@@ -39,7 +39,7 @@ func databaseAppSessionToCore(dbSession *AppSessionV1) *app.AppSessionV1 {
 
 	return &app.AppSessionV1{
 		SessionID:    dbSession.ID,
-		Application:  dbSession.Application,
+		Application:  dbSession.ApplicationID,
 		Participants: participants,
 		Quorum:       dbSession.Quorum,
 		Nonce:        dbSession.Nonce,

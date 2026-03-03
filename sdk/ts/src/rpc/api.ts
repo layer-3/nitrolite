@@ -16,6 +16,8 @@ import {
   PaginationMetadataV1,
   AssetV1,
   BlockchainInfoV1,
+  AppV1,
+  AppInfoV1,
 } from './types';
 import {
   AppDefinitionV1,
@@ -284,6 +286,35 @@ export interface AppSessionsV1GetLastKeyStatesResponse {
   /** List of active session key states for the user */
   states: AppSessionKeyStateV1[];
 }
+
+// ============================================================================
+// Apps Group - V1 API
+// ============================================================================
+
+export interface AppsV1GetAppsRequest {
+  /** Application ID filter */
+  app_id?: string;
+  /** Owner wallet address filter */
+  owner_wallet?: string;
+  /** Pagination parameters */
+  pagination?: PaginationParamsV1;
+}
+
+export interface AppsV1GetAppsResponse {
+  /** List of registered applications */
+  apps: AppInfoV1[];
+  /** Pagination information */
+  metadata: PaginationMetadataV1;
+}
+
+export interface AppsV1SubmitAppVersionRequest {
+  /** Application definition */
+  app: AppV1;
+  /** Owner's signature over the packed app data */
+  owner_sig: string;
+}
+
+export interface AppsV1SubmitAppVersionResponse {}
 
 // ============================================================================
 // User Group - V1 API

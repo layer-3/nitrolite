@@ -148,6 +148,36 @@ export interface ChannelSessionKeyStateV1 {
 }
 
 // ============================================================================
+// App Registry Types
+// ============================================================================
+
+/**
+ * AppV1 represents a registered application definition (without timestamps)
+ */
+export interface AppV1 {
+  /** Application identifier */
+  id: string;
+  /** Owner's wallet address */
+  owner_wallet: string;
+  /** Application metadata */
+  metadata: string;
+  /** Current version */
+  version: string;
+  /** Whether sessions can be created without owner approval */
+  creation_approval_not_required: boolean;
+}
+
+/**
+ * AppInfoV1 represents full application info including timestamps
+ */
+export interface AppInfoV1 extends AppV1 {
+  /** Creation timestamp (unix seconds) */
+  created_at: string;
+  /** Last update timestamp (unix seconds) */
+  updated_at: string;
+}
+
+// ============================================================================
 // Asset and Blockchain Types
 // ============================================================================
 

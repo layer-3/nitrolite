@@ -213,7 +213,7 @@ func migratePostgres(cnf DatabaseConfig, embedMigrations embed.FS) error {
 }
 
 func migrateSqlite(db *gorm.DB) error {
-	if err := db.AutoMigrate(&AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &UserBalance{}); err != nil {
+	if err := db.AutoMigrate(&AppV1{}, &AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &UserBalance{}); err != nil {
 		return err
 	}
 	return nil

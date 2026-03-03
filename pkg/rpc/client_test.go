@@ -509,6 +509,133 @@ func TestClientV1_AppSessionsV1GetLastKeyStates(t *testing.T) {
 	assert.Equal(t, "0xsession_key_1", res.States[0].SessionKey)
 }
 
+// ============================================================================
+// Apps Group Tests
+// ============================================================================
+
+func TestClientV1_AppsV1GetApps(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	response := rpc.AppsV1GetAppsResponse{
+		Apps: []rpc.AppInfoV1{
+			{
+				AppV1: rpc.AppV1{
+					ID:                          "my-app",
+					OwnerWallet:                 testWalletV1,
+					Metadata:                    `{"name": "My App"}`,
+					Version:                     "1",
+					CreationApprovalNotRequired: true,
+				},
+				CreatedAt: "1700000000",
+				UpdatedAt: "1700000001",
+			},
+			{
+				AppV1: rpc.AppV1{
+					ID:                          "another-app",
+					OwnerWallet:                 testWallet2V1,
+					Metadata:                    `{"name": "Another App"}`,
+					Version:                     "1",
+					CreationApprovalNotRequired: false,
+				},
+				CreatedAt: "1700000100",
+				UpdatedAt: "1700000200",
+			},
+		},
+		Metadata: rpc.PaginationMetadataV1{
+			Page:       1,
+			PerPage:    10,
+			TotalCount: 2,
+			PageCount:  1,
+		},
+	}
+
+	registerSimpleHandlerV1(dialer, rpc.AppsV1GetAppsMethod.String(), response)
+
+	resp, err := client.AppsV1GetApps(testCtxV1, rpc.AppsV1GetAppsRequest{})
+	require.NoError(t, err)
+	assert.Len(t, resp.Apps, 2)
+	assert.Equal(t, "my-app", resp.Apps[0].ID)
+	assert.Equal(t, testWalletV1, resp.Apps[0].OwnerWallet)
+	assert.Equal(t, `{"name": "My App"}`, resp.Apps[0].Metadata)
+	assert.Equal(t, "1", resp.Apps[0].Version)
+	assert.True(t, resp.Apps[0].CreationApprovalNotRequired)
+	assert.Equal(t, "1700000000", resp.Apps[0].CreatedAt)
+	assert.Equal(t, "1700000001", resp.Apps[0].UpdatedAt)
+	assert.Equal(t, uint32(2), resp.Metadata.TotalCount)
+}
+
+func TestClientV1_AppsV1GetApps_WithFilters(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	appID := "my-app"
+	ownerWallet := testWalletV1
+
+	response := rpc.AppsV1GetAppsResponse{
+		Apps: []rpc.AppInfoV1{
+			{
+				AppV1: rpc.AppV1{
+					ID:          appID,
+					OwnerWallet: ownerWallet,
+					Metadata:    `{}`,
+					Version:     "1",
+				},
+				CreatedAt: "1700000000",
+				UpdatedAt: "1700000000",
+			},
+		},
+		Metadata: rpc.PaginationMetadataV1{
+			Page:       1,
+			PerPage:    10,
+			TotalCount: 1,
+			PageCount:  1,
+		},
+	}
+
+	registerSimpleHandlerV1(dialer, rpc.AppsV1GetAppsMethod.String(), response)
+
+	resp, err := client.AppsV1GetApps(testCtxV1, rpc.AppsV1GetAppsRequest{
+		AppID:       &appID,
+		OwnerWallet: &ownerWallet,
+		Pagination: &rpc.PaginationParamsV1{
+			Offset: ptrUint32(0),
+			Limit:  ptrUint32(10),
+		},
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Apps, 1)
+	assert.Equal(t, appID, resp.Apps[0].ID)
+}
+
+func TestClientV1_AppsV1SubmitAppVersion(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	response := rpc.AppsV1SubmitAppVersionResponse{}
+
+	registerSimpleHandlerV1(dialer, rpc.AppsV1SubmitAppVersionMethod.String(), response)
+
+	_, err := client.AppsV1SubmitAppVersion(testCtxV1, rpc.AppsV1SubmitAppVersionRequest{
+		App: rpc.AppV1{
+			ID:                          "my-app",
+			OwnerWallet:                 testWalletV1,
+			Metadata:                    `{"name": "My App"}`,
+			Version:                     "1",
+			CreationApprovalNotRequired: false,
+		},
+		OwnerSig: "0xsig123",
+	})
+	require.NoError(t, err)
+}
+
+// ============================================================================
+// User Group Tests
+// ============================================================================
+
 func TestClientV1_UserV1GetBalances(t *testing.T) {
 	t.Parallel()
 
@@ -586,4 +713,12 @@ func TestClientV1_ErrorHandling(t *testing.T) {
 
 	_, err = client.NodeV1GetAssets(testCtxV1, rpc.NodeV1GetAssetsRequest{})
 	assert.Contains(t, err.Error(), "internal server error")
+}
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+func ptrUint32(v uint32) *uint32 {
+	return &v
 }

@@ -194,7 +194,7 @@ func (s *DBStore) GetAppSessionKeyOwner(sessionKey, appSessionId string) (string
 	appSessionId = strings.ToLower(appSessionId)
 
 	// Subquery to get the application ID from the app session
-	appSubQuery := s.db.Model(&AppSessionV1{}).Select("application").Where("id = ?", appSessionId)
+	appSubQuery := s.db.Model(&AppSessionV1{}).Select("application_id").Where("id = ?", appSessionId)
 
 	maxVersionSubQ := s.db.Model(&AppSessionKeyStateV1{}).
 		Select("MAX(version)").

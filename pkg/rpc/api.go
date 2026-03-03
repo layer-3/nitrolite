@@ -247,8 +247,10 @@ type AppSessionsV1CreateAppSessionRequest struct {
 	Definition AppDefinitionV1 `json:"definition"`
 	// SessionData is the optional JSON stringified session data
 	SessionData string `json:"session_data"`
-
-	QuorumSigs []string `json:"quorum_sigs,omitempty"` // Participant signatures for the app session creation
+	// QuorumSigs is the list of participant signatures for the app session creation
+	QuorumSigs []string `json:"quorum_sigs,omitempty"`
+	// OwnerSig is the optional owner signature for app session creation if approval required by the app registry
+	OwnerSig string `json:"owner_sig,omitempty"`
 }
 
 // AppSessionsV1CreateAppSessionResponse returns the created application session information.
@@ -282,6 +284,40 @@ type AppSessionsV1GetLastKeyStatesRequest struct {
 type AppSessionsV1GetLastKeyStatesResponse struct {
 	// States is the list of active session key states for the user
 	States []AppSessionKeyStateV1 `json:"states"`
+}
+
+// ============================================================================
+// Apps Group - V1 API
+// ============================================================================
+
+// AppsV1GetAppsRequest retrieves registered applications with optional filtering.
+type AppsV1GetAppsRequest struct {
+	// AppID filters by application ID
+	AppID *string `json:"app_id,omitempty"`
+	// OwnerWallet filters by owner wallet address
+	OwnerWallet *string `json:"owner_wallet,omitempty"`
+	// Pagination contains pagination parameters (offset, limit, sort)
+	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
+}
+
+// AppsV1GetAppsResponse returns the list of registered applications.
+type AppsV1GetAppsResponse struct {
+	// Apps is the list of registered applications
+	Apps []AppInfoV1 `json:"apps"`
+	// Metadata contains pagination information
+	Metadata PaginationMetadataV1 `json:"metadata"`
+}
+
+// AppsV1SubmitAppVersionRequest submits a new application version (currently only creation is supported).
+type AppsV1SubmitAppVersionRequest struct {
+	// App contains the application definition
+	App AppV1 `json:"app"`
+	// OwnerSig is the owner's signature over the packed app data
+	OwnerSig string `json:"owner_sig"`
+}
+
+// AppsV1SubmitAppVersionResponse returns the result of the application version submission.
+type AppsV1SubmitAppVersionResponse struct {
 }
 
 // ============================================================================

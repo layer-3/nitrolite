@@ -52,6 +52,12 @@ client.getEscrowChannel(escrowChannelId)           // Escrow channel info
 client.getLatestState(wallet, asset, onlySigned)   // Latest state
 ```
 
+### App Registry
+```typescript
+client.getApps(opts)                                            // List registered apps
+client.registerApp(appID, metadata, approvalNotRequired)         // Register new app
+```
+
 ### App Sessions
 ```typescript
 client.getAppSessions(opts)                                     // List sessions
@@ -390,6 +396,21 @@ const state = await client.getLatestState(wallet, asset, onlySigned);
 ```
 
 **Note:** State submission and channel creation are handled internally by state operations (`deposit()`, `withdraw()`, `transfer()`). On-chain settlement is handled by `checkpoint()`.
+
+### App Registry
+
+```typescript
+// List registered applications with optional filtering
+const { apps, metadata } = await client.getApps({
+  appId: 'my-app',
+  ownerWallet: '0x1234...',
+  page: 1,
+  pageSize: 10,
+});
+
+// Register a new application
+await client.registerApp('my-app', '{"name": "My App"}', false);
+```
 
 ### App Sessions (Low-Level)
 
@@ -854,6 +875,9 @@ import type {
   ChannelSessionKeyStateV1,
   PaginationMetadata,
 } from '@yellow-org/sdk';
+
+// App Registry types (from rpc/types)
+import type { AppV1, AppInfoV1 } from '@yellow-org/sdk';
 ```
 
 ### BigInt for Chain IDs

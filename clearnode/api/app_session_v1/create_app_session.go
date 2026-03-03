@@ -7,6 +7,7 @@ import (
 	"github.com/erc7824/nitrolite/pkg/app"
 	"github.com/erc7824/nitrolite/pkg/log"
 	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // CreateAppSession creates a new application session between participants.
@@ -32,6 +33,11 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	}
 	if len(reqPayload.SessionData) > h.maxSessionData {
 		c.Fail(rpc.Errorf("session_data exceeds maximum length of %d", h.maxSessionData), "")
+		return
+	}
+
+	if reqPayload.Definition.Application == "" {
+		c.Fail(nil, "application id is required")
 		return
 	}
 
@@ -101,6 +107,47 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	}
 
 	err = h.useStoreInTx(func(tx Store) error {
+		registeredApp, err := tx.GetApp(appDef.Application)
+		if err != nil {
+			return rpc.Errorf("failed to look up application: %v", err)
+		}
+
+		// App must be registered regardless of CreationApprovalNotRequired flag.
+		if registeredApp == nil {
+			return rpc.Errorf("application %s is not registered", appDef.Application)
+		}
+
+		if !registeredApp.App.CreationApprovalNotRequired {
+			if reqPayload.OwnerSig == "" {
+				return rpc.Errorf("owner_sig is required for this application")
+			}
+
+			sigBytes, err := hexutil.Decode(reqPayload.OwnerSig)
+			if err != nil {
+				return rpc.Errorf("failed to decode signature: %v", err)
+			}
+			if len(sigBytes) == 0 {
+				return rpc.Errorf("empty owner_sig after decode")
+			}
+
+			sigType := app.AppSessionSignerTypeV1(sigBytes[0])
+			appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
+				func(sessionKeyAddr string) (string, error) {
+					return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID)
+				},
+			)
+			recoveredOwnerWallet, err := appSessionSignerValidator.Recover(packedRequest, sigBytes)
+			if err != nil {
+				h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, false)
+				return rpc.Errorf("failed to recover user wallet: %v", err)
+			}
+			h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, true)
+
+			if !strings.EqualFold(recoveredOwnerWallet, registeredApp.App.OwnerWallet) {
+				return rpc.Errorf("invalid owner signature: signer %s is not the app owner", recoveredOwnerWallet)
+			}
+		}
+
 		// Create app session with 0 allocations
 		appSession := app.AppSessionV1{
 			SessionID:    appSessionID,

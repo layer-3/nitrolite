@@ -93,10 +93,23 @@ CREATE INDEX idx_transactions_from_to_type ON transactions(from_account, to_acco
 CREATE INDEX idx_transactions_from_comp ON transactions(from_account, asset_symbol, created_at DESC);
 CREATE INDEX idx_transactions_to_comp ON transactions(to_account, asset_symbol, created_at DESC);
 
+-- Application registry
+CREATE TABLE apps_v1 (
+    id VARCHAR(66) PRIMARY KEY,
+    owner_wallet CHAR(42) NOT NULL,
+    metadata TEXT NOT NULL,
+    version NUMERIC(20,0) NOT NULL DEFAULT 1,
+    creation_approval_not_required BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_apps_v1_owner_wallet ON apps_v1(owner_wallet);
+
 -- App Sessions table: Application sessions
 CREATE TABLE app_sessions_v1 (
     id CHAR(66) PRIMARY KEY,
-    application VARCHAR NOT NULL,
+    application_id VARCHAR NOT NULL,
     nonce NUMERIC(20,0) NOT NULL,
     session_data TEXT NOT NULL,
     quorum SMALLINT NOT NULL DEFAULT 100,
@@ -275,6 +288,8 @@ DROP TABLE IF EXISTS app_session_participants_v1;
 DROP INDEX IF EXISTS idx_app_sessions_v1_status;
 DROP INDEX IF EXISTS idx_app_sessions_v1_application;
 DROP TABLE IF EXISTS app_sessions_v1;
+DROP INDEX IF EXISTS idx_apps_v1_owner_wallet;
+DROP TABLE IF EXISTS apps_v1;
 DROP INDEX IF EXISTS idx_transactions_to_comp;
 DROP INDEX IF EXISTS idx_transactions_from_comp;
 DROP INDEX IF EXISTS idx_transactions_from_to_type;

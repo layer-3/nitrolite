@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/erc7824/nitrolite/clearnode/api/app_session_v1"
+	"github.com/erc7824/nitrolite/clearnode/api/apps_v1"
 	"github.com/erc7824/nitrolite/clearnode/api/channel_v1"
 	"github.com/erc7824/nitrolite/clearnode/api/node_v1"
 	"github.com/erc7824/nitrolite/clearnode/api/user_v1"
@@ -31,7 +32,7 @@ func NewRPCRouter(
 	memoryStore memory.MemoryStore,
 	runtimeMetrics metrics.RuntimeMetricExporter,
 	logger log.Logger,
-	maxParticipants, maxSessionDataLen, maxRebalanceSignedUpdates, maxSessionKeyIDs int,
+	maxParticipants, maxSessionDataLen, maxAppMetadataLen, maxRebalanceSignedUpdates, maxSessionKeyIDs int,
 ) *RPCRouter {
 	r := &RPCRouter{
 		Node:           node,
@@ -75,6 +76,7 @@ func NewRPCRouter(
 	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, minChallenge, runtimeMetrics, maxSessionKeyIDs)
 	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, signer, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
 		maxParticipants, maxSessionDataLen, maxSessionKeyIDs, maxRebalanceSignedUpdates)
+	appsV1Handler := apps_v1.NewHandler(dbStore, maxAppMetadataLen)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, nodeVersion)
 	userV1Handler := user_v1.NewHandler(dbStore)
 
@@ -104,6 +106,10 @@ func NewRPCRouter(
 	nodeV1Group.Handle(rpc.NodeV1PingMethod.String(), nodeV1Handler.Ping)
 	nodeV1Group.Handle(rpc.NodeV1GetAssetsMethod.String(), nodeV1Handler.GetAssets)
 	nodeV1Group.Handle(rpc.NodeV1GetConfigMethod.String(), nodeV1Handler.GetConfig)
+
+	appsV1Group := r.Node.NewGroup(rpc.AppsV1Group.String())
+	appsV1Group.Handle(rpc.AppsV1GetAppsMethod.String(), appsV1Handler.GetApps)
+	appsV1Group.Handle(rpc.AppsV1SubmitAppVersionMethod.String(), appsV1Handler.SubmitAppVersion)
 
 	userV1Group := r.Node.NewGroup(rpc.UserV1Group.String())
 	userV1Group.Handle(rpc.UserV1GetBalancesMethod.String(), userV1Handler.GetBalances)

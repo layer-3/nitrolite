@@ -8,6 +8,9 @@ import (
 
 // Store defines the persistence layer interface for app session management.
 type Store interface {
+	// App registry operations
+	GetApp(appID string) (*app.AppInfoV1, error)
+
 	// App session operations
 	CreateAppSession(session app.AppSessionV1) error
 	GetAppSession(sessionID string) (*app.AppSessionV1, error)

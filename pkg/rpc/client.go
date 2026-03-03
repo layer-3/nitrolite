@@ -218,6 +218,28 @@ func (c *Client) AppSessionsV1GetLastKeyStates(ctx context.Context, req AppSessi
 }
 
 // ============================================================================
+// Apps Group - V1 API Methods
+// ============================================================================
+
+// AppsV1GetApps retrieves registered applications with optional filtering.
+func (c *Client) AppsV1GetApps(ctx context.Context, req AppsV1GetAppsRequest) (AppsV1GetAppsResponse, error) {
+	var resp AppsV1GetAppsResponse
+	if err := c.call(ctx, AppsV1GetAppsMethod, req, &resp); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// AppsV1SubmitAppVersion submits a new application version (currently only creation is supported).
+func (c *Client) AppsV1SubmitAppVersion(ctx context.Context, req AppsV1SubmitAppVersionRequest) (AppsV1SubmitAppVersionResponse, error) {
+	var resp AppsV1SubmitAppVersionResponse
+	if err := c.call(ctx, AppsV1SubmitAppVersionMethod, req, &resp); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// ============================================================================
 // User Group - V1 API Methods
 // ============================================================================
 

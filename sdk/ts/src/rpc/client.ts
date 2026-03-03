@@ -199,6 +199,24 @@ export class RPCClient {
   }
 
   // ============================================================================
+  // Apps Group - V1 API Methods
+  // ============================================================================
+
+  async appsV1GetApps(
+    req: API.AppsV1GetAppsRequest,
+    signal?: AbortSignal
+  ): Promise<API.AppsV1GetAppsResponse> {
+    return this.call(Methods.AppsV1GetAppsMethod, req, signal);
+  }
+
+  async appsV1SubmitAppVersion(
+    req: API.AppsV1SubmitAppVersionRequest,
+    signal?: AbortSignal
+  ): Promise<API.AppsV1SubmitAppVersionResponse> {
+    return this.call(Methods.AppsV1SubmitAppVersionMethod, req, signal);
+  }
+
+  // ============================================================================
   // User Group - V1 API Methods
   // ============================================================================
 

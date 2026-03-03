@@ -12,16 +12,16 @@ import (
 
 // AppSessionV1 represents a virtual payment application session between participants
 type AppSessionV1 struct {
-	ID           string               `gorm:"primaryKey"`
-	Application  string               `gorm:"column:application;not null"`
-	Nonce        uint64               `gorm:"column:nonce;not null"`
-	Participants []AppParticipantV1   `gorm:"foreignKey:AppSessionID;references:ID"`
-	SessionData  string               `gorm:"column:session_data;type:text;not null"`
-	Quorum       uint8                `gorm:"column:quorum;default:100"`
-	Version      uint64               `gorm:"column:version;default:1"`
-	Status       app.AppSessionStatus `gorm:"column:status;not null"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            string               `gorm:"primaryKey"`
+	ApplicationID string               `gorm:"column:application_id;not null"`
+	Nonce         uint64               `gorm:"column:nonce;not null"`
+	Participants  []AppParticipantV1   `gorm:"foreignKey:AppSessionID;references:ID"`
+	SessionData   string               `gorm:"column:session_data;type:text;not null"`
+	Quorum        uint8                `gorm:"column:quorum;default:100"`
+	Version       uint64               `gorm:"column:version;default:1"`
+	Status        app.AppSessionStatus `gorm:"column:status;not null"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func (AppSessionV1) TableName() string {
@@ -51,16 +51,16 @@ func (s *DBStore) CreateAppSession(session app.AppSessionV1) error {
 	}
 
 	dbSession := AppSessionV1{
-		ID:           strings.ToLower(session.SessionID),
-		Application:  session.Application,
-		Nonce:        session.Nonce,
-		Participants: participants,
-		SessionData:  session.SessionData,
-		Quorum:       session.Quorum,
-		Version:      session.Version,
-		Status:       session.Status,
-		CreatedAt:    session.CreatedAt,
-		UpdatedAt:    session.UpdatedAt,
+		ID:            strings.ToLower(session.SessionID),
+		ApplicationID: session.Application,
+		Nonce:         session.Nonce,
+		Participants:  participants,
+		SessionData:   session.SessionData,
+		Quorum:        session.Quorum,
+		Version:       session.Version,
+		Status:        session.Status,
+		CreatedAt:     session.CreatedAt,
+		UpdatedAt:     session.UpdatedAt,
 	}
 
 	if err := s.db.Create(&dbSession).Error; err != nil {
@@ -135,7 +135,7 @@ func (s *DBStore) GetAppSessions(appSessionID *string, participant *string, stat
 
 // AppSessionCount holds the result of a COUNT() GROUP BY query on app sessions.
 type AppSessionCount struct {
-	Application string               `gorm:"column:application"`
+	Application string               `gorm:"column:application_id"`
 	Status      app.AppSessionStatus `gorm:"column:status"`
 	Count       uint64               `gorm:"column:count"`
 }
@@ -144,8 +144,8 @@ type AppSessionCount struct {
 func (s *DBStore) CountAppSessionsByStatus() ([]AppSessionCount, error) {
 	var results []AppSessionCount
 	err := s.db.Model(&AppSessionV1{}).
-		Select("application, status, COUNT(id) as count").
-		Group("application, status").
+		Select("application_id, status, COUNT(id) as count").
+		Group("application_id, status").
 		Find(&results).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to count app sessions: %w", err)

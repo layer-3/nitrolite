@@ -40,6 +40,11 @@ export const AppSessionsV1CloseAppSessionMethod: Method = 'app_sessions.v1.close
 export const AppSessionsV1SubmitSessionKeyStateMethod: Method = 'app_sessions.v1.submit_session_key_state';
 export const AppSessionsV1GetLastKeyStatesMethod: Method = 'app_sessions.v1.get_last_key_states';
 
+// Apps Group - V1 Methods
+export const AppsV1Group: Group = 'apps.v1';
+export const AppsV1GetAppsMethod: Method = 'apps.v1.get_apps';
+export const AppsV1SubmitAppVersionMethod: Method = 'apps.v1.submit_app_version';
+
 // User Group - V1 Methods
 export const UserV1Group: Group = 'user.v1';
 export const UserV1GetBalancesMethod: Method = 'user.v1.get_balances';

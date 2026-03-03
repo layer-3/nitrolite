@@ -113,6 +113,17 @@ type DatabaseStore interface {
 	// GetStateByID retrieves a state by its deterministic ID.
 	GetStateByID(stateID string) (*core.State, error)
 
+	// --- App Registry Operations ---
+
+	// CreateApp registers a new application. Returns an error if the app ID already exists.
+	CreateApp(entry app.AppV1) error
+
+	// GetApp retrieves a single application by ID. Returns nil if not found.
+	GetApp(appID string) (*app.AppInfoV1, error)
+
+	// GetApps retrieves applications with optional filtering by app ID, owner wallet, and pagination.
+	GetApps(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error)
+
 	// --- App Session Operations ---
 
 	// CreateAppSession initializes a new application session.

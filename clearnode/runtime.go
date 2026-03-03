@@ -72,6 +72,7 @@ type Config struct {
 type ValidationLimits struct {
 	MaxParticipants   int `yaml:"max_participants" env:"CLEARNODE_MAX_PARTICIPANTS" env-default:"32"`
 	MaxSessionDataLen int `yaml:"max_session_data_len" env:"CLEARNODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
+	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"CLEARNODE_MAX_APP_METADATA_LEN" env-default:"1024"`
 	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"CLEARNODE_MAX_SESSION_KEY_IDS" env-default:"256"`
 	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"CLEARNODE_MAX_SIGNED_UPDATES" env-default:"0"`
 }

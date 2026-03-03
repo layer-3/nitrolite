@@ -128,6 +128,14 @@ func (m *MockStore) GetAppSessionKeyOwner(sessionKey, appSessionId string) (stri
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockStore) GetApp(appID string) (*app.AppInfoV1, error) {
+	args := m.Called(appID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*app.AppInfoV1), args.Error(1)
+}
+
 func (m *MockStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error) {
 	args := m.Called(wallet, sessionKey, asset, metadataHash)
 	return args.Bool(0), args.Error(1)

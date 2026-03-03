@@ -54,7 +54,7 @@ func setupTestSqlite(t testing.TB) *gorm.DB {
 		t.Fatalf("Failed to open SQLite database: %v", err)
 	}
 
-	err = database.AutoMigrate(&AppLedgerEntryV1{}, &AppSessionV1{}, &AppParticipantV1{}, &BlockchainAction{}, &Channel{}, &ContractEvent{}, &State{}, &Transaction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &UserBalance{})
+	err = database.AutoMigrate(&AppV1{}, &AppLedgerEntryV1{}, &AppSessionV1{}, &AppParticipantV1{}, &BlockchainAction{}, &Channel{}, &ContractEvent{}, &State{}, &Transaction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &UserBalance{})
 	if err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
@@ -99,7 +99,7 @@ func setupTestPostgres(ctx context.Context, t testing.TB) (*gorm.DB, testcontain
 		t.Fatalf("Failed to open PostgreSQL database: %v", err)
 	}
 
-	err = database.AutoMigrate(&AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &Transaction{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &UserBalance{})
+	err = database.AutoMigrate(&AppV1{}, &AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &Transaction{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &UserBalance{})
 	if err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}

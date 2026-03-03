@@ -54,7 +54,7 @@ func TestDBStore_CreateAppSession(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "session123", dbSession.ID)
-		assert.Equal(t, "poker", dbSession.Application)
+		assert.Equal(t, "poker", dbSession.ApplicationID)
 		assert.Equal(t, uint64(1), dbSession.Nonce)
 		assert.Equal(t, `{"state": "active"}`, dbSession.SessionData)
 		assert.Equal(t, uint8(100), dbSession.Quorum)

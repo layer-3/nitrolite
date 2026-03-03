@@ -415,6 +415,50 @@ types:
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
 
+  - app:
+      description: Application definition
+      fields:
+        - name: id
+          type: string
+          description: Application identifier
+        - name: owner_wallet
+          type: string
+          description: Owner's wallet address
+        - name: metadata
+          type: string
+          description: Application metadata (bytes32 hash)
+        - name: version
+          type: string
+          description: Current version of the application
+        - name: creation_approval_not_required
+          type: boolean
+          description: Whether app sessions can be created without owner approval
+
+  - app_info:
+      description: Full application info
+      fields:
+        - name: id
+          type: string
+          description: Application identifier
+        - name: owner_wallet
+          type: string
+          description: Owner's wallet address
+        - name: metadata
+          type: string
+          description: Application metadata (bytes32 hash)
+        - name: version
+          type: string
+          description: Current version of the application
+        - name: creation_approval_not_required
+          type: boolean
+          description: Whether app sessions can be created without owner approval
+        - name: created_at
+          type: string
+          description: Creation timestamp (unix seconds)
+        - name: updated_at
+          type: string
+          description: Last update timestamp (unix seconds)
+
   - pagination_params:
       description: Pagination request parameters
       fields:
@@ -760,7 +804,7 @@ api:
                 - message: invalid_parameters
                   description: The request parameters are invalid
             - name: create_app_session
-              description: Create a new application session between participants
+              description: Create a new application session between participants. The application must be registered in the app registry. If the application requires creation approval (creation_approval_not_required is false), an owner signature is required.
               request:
                 - field_name: definition
                   type: app_definition
@@ -773,6 +817,9 @@ api:
                   description: Participant signatures for the app session creation
                   items:
                     type: string
+                - field_name: owner_sig
+                  type: string
+                  description: Owner signature for app session creation, required when the application's creation_approval_not_required is false
                   optional: true
               response:
                 - field_name: app_session_id
@@ -787,6 +834,12 @@ api:
               errors:
                 - message: invalid_definition
                   description: The application definition is invalid
+                - message: application_not_registered
+                  description: The application is not registered in the app registry
+                - message: owner_sig_required
+                  description: Owner signature is required for this application (creation_approval_not_required is false)
+                - message: invalid_owner_signature
+                  description: The owner signature is invalid or does not match the registered app owner
                 - message: insufficient_balance
                   description: Participant has insufficient balance for allocations
             - name: submit_session_key_state
@@ -818,6 +871,58 @@ api:
               errors:
                 - message: account_not_found
                   description: The specified account was not found
+
+    - name: apps
+      description: Operations related to application registry management
+      versions:
+        - version: v1
+          methods:
+            - name: get_apps
+              description: Retrieve registered applications with optional filtering by app ID and owner wallet
+              request:
+                - field_name: app_id
+                  type: string
+                  description: Filter by application ID
+                  optional: true
+                - field_name: owner_wallet
+                  type: string
+                  description: Filter by owner wallet address
+                  optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit, sort)
+                  optional: true
+              response:
+                - field_name: apps
+                  type: array
+                  items:
+                    type: app_info
+                  description: List of registered applications
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
+              errors:
+                - message: invalid_parameters
+                  description: The request parameters are invalid
+            - name: submit_app_version
+              description: Register a new application in the app registry. Currently only version 1 (creation) is supported. The owner must sign the packed app data to prove ownership.
+              request:
+                - field_name: app
+                  type: app
+                  description: Application definition including ID, owner wallet, metadata, version, and creation approval flag
+                - field_name: owner_sig
+                  type: string
+                  description: Owner's EIP-191 signature over the packed application data
+              response: []
+              errors:
+                - message: invalid_app_id
+                  description: The application ID does not match the required format
+                - message: invalid_version
+                  description: Only version 1 (creation) is currently supported
+                - message: invalid_signature
+                  description: The owner signature is invalid
+                - message: app_already_exists
+                  description: An application with this ID already exists
 
     - name: session_keys
       description: Operations related to session key management

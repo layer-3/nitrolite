@@ -41,8 +41,8 @@ func TestGetAppSessions_SuccessWithParticipant(t *testing.T) {
 
 	sessions := []app.AppSessionV1{
 		{
-			SessionID:   "session1",
-			Application: "game",
+			SessionID:     "session1",
+			ApplicationID: "game",
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: participant, SignatureWeight: 1},
 				{WalletAddress: participant2, SignatureWeight: 1},
@@ -56,8 +56,8 @@ func TestGetAppSessions_SuccessWithParticipant(t *testing.T) {
 			UpdatedAt:   time.Now(),
 		},
 		{
-			SessionID:   "session2",
-			Application: "betting",
+			SessionID:     "session2",
+			ApplicationID: "betting",
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: participant, SignatureWeight: 1},
 			},
@@ -116,17 +116,17 @@ func TestGetAppSessions_SuccessWithParticipant(t *testing.T) {
 	// Verify first session
 	assert.Equal(t, "session1", response.AppSessions[0].AppSessionID)
 	assert.Equal(t, "closed", response.AppSessions[0].Status)
-	assert.Len(t, response.AppSessions[0].Participants, 2)
-	assert.Equal(t, participant, response.AppSessions[0].Participants[0].WalletAddress)
-	assert.Equal(t, uint8(2), response.AppSessions[0].Quorum)
+	assert.Len(t, response.AppSessions[0].AppDefinitionV1.Participants, 2)
+	assert.Equal(t, participant, response.AppSessions[0].AppDefinitionV1.Participants[0].WalletAddress)
+	assert.Equal(t, uint8(2), response.AppSessions[0].AppDefinitionV1.Quorum)
 	assert.Equal(t, "1", response.AppSessions[0].Version)
 	assert.NotNil(t, response.AppSessions[0].SessionData)
 
 	// Verify second session
 	assert.Equal(t, "session2", response.AppSessions[1].AppSessionID)
 	assert.Equal(t, "open", response.AppSessions[1].Status)
-	assert.Len(t, response.AppSessions[1].Participants, 1)
-	assert.Equal(t, uint8(1), response.AppSessions[1].Quorum)
+	assert.Len(t, response.AppSessions[1].AppDefinitionV1.Participants, 1)
+	assert.Equal(t, uint8(1), response.AppSessions[1].AppDefinitionV1.Quorum)
 	assert.Equal(t, "5", response.AppSessions[1].Version)
 	assert.Nil(t, response.AppSessions[1].SessionData)
 
@@ -165,8 +165,8 @@ func TestGetAppSessions_SuccessWithAppSessionID(t *testing.T) {
 
 	sessions := []app.AppSessionV1{
 		{
-			SessionID:   sessionID,
-			Application: "game",
+			SessionID:     sessionID,
+			ApplicationID: "game",
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: participant, SignatureWeight: 1},
 			},
@@ -296,8 +296,8 @@ func TestGetAppSessions_WithStatusFilter(t *testing.T) {
 
 	sessions := []app.AppSessionV1{
 		{
-			SessionID:   "session1",
-			Application: "game",
+			SessionID:     "session1",
+			ApplicationID: "game",
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: participant, SignatureWeight: 1},
 			},

@@ -39,8 +39,8 @@ func TestGetAppDefinition_Success(t *testing.T) {
 	participant2 := "0x9876543210987654321098765432109876543210"
 
 	session := &app.AppSessionV1{
-		SessionID:   sessionID,
-		Application: "game",
+		SessionID:     sessionID,
+		ApplicationID: "game",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 			{WalletAddress: participant2, SignatureWeight: 1},

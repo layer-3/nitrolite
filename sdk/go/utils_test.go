@@ -119,7 +119,7 @@ func TestTransformPaginationParams(t *testing.T) {
 	limit := uint32(20)
 	offset := uint32(0)
 	sort := "desc"
-	
+
 	params := &core.PaginationParams{
 		Limit:  &limit,
 		Offset: &offset,
@@ -226,7 +226,7 @@ func TestTransformState(t *testing.T) {
 	rpcStateBack := transformStateToRPC(state)
 	assert.Equal(t, rpcState.ID, rpcStateBack.ID)
 	assert.Equal(t, rpcState.Epoch, rpcStateBack.Epoch)
-	
+
 	// Test error cases
 	badState := rpcState
 	badState.Epoch = "invalid"
@@ -249,15 +249,17 @@ func TestTransformAppSessions(t *testing.T) {
 	rpcSessions := []rpc.AppSessionInfoV1{
 		{
 			AppSessionID: "0xSessionID",
-			Participants: []rpc.AppParticipantV1{
-				{WalletAddress: "0xA", SignatureWeight: 1},
+			AppDefinitionV1: rpc.AppDefinitionV1{
+				Participants: []rpc.AppParticipantV1{
+					{WalletAddress: "0xA", SignatureWeight: 1},
+				},
+				Nonce: "1",
 			},
 			Allocations: []rpc.AppAllocationV1{
 				{Participant: "0xA", Asset: "USDC", Amount: "10.0"},
 			},
 			Status:      "open",
 			SessionData: &sessionData,
-			Nonce:       "1",
 			Version:     "1",
 		},
 	}
@@ -268,7 +270,7 @@ func TestTransformAppSessions(t *testing.T) {
 	assert.Equal(t, "0xSessionID", sessions[0].AppSessionID)
 	assert.False(t, sessions[0].IsClosed)
 	assert.Equal(t, "data", sessions[0].SessionData)
-	assert.Equal(t, uint64(1), sessions[0].Nonce)
+	assert.Equal(t, uint64(1), sessions[0].AppDefinition.Nonce)
 
 	// Test error cases
 	rpcSessions[0].Allocations[0].Amount = "invalid"
@@ -276,7 +278,7 @@ func TestTransformAppSessions(t *testing.T) {
 	assert.Error(t, err)
 
 	rpcSessions[0].Allocations[0].Amount = "10.0"
-	rpcSessions[0].Nonce = "invalid"
+	rpcSessions[0].AppDefinitionV1.Nonce = "invalid"
 	_, err = transformAppSessions(rpcSessions)
 	assert.Error(t, err)
 }
@@ -293,7 +295,7 @@ func TestTransformAppDefinition(t *testing.T) {
 
 	def, err := transformAppDefinition(rpcDef)
 	require.NoError(t, err)
-	assert.Equal(t, "0xApp", def.Application)
+	assert.Equal(t, "0xApp", def.ApplicationID)
 	assert.Equal(t, uint64(1), def.Nonce)
 
 	// Reverse
@@ -351,7 +353,7 @@ func TestTransformChannelSessionKeyState(t *testing.T) {
 	rpcStateBack := transformChannelSessionKeyStateToRPC(state)
 	assert.Equal(t, rpcState.Version, rpcStateBack.Version)
 	// rpcStateBack.UserAddress might be lowercased now
-	
+
 	// Error cases
 	badState := rpcState
 	badState.Version = "invalid"

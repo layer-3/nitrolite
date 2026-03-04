@@ -22,7 +22,7 @@ config:
     CLEARNODE_MAX_SESSION_KEY_IDS: "256"
 
 image:
-  repository: ghcr.io/erc7824/nitrolite/clearnode
+  repository: ghcr.io/layer-3/nitrolite/clearnode
   tag: v1.0.0-rc.0
 
 service:

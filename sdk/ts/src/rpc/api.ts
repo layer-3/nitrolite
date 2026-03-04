@@ -18,6 +18,7 @@ import {
   BlockchainInfoV1,
   AppV1,
   AppInfoV1,
+  ActionAllowanceV1,
 } from './types';
 import {
   AppDefinitionV1,
@@ -350,6 +351,16 @@ export interface UserV1GetTransactionsResponse {
   transactions: TransactionV1[];
   /** Pagination information */
   metadata: PaginationMetadataV1;
+}
+
+export interface UserV1GetActionAllowancesRequest {
+  /** User's wallet address */
+  wallet: Address;
+}
+
+export interface UserV1GetActionAllowancesResponse {
+  /** List of action allowances */
+  allowances: ActionAllowanceV1[];
 }
 
 // ============================================================================

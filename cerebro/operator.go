@@ -168,11 +168,17 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 			// User queries
 			{Text: "balances", Description: "Get user balances"},
 			{Text: "transactions", Description: "Get transaction history"},
+			{Text: "action-allowances", Description: "Get action allowances"},
 
 			// State management
 			{Text: "state", Description: "Get latest state"},
 			{Text: "home-channel", Description: "Get home channel"},
 			{Text: "escrow-channel", Description: "Get escrow channel"},
+
+			// App registry
+			{Text: "app-info", Description: "Show application details"},
+			{Text: "my-apps", Description: "List your registered applications"},
+			{Text: "register-app", Description: "Register a new application"},
 
 			// App sessions (Base Client - Low-level)
 			{Text: "app-sessions", Description: "List app sessions"},
@@ -211,7 +217,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 		case "transfer":
 			// transfer <recipient> <asset> <amount>
 			return o.getWalletSuggestion()
-		case "balances", "transactions":
+		case "balances", "transactions", "action-allowances":
 			return o.getWalletSuggestion()
 		case "assets":
 			return o.getChainSuggestions()
@@ -451,6 +457,47 @@ func (o *Operator) Execute(s string) {
 			return
 		}
 		o.getEscrowChannel(ctx, args[1])
+
+	// App registry
+	case "app-info":
+		if len(args) < 2 {
+			fmt.Println("ERROR: Usage: app-info <app_id>")
+			return
+		}
+		o.getApps(ctx, &args[1], nil)
+
+	case "my-apps":
+		wallet := o.getImportedWalletAddress()
+		if wallet == "" {
+			fmt.Println("ERROR: No wallet configured. Use 'import wallet' first.")
+			return
+		}
+		o.getApps(ctx, nil, &wallet)
+
+	case "register-app":
+		if len(args) < 2 {
+			fmt.Println("ERROR: Usage: register-app <app_id> [no-approval]")
+			fmt.Println("INFO: Pass 'no-approval' as second arg to allow session creation without owner approval")
+			return
+		}
+		noApproval := len(args) >= 3 && args[2] == "no-approval"
+		o.registerApp(ctx, args[1], "", noApproval)
+
+	// User action allowances
+	case "action-allowances":
+		wallet := ""
+		if len(args) >= 2 {
+			wallet = args[1]
+		} else {
+			wallet = o.getImportedWalletAddress()
+			if wallet == "" {
+				fmt.Println("ERROR: Usage: action-allowances <wallet_address>")
+				fmt.Println("INFO: No wallet configured. Use 'import wallet' first or specify a wallet address.")
+				return
+			}
+			fmt.Printf("INFO: Using configured wallet: %s\n", wallet)
+		}
+		o.getActionAllowances(ctx, wallet)
 
 	// App sessions
 	case "app-sessions":

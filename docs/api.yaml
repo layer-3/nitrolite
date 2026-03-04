@@ -156,7 +156,7 @@ types:
   - app_definition:
       description: Definition for an app session
       fields:
-        - name: application
+        - name: application_id
           type: string
           description: Application identifier from an app registry
         - name: participants
@@ -338,24 +338,16 @@ types:
         - name: status
           type: string
           description: Session status (open/closed)
-        - name: participants
-          type: array
-          items:
-            type: app_participant
-          description: List of participant wallet addresses with weights
+        - name: app_definition
+          type: app_definition
+          description: The application definition for this session
         - name: session_data
           type: string
           description: JSON stringified session data
           optional: true
-        - name: quorum
-          type: integer
-          description: Quorum required for operations
         - name: version
           type: string
           description: Current version of the session state
-        - name: nonce
-          type: string
-          description: Nonce for the session
         - name: allocations
           type: array
           items:
@@ -458,6 +450,22 @@ types:
         - name: updated_at
           type: string
           description: Last update timestamp (unix seconds)
+
+  - action_allowance:
+      description: Allowance information for a specific gated action
+      fields:
+        - name: gated_action
+          type: string
+          description: The specific action being gated (transfer, app_session_deposit, app_session_operation, app_session_withdrawal)
+        - name: time_window
+          type: string
+          description: Time window for which the allowance is valid (e.g. "24h0m0s")
+        - name: allowance
+          type: string
+          description: Total allowance for the action within the time window
+        - name: used
+          type: string
+          description: Amount already used within the time window
 
   - pagination_params:
       description: Pagination request parameters
@@ -984,6 +992,23 @@ api:
                   type: pagination_metadata
                   description: Pagination information
                   optional: true
+            - name: get_action_allowances
+              description: Retrieve action allowances for a user based on their staking level
+              request:
+                - field_name: wallet
+                  type: string
+                  description: User's wallet address
+              response:
+                - field_name: allowances
+                  type: array
+                  items:
+                    type: action_allowance
+                  description: List of action allowances
+              errors:
+                - message: wallet_required
+                  description: The wallet address is required
+                - message: retrieval_failed
+                  description: Failed to retrieve action allowances
 
     - name: node
       description: Utility methods to get node's configuration and check connectivity

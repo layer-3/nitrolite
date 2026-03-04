@@ -15,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/erc7824/nitrolite/clearnode/action_gateway"
 	"github.com/erc7824/nitrolite/clearnode/metrics"
 	"github.com/erc7824/nitrolite/clearnode/store/database"
 	"github.com/erc7824/nitrolite/clearnode/store/memory"
@@ -41,6 +42,7 @@ type Backbone struct {
 
 	DbStore        database.DatabaseStore
 	MemoryStore    memory.MemoryStore
+	ActionGateway  *action_gateway.ActionGateway
 	RpcNode        rpc.Node
 	StateSigner    sign.Signer
 	TxSigner       sign.Signer
@@ -135,6 +137,15 @@ func InitBackbone() *Backbone {
 	memoryStore, err := memory.NewMemoryStoreV1FromConfig(configDirPath)
 	if err != nil {
 		logger.Fatal("failed to load blockchains", "error", err)
+	}
+
+	// ------------------------------------------------
+	// Action Gateway
+	// ------------------------------------------------
+
+	actionGateway, err := action_gateway.NewActionGatewayFromYaml(configDirPath)
+	if err != nil {
+		logger.Fatal("failed to initialize action gateway", "error", err)
 	}
 
 	// ------------------------------------------------
@@ -246,6 +257,7 @@ func InitBackbone() *Backbone {
 
 		DbStore:        dbStore,
 		MemoryStore:    memoryStore,
+		ActionGateway:  actionGateway,
 		RpcNode:        rpcNode,
 		StateSigner:    stateSigner,
 		TxSigner:       txSigner,

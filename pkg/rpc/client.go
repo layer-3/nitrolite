@@ -261,6 +261,15 @@ func (c *Client) UserV1GetTransactions(ctx context.Context, req UserV1GetTransac
 	return resp, nil
 }
 
+// UserV1GetActionAllowances retrieves the user's current action allowances for channels and app sessions.
+func (c *Client) UserV1GetActionAllowances(ctx context.Context, req UserV1GetActionAllowancesRequest) (UserV1GetActionAllowancesResponse, error) {
+	var resp UserV1GetActionAllowancesResponse
+	if err := c.call(ctx, UserV1GetActionAllowancesMethod, req, &resp); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
 // ============================================================================
 // Node Group - V1 API Methods
 // ============================================================================

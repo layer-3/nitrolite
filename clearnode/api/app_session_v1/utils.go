@@ -28,10 +28,10 @@ func unmapAppDefinitionV1(def rpc.AppDefinitionV1) (app.AppDefinitionV1, error) 
 	}
 
 	return app.AppDefinitionV1{
-		Application:  def.Application,
-		Participants: participants,
-		Quorum:       def.Quorum,
-		Nonce:        nonce,
+		ApplicationID: def.Application,
+		Participants:  participants,
+		Quorum:        def.Quorum,
+		Nonce:         nonce,
 	}, nil
 }
 
@@ -219,12 +219,15 @@ func mapAppSessionInfoV1(session app.AppSessionV1, allocations map[string]map[st
 	return rpc.AppSessionInfoV1{
 		AppSessionID: session.SessionID,
 		Status:       session.Status.String(),
-		Participants: participants,
-		SessionData:  sessionData,
-		Quorum:       session.Quorum,
-		Version:      strconv.FormatUint(session.Version, 10),
-		Nonce:        strconv.FormatUint(session.Nonce, 10),
-		Allocations:  rpcAllocations,
+		AppDefinitionV1: rpc.AppDefinitionV1{
+			Application:  session.ApplicationID,
+			Participants: participants,
+			Quorum:       session.Quorum,
+			Nonce:        strconv.FormatUint(session.Nonce, 10),
+		},
+		SessionData: sessionData,
+		Version:     strconv.FormatUint(session.Version, 10),
+		Allocations: rpcAllocations,
 	}
 }
 

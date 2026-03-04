@@ -65,6 +65,18 @@ func (h *Handler) SubmitAppState(c *rpc.Context) {
 			return rpc.Errorf("app session is already closed")
 		}
 
+		registeredApp, err := tx.GetApp(appSession.ApplicationID)
+		if err != nil {
+			return rpc.Errorf("failed to look up application: %v", err)
+		}
+		if registeredApp == nil {
+			return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
+		}
+		err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
+		if err != nil {
+			return rpc.NewError(err)
+		}
+
 		if len(reqPayload.QuorumSigs) > len(appSession.Participants) {
 			return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(reqPayload.QuorumSigs), len(appSession.Participants))
 		}
@@ -84,7 +96,7 @@ func (h *Handler) SubmitAppState(c *rpc.Context) {
 			return rpc.Errorf("failed to pack app state update: %v", err)
 		}
 
-		if err := h.verifyQuorum(tx, appStateUpd.AppSessionID, appSession.Application, participantWeights, appSession.Quorum, packedStateUpdate, reqPayload.QuorumSigs); err != nil {
+		if err := h.verifyQuorum(tx, appStateUpd.AppSessionID, appSession.ApplicationID, participantWeights, appSession.Quorum, packedStateUpdate, reqPayload.QuorumSigs); err != nil {
 			return err
 		}
 

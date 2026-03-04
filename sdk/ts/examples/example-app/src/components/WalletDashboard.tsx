@@ -736,15 +736,18 @@ export default function WalletDashboard({
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                      <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          <span className="uppercase tracking-wider">App: {session.appDefinition.applicationId}</span>
+                        </div>
                         <div>
                           <span className="uppercase tracking-wider">v{session.version?.toString()}</span>
                         </div>
                         <div>
-                          <span className="uppercase tracking-wider">Quorum: {session.quorum}</span>
+                          <span className="uppercase tracking-wider">Quorum: {session.appDefinition.quorum}</span>
                         </div>
                         <div>
-                          <span className="uppercase tracking-wider">{session.participants?.length || 0} participants</span>
+                          <span className="uppercase tracking-wider">{session.appDefinition.participants?.length || 0} participants</span>
                         </div>
                       </div>
                       {session.allocations && session.allocations.length > 0 && (

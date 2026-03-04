@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -37,6 +38,19 @@ func (intent AppStateUpdateIntent) String() string {
 	}
 }
 
+func (intent AppStateUpdateIntent) GatedAction() core.GatedAction {
+	switch intent {
+	case AppStateUpdateIntentOperate:
+		return core.GatedActionAppSessionOperation
+	case AppStateUpdateIntentDeposit:
+		return core.GatedActionAppSessionDeposit
+	case AppStateUpdateIntentWithdraw:
+		return core.GatedActionAppSessionWithdrawal
+	default:
+		return ""
+	}
+}
+
 type AppSessionStatus uint8
 
 const (
@@ -60,16 +74,16 @@ func (status AppSessionStatus) String() string {
 
 // AppSessionV1 represents an application session in the V1 API.
 type AppSessionV1 struct {
-	SessionID    string
-	Application  string
-	Participants []AppParticipantV1
-	Quorum       uint8
-	Nonce        uint64
-	Status       AppSessionStatus
-	Version      uint64
-	SessionData  string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	SessionID     string
+	ApplicationID string
+	Participants  []AppParticipantV1
+	Quorum        uint8
+	Nonce         uint64
+	Status        AppSessionStatus
+	Version       uint64
+	SessionData   string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // AppParticipantV1 represents the definition for an app participant.
@@ -80,10 +94,10 @@ type AppParticipantV1 struct {
 
 // AppDefinitionV1 represents the definition for an app session.
 type AppDefinitionV1 struct {
-	Application  string
-	Participants []AppParticipantV1
-	Quorum       uint8
-	Nonce        uint64
+	ApplicationID string
+	Participants  []AppParticipantV1
+	Quorum        uint8
+	Nonce         uint64
 }
 
 // AppSessionVersionV1 represents a session ID and version pair for rebalancing operations.
@@ -116,14 +130,12 @@ type SignedAppStateUpdateV1 struct {
 
 // AppSessionInfoV1 represents information about an application session.
 type AppSessionInfoV1 struct {
-	AppSessionID string
-	IsClosed     bool
-	Participants []AppParticipantV1
-	SessionData  string
-	Quorum       uint8
-	Version      uint64
-	Nonce        uint64
-	Allocations  []AppAllocationV1
+	AppSessionID  string
+	AppDefinition AppDefinitionV1
+	IsClosed      bool
+	SessionData   string
+	Version       uint64
+	Allocations   []AppAllocationV1
 }
 
 // SessionKeyV1 represents a session key with spending allowances.
@@ -183,7 +195,7 @@ func PackCreateAppSessionRequestV1(definition AppDefinitionV1, sessionData strin
 
 	// Pack the data using ABI encoding
 	packed, err := args.Pack(
-		definition.Application,
+		definition.ApplicationID,
 		participants,
 		definition.Quorum,
 		definition.Nonce,
@@ -294,7 +306,7 @@ func GenerateAppSessionIDV1(definition AppDefinitionV1) (string, error) {
 
 	// Pack the data using ABI encoding
 	packed, err := args.Pack(
-		definition.Application,
+		definition.ApplicationID,
 		participants,
 		definition.Quorum,
 		definition.Nonce,

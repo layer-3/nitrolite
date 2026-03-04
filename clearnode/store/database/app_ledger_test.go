@@ -204,9 +204,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create app session with participant
 		session := app.AppSessionV1{
-			SessionID:   "session123",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session123",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -242,9 +242,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create app session with participants
 		session := app.AppSessionV1{
-			SessionID:   "session456",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session456",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -286,9 +286,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create app session with participant
 		session := app.AppSessionV1{
-			SessionID:   "session789",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session789",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -326,9 +326,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create app session with participant but no ledger entries
 		session := app.AppSessionV1{
-			SessionID:   "session100",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session100",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -366,9 +366,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create app session with one participant
 		session := app.AppSessionV1{
-			SessionID:   "session200",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session200",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -406,9 +406,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 
 		// Create two app sessions with the same participant
 		session1 := app.AppSessionV1{
-			SessionID:   "session300",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session300",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -423,9 +423,9 @@ func TestDBStore_GetParticipantAllocations(t *testing.T) {
 		require.NoError(t, store.CreateAppSession(session1))
 
 		session2 := app.AppSessionV1{
-			SessionID:   "session400",
-			Application: "poker",
-			Nonce:       2,
+			SessionID:     "session400",
+			ApplicationID: "poker",
+			Nonce:         2,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",

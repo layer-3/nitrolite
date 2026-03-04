@@ -91,7 +91,7 @@ export interface AppParticipantV1 {
  * AppDefinitionV1 represents the definition for an app session
  */
 export interface AppDefinitionV1 {
-  application: string;
+  applicationId: string;
   participants: AppParticipantV1[];
   quorum: number; // uint8
   nonce: bigint; // uint64
@@ -138,12 +138,10 @@ export interface SignedAppStateUpdateV1 {
  */
 export interface AppSessionInfoV1 {
   appSessionId: string;
+  appDefinition: AppDefinitionV1;
   isClosed: boolean;
-  participants: AppParticipantV1[];
   sessionData: string;
-  quorum: number; // uint8
   version: bigint; // uint64
-  nonce: bigint; // uint64
   allocations: AppAllocationV1[];
 }
 

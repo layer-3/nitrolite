@@ -234,6 +234,13 @@ export class RPCClient {
     return this.call(Methods.UserV1GetTransactionsMethod, req, signal);
   }
 
+  async userV1GetActionAllowances(
+    req: API.UserV1GetActionAllowancesRequest,
+    signal?: AbortSignal
+  ): Promise<API.UserV1GetActionAllowancesResponse> {
+    return this.call(Methods.UserV1GetActionAllowancesMethod, req, signal);
+  }
+
   // ============================================================================
   // Node Group - V1 API Methods
   // ============================================================================

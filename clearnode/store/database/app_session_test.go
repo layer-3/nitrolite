@@ -28,9 +28,9 @@ func TestDBStore_CreateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session123",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session123",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -72,9 +72,9 @@ func TestDBStore_CreateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session456",
-			Application: "chess",
-			Nonce:       1,
+			SessionID:     "session456",
+			ApplicationID: "chess",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -118,9 +118,9 @@ func TestDBStore_CreateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session789",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session789",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -152,9 +152,9 @@ func TestDBStore_GetAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session123",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session123",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -176,7 +176,7 @@ func TestDBStore_GetAppSession(t *testing.T) {
 		require.NotNil(t, result)
 
 		assert.Equal(t, "session123", result.SessionID)
-		assert.Equal(t, "poker", result.Application)
+		assert.Equal(t, "poker", result.ApplicationID)
 		assert.Equal(t, uint64(1), result.Nonce)
 		assert.Equal(t, `{"state": "active"}`, result.SessionData)
 		assert.Equal(t, uint8(100), result.Quorum)
@@ -207,9 +207,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 
 		// Create multiple sessions
 		session1 := app.AppSessionV1{
-			SessionID:   "session1",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session1",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -225,9 +225,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		}
 
 		session2 := app.AppSessionV1{
-			SessionID:   "session2",
-			Application: "chess",
-			Nonce:       1,
+			SessionID:     "session2",
+			ApplicationID: "chess",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser456",
@@ -264,9 +264,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		store := NewDBStore(db)
 
 		session1 := app.AppSessionV1{
-			SessionID:   "session1",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session1",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -282,9 +282,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		}
 
 		session2 := app.AppSessionV1{
-			SessionID:   "session2",
-			Application: "chess",
-			Nonce:       1,
+			SessionID:     "session2",
+			ApplicationID: "chess",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser456",
@@ -319,9 +319,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		store := NewDBStore(db)
 
 		session1 := app.AppSessionV1{
-			SessionID:   "session1",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session1",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -337,9 +337,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		}
 
 		session2 := app.AppSessionV1{
-			SessionID:   "session2",
-			Application: "chess",
-			Nonce:       1,
+			SessionID:     "session2",
+			ApplicationID: "chess",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser456",
@@ -374,9 +374,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		store := NewDBStore(db)
 
 		session1 := app.AppSessionV1{
-			SessionID:   "session1",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session1",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -392,9 +392,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		}
 
 		session2 := app.AppSessionV1{
-			SessionID:   "session2",
-			Application: "chess",
-			Nonce:       1,
+			SessionID:     "session2",
+			ApplicationID: "chess",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser456",
@@ -432,9 +432,9 @@ func TestDBStore_GetAppSessions(t *testing.T) {
 		for i := 1; i <= 3; i++ {
 			sessionID := "session" + string(rune(i+'0'))
 			session := app.AppSessionV1{
-				SessionID:   sessionID,
-				Application: "poker",
-				Nonce:       uint64(i),
+				SessionID:     sessionID,
+				ApplicationID: "poker",
+				Nonce:         uint64(i),
 				Participants: []app.AppParticipantV1{
 					{
 						WalletAddress:   "0xuser123",
@@ -500,9 +500,9 @@ func TestDBStore_UpdateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session123",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session123",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -544,9 +544,9 @@ func TestDBStore_UpdateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "nonexistent",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "nonexistent",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",
@@ -573,9 +573,9 @@ func TestDBStore_UpdateAppSession(t *testing.T) {
 		store := NewDBStore(db)
 
 		session := app.AppSessionV1{
-			SessionID:   "session456",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "session456",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0xuser123",

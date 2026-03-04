@@ -1,6 +1,8 @@
 package database
 
 import (
+	"time"
+
 	"github.com/erc7824/nitrolite/pkg/app"
 	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
@@ -124,6 +126,9 @@ type DatabaseStore interface {
 	// GetApps retrieves applications with optional filtering by app ID, owner wallet, and pagination.
 	GetApps(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error)
 
+	// GetAppCount returns the total number of applications owned by a specific wallet.
+	GetAppCount(ownerWallet string) (uint64, error)
+
 	// --- App Session Operations ---
 
 	// CreateAppSession initializes a new application session.
@@ -192,6 +197,26 @@ type DatabaseStore interface {
 
 	// CountChannelsByStatus returns channel counts grouped by (asset, status).
 	CountChannelsByStatus() ([]ChannelCount, error)
+
+	// --- User Staked Operations ---
+
+	// UpdateUserStaked upserts the staked amount for a user on a specific blockchain.
+	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
+
+	// GetTotalUserStaked returns the total staked amount for a user across all blockchains.
+	GetTotalUserStaked(wallet string) (decimal.Decimal, error)
+
+	// --- Action Log Operations ---
+
+	// RecordAction inserts a new action log entry for a user.
+	RecordAction(wallet string, gatedAction core.GatedAction) error
+
+	// GetUserActionCount returns the number of actions matching the given wallet, method, and path
+	// within the specified time window.
+	GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error)
+
+	// GetUserActionCounts returns a map of gated actions to their respective counts for a user within the specified time window.
+	GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error)
 
 	// --- Contract Event Operations ---
 

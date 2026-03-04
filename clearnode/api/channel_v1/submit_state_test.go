@@ -42,6 +42,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive senderWallet from a user signer key
@@ -216,6 +217,7 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -371,6 +373,7 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -524,6 +527,7 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -655,6 +659,7 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -788,6 +793,7 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -943,6 +949,7 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1098,6 +1105,7 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1237,6 +1245,7 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key

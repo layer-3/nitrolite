@@ -38,16 +38,16 @@ func databaseAppSessionToCore(dbSession *AppSessionV1) *app.AppSessionV1 {
 	}
 
 	return &app.AppSessionV1{
-		SessionID:    dbSession.ID,
-		Application:  dbSession.ApplicationID,
-		Participants: participants,
-		Quorum:       dbSession.Quorum,
-		Nonce:        dbSession.Nonce,
-		Status:       dbSession.Status,
-		Version:      dbSession.Version,
-		SessionData:  dbSession.SessionData,
-		CreatedAt:    dbSession.CreatedAt,
-		UpdatedAt:    dbSession.UpdatedAt,
+		SessionID:     dbSession.ID,
+		ApplicationID: dbSession.ApplicationID,
+		Participants:  participants,
+		Quorum:        dbSession.Quorum,
+		Nonce:         dbSession.Nonce,
+		Status:        dbSession.Status,
+		Version:       dbSession.Version,
+		SessionData:   dbSession.SessionData,
+		CreatedAt:     dbSession.CreatedAt,
+		UpdatedAt:     dbSession.UpdatedAt,
 	}
 }
 

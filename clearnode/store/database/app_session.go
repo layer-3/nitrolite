@@ -52,7 +52,7 @@ func (s *DBStore) CreateAppSession(session app.AppSessionV1) error {
 
 	dbSession := AppSessionV1{
 		ID:            strings.ToLower(session.SessionID),
-		ApplicationID: session.Application,
+		ApplicationID: strings.ToLower(session.ApplicationID),
 		Nonce:         session.Nonce,
 		Participants:  participants,
 		SessionData:   session.SessionData,

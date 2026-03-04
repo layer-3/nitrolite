@@ -362,12 +362,15 @@ func TestClientV1_AppSessionsV1GetAppSessions(t *testing.T) {
 			{
 				AppSessionID: testAppSession,
 				Status:       "open",
-				Participants: []rpc.AppParticipantV1{
-					{WalletAddress: testWalletV1, SignatureWeight: 1},
+				AppDefinitionV1: rpc.AppDefinitionV1{
+					Application: "0xapp",
+					Participants: []rpc.AppParticipantV1{
+						{WalletAddress: testWalletV1, SignatureWeight: 1},
+					},
+					Nonce:  "1",
+					Quorum: 1,
 				},
-				Quorum:  1,
 				Version: "1",
-				Nonce:   "1",
 			},
 		},
 		Metadata: rpc.PaginationMetadataV1{

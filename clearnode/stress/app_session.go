@@ -72,10 +72,10 @@ func preGenerateSigs(p *pipe, numParticipants, numOperates int, nonce uint64, as
 	}
 
 	definition := app.AppDefinitionV1{
-		Application:  "stress-test",
-		Participants: participants,
-		Quorum:       uint8(numParticipants),
-		Nonce:        nonce,
+		ApplicationID: "stress-test",
+		Participants:  participants,
+		Quorum:        uint8(numParticipants),
+		Nonce:         nonce,
 	}
 
 	sessionID, err := app.GenerateAppSessionIDV1(definition)

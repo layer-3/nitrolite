@@ -148,7 +148,7 @@ type AppParticipantV1 struct {
 // AppDefinitionV1 represents the definition for an app session.
 type AppDefinitionV1 struct {
 	// Application is the application identifier from an app registry
-	Application string `json:"application"`
+	Application string `json:"application_id"`
 	// Participants is the list of participants in the app session
 	Participants []AppParticipantV1 `json:"participants"`
 	// Quorum is the quorum required for the app session
@@ -187,17 +187,13 @@ type AppSessionInfoV1 struct {
 	AppSessionID string `json:"app_session_id"`
 	// Status is the session status (open/closed)
 	Status string `json:"status"`
-	// Participants is the list of participant wallet addresses with weights
-	Participants []AppParticipantV1 `json:"participants"`
+	// AppDefinitionV1 contains immutable application fields
+	AppDefinitionV1 AppDefinitionV1 `json:"app_definition"`
 	// SessionData is the JSON stringified session data
 	SessionData *string `json:"session_data,omitempty"`
-	// Quorum is the quorum required for operations
-	Quorum uint8 `json:"quorum"`
 	// Version is the current version of the session state
 	Version string `json:"version"`
 	// Nonce is the nonce for the session
-	Nonce string `json:"nonce"`
-	// Allocations is the list of allocations in the app state
 	Allocations []AppAllocationV1 `json:"allocations"`
 }
 
@@ -322,6 +318,22 @@ type TransactionV1 struct {
 	Amount string `json:"amount"`
 	// CreatedAt is when the transaction was created
 	CreatedAt string `json:"created_at"`
+}
+
+// ============================================================================
+// Action Gateway Types
+// ============================================================================
+
+// ActionAllowanceV1 represents the allowance information for a specific gated action.
+type ActionAllowanceV1 struct {
+	// GatedAction is the specific action being gated (e.g. transfer, app_operation)
+	GatedAction core.GatedAction `json:"gated_action"`
+	// TimeWindow is the time window for which the allowance is valid (e.g. "1h", "24h")
+	TimeWindow string `json:"time_window"`
+	// Allowance is the total allowance for the gated action within the time window
+	Allowance string `json:"allowance"`
+	// Used is the amount of the allowance that has already been used within the time window
+	Used string `json:"used"`
 }
 
 // ============================================================================

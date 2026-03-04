@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/erc7824/nitrolite/pkg/rpc"
@@ -85,4 +86,47 @@ func (c *Client) GetTransactions(ctx context.Context, wallet string, opts *GetTr
 		return nil, core.PaginationMetadata{}, err
 	}
 	return txs, transformPaginationMetadata(resp.Metadata), nil
+}
+
+// GetActionAllowances retrieves the action allowances for a user based on their staking level.
+//
+// Parameters:
+//   - wallet: The user's wallet address
+//
+// Returns:
+//   - Slice of ActionAllowance containing allowance information per gated action
+//   - Error if the request fails
+func (c *Client) GetActionAllowances(ctx context.Context, wallet string) ([]core.ActionAllowance, error) {
+	req := rpc.UserV1GetActionAllowancesRequest{Wallet: wallet}
+	resp, err := c.rpcClient.UserV1GetActionAllowances(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get action allowances: %w", err)
+	}
+	allowances, err := transformActionAllowances(resp.Allowances)
+	if err != nil {
+		return nil, fmt.Errorf("failed to transform action allowances: %w", err)
+	}
+	return allowances, nil
+}
+
+// transformActionAllowances converts RPC ActionAllowanceV1 slice to core.ActionAllowance slice.
+func transformActionAllowances(allowances []rpc.ActionAllowanceV1) ([]core.ActionAllowance, error) {
+	result := make([]core.ActionAllowance, 0, len(allowances))
+	for _, a := range allowances {
+		allowance, err := strconv.ParseUint(a.Allowance, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid allowance value %q for action %q: %w", a.Allowance, a.GatedAction, err)
+		}
+		used, err := strconv.ParseUint(a.Used, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid used value %q for action %q: %w", a.Used, a.GatedAction, err)
+		}
+		result = append(result, core.ActionAllowance{
+			GatedAction: a.GatedAction,
+			TimeWindow:  a.TimeWindow,
+			Allowance:   allowance,
+			Used:        used,
+		})
+	}
+	return result, nil
 }

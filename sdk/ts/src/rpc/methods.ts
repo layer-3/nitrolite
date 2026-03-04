@@ -49,6 +49,7 @@ export const AppsV1SubmitAppVersionMethod: Method = 'apps.v1.submit_app_version'
 export const UserV1Group: Group = 'user.v1';
 export const UserV1GetBalancesMethod: Method = 'user.v1.get_balances';
 export const UserV1GetTransactionsMethod: Method = 'user.v1.get_transactions';
+export const UserV1GetActionAllowancesMethod: Method = 'user.v1.get_action_allowances';
 
 // Node Group - V1 Methods
 export const NodeV1Group: Group = 'node.v1';

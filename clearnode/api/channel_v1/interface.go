@@ -1,6 +1,7 @@
 package channel_v1
 
 import (
+	"github.com/erc7824/nitrolite/clearnode/action_gateway"
 	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 )
@@ -78,6 +79,13 @@ type Store interface {
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,
 	// and matches the metadata hash.
 	ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error)
+
+	action_gateway.Store
+}
+
+type ActionGateway interface {
+	// AllowAction checks if a user is allowed to perform a specific gated action based on their past activity and allowances.
+	AllowAction(tx action_gateway.Store, userAddress string, gatedAction core.GatedAction) error
 }
 
 // SigValidator validates cryptographic signatures on state transitions.

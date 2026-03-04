@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/erc7824/nitrolite/pkg/app"
+	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/erc7824/nitrolite/pkg/log"
 	"github.com/erc7824/nitrolite/pkg/rpc"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -107,14 +108,14 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	}
 
 	err = h.useStoreInTx(func(tx Store) error {
-		registeredApp, err := tx.GetApp(appDef.Application)
+		registeredApp, err := tx.GetApp(appDef.ApplicationID)
 		if err != nil {
 			return rpc.Errorf("failed to look up application: %v", err)
 		}
 
 		// App must be registered regardless of CreationApprovalNotRequired flag.
 		if registeredApp == nil {
-			return rpc.Errorf("application %s is not registered", appDef.Application)
+			return rpc.Errorf("application %s is not registered", appDef.ApplicationID)
 		}
 
 		if !registeredApp.App.CreationApprovalNotRequired {
@@ -148,25 +149,30 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 			}
 		}
 
+		err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, core.GatedActionAppSessionCreation)
+		if err != nil {
+			return rpc.NewError(err)
+		}
+
 		// Create app session with 0 allocations
 		appSession := app.AppSessionV1{
-			SessionID:    appSessionID,
-			Application:  appDef.Application,
-			Participants: appDef.Participants,
-			Quorum:       appDef.Quorum,
-			Nonce:        appDef.Nonce,
-			Status:       app.AppSessionStatusOpen,
-			Version:      1,
-			SessionData:  reqPayload.SessionData,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			SessionID:     appSessionID,
+			ApplicationID: appDef.ApplicationID,
+			Participants:  appDef.Participants,
+			Quorum:        appDef.Quorum,
+			Nonce:         appDef.Nonce,
+			Status:        app.AppSessionStatusOpen,
+			Version:       1,
+			SessionData:   reqPayload.SessionData,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 		}
 
 		if err := tx.CreateAppSession(appSession); err != nil {
 			return rpc.Errorf("failed to create app session: %v", err)
 		}
 
-		if err := h.verifyQuorum(tx, appSessionID, appDef.Application, participantWeights, appDef.Quorum, packedRequest, reqPayload.QuorumSigs); err != nil {
+		if err := h.verifyQuorum(tx, appSessionID, appDef.ApplicationID, participantWeights, appDef.Quorum, packedRequest, reqPayload.QuorumSigs); err != nil {
 			return err
 		}
 

@@ -42,6 +42,7 @@ func TestRequestCreation_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -191,6 +192,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -332,6 +334,7 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data

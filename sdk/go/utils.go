@@ -385,13 +385,9 @@ func transformChannelDefinitionToRPC(def core.ChannelDefinition) rpc.ChannelDefi
 func transformAppSessions(sessions []rpc.AppSessionInfoV1) ([]app.AppSessionInfoV1, error) {
 	result := make([]app.AppSessionInfoV1, 0, len(sessions))
 	for _, s := range sessions {
-		// Transform participants
-		participants := make([]app.AppParticipantV1, 0, len(s.Participants))
-		for _, p := range s.Participants {
-			participants = append(participants, app.AppParticipantV1{
-				WalletAddress:   p.WalletAddress,
-				SignatureWeight: p.SignatureWeight,
-			})
+		appDef, err := transformAppDefinition(s.AppDefinitionV1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to transform app definition: %w", err)
 		}
 
 		// Transform allocations
@@ -418,25 +414,18 @@ func transformAppSessions(sessions []rpc.AppSessionInfoV1) ([]app.AppSessionInfo
 			sessionData = *s.SessionData
 		}
 
-		nonce, err := strconv.ParseUint(s.Nonce, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse nonce: %w", err)
-		}
-
 		version, err := strconv.ParseUint(s.Version, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse version: %w", err)
 		}
 
 		result = append(result, app.AppSessionInfoV1{
-			AppSessionID: s.AppSessionID,
-			IsClosed:     isClosed,
-			Participants: participants,
-			SessionData:  sessionData,
-			Quorum:       s.Quorum,
-			Version:      version,
-			Nonce:        nonce,
-			Allocations:  allocations,
+			AppSessionID:  s.AppSessionID,
+			AppDefinition: appDef,
+			IsClosed:      isClosed,
+			SessionData:   sessionData,
+			Version:       version,
+			Allocations:   allocations,
 		})
 	}
 	return result, nil
@@ -458,10 +447,10 @@ func transformAppDefinition(def rpc.AppDefinitionV1) (app.AppDefinitionV1, error
 	}
 
 	return app.AppDefinitionV1{
-		Application:  def.Application,
-		Participants: participants,
-		Quorum:       def.Quorum,
-		Nonce:        nonce,
+		ApplicationID: def.Application,
+		Participants:  participants,
+		Quorum:        def.Quorum,
+		Nonce:         nonce,
 	}, nil
 }
 
@@ -476,7 +465,7 @@ func transformAppDefinitionToRPC(def app.AppDefinitionV1) rpc.AppDefinitionV1 {
 	}
 
 	return rpc.AppDefinitionV1{
-		Application:  def.Application,
+		Application:  def.ApplicationID,
 		Participants: participants,
 		Quorum:       def.Quorum,
 		Nonce:        strconv.FormatUint(def.Nonce, 10),

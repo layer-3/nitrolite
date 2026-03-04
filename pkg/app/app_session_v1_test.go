@@ -11,7 +11,7 @@ import (
 func TestPackCreateAppSessionRequestV1(t *testing.T) {
 	t.Parallel()
 	def := AppDefinitionV1{
-		Application: "chess-v1",
+		ApplicationID: "chess-v1",
 		Participants: []AppParticipantV1{
 			{WalletAddress: "0x1111111111111111111111111111111111111111", SignatureWeight: 1},
 			{WalletAddress: "0x2222222222222222222222222222222222222222", SignatureWeight: 1},
@@ -48,7 +48,7 @@ func TestPackAppStateUpdateV1(t *testing.T) {
 func TestGenerateAppSessionIDV1(t *testing.T) {
 	t.Parallel()
 	def := AppDefinitionV1{
-		Application: "chess-v1",
+		ApplicationID: "chess-v1",
 		Participants: []AppParticipantV1{
 			{WalletAddress: "0x1111111111111111111111111111111111111111", SignatureWeight: 1},
 		},

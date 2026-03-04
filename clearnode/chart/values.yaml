@@ -37,13 +37,15 @@ config:
   blockchains: ""
   # -- Assets configuration
   assets: ""
+  # -- Action Gateway configuration
+  actionGateway: ""
 
 # -- Number of replicas
 replicaCount: 1
 
 image:
   # -- Docker image repository
-  repository: ghcr.io/erc7824/nitrolite/clearnode
+  repository: ghcr.io/layer-3/nitrolite/clearnode
   # -- Docker image tag
   tag: v1.0.0-rc.0
 

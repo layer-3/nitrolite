@@ -95,7 +95,7 @@ func main() {
 	fmt.Println("=== Step 1: Creating App Session 1 (Wallet 1 only) ===")
 
 	session1Definition := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: wallet1Address, SignatureWeight: 100},
 		},
@@ -186,7 +186,7 @@ func main() {
 	}
 
 	session2Definition := app.AppDefinitionV1{
-		Application: appID,
+		ApplicationID: appID,
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: wallet2Address, SignatureWeight: 50},
 			{WalletAddress: wallet3Address, SignatureWeight: 50},

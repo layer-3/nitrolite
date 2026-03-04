@@ -29,6 +29,7 @@ import {
   transformSignedAppStateUpdateToRPC,
   transformAppSessionInfo,
   transformAppDefinitionFromRPC,
+  transformActionAllowance,
 } from './utils';
 import * as blockchain from './blockchain';
 import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state';
@@ -1051,6 +1052,26 @@ export class Client {
       transactions: resp.transactions.map(transformTransaction),
       metadata: transformPaginationMetadata(resp.metadata),
     };
+  }
+
+  /**
+   * GetActionAllowances retrieves the action allowances for a user based on their staking level.
+   *
+   * @param wallet - The user's wallet address
+   * @returns Array of action allowances for each gated action
+   *
+   * @example
+   * ```typescript
+   * const allowances = await client.getActionAllowances('0x1234...');
+   * for (const a of allowances) {
+   *   console.log(`${a.gatedAction}: ${a.used}/${a.allowance} (${a.timeWindow})`);
+   * }
+   * ```
+   */
+  async getActionAllowances(wallet: Address): Promise<core.ActionAllowance[]> {
+    const req: API.UserV1GetActionAllowancesRequest = { wallet };
+    const resp = await this.rpcClient.userV1GetActionAllowances(req);
+    return resp.allowances.map(transformActionAllowance);
   }
 
   // ============================================================================

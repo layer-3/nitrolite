@@ -40,7 +40,10 @@ func testOwnerWallet(t *testing.T, appEntry app.AppV1) (address string, sig stri
 }
 
 func newHandlerWithDefaults(store Store) *Handler {
-	return NewHandler(store, 4096)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(store)
+	}
+	return NewHandler(store, storeTxProvider, &MockActionGateway{}, 4096)
 }
 
 func TestSubmitAppVersion_Success(t *testing.T) {
@@ -60,7 +63,11 @@ func TestSubmitAppVersion_Success(t *testing.T) {
 		},
 	}
 
-	handler := newHandlerWithDefaults(mockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(mockStore, storeTxProvider, &MockActionGateway{}, 4096)
 
 	reqPayload := rpc.AppsV1SubmitAppVersionRequest{
 		App: rpc.AppV1{

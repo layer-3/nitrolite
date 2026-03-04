@@ -49,6 +49,24 @@ type Error struct {
 	err error
 }
 
+// NewError creates a new Error from an existing error. The message from the provided error will be included in the RPC response sent to the client.
+//
+// Use this function when you have an existing error that contains a user-friendly message
+// that you want to send back to the client. If the original error message is not suitable
+// for client consumption, consider using Errorf to create a new Error with a custom message.
+//
+// Example:
+//
+//	// Creating an Error from an existing error
+//	if err := validateAddress(addr); err != nil {
+//	    return rpc.NewError(err)
+//	}
+//
+//	// This will send the original error message to the client, so ensure it's appropriate for exposure.
+func NewError(err error) Error {
+	return Error{err: err}
+}
+
 // Errorf creates a new Error with a formatted error message that will be sent
 // to the client in the RPC response. This is the preferred way to create client-facing
 // errors in RPC handlers.

@@ -3,6 +3,7 @@ package app_session_v1
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/erc7824/nitrolite/clearnode/action_gateway"
 	"github.com/erc7824/nitrolite/pkg/app"
 	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/erc7824/nitrolite/pkg/sign"
@@ -139,6 +141,42 @@ func (m *MockStore) GetApp(appID string) (*app.AppInfoV1, error) {
 func (m *MockStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error) {
 	args := m.Called(wallet, sessionKey, asset, metadataHash)
 	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockStore) GetAppCount(ownerWallet string) (uint64, error) {
+	args := m.Called(ownerWallet)
+	return args.Get(0).(uint64), args.Error(1)
+}
+
+func (m *MockStore) GetTotalUserStaked(wallet string) (decimal.Decimal, error) {
+	args := m.Called(wallet)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+func (m *MockStore) RecordAction(wallet string, gatedAction core.GatedAction) error {
+	args := m.Called(wallet, gatedAction)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error) {
+	args := m.Called(wallet, gatedAction, window)
+	return args.Get(0).(uint64), args.Error(1)
+}
+
+func (m *MockStore) GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error) {
+	args := m.Called(userWallet, window)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[core.GatedAction]uint64), args.Error(1)
+}
+
+type MockActionGateway struct {
+	Err error
+}
+
+func (m *MockActionGateway) AllowAction(_ action_gateway.Store, _ string, _ core.GatedAction) error {
+	return m.Err
 }
 
 // MockSigValidator is a mock implementation of the SigValidator interface

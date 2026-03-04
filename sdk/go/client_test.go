@@ -168,11 +168,13 @@ func TestClient_GetAppSessions(t *testing.T) {
 		AppSessions: []rpc.AppSessionInfoV1{
 			{
 				AppSessionID: "0xSessionID",
-				Participants: []rpc.AppParticipantV1{},
-				Allocations:  []rpc.AppAllocationV1{},
-				Status:       "open",
-				Nonce:        "1",
-				Version:      "1",
+				AppDefinitionV1: rpc.AppDefinitionV1{
+					Participants: []rpc.AppParticipantV1{},
+					Nonce:        "1",
+				},
+				Allocations: []rpc.AppAllocationV1{},
+				Status:      "open",
+				Version:     "1",
 			},
 		},
 		Metadata: rpc.PaginationMetadataV1{TotalCount: 1},
@@ -211,7 +213,7 @@ func TestClient_GetAppDefinition(t *testing.T) {
 
 	def, err := client.GetAppDefinition(context.Background(), "0xSessionID")
 	require.NoError(t, err)
-	assert.Equal(t, "0xApp", def.Application)
+	assert.Equal(t, "0xApp", def.ApplicationID)
 	assert.Equal(t, uint64(1), def.Nonce)
 }
 
@@ -232,7 +234,7 @@ func TestClient_CreateAppSession(t *testing.T) {
 	}
 
 	def := app.AppDefinitionV1{
-		Application: "chess-v1",
+		ApplicationID: "chess-v1",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: "0xAlice", SignatureWeight: 1},
 			{WalletAddress: "0xBob", SignatureWeight: 1},

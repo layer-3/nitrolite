@@ -277,6 +277,24 @@ export interface PaginationParamsV1 {
   limit?: number; // uint32
 }
 
+// ============================================================================
+// Action Allowance Types
+// ============================================================================
+
+/**
+ * ActionAllowanceV1 represents the allowance information for a specific gated action
+ */
+export interface ActionAllowanceV1 {
+  /** The specific action being gated (transfer, app_session_deposit, app_session_operation, app_session_withdrawal) */
+  gated_action: string;
+  /** Time window for which the allowance is valid (e.g. "24h0m0s") */
+  time_window: string;
+  /** Total allowance for the action within the time window */
+  allowance: string;
+  /** Amount already used within the time window */
+  used: string;
+}
+
 /**
  * PaginationMetadataV1 represents pagination information
  */

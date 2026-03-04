@@ -48,38 +48,46 @@ func (h *Handler) SubmitAppVersion(c *rpc.Context) {
 		return
 	}
 
-	appEntry := app.AppV1{
-		ID:                          strings.ToLower(req.App.ID),
-		OwnerWallet:                 strings.ToLower(req.App.OwnerWallet),
-		Metadata:                    req.App.Metadata,
-		Version:                     version,
-		CreationApprovalNotRequired: req.App.CreationApprovalNotRequired,
-	}
+	err = h.useStoreInTx(func(tx Store) error {
+		err := h.actionGateway.AllowAppRegistration(tx, req.App.OwnerWallet)
+		if err != nil {
+			return rpc.NewError(err)
+		}
 
-	packedApp, err := app.PackAppV1(appEntry)
+		appEntry := app.AppV1{
+			ID:                          strings.ToLower(req.App.ID),
+			OwnerWallet:                 strings.ToLower(req.App.OwnerWallet),
+			Metadata:                    req.App.Metadata,
+			Version:                     version,
+			CreationApprovalNotRequired: req.App.CreationApprovalNotRequired,
+		}
+
+		packedApp, err := app.PackAppV1(appEntry)
+		if err != nil {
+			return rpc.Errorf("failed to pack app data: %v", err)
+		}
+
+		sigBytes, err := hexutil.Decode(req.OwnerSig)
+		if err != nil {
+			return rpc.Errorf("failed to decode owner signature: %v", err)
+		}
+
+		sigValidator, err := sign.NewSigValidator(sign.TypeEthereumMsg)
+		if err != nil {
+			return rpc.Errorf("failed to create signature validator: %v", err)
+		}
+
+		if err := sigValidator.Verify(appEntry.OwnerWallet, packedApp, sigBytes); err != nil {
+			return rpc.Errorf("invalid owner signature: %v", err)
+		}
+
+		if err := tx.CreateApp(appEntry); err != nil {
+			return rpc.Errorf("failed to create app")
+		}
+
+		return nil
+	})
 	if err != nil {
-		c.Fail(rpc.Errorf("failed to pack app data: %v", err), "")
-		return
-	}
-
-	sigBytes, err := hexutil.Decode(req.OwnerSig)
-	if err != nil {
-		c.Fail(rpc.Errorf("failed to decode owner signature: %v", err), "")
-		return
-	}
-
-	sigValidator, err := sign.NewSigValidator(sign.TypeEthereumMsg)
-	if err != nil {
-		c.Fail(rpc.Errorf("failed to create signature validator: %v", err), "")
-		return
-	}
-
-	if err := sigValidator.Verify(appEntry.OwnerWallet, packedApp, sigBytes); err != nil {
-		c.Fail(rpc.Errorf("invalid owner signature: %v", err), "")
-		return
-	}
-
-	if err := h.store.CreateApp(appEntry); err != nil {
 		c.Fail(err, "failed to create app")
 		return
 	}

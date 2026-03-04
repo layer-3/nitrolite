@@ -35,9 +35,10 @@ const (
 	AppsV1SubmitAppVersionMethod Method = "apps.v1.submit_app_version"
 
 	// User Group - V1 Methods
-	UserV1Group                 Group  = "user.v1"
-	UserV1GetBalancesMethod     Method = "user.v1.get_balances"
-	UserV1GetTransactionsMethod Method = "user.v1.get_transactions"
+	UserV1Group                     Group  = "user.v1"
+	UserV1GetBalancesMethod         Method = "user.v1.get_balances"
+	UserV1GetTransactionsMethod     Method = "user.v1.get_transactions"
+	UserV1GetActionAllowancesMethod Method = "user.v1.get_action_allowances"
 
 	// Node Group - V1 Methods
 	NodeV1Group           Group  = "node.v1"

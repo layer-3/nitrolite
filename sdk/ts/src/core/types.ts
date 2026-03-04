@@ -209,6 +209,13 @@ export interface BalanceEntry {
   balance: Decimal;
 }
 
+export interface ActionAllowance {
+  gatedAction: string;
+  timeWindow: string;
+  allowance: bigint;
+  used: bigint;
+}
+
 // ============================================================================
 // Pagination Types
 // ============================================================================

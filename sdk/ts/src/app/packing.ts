@@ -37,7 +37,7 @@ export function packCreateAppSessionRequestV1(
       { type: 'string' }, // sessionData
     ],
     [
-      definition.application,
+      definition.applicationId,
       participants,
       definition.quorum,
       definition.nonce,
@@ -117,7 +117,7 @@ export function generateAppSessionIDV1(definition: AppDefinitionV1): `0x${string
       { type: 'uint8' }, // quorum
       { type: 'uint64' }, // nonce
     ],
-    [definition.application, participants, definition.quorum, definition.nonce]
+    [definition.applicationId, participants, definition.quorum, definition.nonce]
   );
 
   // Return the Keccak256 hash as hex string

@@ -1,6 +1,7 @@
 package app_session_v1
 
 import (
+	"github.com/erc7824/nitrolite/clearnode/action_gateway"
 	"github.com/erc7824/nitrolite/pkg/app"
 	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
@@ -45,6 +46,13 @@ type Store interface {
 
 	// Channel Session key state operations
 	ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error)
+
+	action_gateway.Store
+}
+
+type ActionGateway interface {
+	// AllowAction checks if a user is allowed to perform a specific gated action based on their past activity and allowances.
+	AllowAction(tx action_gateway.Store, userAddress string, gatedAction core.GatedAction) error
 }
 
 // StoreTxHandler is a function that executes Store operations within a transaction.

@@ -852,9 +852,9 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 
 		// Create an app session that the session key references
 		appSession := app.AppSessionV1{
-			SessionID:   testSess1,
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     testSess1,
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: testUser1, SignatureWeight: 100},
 			},
@@ -891,9 +891,9 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 
 		// Create an app session with a specific application
 		appSession := app.AppSessionV1{
-			SessionID:   testSess1,
-			Application: testApp1,
-			Nonce:       1,
+			SessionID:     testSess1,
+			ApplicationID: testApp1,
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: testUser1, SignatureWeight: 100},
 			},
@@ -941,9 +941,9 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 
 		// Create an app session
 		appSession := app.AppSessionV1{
-			SessionID:   testSess1,
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     testSess1,
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: testUser1, SignatureWeight: 100},
 			},
@@ -980,9 +980,9 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 
 		// Create an app session
 		appSession := app.AppSessionV1{
-			SessionID:   testSess1,
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     testSess1,
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: testUser1, SignatureWeight: 100},
 			},

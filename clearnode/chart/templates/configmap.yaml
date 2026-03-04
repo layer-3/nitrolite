@@ -13,3 +13,5 @@ data:
 {{ .Values.config.blockchains | indent 4 }}
   assets.yaml: |-
 {{ .Values.config.assets | indent 4 }}
+  action_gateway.yaml: |-
+{{ .Values.config.actionGateway | indent 4 }}

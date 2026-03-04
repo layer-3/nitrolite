@@ -106,3 +106,13 @@ func databaseAppToCore(dbApp *AppV1) app.AppInfoV1 {
 		UpdatedAt: dbApp.UpdatedAt,
 	}
 }
+
+func (s *DBStore) GetAppCount(ownerWallet string) (uint64, error) {
+	var count int64
+	err := s.db.Model(&AppV1{}).Where("owner_wallet = ?", strings.ToLower(ownerWallet)).Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count apps: %w", err)
+	}
+
+	return uint64(count), nil
+}

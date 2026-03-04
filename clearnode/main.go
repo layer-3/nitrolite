@@ -42,7 +42,7 @@ func main() {
 		RateLimitPerSec:           bb.RateLimitPerSec,
 		RateLimitBurst:            bb.RateLimitBurst,
 	}
-	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.RuntimeMetrics, bb.Logger)
+	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.ActionGateway, bb.RuntimeMetrics, bb.Logger)
 
 	rpcListenAddr := ":7824"
 	rpcListenEndpoint := "/ws"

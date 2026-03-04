@@ -21,7 +21,7 @@ func TestGetApps_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockStore, 4096)
+	handler := NewHandler(mockStore, nil, nil, 4096)
 
 	reqPayload := rpc.AppsV1GetAppsRequest{}
 	payload, err := rpc.NewPayload(reqPayload)
@@ -52,7 +52,7 @@ func TestGetApps_EmptyResults(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockStore, 4096)
+	handler := NewHandler(mockStore, nil, nil, 4096)
 
 	reqPayload := rpc.AppsV1GetAppsRequest{}
 	payload, err := rpc.NewPayload(reqPayload)
@@ -85,7 +85,7 @@ func TestGetApps_FilterByAppID(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockStore, 4096)
+	handler := NewHandler(mockStore, nil, nil, 4096)
 
 	aid := "app-1"
 	reqPayload := rpc.AppsV1GetAppsRequest{AppID: &aid}
@@ -119,7 +119,7 @@ func TestGetApps_FilterByOwnerWallet(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockStore, 4096)
+	handler := NewHandler(mockStore, nil, nil, 4096)
 
 	owner := "0x1111"
 	reqPayload := rpc.AppsV1GetAppsRequest{OwnerWallet: &owner}

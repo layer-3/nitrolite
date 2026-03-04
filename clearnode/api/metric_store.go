@@ -40,7 +40,7 @@ func (s *metricStore) UpdateAppSession(session app.AppSessionV1) error {
 		return err
 	}
 	s.callbacks = append(s.callbacks, func() {
-		s.m.IncAppStateUpdate(session.Application)
+		s.m.IncAppStateUpdate(session.ApplicationID)
 	})
 	return nil
 }

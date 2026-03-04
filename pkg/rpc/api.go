@@ -360,6 +360,18 @@ type UserV1GetTransactionsResponse struct {
 	Metadata PaginationMetadataV1 `json:"metadata"`
 }
 
+// UserV1GetActionAllowancesRequest retrieves the current action allowances for a user.
+type UserV1GetActionAllowancesRequest struct {
+	// Wallet is the user's wallet address
+	Wallet string `json:"wallet"`
+}
+
+// UserV1GetActionAllowancesResponse returns the list of action allowances for the user.
+type UserV1GetActionAllowancesResponse struct {
+	// Allowances is the list of action allowances for the user
+	Allowances []ActionAllowanceV1 `json:"allowances"`
+}
+
 // ============================================================================
 // Node Group - V1 API
 // ============================================================================

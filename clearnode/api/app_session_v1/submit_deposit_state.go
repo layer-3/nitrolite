@@ -44,8 +44,48 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 
 	var nodeSig string
 	err = h.useStoreInTx(func(tx Store) error {
+		appSession, err := tx.GetAppSession(appStateUpd.AppSessionID)
+		if err != nil {
+			return rpc.Errorf("app session not found: %v", err)
+		}
+		if appSession == nil {
+			return rpc.Errorf("app session not found")
+		}
+		if len(reqPayload.QuorumSigs) > len(appSession.Participants) {
+			return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(reqPayload.QuorumSigs), len(appSession.Participants))
+		}
+		if appSession.Status == app.AppSessionStatusClosed {
+			return rpc.Errorf("app session is already closed")
+		}
+		if appStateUpd.Version != appSession.Version+1 {
+			return rpc.Errorf("invalid app session version: expected %d, got %d", appSession.Version+1, appStateUpd.Version)
+		}
+
+		if appStateUpd.Intent != app.AppStateUpdateIntentDeposit {
+			return rpc.Errorf("invalid intent: expected 'deposit', got '%s'", appStateUpd.Intent)
+		}
+
+		participantWeights := getParticipantWeights(appSession.Participants)
+
+		if len(reqPayload.QuorumSigs) == 0 {
+			return rpc.Errorf("no signatures provided")
+		}
+
+		registeredApp, err := tx.GetApp(appSession.ApplicationID)
+		if err != nil {
+			return rpc.Errorf("failed to look up application: %v", err)
+		}
+		if registeredApp == nil {
+			return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
+		}
+
+		err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
+		if err != nil {
+			return rpc.NewError(err)
+		}
+
 		// Lock the user's state to prevent concurrent modifications
-		_, err := tx.LockUserState(userState.UserWallet, userState.Asset)
+		_, err = tx.LockUserState(userState.UserWallet, userState.Asset)
 		if err != nil {
 			return rpc.Errorf("failed to lock user state: %v", err)
 		}
@@ -116,40 +156,13 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 		}
 		h.metrics.IncChannelStateSigValidation(sigType, true)
 
-		appSession, err := tx.GetAppSession(appStateUpd.AppSessionID)
-		if err != nil {
-			return rpc.Errorf("app session not found: %v", err)
-		}
-		if appSession == nil {
-			return rpc.Errorf("app session not found")
-		}
-		if len(reqPayload.QuorumSigs) > len(appSession.Participants) {
-			return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(reqPayload.QuorumSigs), len(appSession.Participants))
-		}
-		if appSession.Status == app.AppSessionStatusClosed {
-			return rpc.Errorf("app session is already closed")
-		}
-		if appStateUpd.Version != appSession.Version+1 {
-			return rpc.Errorf("invalid app session version: expected %d, got %d", appSession.Version+1, appStateUpd.Version)
-		}
-
-		if appStateUpd.Intent != app.AppStateUpdateIntentDeposit {
-			return rpc.Errorf("invalid intent: expected 'deposit', got '%s'", appStateUpd.Intent)
-		}
-
-		participantWeights := getParticipantWeights(appSession.Participants)
-
-		if len(reqPayload.QuorumSigs) == 0 {
-			return rpc.Errorf("no signatures provided")
-		}
-
 		// Pack the app state update for signature verification
 		packedStateUpdate, err := app.PackAppStateUpdateV1(appStateUpd)
 		if err != nil {
 			return rpc.Errorf("failed to pack app state update: %v", err)
 		}
 
-		if err := h.verifyQuorum(tx, appStateUpd.AppSessionID, appSession.Application, participantWeights, appSession.Quorum, packedStateUpdate, reqPayload.QuorumSigs); err != nil {
+		if err := h.verifyQuorum(tx, appStateUpd.AppSessionID, appSession.ApplicationID, participantWeights, appSession.Quorum, packedStateUpdate, reqPayload.QuorumSigs); err != nil {
 			return err
 		}
 

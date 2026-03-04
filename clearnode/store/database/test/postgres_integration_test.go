@@ -254,9 +254,9 @@ func TestPostgres_AppSessionOperations(t *testing.T) {
 
 	t.Run("Create and retrieve app session", func(t *testing.T) {
 		session := app.AppSessionV1{
-			SessionID:   "0x7234567890123456789012345678901234567890123456789012345678901234",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "0x7234567890123456789012345678901234567890123456789012345678901234",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0x7334567890123456789012345678901234567890",
@@ -283,7 +283,7 @@ func TestPostgres_AppSessionOperations(t *testing.T) {
 		require.NotNil(t, retrieved)
 
 		assert.Equal(t, session.SessionID, retrieved.SessionID)
-		assert.Equal(t, session.Application, retrieved.Application)
+		assert.Equal(t, session.ApplicationID, retrieved.ApplicationID)
 		assert.Len(t, retrieved.Participants, 2)
 	})
 
@@ -291,9 +291,9 @@ func TestPostgres_AppSessionOperations(t *testing.T) {
 		participant := "0x7534567890123456789012345678901234567890"
 
 		session := app.AppSessionV1{
-			SessionID:   "0x7634567890123456789012345678901234567890123456789012345678901234",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "0x7634567890123456789012345678901234567890123456789012345678901234",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   participant,
@@ -319,9 +319,9 @@ func TestPostgres_AppSessionOperations(t *testing.T) {
 
 	t.Run("Update app session", func(t *testing.T) {
 		session := app.AppSessionV1{
-			SessionID:   "0x7734567890123456789012345678901234567890123456789012345678901234",
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     "0x7734567890123456789012345678901234567890123456789012345678901234",
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{
 					WalletAddress:   "0x7834567890123456789012345678901234567890",
@@ -380,9 +380,9 @@ func TestPostgres_AppLedgerOperations(t *testing.T) {
 
 		// Create session with participants
 		session := app.AppSessionV1{
-			SessionID:   sessionID,
-			Application: "poker",
-			Nonce:       1,
+			SessionID:     sessionID,
+			ApplicationID: "poker",
+			Nonce:         1,
 			Participants: []app.AppParticipantV1{
 				{WalletAddress: wallet1, SignatureWeight: 50},
 				{WalletAddress: wallet2, SignatureWeight: 50},

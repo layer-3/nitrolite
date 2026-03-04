@@ -842,6 +842,15 @@ func (t TransitionType) String() string {
 	}
 }
 
+func (t TransitionType) GatedAction() GatedAction {
+	switch t {
+	case TransitionTypeTransferSend:
+		return GatedActionTransfer
+	default:
+		return ""
+	}
+}
+
 // Transition represents a state transition
 type Transition struct {
 	Type      TransitionType  `json:"type"`       // Type of state transition
@@ -903,22 +912,61 @@ type Token struct {
 	Decimals     uint8  `json:"decimals"`      // Number of decimal places
 }
 
-// SessionKey represents a session key with spending allowances
-type SessionKey struct {
-	ID          uint64           `json:"id"`              // Unique identifier for the session key record
-	SessionKey  string           `json:"session_key"`     // The address of the session key
-	Application string           `json:"application"`     // Name of the application authorized for this session key
-	Allowances  []AssetAllowance `json:"allowances"`      // Asset allowances with usage tracking
-	Scope       *string          `json:"scope,omitempty"` // Permission scope for this session key
-	ExpiresAt   string           `json:"expires_at"`      // When this session key expires (ISO 8601 format)
-	CreatedAt   string           `json:"created_at"`      // When the session key was created (ISO 8601 format)
+// GatedAction represents an action that can be gated behind certain conditions, such as feature flags or access controls.
+type GatedAction string
+
+var (
+	GatedActionTransfer GatedAction = "transfer"
+
+	GatedActionAppSessionCreation   GatedAction = "app_session_creation"
+	GatedActionAppSessionOperation  GatedAction = "app_session_operation"
+	GatedActionAppSessionDeposit    GatedAction = "app_session_deposit"
+	GatedActionAppSessionWithdrawal GatedAction = "app_session_withdrawal"
+)
+
+// ID returns a unique identifier for the GatedAction, which can be used for efficient storage and retrieval in databases or feature flag systems.
+func (g GatedAction) ID() uint8 {
+	switch g {
+	case GatedActionTransfer:
+		return 1
+	case GatedActionAppSessionCreation:
+		return 10
+	case GatedActionAppSessionOperation:
+		return 11
+	case GatedActionAppSessionDeposit:
+		return 12
+	case GatedActionAppSessionWithdrawal:
+		return 13
+	}
+	return 0
 }
 
-// AssetAllowance represents asset allowance with usage tracking
-type AssetAllowance struct {
-	Asset     string          `json:"asset"`     // Symbol of the asset
-	Allowance decimal.Decimal `json:"allowance"` // Maximum amount the session key can spend
-	Used      decimal.Decimal `json:"used"`      // Amount already spent by this session key
+// GatedActionFromID returns the GatedAction corresponding to the given uint8 ID.
+// Returns an empty GatedAction and false if the ID is unknown.
+func GatedActionFromID(id uint8) (GatedAction, bool) {
+	switch id {
+	case 1:
+		return GatedActionTransfer, true
+	case 10:
+		return GatedActionAppSessionCreation, true
+	case 11:
+		return GatedActionAppSessionOperation, true
+	case 12:
+		return GatedActionAppSessionDeposit, true
+	case 13:
+		return GatedActionAppSessionWithdrawal, true
+	default:
+		return "", false
+	}
+}
+
+// ActionAllowance represents the allowance information for a specific gated action,
+// including the time window for which the allowance applies, the total allowance, and the amount used.
+type ActionAllowance struct {
+	GatedAction GatedAction
+	TimeWindow  string
+	Allowance   uint64
+	Used        uint64
 }
 
 // ========= Blockchain CLient Response Types =========

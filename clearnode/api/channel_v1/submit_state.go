@@ -30,7 +30,12 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 	var nodeSig string
 	incomingTransition := incomingState.Transition
 	err = h.useStoreInTx(func(tx Store) error {
-		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
+		err := h.actionGateway.AllowAction(tx, incomingState.UserWallet, incomingState.Transition.Type.GatedAction())
+		if err != nil {
+			return rpc.NewError(err)
+		}
+
+		_, err = tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
 		if err != nil {
 			return rpc.Errorf("failed to lock user state: %v", err)
 		}

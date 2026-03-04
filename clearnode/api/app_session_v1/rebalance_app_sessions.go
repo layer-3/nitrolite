@@ -103,6 +103,18 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 			if appSession == nil {
 				return rpc.Errorf("app session not found: %s", update.AppStateUpdate.AppSessionID)
 			}
+			registeredApp, err := tx.GetApp(appSession.ApplicationID)
+			if err != nil {
+				return rpc.Errorf("failed to look up application: %v", err)
+			}
+			if registeredApp == nil {
+				return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
+			}
+
+			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, update.AppStateUpdate.Intent.GatedAction())
+			if err != nil {
+				return rpc.NewError(err)
+			}
 			if len(update.QuorumSigs) > len(appSession.Participants) {
 				return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(update.QuorumSigs), len(appSession.Participants))
 			}
@@ -125,7 +137,7 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 				return rpc.Errorf("failed to pack app state update for session %s: %v", update.AppStateUpdate.AppSessionID, err)
 			}
 
-			if err := h.verifyQuorum(tx, update.AppStateUpdate.AppSessionID, appSession.Application, participantWeights, appSession.Quorum, packedStateUpdate, update.QuorumSigs); err != nil {
+			if err := h.verifyQuorum(tx, update.AppStateUpdate.AppSessionID, appSession.ApplicationID, participantWeights, appSession.Quorum, packedStateUpdate, update.QuorumSigs); err != nil {
 				return rpc.Errorf("quorum verification failed for session %s: %v", update.AppStateUpdate.AppSessionID, err)
 			}
 

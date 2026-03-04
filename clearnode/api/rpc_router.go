@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/erc7824/nitrolite/clearnode/action_gateway"
 	"github.com/erc7824/nitrolite/clearnode/api/app_session_v1"
 	"github.com/erc7824/nitrolite/clearnode/api/apps_v1"
 	"github.com/erc7824/nitrolite/clearnode/api/channel_v1"
@@ -46,6 +47,7 @@ func NewRPCRouter(
 	signer sign.Signer,
 	dbStore database.DatabaseStore,
 	memoryStore memory.MemoryStore,
+	actionGateway *action_gateway.ActionGateway,
 	runtimeMetrics metrics.RuntimeMetricExporter,
 	logger log.Logger,
 ) *RPCRouter {
@@ -80,6 +82,12 @@ func NewRPCRouter(
 	useAppSessionV1StoreInTx := func(h app_session_v1.StoreTxHandler) error {
 		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
 	}
+	useAppV1StoreInTx := func(h apps_v1.StoreTxHandler) error {
+		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
+	}
+	useUserV1StoreInTx := func(h user_v1.StoreTxHandler) error {
+		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
+	}
 
 	nodeAddress := signer.PublicKey().Address().String()
 
@@ -91,12 +99,12 @@ func NewRPCRouter(
 		panic("failed to create channel wallet signer: " + err.Error())
 	}
 
-	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
-	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, signer, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
+	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
+	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, signer, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
 		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates)
-	appsV1Handler := apps_v1.NewHandler(dbStore, cfg.MaxAppMetadataLen)
+	appsV1Handler := apps_v1.NewHandler(dbStore, useAppV1StoreInTx, actionGateway, cfg.MaxAppMetadataLen)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)
-	userV1Handler := user_v1.NewHandler(dbStore)
+	userV1Handler := user_v1.NewHandler(dbStore, useUserV1StoreInTx, actionGateway)
 
 	appSessionV1Group := r.Node.NewGroup(rpc.AppSessionsV1Group.String())
 	appSessionV1Group.Handle(rpc.AppSessionsV1SubmitDepositStateMethod.String(), appSessionV1Handler.SubmitDepositState)
@@ -132,6 +140,7 @@ func NewRPCRouter(
 	userV1Group := r.Node.NewGroup(rpc.UserV1Group.String())
 	userV1Group.Handle(rpc.UserV1GetBalancesMethod.String(), userV1Handler.GetBalances)
 	userV1Group.Handle(rpc.UserV1GetTransactionsMethod.String(), userV1Handler.GetTransactions)
+	userV1Group.Handle(rpc.UserV1GetActionAllowancesMethod.String(), userV1Handler.GetActionAllowances)
 
 	return r
 }

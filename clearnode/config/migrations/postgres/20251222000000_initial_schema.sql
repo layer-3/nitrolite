@@ -119,7 +119,7 @@ CREATE TABLE app_sessions_v1 (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_app_sessions_v1_application ON app_sessions_v1(application);
+CREATE INDEX idx_app_sessions_v1_application ON app_sessions_v1(application_id);
 CREATE INDEX idx_app_sessions_v1_status ON app_sessions_v1(status);
 
 -- App Session Participants table: Participants in application sessions
@@ -135,7 +135,7 @@ CREATE INDEX idx_app_session_participants_v1_wallet ON app_session_participants_
 
 -- App Ledger table: Internal ledger entries for application sessions
 CREATE TABLE app_ledger_v1 (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id CHAR(66) NOT NULL, -- Session ID
     asset_symbol VARCHAR(20) NOT NULL,
     wallet CHAR(42) NOT NULL,
@@ -259,7 +259,33 @@ CREATE TABLE user_balances (
 
 CREATE INDEX idx_user_balances_user_wallet ON user_balances(user_wallet);
 
+-- User staked table: Stores staked amounts per user per blockchain
+CREATE TABLE user_staked_v1 (
+    user_wallet CHAR(42) NOT NULL,
+    blockchain_id NUMERIC(20,0) NOT NULL,
+    amount NUMERIC(78, 18) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_wallet, blockchain_id)
+);
+
+CREATE INDEX idx_user_staked_v1_user_wallet ON user_staked_v1(user_wallet);
+
+-- Action log table: Records user actions for rate limiting and auditing
+CREATE TABLE action_log_v1 (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_wallet CHAR(42) NOT NULL,
+    gated_action SMALLINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_action_log_v1_wallet_gated_action_created ON action_log_v1(user_wallet, gated_action, created_at DESC);
+
 -- +goose Down
+DROP INDEX IF EXISTS idx_action_log_v1_wallet_gated_action_created;
+DROP TABLE IF EXISTS action_log_v1;
+DROP INDEX IF EXISTS idx_user_staked_v1_user_wallet;
+DROP TABLE IF EXISTS user_staked_v1;
 DROP INDEX IF EXISTS idx_user_balances_user_wallet;
 DROP TABLE IF EXISTS user_balances;
 DROP INDEX IF EXISTS idx_channel_session_key_assets_v1_asset;

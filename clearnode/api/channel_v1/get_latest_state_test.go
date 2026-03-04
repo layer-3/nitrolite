@@ -38,6 +38,7 @@ func TestGetLatestState_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data
@@ -136,6 +137,7 @@ func TestGetLatestState_OnlySigned(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data

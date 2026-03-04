@@ -29,6 +29,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -44,7 +45,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 
 	// Build the app.AppDefinitionV1 for signing
 	appDef := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 			{WalletAddress: participant2, SignatureWeight: 1},
@@ -132,6 +133,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -149,7 +151,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 
 	// Build the app.AppDefinitionV1 for signing
 	appDef := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 2},
 			{WalletAddress: participant2, SignatureWeight: 1},
@@ -233,6 +235,7 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -296,6 +299,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -365,6 +369,7 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -428,6 +433,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -442,7 +448,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 
 	// Build the app.AppDefinitionV1 for signing (with participant1 only)
 	appDef := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 		},
@@ -509,6 +515,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -525,7 +532,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 
 	// Build the app.AppDefinitionV1 for signing
 	appDef := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 			{WalletAddress: participant2, SignatureWeight: 1},
@@ -604,6 +611,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -619,7 +627,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 
 	// Build the app.AppDefinitionV1 for signing
 	appDef := app.AppDefinitionV1{
-		Application: "test-app",
+		ApplicationID: "test-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 			{WalletAddress: participant2, SignatureWeight: 1},
@@ -696,6 +704,7 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -764,6 +773,7 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -832,6 +842,7 @@ func TestCreateAppSession_AppNotRegistered(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -844,7 +855,7 @@ func TestCreateAppSession_AppNotRegistered(t *testing.T) {
 	participant1 := wallet1.Address
 
 	appDef := app.AppDefinitionV1{
-		Application: "unregistered-app",
+		ApplicationID: "unregistered-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 		},
@@ -900,6 +911,7 @@ func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -912,7 +924,7 @@ func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
 	participant1 := wallet1.Address
 
 	appDef := app.AppDefinitionV1{
-		Application: "restricted-app",
+		ApplicationID: "restricted-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 		},
@@ -975,6 +987,7 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
+		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
@@ -989,7 +1002,7 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 	participant1 := wallet1.Address
 
 	appDef := app.AppDefinitionV1{
-		Application: "restricted-app",
+		ApplicationID: "restricted-app",
 		Participants: []app.AppParticipantV1{
 			{WalletAddress: participant1, SignatureWeight: 1},
 		},

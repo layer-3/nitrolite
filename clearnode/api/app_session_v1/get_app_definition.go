@@ -36,7 +36,7 @@ func (h *Handler) GetAppDefinition(c *rpc.Context) {
 		}
 
 		definition = rpc.AppDefinitionV1{
-			Application:  session.Application,
+			Application:  session.ApplicationID,
 			Participants: participants,
 			Quorum:       session.Quorum,
 			Nonce:        strconv.FormatUint(session.Nonce, 10),

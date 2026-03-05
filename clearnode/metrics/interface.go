@@ -60,4 +60,7 @@ func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool) {}
 type StoreMetricExporter interface {
 	SetAppSessions(applicationID string, status app.AppSessionStatus, count uint64)
 	SetChannels(asset string, status core.ChannelStatus, count uint64)
+	SetActiveUsers(asset, timeSpanLabel string, count uint64)
+	SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64)
+	SetTotalValueLocked(domain, asset string, value float64)
 }

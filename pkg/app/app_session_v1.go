@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -70,6 +72,45 @@ func (status AppSessionStatus) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+func (s *AppSessionStatus) Scan(src any) error {
+	switch v := src.(type) {
+	case int64:
+		*s = AppSessionStatus(uint8(v))
+		return nil
+	case int32:
+		*s = AppSessionStatus(uint8(v))
+		return nil
+	case int:
+		*s = AppSessionStatus(uint8(v))
+		return nil
+	case string:
+		return s.scanString(v)
+	default:
+		return fmt.Errorf("unsupported AppSessionStatus scan type %T", src)
+	}
+}
+
+func (s *AppSessionStatus) scanString(v string) error {
+	v = strings.TrimSpace(v)
+	// if numeric
+	if n, err := strconv.Atoi(v); err == nil {
+		*s = AppSessionStatus(uint8(n))
+		return nil
+	}
+	// else map names
+	switch strings.ToLower(v) {
+	case AppSessionStatusVoid.String():
+		*s = AppSessionStatusVoid
+	case AppSessionStatusOpen.String():
+		*s = AppSessionStatusOpen
+	case AppSessionStatusClosed.String():
+		*s = AppSessionStatusClosed
+	default:
+		return fmt.Errorf("unknown AppSessionStatus %q", v)
+	}
+	return nil
 }
 
 // AppSessionV1 represents an application session in the V1 API.

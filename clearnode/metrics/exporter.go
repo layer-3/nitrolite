@@ -24,28 +24,49 @@ var (
 )
 
 type storeMetricExporter struct {
-	appSessionsTotal *prometheus.GaugeVec
-	channelsTotal    *prometheus.GaugeVec
+	appSessionsTotal  *prometheus.GaugeVec
+	channelsTotal     *prometheus.GaugeVec
+	usersActive       *prometheus.GaugeVec
+	appSessionsActive *prometheus.GaugeVec
+	totalValueLocked  *prometheus.GaugeVec
 }
 
 func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, error) {
 	m := &storeMetricExporter{
 		appSessionsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
-			Name:      "app_sessions_active",
+			Name:      "app_sessions_total",
 			Help:      "Current total number of app sessions",
 		}, []string{"application", "status"}),
 		channelsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
-			Name:      "channels_active",
+			Name:      "channels_total",
 			Help:      "Current total number of channels",
 		}, []string{"asset", "status"}),
+		usersActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "users_active",
+			Help:      "Current total active users",
+		}, []string{"asset", "timespan"}),
+		appSessionsActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "app_sessions_active",
+			Help:      "Current total active app sessions",
+		}, []string{"application", "timespan"}),
+		totalValueLocked: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "total_value_locked",
+			Help:      "Total value locked by domain and asset",
+		}, []string{"domain", "asset"}),
 	}
 
 	if reg != nil {
 		reg.MustRegister(
 			m.appSessionsTotal,
 			m.channelsTotal,
+			m.usersActive,
+			m.appSessionsActive,
+			m.totalValueLocked,
 		)
 	} else {
 		return nil, fmt.Errorf("prometheus registerer not provided")
@@ -60,6 +81,18 @@ func (m *storeMetricExporter) SetAppSessions(applicationID string, status app.Ap
 
 func (m *storeMetricExporter) SetChannels(asset string, status core.ChannelStatus, count uint64) {
 	m.channelsTotal.WithLabelValues(asset, status.String()).Set(float64(count))
+}
+
+func (m *storeMetricExporter) SetActiveUsers(asset, timeSpanLabel string, count uint64) {
+	m.usersActive.WithLabelValues(asset, timeSpanLabel).Set(float64(count))
+}
+
+func (m *storeMetricExporter) SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64) {
+	m.appSessionsActive.WithLabelValues(applicationID, timeSpanLabel).Set(float64(count))
+}
+
+func (m *storeMetricExporter) SetTotalValueLocked(domain, asset string, value float64) {
+	m.totalValueLocked.WithLabelValues(domain, asset).Set(value)
 }
 
 // runtimeMetricExporter is the concrete implementation of the Metrics interface.

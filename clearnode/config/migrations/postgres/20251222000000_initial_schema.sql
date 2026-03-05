@@ -87,6 +87,7 @@ CREATE TABLE transactions (
 );
 
 CREATE INDEX idx_transactions_type ON transactions(tx_type);
+CREATE INDEX idx_transactions_type_created ON transactions(tx_type, created_at);
 CREATE INDEX idx_transactions_from_account ON transactions(from_account);
 CREATE INDEX idx_transactions_to_account ON transactions(to_account);
 CREATE INDEX idx_transactions_from_to_type ON transactions(from_account, to_account, tx_type);
@@ -281,7 +282,29 @@ CREATE TABLE action_log_v1 (
 
 CREATE INDEX idx_action_log_v1_wallet_gated_action_created ON action_log_v1(user_wallet, gated_action, created_at DESC);
 
+-- Lifespan metrics table: Stores accumulated metric counters with labels
+CREATE TABLE lifespan_metrics (
+    id VARCHAR(66) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    labels JSONB,
+    value NUMERIC(78, 18) NOT NULL,
+    last_timestamp TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_lifespan_metrics_name_last_ts ON lifespan_metrics(name, last_timestamp DESC);
+
+-- Indexes for metric-gathering queries that filter on updated_at
+CREATE INDEX idx_channels_updated_at ON channels(updated_at);
+CREATE INDEX idx_app_sessions_v1_updated_at ON app_sessions_v1(updated_at);
+CREATE INDEX idx_user_balances_updated_at ON user_balances(updated_at);
+
 -- +goose Down
+DROP INDEX IF EXISTS idx_user_balances_updated_at;
+DROP INDEX IF EXISTS idx_app_sessions_v1_updated_at;
+DROP INDEX IF EXISTS idx_channels_updated_at;
+DROP INDEX IF EXISTS idx_lifespan_metrics_name_last_ts;
+DROP TABLE IF EXISTS lifespan_metrics;
 DROP INDEX IF EXISTS idx_action_log_v1_wallet_gated_action_created;
 DROP TABLE IF EXISTS action_log_v1;
 DROP INDEX IF EXISTS idx_user_staked_v1_user_wallet;
@@ -321,6 +344,7 @@ DROP INDEX IF EXISTS idx_transactions_from_comp;
 DROP INDEX IF EXISTS idx_transactions_from_to_type;
 DROP INDEX IF EXISTS idx_transactions_to_account;
 DROP INDEX IF EXISTS idx_transactions_from_account;
+DROP INDEX IF EXISTS idx_transactions_type_created;
 DROP INDEX IF EXISTS idx_transactions_type;
 DROP TABLE IF EXISTS transactions;
 DROP INDEX IF EXISTS idx_channel_states_escrow_channel_id;

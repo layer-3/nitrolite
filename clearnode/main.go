@@ -108,7 +108,7 @@ func main() {
 		})
 	}
 
-	go runStoreMetricsExporter(ctx, 10*time.Second, bb.DbStore, bb.StoreMetrics, logger)
+	go runStoreMetricsExporter(ctx, 30*time.Second, bb.DbStore, bb.StoreMetrics, logger)
 
 	metricsListenAddr := ":4242"
 	metricsEndpoint := "/metrics"
@@ -171,8 +171,11 @@ func runStoreMetricsExporter(
 	ctx context.Context,
 	fetchInterval time.Duration,
 	store interface {
-		CountAppSessionsByStatus() ([]database.AppSessionCount, error)
-		CountChannelsByStatus() ([]database.ChannelCount, error)
+		GetChannelsCountByLabels() ([]database.ChannelCount, error)
+		GetAppSessionsCountByLabels() ([]database.AppSessionCount, error)
+		GetTotalValueLocked() ([]database.TotalValueLocked, error)
+		CountActiveUsers(window time.Duration) ([]database.ActiveCountByLabel, error)
+		CountActiveAppSessions(window time.Duration) ([]database.ActiveCountByLabel, error)
 	},
 	metricExported metrics.StoreMetricExporter, logger log.Logger) {
 	logger = logger.WithName("store-metrics")
@@ -182,21 +185,62 @@ func runStoreMetricsExporter(
 	for {
 		select {
 		case <-ticker.C:
-			if counts, err := store.CountAppSessionsByStatus(); err != nil {
-				logger.Error("failed to count app sessions", "error", err)
+			timeSpans := []struct {
+				label    string
+				duration time.Duration
+			}{
+				{"day", 24 * time.Hour},
+				{"week", 7 * 24 * time.Hour},
+				{"month", 30 * 24 * time.Hour},
+			}
+
+			channelCounts, err := store.GetChannelsCountByLabels()
+			if err != nil {
+				logger.Error("failed to get channel counts by labels", "error", err)
 			} else {
-				for _, c := range counts {
+				for _, c := range channelCounts {
+					metricExported.SetChannels(c.Asset, c.Status, c.Count)
+				}
+			}
+
+			appSessionCounts, err := store.GetAppSessionsCountByLabels()
+			if err != nil {
+				logger.Error("failed to get app sessions counts by labels", "error", err)
+			} else {
+				for _, c := range appSessionCounts {
 					metricExported.SetAppSessions(c.Application, c.Status, c.Count)
 				}
 			}
 
-			if counts, err := store.CountChannelsByStatus(); err != nil {
-				logger.Error("failed to count channels", "error", err)
+			tvlCounts, err := store.GetTotalValueLocked()
+			if err != nil {
+				logger.Error("failed to get total value locked", "error", err)
 			} else {
-				for _, c := range counts {
-					metricExported.SetChannels(c.Asset, c.Status, c.Count)
+				for _, c := range tvlCounts {
+					metricExported.SetTotalValueLocked(c.Domain, c.Asset, c.Value.InexactFloat64())
 				}
 			}
+
+			for _, tw := range timeSpans {
+				if counts, err := store.CountActiveUsers(tw.duration); err != nil {
+					logger.Error("failed to count active users", "timeframe", tw.label, "error", err)
+				} else {
+					for _, c := range counts {
+						metricExported.SetActiveUsers(c.Label, tw.label, c.Count)
+					}
+				}
+			}
+
+			for _, tw := range timeSpans {
+				if counts, err := store.CountActiveAppSessions(tw.duration); err != nil {
+					logger.Error("failed to count active app sessions", "timeframe", tw.label, "error", err)
+				} else {
+					for _, c := range counts {
+						metricExported.SetActiveAppSessions(c.Label, tw.label, c.Count)
+					}
+				}
+			}
+
 		case <-ctx.Done():
 			logger.Info("stopping store metrics exporter")
 			return

@@ -192,11 +192,25 @@ type DatabaseStore interface {
 
 	// --- Metric Aggregation ---
 
-	// CountAppSessionsByStatus returns app session counts grouped by (application, status).
-	CountAppSessionsByStatus() ([]AppSessionCount, error)
+	// CountActiveUsers returns distinct user counts per asset within the given window.
+	CountActiveUsers(window time.Duration) ([]ActiveCountByLabel, error)
 
-	// CountChannelsByStatus returns channel counts grouped by (asset, status).
-	CountChannelsByStatus() ([]ChannelCount, error)
+	// CountActiveAppSessions returns app session counts per application within the given window.
+	CountActiveAppSessions(window time.Duration) ([]ActiveCountByLabel, error)
+
+	// --- Lifespan Metric Operations ---
+
+	// GetLifetimeMetricLastTimestamp returns the most recent last_timestamp among all metrics with the given name.
+	GetLifetimeMetricLastTimestamp(name string) (time.Time, error)
+
+	// GetAppSessionsCountByLabels computes app session count deltas, upserts as lifespan metrics, and returns updated totals.
+	GetAppSessionsCountByLabels() ([]AppSessionCount, error)
+
+	// GetChannelsCountByLabels computes channel count deltas, upserts as lifespan metrics, and returns updated totals.
+	GetChannelsCountByLabels() ([]ChannelCount, error)
+
+	// GetTotalValueLocked computes TVL deltas by domain (channels, app_sessions) and asset, upserts as lifespan metrics, and returns updated totals.
+	GetTotalValueLocked() ([]TotalValueLocked, error)
 
 	// --- User Staked Operations ---
 

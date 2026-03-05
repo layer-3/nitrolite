@@ -2,6 +2,8 @@ package core
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +46,47 @@ func (s ChannelStatus) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+func (s *ChannelStatus) Scan(src any) error {
+	switch v := src.(type) {
+	case int64:
+		*s = ChannelStatus(uint8(v))
+		return nil
+	case int32:
+		*s = ChannelStatus(uint8(v))
+		return nil
+	case int:
+		*s = ChannelStatus(uint8(v))
+		return nil
+	case string:
+		return s.scanString(v)
+	default:
+		return fmt.Errorf("unsupported ChannelStatus scan type %T", src)
+	}
+}
+
+func (s *ChannelStatus) scanString(v string) error {
+	v = strings.TrimSpace(v)
+	// if numeric
+	if n, err := strconv.Atoi(v); err == nil {
+		*s = ChannelStatus(uint8(n))
+		return nil
+	}
+	// else map names
+	switch strings.ToLower(v) {
+	case ChannelStatusVoid.String():
+		*s = ChannelStatusVoid
+	case ChannelStatusOpen.String():
+		*s = ChannelStatusOpen
+	case ChannelStatusChallenged.String():
+		*s = ChannelStatusChallenged
+	case ChannelStatusClosed.String():
+		*s = ChannelStatusClosed
+	default:
+		return fmt.Errorf("unknown ChannelStatus %q", v)
+	}
+	return nil
 }
 
 const (

@@ -15,7 +15,7 @@ import {
     ResizeChannelParams,
     RPCChannelOperation,
     State,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Hex } from 'viem';
 
 export function toRaw(amount: bigint, decimals: number = 6): bigint {

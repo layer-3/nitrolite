@@ -6,7 +6,7 @@ import { createAuthSessionWithClearnode } from '@/auth';
 import {
     createGetAppSessionsMessageV2,
     parseGetAppSessionsResponse,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 export interface TestSetupResult {
     alice: Identity;

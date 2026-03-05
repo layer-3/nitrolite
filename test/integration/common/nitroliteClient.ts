@@ -13,7 +13,7 @@ import {
     RPCChannelStatus,
     State,
     StateSigner,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Identity } from './identity';
 import { Address, createPublicClient, Hex, http } from 'viem';
 import { chain, CONFIG } from './setup';

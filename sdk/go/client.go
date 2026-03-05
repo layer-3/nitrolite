@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/blockchain/evm"
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/rpc"
-	"github.com/erc7824/nitrolite/pkg/sign"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/layer-3/nitrolite/pkg/blockchain/evm"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // Client provides a unified interface for interacting with Clearnode.

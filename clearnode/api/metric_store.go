@@ -1,10 +1,10 @@
 package api
 
 import (
-	"github.com/erc7824/nitrolite/clearnode/metrics"
-	"github.com/erc7824/nitrolite/clearnode/store/database"
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/clearnode/metrics"
+	"github.com/layer-3/nitrolite/clearnode/store/database"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // metricStore wraps a DatabaseStore to buffer metric callbacks during a DB transaction.

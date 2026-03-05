@@ -11,17 +11,17 @@ The compat layer centralises this complexity into **~5 file changes** per app. I
 ## 2. Installation
 
 ```bash
-npm install @erc7824/nitrolite-compat
+npm install @layer-3/nitrolite-compat
 # Peer dependencies
-npm install @erc7824/nitrolite viem
+npm install @layer-3/nitrolite viem
 ```
 
 ## 3. Import Swap
 
 | Before (v0.5.3) | After (compat) |
 |-----------------|----------------|
-| `import { createGetChannelsMessage, parseGetChannelsResponse } from '@erc7824/nitrolite'` | `import { NitroliteClient } from '@erc7824/nitrolite-compat'` |
-| Types: `AppSession`, `LedgerChannel`, `RPCAppDefinition` | Same types — re-exported from `@erc7824/nitrolite-compat` |
+| `import { createGetChannelsMessage, parseGetChannelsResponse } from '@layer-3/nitrolite'` | `import { NitroliteClient } from '@layer-3/nitrolite-compat'` |
+| Types: `AppSession`, `LedgerChannel`, `RPCAppDefinition` | Same types — re-exported from `@layer-3/nitrolite-compat` |
 
 For **types**, just change the package name. For **functions**, switch to client methods instead of `create*Message` / `parse*Response`.
 
@@ -62,7 +62,7 @@ const channels = await client.getChannels();
 ## 7. Quick Start Example
 
 ```typescript
-import { NitroliteClient, WalletStateSigner, blockchainRPCsFromEnv } from '@erc7824/nitrolite-compat';
+import { NitroliteClient, WalletStateSigner, blockchainRPCsFromEnv } from '@layer-3/nitrolite-compat';
 
 // Create client (replaces new Client(ws, signer))
 const client = await NitroliteClient.create({

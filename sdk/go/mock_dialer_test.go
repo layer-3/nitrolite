@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 type MockDialer struct {

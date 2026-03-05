@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/erc7824/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // TestContextLogger tests the context-based logger functionality.

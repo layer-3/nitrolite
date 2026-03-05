@@ -11,7 +11,7 @@ import {
     createEIP712AuthMessageSigner,
     parseAuthChallengeResponse,
     parseAuthVerifyResponse,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 describe('Clearnode Authentication', () => {
     let ws: TestWebSocket;

@@ -1,7 +1,7 @@
 /**
  * Compat Layer Comprehensive Lifecycle Example
  *
- * Exercises every public API offered by @erc7824/nitrolite-compat:
+ * Exercises every public API offered by @layer-3/nitrolite-compat:
  *   - NitroliteClient: creation, ping, config, assets, balances, channels,
  *     transfers, app sessions (create/submit/close), asset helpers, error classification
  *   - EventPoller: start/stop with callbacks
@@ -574,7 +574,7 @@ async function main() {
             RPCMethod.CloseAppSession, RPCMethod.SubmitAppState,
             RPCMethod.GetAppDefinition, RPCMethod.AuthRequest,
             RPCMethod.AuthChallenge, RPCMethod.AuthVerify,
-            RPCMethod.GetLedgerTransactions, RPCMethod.GetUserTag,
+            RPCMethod.GetLedgerTransactions,
         ];
         ok('RPCMethod enum', `${methods.length} methods accessible`);
     } catch (e: any) { fail('RPCMethod enum', e); }

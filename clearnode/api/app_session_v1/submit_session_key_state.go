@@ -7,10 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/log"
-	"github.com/erc7824/nitrolite/pkg/rpc"
-	"github.com/erc7824/nitrolite/pkg/sign"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // SubmitSessionKeyState processes session key state submissions for registration and updates.

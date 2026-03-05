@@ -1,10 +1,10 @@
 package channel_v1
 
 import (
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
-	"github.com/erc7824/nitrolite/pkg/rpc"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // SubmitState processes user-submitted state transitions, validates them against the current state,

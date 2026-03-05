@@ -1,6 +1,6 @@
 # Nitrolite Compat SDK
 
-[![License](https://img.shields.io/npm/l/@yellow-org/sdk-compat.svg)](https://github.com/erc7824/nitrolite/blob/main/LICENSE)
+[![License](https://img.shields.io/npm/l/@yellow-org/sdk-compat.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
 Compatibility layer that bridges the Nitrolite SDK **v0.5.3 API** to the **v1.0.0 runtime**, letting existing dApps upgrade to the new protocol with minimal code changes.
 

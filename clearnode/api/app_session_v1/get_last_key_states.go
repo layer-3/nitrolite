@@ -1,9 +1,9 @@
 package app_session_v1
 
 import (
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/log"
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // GetLastKeyStates retrieves the latest session key states for a user with optional filtering by session key.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

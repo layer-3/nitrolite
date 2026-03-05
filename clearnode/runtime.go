@@ -15,16 +15,16 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/erc7824/nitrolite/clearnode/action_gateway"
-	"github.com/erc7824/nitrolite/clearnode/metrics"
-	"github.com/erc7824/nitrolite/clearnode/store/database"
-	"github.com/erc7824/nitrolite/clearnode/store/memory"
-	"github.com/erc7824/nitrolite/pkg/blockchain/evm"
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
-	"github.com/erc7824/nitrolite/pkg/rpc"
-	"github.com/erc7824/nitrolite/pkg/sign"
-	"github.com/erc7824/nitrolite/pkg/sign/kms/gcp"
+	"github.com/layer-3/nitrolite/clearnode/action_gateway"
+	"github.com/layer-3/nitrolite/clearnode/metrics"
+	"github.com/layer-3/nitrolite/clearnode/store/database"
+	"github.com/layer-3/nitrolite/clearnode/store/memory"
+	"github.com/layer-3/nitrolite/pkg/blockchain/evm"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
+	"github.com/layer-3/nitrolite/pkg/sign/kms/gcp"
 )
 
 //go:embed config/migrations/*/*.sql

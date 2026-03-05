@@ -385,7 +385,7 @@ function App() {
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs text-muted-foreground">
           <span className="uppercase tracking-wider">Yellow SDK v1.0.0</span>
           <a
-            href="https://github.com/erc7824/nitrolite"
+            href="https://github.com/layer-3/nitrolite"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-accent transition-colors"

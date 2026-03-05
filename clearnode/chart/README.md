@@ -17,7 +17,7 @@ Clearnode Helm chart
 
 To install the chart with the release name `my-release`:
 ```bash
-helm install my-release git+https://github.com/erc7824/clearnode@chart?ref=main
+helm install my-release git+https://github.com/layer-3/clearnode@chart?ref=main
 ```
 
 The command deploys Clearnode on the Kubernetes cluster with default configuration. The [Parameters](#parameters) section lists the parameters that can be configured during installation.
@@ -54,7 +54,7 @@ helm delete my-release
 | config.secretEnvs | object | `{}` | Additional environment variables to be stored in a secret |
 | extraLabels | object | `{}` | Additional labels to add to all resources |
 | fullnameOverride | string | `""` | Override the full name |
-| image.repository | string | `"ghcr.io/erc7824/clearnode"` | Docker image repository |
+| image.repository | string | `"ghcr.io/layer-3/clearnode"` | Docker image repository |
 | image.tag | string | `"0.0.1"` | Docker image tag |
 | imagePullSecret | string | `""` | Image pull secret name |
 | metrics.enabled | bool | `true` | Enable Prometheus metrics |
@@ -114,7 +114,7 @@ For managing sensitive values like API keys and credentials, you can use `helm-s
   
 3. When deploying or upgrading, reference your secrets file with the `secrets://` prefix:
    ```bash
-   helm upgrade --install my-release git+https://github.com/erc7824/clearnode@chart?ref=main \
+   helm upgrade --install my-release git+https://github.com/layer-3/clearnode@chart?ref=main \
      -f values.yaml \
      -f secrets://secrets.yaml
    ```

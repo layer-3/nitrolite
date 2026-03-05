@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

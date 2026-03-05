@@ -57,22 +57,3 @@ jobs:
           build-args: |
             VERSION=${{ steps.sha.outputs.short_sha }}
 
-  # TODO: Enable this job if docs preview are needed (do not forget to provide GITHUB_TOKEN and GH access to receive preview URLs).
-  # https://stackoverflow.com/questions/75514653/firebase-action-hosting-deploy-fails-with-requesterror-resource-not-accessible
-
-  # build-and-preview-docs-firebase:
-  #   name: Deploy to Firebase Hosting on PR
-  #   if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - run: npm install && npm run build
-  #       working-directory: erc7824-docs
-
-  #     - uses: FirebaseExtended/action-hosting-deploy@v0
-  #       with:
-  #         # repoToken: ${{ secrets.GITHUB_TOKEN }}
-  #         firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ERC7824 }}
-  #         projectId: erc7824
-  #         entryPoint: ./erc7824-docs

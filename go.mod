@@ -1,4 +1,4 @@
-module github.com/erc7824/nitrolite
+module github.com/layer-3/nitrolite
 
 go 1.25.0
 

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/log"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 var _ core.BlockchainEventHandler = &EventHandlerService{}

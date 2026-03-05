@@ -18,7 +18,7 @@
     },
     "keywords": [
         "yellow",
-        "erc7824",
+        "layer-3",
         "nitrolite",
         "compat",
         "migration",
@@ -28,7 +28,7 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/erc7824/nitrolite.git",
+        "url": "https://github.com/layer-3/nitrolite.git",
         "directory": "sdk/ts-compat"
     },
     "engines": {

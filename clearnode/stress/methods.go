@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/erc7824/nitrolite/pkg/core"
-	sdk "github.com/erc7824/nitrolite/sdk/go"
+	"github.com/layer-3/nitrolite/pkg/core"
+	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
 
 // MethodRegistry returns all available stress test methods.

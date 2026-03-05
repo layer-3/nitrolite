@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { CONFIG } from './setup';
-import { createCleanupSessionKeyCacheMessage, createECDSAMessageSigner } from '@erc7824/nitrolite';
+import { createCleanupSessionKeyCacheMessage, createECDSAMessageSigner } from '@layer-3/nitrolite';
 import { getCleanupSessionKeyCachePredicate, TestWebSocket } from './ws';
 import { generatePrivateKey } from 'viem/accounts';
 

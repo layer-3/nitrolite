@@ -1,7 +1,7 @@
 # Yellow TypeScript SDK
 
 [![npm version](https://img.shields.io/npm/v/@yellow-org/sdk.svg)](https://www.npmjs.com/package/@yellow-org/sdk)
-[![License](https://img.shields.io/npm/l/@yellow-org/sdk.svg)](https://github.com/erc7824/nitrolite/blob/main/LICENSE)
+[![License](https://img.shields.io/npm/l/@yellow-org/sdk.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
 TypeScript SDK for Clearnode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `deposit()`, `withdraw()`, `transfer()`, `closeHomeChannel()`, `acknowledge()` - build and co-sign states off-chain
@@ -9,7 +9,7 @@ TypeScript SDK for Clearnode payment channels providing both high-level and low-
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
 - **Full Feature Parity**: 100% compatibility with Go SDK functionality
 
-> If you are migrating from `@erc7824/nitrolite@v0.5.3`, please consider using the [@yellow-org/sdk-compat](https://www.npmjs.com/package/@yellow-org/sdk-compat) package. It is a translation layer that uses this SDK underneath and maps the familiar v0.5.3 API surfaces to this SDK.
+> If you are migrating from `@layer-3/nitrolite@v0.5.3`, please consider using the [@yellow-org/sdk-compat](https://www.npmjs.com/package/@yellow-org/sdk-compat) package. It is a translation layer that uses this SDK underneath and maps the familiar v0.5.3 API surfaces to this SDK.
 
 ## Method Cheat Sheet
 
@@ -1000,8 +1000,8 @@ Part of the Nitrolite project. See [LICENSE](../../LICENSE) for details.
 ## Related Projects
 
 - [Nitrolite TS Compat](https://www.npmjs.com/package/@yellow-org/sdk-compat) - Compatibility layer for older TypeScript versions
-- [Nitrolite Go SDK](https://github.com/erc7824/nitrolite/tree/stable/sdk/go) - Go implementation with same API
-- [Nitrolite Smart Contracts](https://github.com/erc7824/nitrolite/tree/stable/contracts) - On-chain contracts
+- [Nitrolite Go SDK](https://github.com/layer-3/nitrolite/tree/stable/sdk/go) - Go implementation with same API
+- [Nitrolite Smart Contracts](https://github.com/layer-3/nitrolite/tree/stable/contracts) - On-chain contracts
 
 ---
 

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/erc7824/nitrolite/pkg/sign"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // buildSecp256k1PEM creates a PEM-encoded SubjectPublicKeyInfo for a secp256k1 key,

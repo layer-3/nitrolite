@@ -9,7 +9,7 @@ import {
     parseSubmitAppStateResponse,
     parseCloseAppSessionResponse,
     RPCChannelStatus,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Hex } from 'viem';
 
 /**

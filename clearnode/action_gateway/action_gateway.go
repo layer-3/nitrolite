@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 	"go.yaml.in/yaml/v2"
 )

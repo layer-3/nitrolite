@@ -7,8 +7,8 @@
         "skipLibCheck": true,
         "strict": true,
         "paths": {
-            "@erc7824/nitrolite": ["../../ts/src/index.ts"],
-            "@erc7824/nitrolite-compat": ["../src/index.ts"]
+            "@layer-3/nitrolite": ["../../ts/src/index.ts"],
+            "@layer-3/nitrolite-compat": ["../src/index.ts"]
         }
     },
     "include": ["./*.ts"]

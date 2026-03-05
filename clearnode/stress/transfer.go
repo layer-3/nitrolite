@@ -13,9 +13,9 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/sign"
-	sdk "github.com/erc7824/nitrolite/sdk/go"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/sign"
+	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
 
 type wallet struct {

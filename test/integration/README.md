@@ -38,7 +38,7 @@ npm ci
 npm run build
 ```
 
-It's possible to use specific version of the sdk by updating the `package.json` with a specific version of `@erc7824/nitrolite` and change import path in the `tsconfig.json`
+It's possible to use specific version of the sdk by updating the `package.json` with a specific version of `@layer-3/nitrolite` and change import path in the `tsconfig.json`
 
 ## Running Integration Tests
 

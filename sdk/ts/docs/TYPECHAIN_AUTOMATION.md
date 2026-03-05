@@ -55,7 +55,7 @@ export default defineConfig({
 ### 3. Usage in Code
 
 ```typescript
-import { custodyAbi } from '@erc7824/nitrolite';
+import { custodyAbi } from '@layer-3/nitrolite';
 
 // ✅ Full type safety and autocomplete
 const result = await publicClient.readContract({

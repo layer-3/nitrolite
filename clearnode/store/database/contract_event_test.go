@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

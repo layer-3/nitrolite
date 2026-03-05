@@ -12,7 +12,7 @@ go build -o clearnode-cli
 Or install directly:
 
 ```bash
-go install github.com/erc7824/nitrolite/sdk/go/examples/cli@latest
+go install github.com/layer-3/nitrolite/sdk/go/examples/cli@latest
 ```
 
 ## Quick Start

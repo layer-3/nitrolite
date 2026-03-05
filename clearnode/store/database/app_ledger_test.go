@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"github.com/erc7824/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

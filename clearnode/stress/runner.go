@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	sdk "github.com/erc7824/nitrolite/sdk/go"
+	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
 
 // RunTest executes totalReqs calls of fn distributed across the client pool.

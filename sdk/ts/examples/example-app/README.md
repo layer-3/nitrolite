@@ -1,6 +1,6 @@
 # Nitrolite SDK Integration Guide
 
-This example app demonstrates how to integrate the `@erc7824/nitrolite` TypeScript SDK into a React application. Use it as a reference for building your own Yellow-Network-powered app.
+This example app demonstrates how to integrate the `@layer-3/nitrolite` TypeScript SDK into a React application. Use it as a reference for building your own Yellow-Network-powered app.
 
 ## Quick Start
 
@@ -14,10 +14,10 @@ Opens at `http://localhost:3000`. Requires MetaMask.
 ## Install the SDK
 
 ```bash
-npm install @erc7824/nitrolite viem decimal.js
+npm install @layer-3/nitrolite viem decimal.js
 ```
 
-- **`@erc7824/nitrolite`** — the state channel SDK
+- **`@layer-3/nitrolite`** — the state channel SDK
 - **`viem`** — Ethereum wallet and signing primitives
 - **`decimal.js`** — precise decimal arithmetic for token amounts
 
@@ -85,7 +85,7 @@ import {
   Client,
   withBlockchainRPC,
   ChannelDefaultSigner,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { createWalletClient, custom } from 'viem';
 import { mainnet } from 'viem/chains';
 
@@ -233,7 +233,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   ChannelSessionKeyStateSigner,
   getChannelSessionKeyAuthMetadataHashV1,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 // 1. Generate a temporary key pair
 const privateKey = generatePrivateKey();
@@ -290,7 +290,7 @@ Now `sessionClient` signs off-chain state updates with the session key — no wa
 Submit a new version with empty assets to revoke a session key:
 
 ```ts
-import { packChannelKeyStateV1 } from '@erc7824/nitrolite';
+import { packChannelKeyStateV1 } from '@layer-3/nitrolite';
 
 const existing = await client.getLastChannelKeyStates(address, sessionKeyAddress);
 const latest = existing[0];
@@ -328,7 +328,7 @@ import {
   withHandshakeTimeout,
   withPingInterval,
   withErrorHandler,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 const client = await Client.create(
   wsUrl,
@@ -362,6 +362,5 @@ src/
 
 ## Resources
 
-- [Nitrolite Documentation](https://erc7824.org/quick_start)
-- [GitHub Repository](https://github.com/erc7824/nitrolite)
+- [GitHub Repository](https://github.com/layer-3/nitrolite)
 - [Viem Documentation](https://viem.sh)

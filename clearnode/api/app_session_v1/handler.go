@@ -7,12 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/shopspring/decimal"
 
-	"github.com/erc7824/nitrolite/clearnode/metrics"
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
-	"github.com/erc7824/nitrolite/pkg/rpc"
-	"github.com/erc7824/nitrolite/pkg/sign"
+	"github.com/layer-3/nitrolite/clearnode/metrics"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // Handler manages app session operations and provides RPC endpoints for app session management.

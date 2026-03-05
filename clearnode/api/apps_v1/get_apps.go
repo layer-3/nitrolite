@@ -3,9 +3,9 @@ package apps_v1
 import (
 	"strconv"
 
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // GetApps retrieves registered applications with optional filtering.

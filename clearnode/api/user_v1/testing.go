@@ -6,8 +6,8 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/erc7824/nitrolite/clearnode/action_gateway"
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/clearnode/action_gateway"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // MockStore is a mock implementation of the Store interface

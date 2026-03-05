@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // clientAssetStore implements core.AssetStore by fetching data from the Clearnode API.

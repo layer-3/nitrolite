@@ -57,7 +57,7 @@ await sendRequest(msg);
 v0.5.3 used WebSocket push events (`ChannelUpdate`, `BalanceUpdate`). v1.0.0 uses polling. The compat layer provides `EventPoller`:
 
 ```typescript
-import { EventPoller } from '@erc7824/nitrolite-compat';
+import { EventPoller } from '@layer-3/nitrolite-compat';
 
 const poller = new EventPoller(client, {
   onChannelUpdate: (channels) => updateUI(channels),

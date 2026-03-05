@@ -11,7 +11,7 @@ import {
     parseResizeChannelResponse,
     createCloseChannelMessage,
     parseCloseChannelResponse,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Hex, parseUnits } from 'viem';
 
 describe('Close channel', () => {

@@ -160,20 +160,3 @@ jobs:
   #           ⚠️ RC build or deployment was cancelled!
   #           ${{github.event.head_commit.message}}
   #         SLACK_FOOTER: 'Nitrolite CI/CD Pipeline'
-
-  # build-and-deploy-docs-firebase:
-  #   name: Deploy to Firebase Hosting on merge
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - run: npm install && npm run build
-  #       working-directory: erc7824-docs
-
-  #     - uses: FirebaseExtended/action-hosting-deploy@v0
-  #       with:
-  #         # repoToken: ${{ secrets.GITHUB_TOKEN }}
-  #         firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ERC7824 }}
-  #         channelId: live
-  #         projectId: erc7824
-  #         entryPoint: ./erc7824-docs

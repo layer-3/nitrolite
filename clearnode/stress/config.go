@@ -10,7 +10,7 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ilyakaznacheev/cleanenv"
 
-	"github.com/erc7824/nitrolite/pkg/sign"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // Config holds all stress test settings, read from environment variables.

@@ -11,7 +11,7 @@ import {
     parseAnyRPCResponse,
     TransferRequestParams,
     RPCMethod,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 describe('Transfer Integration', () => {
     let ws: TestWebSocket;

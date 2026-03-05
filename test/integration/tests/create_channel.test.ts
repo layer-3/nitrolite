@@ -21,7 +21,7 @@ import {
     RPCChannelStatus,
     RPCData,
     RPCMethod,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Hex, parseUnits } from 'viem';
 
 describe('Create channel', () => {

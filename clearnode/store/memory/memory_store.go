@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 type MemoryStoreV1 struct {

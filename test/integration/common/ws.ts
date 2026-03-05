@@ -1,4 +1,4 @@
-import { parseAnyRPCResponse, RPCChannelStatus, RPCMethod, RPCResponse } from '@erc7824/nitrolite';
+import { parseAnyRPCResponse, RPCChannelStatus, RPCMethod, RPCResponse } from '@layer-3/nitrolite';
 import { WebSocket } from 'ws';
 
 interface MessageListener {
@@ -230,12 +230,6 @@ export const getGetLedgerEntriesPredicate = () => {
 export const getGetLedgerTransactionsPredicate = () => {
     return (data: string, reqId?: number): boolean => {
         return genericPredicate(data, (r) => r.method === RPCMethod.GetLedgerTransactions, reqId);
-    };
-};
-
-export const getGetUserTagPredicate = () => {
-    return (data: string, reqId?: number): boolean => {
-        return genericPredicate(data, (r) => r.method === RPCMethod.GetUserTag, reqId);
     };
 };
 

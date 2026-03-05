@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/app"
 	"gorm.io/gorm"
 )
 

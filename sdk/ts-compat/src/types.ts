@@ -29,7 +29,6 @@ export enum RPCMethod {
     AuthVerify = 'auth_verify',
     Error = 'error',
     GetLedgerTransactions = 'get_ledger_transactions',
-    GetUserTag = 'get_user_tag',
     TransferNotification = 'tr',
 }
 

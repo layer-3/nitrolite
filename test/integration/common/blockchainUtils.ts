@@ -17,7 +17,7 @@ import {
 } from 'viem';
 import { chain } from './setup';
 import { privateKeyToAccount } from 'viem/accounts';
-import { custodyAbi } from '@erc7824/nitrolite/dist/abis/generated';
+import { custodyAbi } from '@layer-3/nitrolite/dist/abis/generated';
 
 export class BlockchainUtils {
     private client = null;

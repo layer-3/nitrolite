@@ -3,7 +3,7 @@ package node_v1
 import (
 	"strconv"
 
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // GetAssets retrieves the current assets of the Node.

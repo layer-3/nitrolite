@@ -3,7 +3,7 @@ package app_session_v1
 import (
 	"strconv"
 
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // GetAppDefinition retrieves the application definition for a specific app session.

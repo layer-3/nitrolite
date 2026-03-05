@@ -1,6 +1,6 @@
 package api
 
-import "github.com/erc7824/nitrolite/pkg/rpc"
+import "github.com/layer-3/nitrolite/pkg/rpc"
 
 func getMethodPath(c *rpc.Context) string {
 	switch c.Request.Method {

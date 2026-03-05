@@ -346,5 +346,5 @@
 //
 // Run tests with:
 //
-//	go test github.com/erc7824/nitrolite/pkg/rpc
+//	go test github.com/layer-3/nitrolite/pkg/rpc
 package rpc

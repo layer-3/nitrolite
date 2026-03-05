@@ -117,7 +117,7 @@ if err := db.Save(); err != nil {
 ## Installation
 
 ```go
-import "github.com/erc7824/nitrolite/pkg/rpc"
+import "github.com/layer-3/nitrolite/pkg/rpc"
 ```
 
 ## Server Usage
@@ -126,8 +126,8 @@ import "github.com/erc7824/nitrolite/pkg/rpc"
 
 ```go
 import (
-    "github.com/erc7824/nitrolite/pkg/rpc"
-    "github.com/erc7824/nitrolite/pkg/log"
+    "github.com/layer-3/nitrolite/pkg/rpc"
+    "github.com/layer-3/nitrolite/pkg/log"
 )
 
 // Create server configuration
@@ -255,7 +255,7 @@ func rateLimitMiddleware(c *rpc.Context) {
 ### Quick Start
 
 ```go
-import "github.com/erc7824/nitrolite/pkg/rpc"
+import "github.com/layer-3/nitrolite/pkg/rpc"
 
 // Create client
 dialer := rpc.NewWebsocketDialer(rpc.DefaultWebsocketDialerConfig)
@@ -597,4 +597,4 @@ Test coverage includes:
 ## See Also
 
 - [API Documentation](api.yaml) - OpenAPI specification for V1 API
-- Package documentation: `go doc github.com/erc7824/nitrolite/pkg/rpc`
+- Package documentation: `go doc github.com/layer-3/nitrolite/pkg/rpc`

@@ -1,8 +1,8 @@
 package user_v1
 
 import (
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // GetTransactions retrieves transaction history for a user with optional filters.

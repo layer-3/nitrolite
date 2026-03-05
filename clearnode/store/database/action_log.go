@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/core"
 	"github.com/google/uuid"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 type ActionLogEntryV1 struct {

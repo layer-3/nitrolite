@@ -7,7 +7,6 @@ docker-compose.yml
 LICENSE
 contracts/
 docs/
-erc7824-docs/
 sdk/ts/
 test/
 

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/log"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // Default values are carefully chosen to balance resource consumption and operational flexibility.

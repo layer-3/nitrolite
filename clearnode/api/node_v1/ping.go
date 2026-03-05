@@ -1,7 +1,7 @@
 package node_v1
 
 import (
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 // Ping handles the ping request and responds with the ping method.

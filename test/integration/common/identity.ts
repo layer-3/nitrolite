@@ -1,8 +1,8 @@
 import { Address, createWalletClient, Hex, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { chain } from './setup';
-import { createECDSAMessageSigner } from '@erc7824/nitrolite';
-import { SessionKeyStateSigner } from '@erc7824/nitrolite/dist/client/signer';
+import { createECDSAMessageSigner } from '@layer-3/nitrolite';
+import { SessionKeyStateSigner } from '@layer-3/nitrolite/dist/client/signer';
 
 export class Identity {
     public walletClient = null;

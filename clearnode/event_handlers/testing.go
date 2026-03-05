@@ -3,7 +3,7 @@ package event_handlers
 import (
 	"github.com/stretchr/testify/mock"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // MockStore is a mock implementation of the Store interface for testing

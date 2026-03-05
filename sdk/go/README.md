@@ -1,4 +1,4 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/erc7824/nitrolite/sdk/go.svg)](https://pkg.go.dev/github.com/erc7824/nitrolite/sdk/go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/layer-3/nitrolite/sdk/go.svg)](https://pkg.go.dev/github.com/layer-3/nitrolite/sdk/go)
 
 # Clearnode Go SDK
 
@@ -95,9 +95,9 @@ package main
 
 import (
     "context"
-    "github.com/erc7824/nitrolite/pkg/core"
-    "github.com/erc7824/nitrolite/pkg/sign"
-    sdk "github.com/erc7824/nitrolite/sdk/go"
+    "github.com/layer-3/nitrolite/pkg/core"
+    "github.com/layer-3/nitrolite/pkg/sign"
+    sdk "github.com/layer-3/nitrolite/sdk/go"
     "github.com/shopspring/decimal"
 )
 

@@ -6,7 +6,7 @@
     "test:watch": "jest --watch --runInBand --detectOpenHandles"
   },
   "dependencies": {
-    "@erc7824/nitrolite": "file:../sdk",
+    "@layer-3/nitrolite": "file:../sdk",
     "pg": "^8.17.1",
     "viem": "^2.44.4",
     "ws": "^8.19.0"

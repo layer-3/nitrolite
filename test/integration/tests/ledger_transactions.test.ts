@@ -8,7 +8,7 @@ import {
     GetLedgerTransactionsFilters,
     parseGetLedgerTransactionsResponse,
     RPCTxType,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 describe('Ledger Transactions Integration', () => {
     let ws: TestWebSocket;

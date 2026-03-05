@@ -656,7 +656,7 @@ function generateContractDocs(contract: ContractInfo): string {
     docs += '## Type Safety\n\n';
     docs += 'This contract is fully type-safe when used with the generated TypeScript types:\n\n';
     docs += '```typescript\n';
-    docs += `import { ${contract.name.toLowerCase()}Abi } from '@erc7824/nitrolite';\n\n`;
+    docs += `import { ${contract.name.toLowerCase()}Abi } from '@layer-3/nitrolite';\n\n`;
     docs += `// Full type safety with autocomplete\n`;
     docs += `const result = await publicClient.readContract({\n`;
     docs += `  address: contractAddress,\n`;
@@ -680,11 +680,11 @@ function generateSDKOverview(contracts: ContractInfo[]): string {
 
     docs += '## Quick Start\n\n';
     docs += '```bash\n';
-    docs += 'npm install @erc7824/nitrolite\n';
+    docs += 'npm install @layer-3/nitrolite\n';
     docs += '```\n\n';
 
     docs += '```typescript\n';
-    docs += "import { custodyAbi, NitroliteClient } from '@erc7824/nitrolite';\n\n";
+    docs += "import { custodyAbi, NitroliteClient } from '@layer-3/nitrolite';\n\n";
     docs += '// Initialize client with full type safety\n';
     docs += 'const client = new NitroliteClient({...config});\n\n';
     docs += '// Deposit funds for state channels\n';

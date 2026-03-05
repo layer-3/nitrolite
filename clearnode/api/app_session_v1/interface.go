@@ -1,9 +1,9 @@
 package app_session_v1
 
 import (
-	"github.com/erc7824/nitrolite/clearnode/action_gateway"
-	"github.com/erc7824/nitrolite/pkg/app"
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/clearnode/action_gateway"
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 )
 

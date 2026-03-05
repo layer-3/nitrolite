@@ -3,10 +3,10 @@ package evm
 import (
 	"context"
 
-	"github.com/erc7824/nitrolite/pkg/core"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 type HandleEvent func(ctx context.Context, eventLog types.Log)

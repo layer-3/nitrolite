@@ -3,7 +3,7 @@ import { DatabaseUtils } from '@/databaseUtils';
 import { Identity } from '@/identity';
 import { TestNitroliteClient } from '@/nitroliteClient';
 import { TestWebSocket } from '@/ws';
-import { RPCAppStateIntent, RPCProtocolVersion, State } from '@erc7824/nitrolite';
+import { RPCAppStateIntent, RPCProtocolVersion, State } from '@layer-3/nitrolite';
 import { Hex } from 'viem';
 import { fetchAndParseAppSessions, setupTestIdentitiesAndConnections } from '@/testSetup';
 import {

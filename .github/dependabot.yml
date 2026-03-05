@@ -8,7 +8,6 @@ updates:
   - package-ecosystem: "npm" # See documentation for possible values
     directories:
       - "/sdk/ts"
-      - "/erc7824-docs"
       - "/sdk/compat"
       - "/test/integration"
       - "/sdk/ts/examples/*app*"

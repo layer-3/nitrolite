@@ -4,7 +4,7 @@ import {
     createAuthVerifyMessage,
     AuthRequestParams,
     parseAuthChallengeResponse,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { Identity } from './identity';
 import { getAuthChallengePredicate, getAuthVerifyPredicate, TestWebSocket } from './ws';
 

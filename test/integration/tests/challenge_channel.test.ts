@@ -8,7 +8,7 @@ import { getChannelUpdatePredicateWithStatus, TestWebSocket } from '@/ws';
 import {
     parseChannelUpdateResponse,
     RPCChannelStatus,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 import { parseUnits } from 'viem';
 
 describe('Challenge channel', () => {

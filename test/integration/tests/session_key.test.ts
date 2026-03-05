@@ -10,7 +10,7 @@ import {
     createRevokeSessionKeyMessage,
     createTransferMessage,
     parseAnyRPCResponse,
-} from '@erc7824/nitrolite';
+} from '@layer-3/nitrolite';
 
 import {
     createTestChannels,

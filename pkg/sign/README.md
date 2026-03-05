@@ -17,4 +17,4 @@ This library separates generic interfaces from specific blockchain implementatio
 
 See the Go package documentation and examples by running:
 ```bash
-go doc -all github.com/erc7824/nitrolite/pkg/sign
+go doc -all github.com/layer-3/nitrolite/pkg/sign

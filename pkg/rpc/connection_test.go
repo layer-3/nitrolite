@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 
-	"github.com/erc7824/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
 func TestNewWebsocketConnection(t *testing.T) {

@@ -12,13 +12,13 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/erc7824/nitrolite/clearnode/api"
-	"github.com/erc7824/nitrolite/clearnode/event_handlers"
-	"github.com/erc7824/nitrolite/clearnode/metrics"
-	"github.com/erc7824/nitrolite/clearnode/store/database"
-	"github.com/erc7824/nitrolite/clearnode/stress"
-	"github.com/erc7824/nitrolite/pkg/blockchain/evm"
-	"github.com/erc7824/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/clearnode/api"
+	"github.com/layer-3/nitrolite/clearnode/event_handlers"
+	"github.com/layer-3/nitrolite/clearnode/metrics"
+	"github.com/layer-3/nitrolite/clearnode/store/database"
+	"github.com/layer-3/nitrolite/clearnode/stress"
+	"github.com/layer-3/nitrolite/pkg/blockchain/evm"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 func main() {

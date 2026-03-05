@@ -1,7 +1,7 @@
 package node_v1
 
 import (
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // MemoryStore defines an in-memory data store interface for retrieving

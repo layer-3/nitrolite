@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	sdk "github.com/erc7824/nitrolite/sdk/go"
+	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
 
 // Runner is the unified signature for executing a stress test.

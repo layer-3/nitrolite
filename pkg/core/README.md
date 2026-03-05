@@ -82,7 +82,7 @@ The `Ledger` tracks balances and "Net Flow" (total funds inflow(+)/outflow(-) of
 ## Usage Example: Generating IDs
 
 ```go
-import "github.com/erc7824/nitrolite/core"
+import "github.com/layer-3/nitrolite/core"
 
 // Generate a Home Channel ID
 channelID, err := core.GetHomeChannelID(

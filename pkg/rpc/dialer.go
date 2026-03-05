@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erc7824/nitrolite/pkg/log"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // Dialer is the interface for RPC client connections.

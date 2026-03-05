@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erc7824/nitrolite/clearnode/store/database"
-	"github.com/erc7824/nitrolite/pkg/core"
-	"github.com/erc7824/nitrolite/pkg/log"
+	"github.com/layer-3/nitrolite/clearnode/store/database"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 type BlockchainWorkerStore interface {

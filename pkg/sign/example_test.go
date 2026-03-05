@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/erc7824/nitrolite/pkg/sign"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // ExampleNewEthereumRawSigner demonstrates creating an Ethereum signer and signing a message.

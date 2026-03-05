@@ -21,8 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 
-	"github.com/erc7824/nitrolite/pkg/sign"
-	kmssign "github.com/erc7824/nitrolite/pkg/sign/kms"
+	"github.com/layer-3/nitrolite/pkg/sign"
+	kmssign "github.com/layer-3/nitrolite/pkg/sign/kms"
 )
 
 // crc32cTable is pre-computed once to avoid re-creating it on every Sign() call.

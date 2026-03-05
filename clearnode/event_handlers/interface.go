@@ -1,7 +1,7 @@
 package event_handlers
 
 import (
-	"github.com/erc7824/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 // StoreTxHandler is a function that executes Store operations within a transaction.

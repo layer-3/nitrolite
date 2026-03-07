@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	const defaultWSURL = "wss://clearnode-v1-rc.yellow.org/ws"
+	const defaultWSURL = "wss://clearnode-sandbox.yellow.org/v1/ws"
 
 	log.SetFlags(0)
 	log.SetPrefix("clearnode-cli: ")

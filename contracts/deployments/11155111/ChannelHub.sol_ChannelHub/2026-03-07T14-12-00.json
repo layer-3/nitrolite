@@ -1,0 +1,18 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0xb7bE0E2007dDF320d680942cb9e008F986E74F83",
+  "transactionHash": "0x6e0b716f9bdb40d3aadbfa2544bf5ec11b39f431736bd19569ade187cb0b7396",
+  "commit": "fd39408567c4793fa5872f853bf875a45f12a4e9",
+  "timestamp": 1772892720,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0x735EB1026aFbA78B602dA39C6B59EABa95753686"
+  ],
+  "libraries": {
+    "src/ChannelEngine.sol:ChannelEngine": "0x78d150fda6fa6739c18014b347c7c7c45c58e148",
+    "src/EscrowDepositEngine.sol:EscrowDepositEngine": "0x728904e52308213ba61c90ef49f34c18fbda9e11",
+    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine": "0x893f2d45fdffe2d4297a5c1d5732edce4849ee82"
+  },
+  "comment": "clearnet-sandbox-1"
+}

@@ -1,0 +1,11 @@
+{
+  "deployer": "0xF8bedb0aBa14833e95F29e760487C3d34Bc4Ec64",
+  "deployedTo": "0x87825ACa5f4B9c3dc8B5aa3352724eDF5135D892",
+  "transactionHash": "0xb093a4bda220b56c44fb0cd62ec98938433830cb8262db0ec37d7b3571514cb3",
+  "commit": "4b4244f1df8ac6aa87a848174e29eabc7c1c3ede",
+  "timestamp": 1772893759,
+  "chainId": 80002,
+  "contractPath": "./src/sigValidators/SessionKeyValidator.sol:SessionKeyValidator",
+  "constructorArgs": [],
+  "comment": ""
+}

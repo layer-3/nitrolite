@@ -273,7 +273,7 @@ go func() {
 
 // Connect to server
 ctx := context.Background()
-err := client.Start(ctx, "wss://node.example.com/ws", func(err error) {
+err := client.Start(ctx, "wss://clearnode-sandbox.yellow.org/v1/ws", func(err error) {
     if err != nil {
         log.Error("Connection closed", "error", err)
     }

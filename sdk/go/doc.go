@@ -48,7 +48,7 @@
 //
 //		// Create Client
 //		client, err := sdk.NewClient(
-//			"wss://clearnode.example.com/ws",
+//			"wss://clearnode-sandbox.yellow.org/v1/ws",
 //			stateSigner,
 //			txSigner,
 //			sdk.WithBlockchainRPC(80002, "https://rpc-endpoint.example.com"),

@@ -28,7 +28,7 @@ import (
 //	client := rpc.NewClient(dialer)
 //
 //	// Connect to the server
-//	err := client.Start(ctx, "wss://server.example.com/ws", handleError)
+//	err := client.Start(ctx, "wss://clearnode-sandbox.yellow.org/v1/ws", handleError)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}

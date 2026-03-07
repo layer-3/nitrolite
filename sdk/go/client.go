@@ -30,7 +30,7 @@ import (
 //	stateSigner, _ := sign.NewEthereumMsgSigner(privateKeyHex)
 //	txSigner, _ := sign.NewEthereumRawSigner(privateKeyHex)
 //	client, _ := sdk.NewClient(
-//	    "wss://clearnode.example.com/ws",
+//	    "wss://clearnode-sandbox.yellow.org/v1/ws",
 //	    stateSigner,
 //	    txSigner,
 //	    sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),
@@ -65,7 +65,7 @@ type Client struct {
 // This is the recommended constructor for most use cases.
 //
 // Parameters:
-//   - wsURL: WebSocket URL of the Clearnode server (e.g., "wss://clearnode.example.com/ws")
+//   - wsURL: WebSocket URL of the Clearnode server (e.g., "wss://clearnode-sandbox.yellow.org/v1/ws")
 //   - stateSigner: core.ChannelSigner for signing channel states (use sign.NewEthereumMsgSigner)
 //   - txSigner: sign.Signer for signing blockchain transactions (use sign.NewEthereumRawSigner)
 //   - opts: Optional configuration (WithBlockchainRPC, WithHandshakeTimeout, etc.)
@@ -79,7 +79,7 @@ type Client struct {
 //	stateSigner, _ := sign.NewEthereumMsgSigner(privateKeyHex)
 //	txSigner, _ := sign.NewEthereumRawSigner(privateKeyHex)
 //	client, err := sdk.NewClient(
-//	    "wss://clearnode.example.com/ws",
+//	    "wss://clearnode-sandbox.yellow.org/v1/ws",
 //	    stateSigner,
 //	    txSigner,
 //	    sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),

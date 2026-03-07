@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0x78d150fda6fa6739c18014b347c7c7c45c58e148",
+  "transactionHash": "0x0dd22ca5c6e28580d5cd04bc74d1df7d6612757840f54d0bcae73a4424db0213",
+  "commit": "fd39408567c4793fa5872f853bf875a45f12a4e9",
+  "timestamp": 1772893715,
+  "chainId": 80002,
+  "contractPath": "src/ChannelEngine.sol:ChannelEngine",
+  "constructorArgs": [],
+  "comment": "clearnet-sandbox-1"
+}

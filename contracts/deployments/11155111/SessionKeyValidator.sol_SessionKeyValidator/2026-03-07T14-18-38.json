@@ -1,0 +1,11 @@
+{
+  "deployer": "0xF8bedb0aBa14833e95F29e760487C3d34Bc4Ec64",
+  "deployedTo": "0x2aC63456d78Cf2E2FDAf45cbed45b5d29907f4ac",
+  "transactionHash": "0xc60132f8c0d6776ab20861ff4c3137a3e23e4b5719cedda4bde866f435024488",
+  "commit": "fd39408567c4793fa5872f853bf875a45f12a4e9",
+  "timestamp": 1772893118,
+  "chainId": 11155111,
+  "contractPath": "./src/sigValidators/SessionKeyValidator.sol:SessionKeyValidator",
+  "constructorArgs": [],
+  "comment": "clearnet-sandbox-1"
+}

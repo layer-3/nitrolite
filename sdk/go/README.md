@@ -110,7 +110,7 @@ func main() {
 
     // Create unified client
     client, _ := sdk.NewClient(
-        "wss://clearnode.example.com/ws",
+        "wss://clearnode-sandbox.yellow.org/v1/ws",
         stateSigner,
         txSigner,
         sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),

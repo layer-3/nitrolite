@@ -1,76 +1,68 @@
 # Nitrolite V1 Clearnode Specifications
 
-This directory introduces new Clearnode architecture, models and communication flows to facilitate communication between user, SDK client, Node and Blockchains that will become the core off-chain engine for the Nitrolite V1 Protocol.
+This directory contains Clearnode architecture, models and communication flows that facilitate communication between user, SDK client, Node and Blockchains — the core off-chain engine for the Nitrolite V1 Protocol.
 
 ## Contents
 
 - **[api.yaml](api.yaml)** - API definitions including types, state transitions, and RPC methods
 - **[data_models.mmd](data_models.mmd)** - Data model diagrams
-- **[rpc_message.md](rpc_message.md)** - Standardized RPC message format for communication with a Clearnode via WebSocket
 
 ### Communication Flows
 
-- **[transfer.mmd](communication_flows/transfer.mmd)** - Off-chain transfer flow
-- **[app_session_deposit.mmd](communication_flows/app_session_deposit.mmd)** - Application session deposit
-- **[escrow_chan_deposit.mmd](communication_flows/escrow_chan_deposit.mmd)** - Escrow channel deposit
-- **[escrow_chan_withdrawal.mmd](communication_flows/escrow_chan_withdrawal.mmd)** - Escrow channel withdrawal
-- **[home_chan_creation_from_scratch.mmd](communication_flows/home_chan_creation_from_scratch.mmd)** - Home channel creation
-- **[home_chan_withdraw.mmd](communication_flows/home_chan_withdraw.mmd)** - Home channel withdrawal
-- **[home_chan_withdraw_on_create_from_state.mmd](communication_flows/home_chan_withdraw_on_create_from_state.mmd)** - State-based channel creation with withdrawal
+- **[home_chan_creation_from_scratch.mmd](communication_flows/home_chan_creation_from_scratch.mmd)** - Home channel creation with initial deposit
+- **[home_chan_deposit.mmd](communication_flows/home_chan_deposit.mmd)** - Home channel deposit (existing channel)
+- **[home_chan_withdraw.mmd](communication_flows/home_chan_withdraw.mmd)** - Home channel withdrawal (existing channel)
+- **[home_chan_withdraw_on_create_from_state.mmd](communication_flows/home_chan_withdraw_on_create_from_state.mmd)** - Channel creation with withdrawal from pending state
+- **[transfer.mmd](communication_flows/transfer.mmd)** - Off-chain transfer (sender + automatic receiver state creation)
+- **[app_session_deposit.mmd](communication_flows/app_session_deposit.mmd)** - Application session deposit with quorum verification
+- **[escrow_chan_deposit.mmd](communication_flows/escrow_chan_deposit.mmd)** - Cross-chain escrow deposit (mutual lock → on-chain → finalize)
+- **[escrow_chan_withdrawal.mmd](communication_flows/escrow_chan_withdrawal.mmd)** - Cross-chain escrow withdrawal (escrow lock → on-chain → finalize)
 
 #### Remaining Flows
 
-The following communication flows are not yet documented but will be added in future iterations:
+The following communication flows are not yet documented:
 
-- **Remaining app session endpoints** are not affected and will be added here later. The only new requirement includes creating app sessions with 0 allocations, and participants depositing one by one. Now app session deposits are limited to one participant deposit at a time.
-
-- **home channel deposit** - Similar to home channel creation with deposit, but for existing channels
 - **home chain migration** - Cross-chain state migration between home channels
-- **off-chain transfer to a non-existing user** - Handles receiver account creation during transfer
+- **app session create / operate / withdraw / close** - Full app session lifecycle beyond deposits
 
 ---
 
-**Note:**  This directory contains ongoing work on Nitrolite V1 protocol architecture.
-
 ## Project Structure
 
-The following is a suggested project structure that may change as the implementation evolves:
-
-```t
-cerebro/
+```text
+cerebro/                    # Cerebro Testing Client
 clearnode/
-    api/ # AppSessionService
-        app_session/
-        channel/
-        user/
-        node/
+    action_gateway/         # Rate limiting via gated actions
+    api/
+        app_session_v1/     # App session endpoints (create, deposit, operate, withdraw, close)
+        apps_v1/            # Application registry endpoints
+        channel_v1/         # Channel endpoints (create, submit_state, get_state, transfer)
+        node_v1/            # Node info endpoints
+        user_v1/            # User endpoints (balances, staking)
     config/
-        migrations/ # database migration files
-            postgres/
-            sqlite/
-    metric/
-        prometheus/ # Prometheus metrics exporter
+        migrations/
+            postgres/       # Goose SQL migrations (embedded at compile time)
+    event_handlers/         # Blockchain event processing (channel events, locking events)
+    metrics/                # Prometheus metrics + lifespan metric aggregation
     store/
-        db/ # struct Database implements Store interface
-        memory/ # may include in-memory store for Asset's, Blockchain's etc.
-    blockchain_worker.go # service: BlockchainWorker, BWStore
-    config.go
-    event_handler.go # service: EventHandler
-    eth_listener.go # service: SmartContractListener, SCLStore (TBD)
-    main.go # 1st - monolithic clearnode implementation; then - refactor into microservices
-    rpc_router.go # RPC Router binding RPC methods to handlers
-contract/
-docs/
+        database/           # GORM-based DB store
+        memory/             # In-memory store for assets, blockchains, config
+    blockchain_worker.go    # Processes pending BlockchainAction records
+    runtime.go              # Embeds migrations, initializes services
+    main.go                 # Entry point, EVM listeners, metric exporters
+contracts/                  # Smart contracts (ChannelHub, Locking, etc.)
+docs/                       # This directory
 pkg/
-    amm/
-    app_session/
+    app/                    # App session types (AppSessionStatus, quorum, allocations)
     blockchain/
-        evm/ # Client implementations for EVM-based blockchains
-    core/ # Client interface (Create, Checkpoint, Challenge etc.), PackState, UnpackState, TransitionValidator, functions related to State build
-    rpc/ # Node, Client, Requests, Responses, Events, Errors
+        evm/                # EVM client implementations
+    core/                   # Core types: Channel, State, Transaction, Signer, Transition
+    log/                    # Structured logging
+    rpc/                    # RPC protocol: messages, requests, responses, errors
+    sign/                   # Signer implementations (EthereumMsgSigner, EthereumRawSigner)
 sdk/
-    go/
-    ts/ # should include implementations for everything inside /pkg/
-test/ # integration test scenarios executed by all SDKs inside sdk/ directory
-go.mod
+    go/                     # Go SDK client
+    ts/                     # TypeScript SDK client
+    ts-compat/              # TypeScript compatibility SDK
+test/                       # Integration test scenarios
 ```

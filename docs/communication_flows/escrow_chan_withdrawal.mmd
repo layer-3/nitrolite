@@ -5,58 +5,68 @@ sequenceDiagram
         actor HomeChain
         actor EscrowChain
         Note over HomeChain: User already has a home channel
-        Note over Node: Contains user's state with Home Chain 
+        Note over Node: Contains user's state with Home Chain
         Note right of Client: Connected to Node
+
         User->>Client: async withdraw(blockchainId, asset, amount)
 
+        %% Phase 1: Escrow Lock - lock funds for withdrawal
         Client->>Node: GetLastState(UserWallet, asset)
-        Note right of Node: GetLastState(userWallet, asset)
         Node->>Client: Returns state
         Note over Client: createNextState(currentState) returns state
-        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, state.cycleId, state.version))
+        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
         Note over Client: GetTokenAddress(blockchainId, asset)
         Note over Client: state.setEscrowToken(blockchainId, tokenAddress)
         Note over Client: GetEscrowChannelID(homeChannelDef, state.version)
-        Note over Client: NewTransition(escrowLockT, state.ID(), escrowChannelID, amount)
+        Note over Client: NewTransition(TransitionTypeEscrowLock, state.ID(), escrowChannelID, amount)
         Note over Client: state.applyTransitions(transitions) returns true
-        Note over Client: signState(state) returns userSig
+        Note over Client: signState(state) returns userSig (prepends signer type byte)
 
         Client->>Node: SubmitState(state, userSig)
-        Note right of Node: GetLastState(userWallet, asset) returns currentState
-        Note right of Node: EnsureNoOngoingTransitions()
-        Note right of Node: ValidateStateTransition(currentState, state)
-        Note right of Node: StoreEscrowChannel(escrow_channel)
-        Note right of Node: StoreState(state)
+        Note over Node: LockUserState(userWallet, asset)
+        Note over Node: CheckOpenChannel(userWallet, asset) → approvedSigValidators
+        Note over Node: GetLastUserState(userWallet, asset) → currentState
+        Note over Node: EnsureNoOngoingStateTransitions(userWallet, asset)
+        Note over Node: ValidateStateAdvancement(currentState, incomingState)
+        Note over Node: PackState → verify userSig → nodeSigner.Sign(packedState)
+        Note over Node: StoreEscrowChannel(escrow_channel)
+        Note over Node: RecordTransaction → StoreUserState(state)
         Node->>Client: Return node signature
+
+        %% Phase 2: On-chain escrow withdrawal initiation
         Note over Client: PackChannelDefinition(channelDef)
         Note over Client: PackState(channelId, state)
         Node->>EscrowChain: initiateEscrowWithdrawal(packedChannelDef, packedState)
         EscrowChain->>Node: Return Tx Hash
         EscrowChain-->>Node: Emits EscrowWithdrawalInitiated Event
-        Note right of Node: HandleEscrowWithdrawalInitiated()
-        Note right of Node: UpdateEscrowChannel(escrow_channel)
+        Note over Node: HandleEscrowWithdrawalInitiated()
+        Note over Node: escrowChannel.StateVersion = event.StateVersion
+        Note over Node: escrowChannel.Status = Open
+        Note over Node: UpdateChannel(escrowChannel)
         Node-->>Client: Sends ChannelUpdate & BalanceUpdate
-        
+
+        %% Phase 3: Escrow withdrawal finalization - debit home, credit escrow
         Client->>Node: GetLastState(UserWallet, asset)
-        Note right of Node: GetLastState(userWallet, asset)
         Node->>Client: Returns state
         Note over Client: createNextState(currentState) returns state
-        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, state.cycleId, state.version))
-        Note over Client: NewTransition(escrow_withdrawalT, state.ID(), escrowChannelID, amount)
+        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
+        Note over Client: NewTransition(TransitionTypeEscrowWithdraw, state.ID(), escrowChannelID, amount)
         Note over Client: state.applyTransitions(transitions) returns true
         Note over Client: signState(state) returns userSig
 
         Client->>Node: SubmitState(state, userSig)
-        Note right of Node: GetLastState(userWallet, asset) returns currentState
-        Note right of Node: ValidateStateTransition(currentState, state)
-        Note right of Node: StoreState(state)
+        Note over Node: LockUserState → CheckOpenChannel → GetLastUserState
+        Note over Node: ValidateStateAdvancement → PackState → verify sig → node sign
+        Note over Node: RecordTransaction → StoreUserState(state)
         Node->>Client: Return node signature
 
+        %% Phase 4: Finalize on-chain
         Note over Node: PackState(channelId, state)
         Client->>EscrowChain: finalizeEscrowWithdrawal(escrowChannelId, packedState)
         EscrowChain->>Client: Return Tx Hash
         EscrowChain-->>Node: Emits EscrowWithdrawalFinalized Event
-        Note right of Node: HandleEscrowWithdrawalFinalized()
-        Note right of Node: UpdateEscrowChannel(escrow_channel)
+        Note over Node: HandleEscrowWithdrawalFinalized()
+        Note over Node: escrowChannel.StateVersion = event.StateVersion
+        Note over Node: escrowChannel.Status = Closed
+        Note over Node: UpdateChannel(escrowChannel)
         Node-->>Client: Sends ChannelUpdate & BalanceUpdate
-        

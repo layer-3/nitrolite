@@ -8,20 +8,34 @@ sequenceDiagram
         Client->>Node: GetLastState(UserWallet, asset)
         Note right of Node: GetLastState(userWallet, asset) returns nil
         Node->>Client: Returns an "empty state with 0 version" error
-        Note over Client: newChannelDefinition()
+        Note over Client: newChannelDefinition(nonce, challenge, approvedSigValidators)
         Note over Client: newEmptyState(asset) returns state
-        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, cycleId, state.version))
+        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
         Note over Client: GetTokenAddress(blockchainId, asset)
         Note over Client: state.setHomeToken(blockchainId, tokenAddress)
-        Note over Client: NewTransition(depositT, state.ID(), userWallet, amount)
+        Note over Client: NewTransition(TransitionTypeHomeDeposit, state.ID(), userWallet, amount)
         Note over Client: state.applyTransitions(transitions) returns true
-        Note over Client: signState(state) returns userSig
+        Note over Client: signState(state) returns userSig (prepends signer type byte)
+
         Client->>Node: RequestCreateChannel(channelDef, state, userSig)
-        Note right of Node: GetLastState(userWallet, asset) returns nil
-        Note right of Node: ValidateChannelDefinition(channelDef)
-        Note right of Node: ValidateStateTransition(nil, state)
-        Note right of Node: StoreChannel(channel)
-        Note right of Node: StoreState(state)
+        Note over Node: Validate userWallet is valid hex address
+        Note over Node: IsAssetSupported(asset, tokenAddress, blockchainId)
+        Note over Node: SignerValidatorsSupported(approvedSigValidators)
+        Note over Node: LockUserState(userWallet, asset)
+        Note over Node: GetLastUserState(userWallet, asset) → nil → NewVoidState()
+        Note over Node: If channel exists and not final → reject "already initialized"
+        Note over Node: Calculate homeChannelID = GetHomeChannelID(node, user, asset, nonce, challenge, sigValidators)
+        Note over Node: Validate incoming homeChannelID matches calculated ID
+        Note over Node: Validate nonce != 0, challenge >= minChallenge
+        Note over Node: ValidateStateAdvancement(voidState, incomingState)
+        Note over Node: PackState(incomingState) → packedState
+        Note over Node: Extract signer type from userSig (0x00=default, 0x01=session key)
+        Note over Node: Verify signer type approved: IsChannelSignerSupported(approvedSigValidators, sigType)
+        Note over Node: ChannelSigValidator.Verify(userWallet, packedState, userSig)
+        Note over Node: CreateChannel(homeChannelID, userWallet, asset, Home, blockchainID, token, nonce, challenge, approvedSigValidators)
+        Note over Node: nodeSigner.Sign(packedState) → nodeSig
+        Note over Node: NewTransactionFromTransition(state, transition) → RecordTransaction
+        Note over Node: StoreUserState(state) → also updates UserBalance
         Node->>Client: Return node signature
         Note over Client: GetChannelId(channelDef)
         Note over Client: PackChannelDefinition(channelDef)
@@ -29,8 +43,9 @@ sequenceDiagram
         Client->>HomeChain: createHomeChannel(packedChannelDef, packedState)
         HomeChain->>Client: Return Tx Hash
         HomeChain-->>Node: Emits HomeChannelCreated Event
-        Note right of Node: HandleHomeChannelCreated()
-        Note right of Node: UpdateChannel(channel)
+        Note over Node: HandleHomeChannelCreated()
+        Note over Node: channel.StateVersion = event.StateVersion
+        Note over Node: channel.Status = Open
+        Note over Node: UpdateChannel(channel)
         Node-->>Client: Sends ChannelUpdate & BalanceUpdate
         Client-->>User: Returns success
-        

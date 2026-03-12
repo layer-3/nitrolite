@@ -94,7 +94,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     error IncorrectStateIntent();
     error IncorrectChannelStatus();
     error ChallengerVersionTooLow();
-    error NoChannelIdFound();
+    error NoChannelIdFoundForEscrow();
     error IncorrectChannelId();
 
     struct ChannelMeta {
@@ -578,7 +578,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         address user = def.user;
 
         // Path 1: Unilateral closure after challenge timeout
-        if (status == ChannelStatus.DISPUTED && block.timestamp > meta.challengeExpireAt) {
+        if (status == ChannelStatus.DISPUTED && meta.challengeExpireAt < block.timestamp) {
             meta.status = ChannelStatus.CLOSED;
             meta.lockedFunds = 0;
             meta.challengeExpireAt = 0;
@@ -639,7 +639,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
         bytes32 channelId = meta.channelId;
-        require(channelId != bytes32(0), NoChannelIdFound());
+        require(channelId != bytes32(0), NoChannelIdFoundForEscrow());
 
         (ISignatureValidator validator, bytes calldata sigData) =
             _extractValidator(challengerSig, meta.node, meta.approvedSignatureValidators);
@@ -673,14 +673,15 @@ contract ChannelHub is IVault, ReentrancyGuard {
         address node = meta.node;
         EscrowStatus status = meta.status;
 
-        if (status == EscrowStatus.DISPUTED && block.timestamp > meta.challengeExpireAt) {
+        if (status == EscrowStatus.DISPUTED && meta.challengeExpireAt < block.timestamp) {
             // NON-HOME CHAIN: Unilateral finalization after challenge timeout
             meta.status = EscrowStatus.FINALIZED;
             uint256 lockedAmount = meta.lockedAmount;
             meta.lockedAmount = 0;
             meta.challengeExpireAt = 0;
 
-            _pushFunds(node, meta.initState.nonHomeLedger.token, lockedAmount);
+            // Release to user as "deposit exchange" has not been signed yet (it is the "finalizeEscrowDeposit" state)
+            _pushFunds(user, meta.initState.nonHomeLedger.token, lockedAmount);
 
             emit EscrowDepositFinalized(escrowId, channelId, candidate);
             return;
@@ -733,7 +734,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     {
         EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
         bytes32 channelId = meta.channelId;
-        require(channelId != bytes32(0), NoChannelIdFound());
+        require(channelId != bytes32(0), NoChannelIdFoundForEscrow());
 
         EscrowWithdrawalEngine.TransitionContext memory ctx = _buildEscrowWithdrawalContext(escrowId, meta.node);
         EscrowWithdrawalEngine.TransitionEffects memory effects = EscrowWithdrawalEngine.validateChallenge(ctx);
@@ -770,14 +771,15 @@ contract ChannelHub is IVault, ReentrancyGuard {
         address node = meta.node;
         EscrowStatus status = meta.status;
 
-        if (status == EscrowStatus.DISPUTED && block.timestamp > meta.challengeExpireAt) {
+        if (status == EscrowStatus.DISPUTED && meta.challengeExpireAt < block.timestamp) {
             // NON-HOME CHAIN: Unilateral finalization after challenge timeout
             meta.status = EscrowStatus.FINALIZED;
             uint256 lockedAmount = meta.lockedAmount;
             meta.lockedAmount = 0;
             meta.challengeExpireAt = 0;
 
-            _pushFunds(node, meta.initState.nonHomeLedger.token, lockedAmount);
+            // Release locked amount back to node as "withdrawal exchange" has not been signed yet (it is the "finalizeEscrowWithdrawal" state)
+            _nodeBalances[node][meta.initState.nonHomeLedger.token] += lockedAmount;
 
             emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
             return;

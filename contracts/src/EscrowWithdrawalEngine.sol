@@ -22,6 +22,7 @@ library EscrowWithdrawalEngine {
     error IncorrectEscrowStatus();
     error EscrowAlreadyExists();
     error EscrowAlreadyFinalized();
+    error ChallengeExpired();
 
     error IncorrectHomeChain();
     error IncorrectNonHomeChain();
@@ -124,6 +125,11 @@ library EscrowWithdrawalEngine {
 
         require(netFlowsSum >= 0, NegativeNetFlowSum());
         require(allocsSum == netFlowsSum.toUint256(), InvalidAllocationSum());
+
+        // If channel is DISPUTED, check that challenge hasn't expired
+        if (ctx.status == EscrowStatus.DISPUTED) {
+            require(block.timestamp <= ctx.challengeExpiry, ChallengeExpired());
+        }
     }
 
     // ========== Internal: Phase 2 - Intent-Specific Calculation ==========

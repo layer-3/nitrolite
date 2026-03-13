@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
 import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
 
-import {Utils} from "../src/Utils.sol";
+// forge-lint: disable-start(unsafe-typecast)
+
+import {Utils} from "../../src/Utils.sol";
 import {
     ChannelDefinition,
     ChannelStatus,
@@ -12,12 +13,11 @@ import {
     StateIntent,
     Ledger,
     EscrowStatus,
-    ParticipantIndex,
-    DEFAULT_SIG_VALIDATOR_ID
-} from "../src/interfaces/Types.sol";
-import {ChannelHub} from "../src/ChannelHub.sol";
-import {EscrowDepositEngine} from "../src/EscrowDepositEngine.sol";
-import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
+    ParticipantIndex
+} from "../../src/interfaces/Types.sol";
+import {ChannelHub} from "../../src/ChannelHub.sol";
+import {EscrowDepositEngine} from "../../src/EscrowDepositEngine.sol";
+import {EscrowWithdrawalEngine} from "../../src/EscrowWithdrawalEngine.sol";
 
 /*
  * @dev This file uses integration / blackbox testing through ChannelHub to verify
@@ -521,3 +521,4 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         );
     }
 }
+// forge-lint: disable-end(unsafe-typecast)

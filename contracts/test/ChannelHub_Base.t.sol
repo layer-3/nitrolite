@@ -9,8 +9,9 @@ import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 import {SessionKeyValidator, SessionKeyAuthorization} from "../src/sigValidators/SessionKeyValidator.sol";
-import {ChannelStatus, State, StateIntent, Ledger} from "../src/interfaces/Types.sol";
+import {ChannelStatus, State, StateIntent, Ledger, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
+import {Utils} from "../src/Utils.sol";
 
 // forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_Base is Test {
@@ -195,6 +196,18 @@ contract ChannelHubTest_Base is Test {
         state.userSig = TestUtils.signStateEip191WithSkValidator(vm, channelId, state, userPk, skAuth);
         state.nodeSig = TestUtils.signStateEip191WithEcdsaValidator(vm, channelId, state, NODE_PK);
         return state;
+    }
+
+    function signChallengeEip191WithEcdsaValidator(bytes32 channelId_, State memory state, uint256 privateKey)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory signingData = Utils.toSigningData(state);
+        bytes memory challengerSigningData = abi.encodePacked(signingData, "challenge");
+        bytes memory message = Utils.pack(channelId_, challengerSigningData);
+        bytes memory signature = TestUtils.signEip191(vm, privateKey, message);
+        return abi.encodePacked(DEFAULT_SIG_VALIDATOR_ID, signature);
     }
 
     function verifyChannelData(

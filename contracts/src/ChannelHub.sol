@@ -76,6 +76,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
     event TransferFailed(address indexed recipient, address indexed token, uint256 amount);
     event FundsClaimed(address indexed account, address indexed token, address indexed destination, uint256 amount);
 
+    event NodeBalanceUpdated(address indexed node, address indexed token, uint256 amount);
+
     error InvalidAddress();
     error IncorrectAmount();
     error IncorrectValue();
@@ -281,25 +283,30 @@ contract ChannelHub is IVault, ReentrancyGuard {
         require(node != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
 
-        _nodeBalances[node][token] += amount;
+        uint256 updatedBalance = _nodeBalances[node][token] + amount;
+        _nodeBalances[node][token] = updatedBalance;
 
         _pullFunds(msg.sender, token, amount);
 
         emit Deposited(node, token, amount);
+        emit NodeBalanceUpdated(node, token, updatedBalance);
     }
 
     function withdrawFromVault(address to, address token, uint256 amount) external {
         require(to != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
 
-        uint256 currentBalance = _nodeBalances[msg.sender][token];
+        address node = msg.sender;
+        uint256 currentBalance = _nodeBalances[node][token];
         require(currentBalance >= amount, InsufficientBalance());
 
-        _nodeBalances[msg.sender][token] = currentBalance - amount;
+        uint256 updatedBalance = currentBalance - amount;
+        _nodeBalances[node][token] = updatedBalance;
 
         _pushFunds(to, token, amount);
 
-        emit Withdrawn(msg.sender, token, amount);
+        emit Withdrawn(node, token, amount);
+        emit NodeBalanceUpdated(node, token, updatedBalance);
     }
 
     /**
@@ -387,11 +394,16 @@ contract ChannelHub is IVault, ReentrancyGuard {
             }
             // Only INITIALIZED escrows can be purged; CHALLENGED escrows require manual finalization
             if (_isEscrowDepositUnlockable(meta)) {
-                _nodeBalances[meta.node][meta.initState.nonHomeLedger.token] += meta.lockedAmount;
+                uint256 updatedBalance =
+                    _nodeBalances[meta.node][meta.initState.nonHomeLedger.token] + meta.lockedAmount;
+                _nodeBalances[meta.node][meta.initState.nonHomeLedger.token] = updatedBalance;
+
                 meta.status = EscrowStatus.FINALIZED;
                 meta.lockedAmount = 0;
                 purgedCount++;
                 escrowHeadTemp++;
+
+                emit NodeBalanceUpdated(meta.node, meta.initState.nonHomeLedger.token, updatedBalance);
             } else {
                 break;
             }
@@ -779,8 +791,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
             meta.challengeExpireAt = 0;
 
             // Release locked amount back to node as "withdrawal exchange" has not been signed yet (it is the "finalizeEscrowWithdrawal" state)
-            _nodeBalances[node][meta.initState.nonHomeLedger.token] += lockedAmount;
+            address withdrawalToken = meta.initState.nonHomeLedger.token;
+            uint256 updatedWithdrawalBalance = _nodeBalances[node][withdrawalToken] + lockedAmount;
+            _nodeBalances[node][withdrawalToken] = updatedWithdrawalBalance;
 
+            emit NodeBalanceUpdated(node, withdrawalToken, updatedWithdrawalBalance);
             emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
             return;
         }
@@ -1088,8 +1103,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            _nodeBalances[def.node][token] -= amount;
+            uint256 updatedBalance = _nodeBalances[def.node][token] - amount;
+            _nodeBalances[def.node][token] = updatedBalance;
             meta.lockedFunds += amount;
+
+            emit NodeBalanceUpdated(def.node, token, updatedBalance);
         }
 
         // Then process NEGATIVE deltas (subtractions from lockedFunds)
@@ -1101,8 +1119,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            _nodeBalances[def.node][token] += amount;
+            uint256 updatedBalance = _nodeBalances[def.node][token] + amount;
+            _nodeBalances[def.node][token] = updatedBalance;
             meta.lockedFunds -= amount;
+
+            emit NodeBalanceUpdated(def.node, token, updatedBalance);
         }
 
         // Special handling for CLOSE: push nodeAllocation directly to node address
@@ -1159,12 +1180,16 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // Handle node funds (positive = pull from node vault, negative = release to vault)
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            _nodeBalances[node][token] -= amount;
+            uint256 updatedBalance = _nodeBalances[node][token] - amount;
+            _nodeBalances[node][token] = updatedBalance;
             meta.lockedAmount += amount;
+            emit NodeBalanceUpdated(node, token, updatedBalance);
         } else if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            _nodeBalances[node][token] += amount;
+            uint256 updatedBalance = _nodeBalances[node][token] + amount;
+            _nodeBalances[node][token] = updatedBalance;
             meta.lockedAmount -= amount;
+            emit NodeBalanceUpdated(node, token, updatedBalance);
         }
 
         // NOTE: purge escrow deposits to unlock unutilized node liquidity
@@ -1211,12 +1236,16 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // Handle node funds (positive = pull from node vault, negative = release to vault)
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            _nodeBalances[node][token] -= amount;
+            uint256 updatedBalance = _nodeBalances[node][token] - amount;
+            _nodeBalances[node][token] = updatedBalance;
             meta.lockedAmount += amount;
+            emit NodeBalanceUpdated(node, token, updatedBalance);
         } else if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            _nodeBalances[node][token] += amount;
+            uint256 updatedBalance = _nodeBalances[node][token] + amount;
+            _nodeBalances[node][token] = updatedBalance;
             meta.lockedAmount -= amount;
+            emit NodeBalanceUpdated(node, token, updatedBalance);
         }
 
         // NOTE: purge escrow deposits to unlock unutilized node liquidity

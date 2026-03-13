@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
+import {ChannelHubTest_Base} from "../ChannelHub_Base.t.sol";
 
-import {Utils} from "../src/Utils.sol";
-import {State, ChannelDefinition, StateIntent, Ledger, ChannelStatus} from "../src/interfaces/Types.sol";
-import {SessionKeyAuthorization} from "../src/sigValidators/SessionKeyValidator.sol";
-import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
+import {Utils} from "../../src/Utils.sol";
+import {State, ChannelDefinition, StateIntent, Ledger, ChannelStatus} from "../../src/interfaces/Types.sol";
+import {SessionKeyAuthorization} from "../../src/sigValidators/SessionKeyValidator.sol";
+import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "../TestUtils.sol";
 
 contract ChannelHubTest_SingleChain_Lifecycle is ChannelHubTest_Base {
     function test_happyPath() public {

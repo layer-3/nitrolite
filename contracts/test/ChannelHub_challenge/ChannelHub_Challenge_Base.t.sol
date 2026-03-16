@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
+import {ChannelHubTest_Base} from "../ChannelHub_Base.t.sol";
 
-import {Utils} from "../src/Utils.sol";
-import {State, ChannelDefinition, StateIntent, Ledger, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
-import {TestUtils} from "./TestUtils.sol";
+import {Utils} from "../../src/Utils.sol";
+import {State, ChannelDefinition, StateIntent, Ledger} from "../../src/interfaces/Types.sol";
 
 /**
  * @dev Base contract for challenge tests with common helper functions.
@@ -63,17 +62,5 @@ abstract contract ChannelHubTest_Challenge_Base is ChannelHubTest_Base {
 
         vm.prank(alice);
         cHub.createChannel(def, initState);
-    }
-
-    function signChallengeEip191WithEcdsaValidator(bytes32 channelId_, State memory state, uint256 privateKey)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory signingData = Utils.toSigningData(state);
-        bytes memory challengerSigningData = abi.encodePacked(signingData, "challenge");
-        bytes memory message = Utils.pack(channelId_, challengerSigningData);
-        bytes memory signature = TestUtils.signEip191(vm, privateKey, message);
-        return abi.encodePacked(DEFAULT_SIG_VALIDATOR_ID, signature);
     }
 }

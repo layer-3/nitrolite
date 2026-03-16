@@ -3,35 +3,47 @@ sequenceDiagram
         actor SenderClient
         actor Node
         actor ReceiverClient
-        
+
         Note over SenderClient: Connected to Node
-        Note over Node: Contains user's state with Home Chain 
+        Note over Node: Contains user's state with Home Chain
 
         SenderUser->>SenderClient: transfer(DestinationUserWallet, asset, amount)
         SenderClient->>Node: GetLastState(SenderUserWallet, asset)
-        Note right of Node: GetLastState(userWallet, asset)
         Node->>SenderClient: Returns a state with home chain
-        %% Note over SenderClient: Check current state transitions
         Note over SenderClient: createNextState(currentState) returns state
-        Note over SenderClient: state.setID(CalculateStateID(state.userWallet, state.asset, cycleId, state.version))
-        Note over SenderClient: NewTransition(transferT, state.ID(), DestinationSenderUserWallet, amount)
+        Note over SenderClient: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
+        Note over SenderClient: NewTransition(TransitionTypeTransferSend, state.ID(), DestinationUserWallet, amount)
         Note over SenderClient: state.applyTransitions(transitions) returns true
-        Note over SenderClient: signState(state) returns userSig
+        Note over SenderClient: signState(state) returns userSig (prepends signer type byte)
 
         SenderClient->>Node: SubmitState(state, userSig)
-        Note right of Node: GetLastState(userWallet, asset) returns currentState
-        Note right of Node: EnsureNoOngoingTransitions()
-        Note right of Node: ValidateStateTransition(currentState, state)
-        Note right of Node: StoreState(state)
-        
-        Note right of Node: CreateReceiverState(DestinationUserWallet)
-        Note right of Node: GetLastState(DestinationUserWallet, asset)
-        %% Note over SenderClient: Check current state transitions
-        Note over Node: createNextState(receiver_state) returns new_receiver_state
-        Note over Node: new_receiver_state.setID(CalculateStateID(new_receiver_state.userWallet, new_receiver_state.asset, cycleId, new_receiver_state.version))
-        Note over Node: NewTransition(transfer_receiveT, new_receiver_state.ID(), DestinationUserWallet, amount)
-        Note over Node: new_receiver_state.applyTransitions(transitions) returns true
-        Note over Node: signState(new_receiver_state) returns nodeSig
+        Note over Node: ActionGateway.AllowAction(userWallet, GatedActionTransfer)
+        Note over Node: LockUserState(senderWallet, asset)
+        Note over Node: CheckOpenChannel(senderWallet, asset) → approvedSigValidators
+        Note over Node: GetLastUserState(senderWallet, asset) → currentState
+        Note over Node: EnsureNoOngoingStateTransitions(senderWallet, asset)
+        Note over Node: ValidateStateAdvancement(currentState, incomingState)
+        Note over Node: PackState(incomingState) → packedState
+        Note over Node: Extract signer type from userSig (0x00=default, 0x01=session key)
+        Note over Node: Verify signer type approved: IsChannelSignerSupported(approvedSigValidators, sigType)
+        Note over Node: ChannelSigValidator.Verify(senderWallet, packedState, userSig)
+        Note over Node: nodeSigner.Sign(packedState) → senderNodeSig
+
+        rect rgb(240, 248, 255)
+            Note over Node: issueTransferReceiverState()
+            Note over Node: Validate sender ≠ receiver
+            Note over Node: LockUserState(receiverWallet, asset)
+            Note over Node: GetLastUserState(receiverWallet, asset) → receiverState (or VoidState)
+            Note over Node: receiverState.NextState() → increment version
+            Note over Node: ApplyTransferReceiveTransition(senderWallet, amount, txID)
+            Note over Node: GetLastSignedState(receiverWallet, asset)
+            Note over Node: If last signed was MutualLock or EscrowLock → skip signing
+            Note over Node: Else if HomeChannelID exists → nodeSigner.Sign(packedReceiverState)
+            Note over Node: StoreUserState(receiverState) → also updates receiver UserBalance
+        end
+
+        Note over Node: NewTransactionFromTransition(senderState, receiverState, transition) → RecordTransaction
+        Note over Node: StoreUserState(senderState) → also updates sender UserBalance
 
         Node->>SenderClient: Sends ChannelUpdate & BalanceUpdate
         Node->>ReceiverClient: Sends ChannelUpdate & BalanceUpdate

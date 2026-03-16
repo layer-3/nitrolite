@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
+import {ChannelHubTest_Base} from "../ChannelHub_Base.t.sol";
+import {MockERC20} from "../mocks/MockERC20.sol";
 
-import {Utils} from "../src/Utils.sol";
-import {State, ChannelDefinition, StateIntent, Ledger, ChannelStatus, EscrowStatus} from "../src/interfaces/Types.sol";
+import {Utils} from "../../src/Utils.sol";
+import {
+    State,
+    ChannelDefinition,
+    StateIntent,
+    Ledger,
+    ChannelStatus,
+    EscrowStatus
+} from "../../src/interfaces/Types.sol";
 
 // forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {

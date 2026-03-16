@@ -1,151 +1,332 @@
 classDiagram
+    %% ===== ENUMS =====
+
     class ChannelStatus {
-        open
-        closed
-        challenged
+        <<enumeration>>
+        0 void
+        1 open
+        2 challenged
+        3 closed
     }
 
     class ChannelType {
-        escrow
-        home
-    }
-
-    class Channel {
-        +string ChannelID // should be different for home and escrow channels
-        +string UserWallet // better than ParticipantWallet, because we won't have more than one participant
-        +ChannelType Type
-        +uint32 BlockchainID
-        +string Token
-        +uint64 Challenge
-        +uint64 Nonce
-        +ChannelStatus Status
-        +uint64 OnChainStateVersion
-
-        +time.Time CreatedAt
-        +time.Time UpdatedAt
-    }
-
-    class State { // Immutable
-        +[64]char ID // Deterministic: Hash(UserWallet, Asset, UserCycleIndex, Version)
-
-        +string Data
-        +string Asset
-        +string UserWallet
-        +uint64 CycleIndex
-
-        +uint64 Version
-
-        +string *HomeChannelID
-        +string *EscrowChannelID
-
-        // It seem to better not to use State array in SC in CrossChainState
-        // And CrossChainState now can be renamed to "State"
-
-        // Home Channel
-        +int256 HomeUserBalance
-        +int64 HomeUserNetFlow
-        +int256 HomeNodeBalance
-        +int64 HomeNodeNetFlow
-
-        // Escrow Channel
-        +int256 EscrowUserBalance
-        +int64 EscrowUserNetFlow
-        +int256 EscrowNodeBalance
-        +int64 EscrowNodeNetFlow
-
-        +bool IsFinal
-        %% TODO: Remove in the future if redundant 
-
-        +string UserSig
-        +string NodeSig
-
-        +time.Time CreatedAt
-    }
-
-    class ChannelOfTypeHome {
-    }
-
-    class ChannelOfTypeEscrow {
-    }
-
-    %% Relationships
-    Channel --> ChannelStatus
-    State --> ChannelOfTypeHome
-    State --> ChannelOfTypeEscrow
-    ChannelOfTypeHome --> Channel
-    ChannelOfTypeEscrow --> Channel
-    Channel --> ChannelType
-    Transaction --> TransactionType
-    Transaction --> SenderNewState
-    Transaction --> ReceiverNewState
-    SenderNewState --> State
-    ReceiverNewState --> State
-
-    class SenderNewState {
-        *Optional
-    }
-
-    class ReceiverNewState {
-        *Optional
-    }
-
-
-    class Transaction { // Immutable
-        +[64]char ID
-        // Deterministic:
-        // 1) Initiated by User: Hash(ToAccount, SenderNewStateID)
-        // 2) Initiated by Node: Hash(FromAccount, ReceiverNewStateID)
-
-        +TransactionType Type
-        +string AssetSymbol
-
-        +string FromAccount
-        +string ToAccount
-
-        +[64]char *SenderNewStateID
-        +[64]char *ReceiverNewStateID
-
-        +decimal.Decimal Amount
-        +time.Time CreatedAt
+        <<enumeration>>
+        1 home
+        2 escrow
     }
 
     class TransactionType {
-        %% isWallet(ToAccount) && isWallet(FromAccount) -> transfer
-        transfer
-
-        %% ToAccount = AppSessionID -> commit
-        %% FromAccount = UserWallet -> commit
-        commit
-
-        %% ToAccount = UserWallet -> release
-        %% FromAccount = AppSessionID -> release
-        release
-
-        %% FromAccount = HomeChannelID -> home_deposit
-        %% ToAccount = UserWallet -> home_deposit
-        home_deposit
-
-        %% FromAccount = UserWallet -> home_withdrawal
-        %% ToAccount = HomeChannelID -> home_withdrawal
-        home_withdrawal
-
-        %% ToAccount = EscrowChannelID -> mutual_lock
-        %% FromAccount = HomeChannelID -> mutual_lock
-        mutual_lock
-
-        %% FromAccount = EscrowChannelID -> escrow_deposit
-        %% ToAccount = HomeChannelID -> escrow_deposit
-        escrow_deposit
-        
-        %% ToAccount = HomeChannelID -> escrow_lock
-        %% FromAccount = EscrowChannelID -> escrow_lock
-        escrow_lock
-
-        %% FromAccount = HomeChannelID -> escrow_withdraw
-        %% ToAccount = EscrowChannelID -> escrow_withdraw
-        escrow_withdraw
-
-        %% FromAccount = HomeChannelID -> migrate
-        %% ToAccount = EscrowChannelID -> migrate
-        migrate
+        <<enumeration>>
+        10 home_deposit
+        11 home_withdrawal
+        20 escrow_deposit
+        21 escrow_withdraw
+        30 transfer
+        40 commit
+        41 release
+        42 rebalance
+        100 migrate
+        110 escrow_lock
+        120 mutual_lock
+        200 finalize
     }
+
+    class TransitionType {
+        <<enumeration>>
+        0 void
+        1 acknowledgement
+        10 home_deposit
+        11 home_withdrawal
+        20 escrow_deposit
+        21 escrow_withdraw
+        30 transfer_send
+        31 transfer_receive
+        40 commit
+        41 release
+        100 migrate
+        110 escrow_lock
+        120 mutual_lock
+        200 finalize
+    }
+
+    class AppSessionStatus {
+        <<enumeration>>
+        0 void
+        1 open
+        2 closed
+    }
+
+    class BlockchainActionType {
+        <<enumeration>>
+        1 checkpoint
+        10 initiate_escrow_deposit
+        11 finalize_escrow_deposit
+        20 initiate_escrow_withdrawal
+        21 finalize_escrow_withdrawal
+    }
+
+    class BlockchainActionStatus {
+        <<enumeration>>
+        0 pending
+        1 completed
+        2 failed
+    }
+
+    class GatedAction {
+        <<enumeration>>
+        1 transfer
+        10 app_session_creation
+        11 app_session_operation
+        12 app_session_deposit
+        13 app_session_withdrawal
+    }
+
+    %% ===== CORE TABLES =====
+
+    class Channel {
+        +char~66~ channel_id PK
+        +char~42~ user_wallet
+        +varchar~20~ asset
+        +smallint type
+        +numeric blockchain_id
+        +char~42~ token
+        +bigint challenge_duration
+        +timestamptz challenge_expires_at
+        +numeric nonce
+        +varchar~66~ approved_sig_validators
+        +smallint status
+        +numeric state_version
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    class ChannelState {
+        +char~66~ id PK
+        +varchar~20~ asset
+        +char~42~ user_wallet
+        +numeric epoch
+        +numeric version
+        +smallint transition_type
+        +char~66~ transition_tx_id FK
+        +varchar~66~ transition_account_id
+        +numeric transition_amount
+        +char~66~ home_channel_id FK
+        +char~66~ escrow_channel_id FK
+        +numeric home_user_balance
+        +numeric home_user_net_flow
+        +numeric home_node_balance
+        +numeric home_node_net_flow
+        +numeric escrow_user_balance
+        +numeric escrow_user_net_flow
+        +numeric escrow_node_balance
+        +numeric escrow_node_net_flow
+        +text user_sig
+        +text node_sig
+        +timestamptz created_at
+    }
+
+    class Transaction {
+        +char~66~ id PK
+        +smallint tx_type
+        +varchar~20~ asset_symbol
+        +varchar~66~ from_account
+        +varchar~66~ to_account
+        +char~66~ sender_new_state_id FK
+        +char~66~ receiver_new_state_id FK
+        +numeric amount
+        +timestamptz created_at
+    }
+
+    class UserBalance {
+        +char~42~ user_wallet PK
+        +varchar~20~ asset PK
+        +numeric balance
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    %% ===== APPLICATION TABLES =====
+
+    class AppV1 {
+        +varchar~66~ id PK
+        +char~42~ owner_wallet
+        +text metadata
+        +numeric version
+        +boolean creation_approval_not_required
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    class AppSessionV1 {
+        +char~66~ id PK
+        +varchar~66~ application_id FK
+        +numeric nonce
+        +text session_data
+        +smallint quorum
+        +numeric version
+        +smallint status
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    class AppParticipantV1 {
+        +char~66~ app_session_id PK FK
+        +char~42~ wallet_address PK
+        +smallint signature_weight
+    }
+
+    class AppLedgerEntryV1 {
+        +uuid id PK
+        +char~66~ account_id FK
+        +varchar~20~ asset_symbol
+        +char~42~ wallet
+        +numeric credit
+        +numeric debit
+        +timestamptz created_at
+    }
+
+    %% ===== SESSION KEY TABLES =====
+
+    class AppSessionKeyStateV1 {
+        +char~66~ id PK
+        +char~42~ user_address
+        +char~42~ session_key
+        +numeric version
+        +timestamptz expires_at
+        +text user_sig
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    class AppSessionKeyApplicationV1 {
+        +char~66~ session_key_state_id PK FK
+        +varchar~66~ application_id PK FK
+    }
+
+    class AppSessionKeyAppSessionV1 {
+        +char~66~ session_key_state_id PK FK
+        +char~66~ app_session_id PK FK
+    }
+
+    class ChannelSessionKeyStateV1 {
+        +char~66~ id PK
+        +char~42~ user_address
+        +char~42~ session_key
+        +numeric version
+        +char~66~ metadata_hash
+        +timestamptz expires_at
+        +text user_sig
+        +timestamptz created_at
+    }
+
+    class ChannelSessionKeyAssetV1 {
+        +char~66~ session_key_state_id PK FK
+        +varchar~20~ asset PK
+    }
+
+    %% ===== BLOCKCHAIN TABLES =====
+
+    class ContractEvent {
+        +bigserial id PK
+        +char~42~ contract_address
+        +numeric blockchain_id
+        +varchar~255~ name
+        +numeric block_number
+        +varchar~255~ transaction_hash
+        +bigint log_index
+        +timestamptz created_at
+    }
+
+    class BlockchainAction {
+        +bigserial id PK
+        +smallint action_type
+        +char~66~ state_id FK
+        +numeric blockchain_id
+        +jsonb action_data
+        +smallint status
+        +smallint retry_count
+        +text last_error
+        +char~66~ transaction_hash
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    %% ===== OPERATIONAL TABLES =====
+
+    class UserStakedV1 {
+        +char~42~ user_wallet PK
+        +numeric blockchain_id PK
+        +numeric amount
+        +timestamptz created_at
+        +timestamptz updated_at
+    }
+
+    class ActionLogEntryV1 {
+        +uuid id PK
+        +char~42~ user_wallet
+        +smallint gated_action
+        +timestamptz created_at
+    }
+
+    class LifespanMetric {
+        +varchar~66~ id PK
+        +varchar~255~ name
+        +jsonb labels
+        +numeric value
+        +timestamptz last_timestamp
+        +timestamptz updated_at
+    }
+
+    %% ===== RELATIONSHIPS =====
+
+    %% -- Channel core --
+    Channel --> ChannelStatus : status
+    Channel --> ChannelType : type
+
+    %% -- ChannelState references channels and transitions --
+    ChannelState --> TransitionType : transition_type
+    ChannelState --> Channel : home_channel_id
+    ChannelState --> Channel : escrow_channel_id
+    ChannelState --> Transaction : transition_tx_id
+
+    %% -- Transaction references states --
+    Transaction --> TransactionType : tx_type
+    Transaction --> ChannelState : sender_new_state_id
+    Transaction --> ChannelState : receiver_new_state_id
+
+    %% -- UserBalance derived from ChannelState.home_user_balance --
+    ChannelState ..> UserBalance : StoreUserState updates balance
+
+    %% -- Blockchain: actions reference states, events update channels --
+    BlockchainAction --> BlockchainActionType : action_type
+    BlockchainAction --> BlockchainActionStatus : status
+    BlockchainAction --> ChannelState : state_id
+    ContractEvent ..> Channel : events update channel status
+    ContractEvent ..> BlockchainAction : events schedule actions
+    ContractEvent ..> UserStakedV1 : UserLockedBalanceUpdated
+
+    %% -- App layer --
+    AppSessionV1 --> AppV1 : application_id
+    AppSessionV1 --> AppSessionStatus : status
+    AppParticipantV1 --> AppSessionV1 : app_session_id
+    AppLedgerEntryV1 --> AppSessionV1 : account_id
+
+    %% -- App session keys link to apps and sessions --
+    AppSessionKeyApplicationV1 --> AppSessionKeyStateV1 : session_key_state_id
+    AppSessionKeyApplicationV1 --> AppV1 : application_id
+    AppSessionKeyAppSessionV1 --> AppSessionKeyStateV1 : session_key_state_id
+    AppSessionKeyAppSessionV1 --> AppSessionV1 : app_session_id
+
+    %% -- Channel session keys link to channels via user_address + asset --
+    ChannelSessionKeyAssetV1 --> ChannelSessionKeyStateV1 : session_key_state_id
+    ChannelSessionKeyStateV1 ..> Channel : validated against user_address + asset
+
+    %% -- Action log gates user operations --
+    ActionLogEntryV1 --> GatedAction : gated_action
+    ActionLogEntryV1 ..> AppSessionV1 : gates session operations
+
+    %% -- Lifespan metrics aggregate from core tables --
+    LifespanMetric ..> Channel : aggregates channel counts
+    LifespanMetric ..> Transaction : aggregates TVL
+    LifespanMetric ..> AppSessionV1 : aggregates session counts
+    LifespanMetric ..> UserBalance : counts active users

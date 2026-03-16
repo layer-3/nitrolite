@@ -61,9 +61,9 @@ The protocol defines the following core operations:
 
 Creates a new channel with an initial state.
 
-The request MUST include the channel definition parameters and the user's signature on the initial state. The node validates the channel definition, computes the channel identifier, verifies the user's signature, co-signs the state, and stores the channel record.
+The request MUST include the channel definition parameters, the initial state and the user's signature over it. The node validates the channel definition, computes the channel identifier, verifies the user's signature, co-signs the state, and stores the channel record.
 
-The response includes the channel identifier and the co-signed initial state.
+The response includes Node's signature over the submitted state.
 
 ### Operation: SubmitState
 
@@ -71,7 +71,7 @@ Submits a user-signed state transition for processing.
 
 The request MUST include the signed state with a valid transition. The node validates the state against advancement rules, verifies the user's signature, co-signs the state, and applies any side effects (e.g. scheduling blockchain operations for non-OPERATE intents, creating receiver states for transfers).
 
-The response includes the co-signed state.
+The response includes Node's signature over the submitted state.
 
 ### Operation: GetLatestState
 

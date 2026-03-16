@@ -87,8 +87,8 @@ An escrow is a temporary on-chain record that locks funds on one chain while a c
 | Identifier     | 32-byte hash derived from the home channel identifier and state version |
 | Hosting chain  | The non-home chain (for deposits: where the user's funds are locked; for withdrawals: where the node's funds are locked) |
 | Tracked amount | The amount locked in escrow, corresponding to the non-home ledger allocations |
-| Timeout        | Escrow deposits include an unlock delay after which funds are automatically returned if not finalized |
-| Challenge      | Either participant MAY challenge the escrow during its challenge period |
+| Unlock delay   | Escrow deposits include an unlock delay after which funds are automatically unlocked to the node if not challenged |
+| ChallengeDuration | A period after a challenge was initiated that allows resolution. If no finalization state was supplied, the initiate state is finalized, and funds are returned |
 
 An escrow is not a separate protocol entity with its own state — it is an on-chain record derived from a channel state transition. The escrow exists only between initiation and finalization (or timeout).
 
@@ -99,7 +99,7 @@ To deposit assets from a non-home chain into a channel, the protocol uses a two-
 1. **Initiate (Escrow Deposit Initiate)** — participants sign a state that creates an escrow. On the home chain, the node's allocation increases to reserve funds. On the non-home chain, the user's deposit is locked in an escrow record with an unlock delay.
 2. **Finalize (Escrow Deposit Finalize)** — after the escrow is created, participants sign a state that completes the deposit. On the home chain, the user's allocation increases by the deposited amount. On the non-home chain, the escrowed funds are released to the node's vault.
 
-If the escrow is not finalized within the unlock delay, the escrowed funds on the non-home chain are automatically returned to the user. Either participant MAY challenge the escrow during the challenge period.
+If the escrow is not finalized within the unlock delay, the escrowed funds on the non-home chain are automatically unlocked to the Node. Either participant MAY challenge the escrow during the challenge period. Note that it is NOT possible to challenge a deposit escrow after unlock delay has passed as the funds were already unlocked to the Node.
 
 Cross-chain amounts are validated using WAD normalization to ensure the home-chain node allocation matches the non-home-chain user deposit.
 
@@ -110,7 +110,7 @@ To withdraw assets to a non-home chain, the protocol uses a similar two-phase es
 1. **Initiate (Escrow Withdrawal Initiate)** — participants sign a state that creates an escrow. On the non-home chain, the node locks funds from its vault into the escrow record.
 2. **Finalize (Escrow Withdrawal Finalize)** — participants sign a state that completes the withdrawal. On the home chain, the user's allocation decreases. On the non-home chain, the escrowed funds are released to the user.
 
-If the escrow is not finalized cooperatively, either participant MAY challenge the escrow during the challenge period.
+If the escrow is not finalized cooperatively, either participant MAY challenge the escrow.
 
 ## Home Chain Migration
 
@@ -121,10 +121,10 @@ The home chain of a channel MAY be changed through a two-phase migration process
 
 After migration, the following changes take effect:
 
-- **Home chain identifier** — changes to the new chain's identifier
-- **Home token address** — changes to the token address on the new chain
-- **Ledger roles** — the former non-home ledger becomes the home ledger; the former home ledger becomes the non-home ledger (and is zeroed out on finalization)
-- **Enforcement target** — all subsequent enforcement operations execute against the new chain
+- **Home chain identifier** is updated to reflect the migration
+- **Home token address** is updated to reflect the migration
+- **Ledger roles** — the former non-home ledger becomes the home ledger; the former home ledger becomes the non-home ledger (and its allocations are zeroed out on finalization)
+- **Enforcement target** — all subsequent enforcement operations execute against the new home chain
 - **Balances** — the user's allocation is preserved (normalized by decimal precision); the node's allocation is recalculated for the new chain
 
 VERSION NOTE: Migration transitions are functional but may be refined in future protocol versions.
@@ -134,9 +134,9 @@ VERSION NOTE: Migration transitions are functional but may be refined in future 
 The protocol prevents cross-chain replay through multiple binding mechanisms:
 
 - **Chain identifier binding** — each ledger is bound to a specific chain identifier. The blockchain layer validates that the home ledger chain identifier matches the current blockchain. This prevents a state signed for one chain from being enforced on another.
-- **Channel identifier scoping** — channel identifiers incorporate a protocol version byte, preventing replay across protocol deployments. The same channel definition on a different protocol version produces a different channel identifier.
+- **Channel identifier scoping** — channel identifiers incorporate a protocol version byte, preventing replay across smart contract deployments. The same channel definition on a different protocol version produces a different channel identifier.
 - **Escrow identifier uniqueness** — escrow channel identifiers are derived from the home channel identifier and the state version at initiation. This ensures that each escrow operation produces a unique identifier, preventing a completed escrow from being replayed.
-- **Home ledger validation** — on-chain enforcement validates that the home ledger's declared decimals match the actual token decimals on the current chain, preventing states crafted for a different token from being accepted.
+- **Ledger validation** — on-chain enforcement validates that both home and non-home ledger's declared decimals match the actual token decimals on the current execution chain, preventing states crafted for a different token from being accepted. Additionally, a specific set of invariants is enforced for security purposes.
 
 ## Current Version Notes
 

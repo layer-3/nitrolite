@@ -110,7 +110,7 @@ The challenger signature is distinct from the state signatures. It is produced b
 
 During the challenge period, any participant MAY respond by submitting a new valid state whose version is strictly greater than the currently disputed state. This replaces the disputed state, changes channel's status (transitions out from DISPUTED) and clears the challenge timer.
 
-It should be noted that it is NOT possible the file another challenge on a channel that is already disputed. The current challenge must be resolved first.
+It should be noted that it is NOT possible to file another challenge on a channel that is already disputed. The current challenge must be resolved first.
 
 Additionally, it is possible to close the channel unilaterally by submitting a valid "CLOSE" state (if present) even after a channel was challenged. In such case, the channel will transition to CLOSED status immediately, transferring out all funds to the User and the Node according to amounts agreed about in the CLOSE state.
 

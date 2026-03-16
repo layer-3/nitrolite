@@ -65,14 +65,14 @@ In the current protocol version, participants MUST trust nodes for:
 
 Participants do not need to trust nodes for:
 
-- **Single-chain asset custody** — assets on the home chain can always be recovered through on-chain enforcement, provided the channel has sufficient locked funds
+- **Single-chain asset custody** — assets on the home chain can always be recovered through on-chain enforcement
 - **State validity** — invalid states are rejected by signature and validation rules
 
 ## Known Limitations
 
 The following capabilities are not yet implemented:
 
-- Trustless cross-chain state enforcement (node liquidity verification)
+- Trustless off-chain state operations (node liquidity enforcement)
 - Validator network for monitoring node behaviour and enforcing correctness
 - Watchtower services for automated enforcement
 - Support for non-EVM blockchains
@@ -83,7 +83,7 @@ The following capabilities are not yet implemented:
 The protocol roadmap includes the following planned improvements:
 
 - **Validator network** — off-chain state advancement can be independently validated; a validator network would monitor on-chain actions and penalize node misbehaviour that harms the ecosystem
-- **Trustless cross-chain enforcement** — removing the reliance on node liquidity trust through bridging or proof mechanisms
+- **Extension layer on-chain enforcement** — removing the reliance on node liquidity trust for extension layer operations
 - **Non-EVM blockchain support** — redesigning the protocol to support blockchains beyond the EVM ecosystem (planned for V2)
 - **Watchtower integration** — automated monitoring and enforcement on behalf of users
 

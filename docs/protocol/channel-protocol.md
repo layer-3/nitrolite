@@ -31,8 +31,8 @@ The channel identifier is derived deterministically from the channel definition 
 
 The derivation produces a 32-byte identifier where:
 
-- the first byte encodes the protocol version
-- the remaining bytes are derived from the hash of the ABI-encoded channel definition parameters
+- the first byte encodes the smart contract version
+- the remaining bytes are derived from the hash of the canonical encoded channel definition parameters
 
 This ensures that:
 
@@ -52,7 +52,7 @@ The node validates and stores the channel definition. An initial state is constr
 The node validates and stores a new state off-chain. Depending on the transition type or a participant's initiative, the node MAY also submit the state to the blockchain layer for on-chain enforcement. Any party MAY independently submit a signed state to the blockchain layer.
 
 **Challenge** *(on-chain only)*
-A participant submits a signed state along with a challenger signature to the blockchain layer. Upon successful validation, the challenge duration begins. During this period, other participants MAY respond by submitting a state with a higher version (via checkpoint) to refute the challenge.
+A participant submits a signed state along with a challenger signature to the blockchain layer. Upon successful validation, the challenge duration begins. During this period, other participants MAY respond by submitting a state with a higher version (if exists) via checkpoint to refute the challenge.
 
 **Close** *(off-chain for cooperative, on-chain for execution)*
 Off-chain, a close represents a mutual agreement to finalize the channel. On-chain, a close MAY be executed either through a mutually signed close state or after the challenge duration has elapsed without a successful response. Upon close, the channel's funds are released according to the final state allocations and the channel's lifecycle ends.
@@ -65,7 +65,7 @@ During the channel lifecycle, states exist in one of the following signing categ
 
 **Node-issued pending state** — a state produced by the node (e.g. for TransferReceive or Release transitions) that carries only the node's signature. A pending state is not enforceable on-chain and MUST NOT be treated as the latest authoritative state. It becomes mutually signed only after the user acknowledges it.
 
-The off-chain and enforcement representations encode the same logical state. A state that is mutually signed off-chain is directly enforceable on-chain without transformation, provided the enforcement representation is derived correctly. Session-key signatures are valid for enforcement if the channel's approved signature validators include the session key validation mode.
+The off-chain and enforcement representations encode the same logical state. A state that is mutually signed off-chain is directly enforceable on-chain without transformation, provided the enforcement representation is derived correctly. Session-key signatures are valid for enforcement if the channel's approved signature validators include the session key validator.
 
 ## State Advancement Rules
 
@@ -84,7 +84,7 @@ The channel identifier MUST be present and MUST match the channel definition.
 The transition type MUST be valid for the current channel state. Transition-specific validation rules MUST be satisfied.
 
 **Ledger admissibility**
-Ledger invariants MUST hold: allocations MUST equal net flows, and allocation values MUST be non-negative. Declared decimal precision MUST match the asset's actual precision.
+Ledger invariants MUST hold: allocations MUST equal net flows, and allocation values MUST be non-negative. Declared decimal precision MUST match the asset's actual precision. Additionally, transition-specific ledger validations apply.
 
 ## Transition Families
 
@@ -105,6 +105,10 @@ Transitions are organized into the following families:
 Each transition below describes its purpose, the expected transition field values, and the resulting ledger effects. Ledger fields are abbreviated as: UB (UserAllocation), UNF (UserNetFlow), NB (NodeAllocation), NNF (NodeNetFlow).
 
 For all transitions that do not modify the non-home ledger, the non-home ledger MUST be empty (see [Empty Non-Home Ledger](state-model.md#empty-non-home-ledger)).
+
+State Ledgers Operation-specific advancement diagram:
+
+![State Ledger Advancement](./state_ledger_advancement.png)
 
 ### Acknowledgement
 
@@ -155,7 +159,7 @@ For all transitions that do not modify the non-home ledger, the non-home ledger 
 ### Commit
 
 - Purpose: moves assets from the channel into an extension (such as an application session)
-- AccountId MUST reference the application session identifier
+- AccountId MUST reference the extension object identifier (e.g. application session id)
 - Amount MUST be the committed quantity
 - Home ledger effects: UB decreases by Amount, NNF decreases by Amount
 - The non-home ledger MUST be empty
@@ -163,7 +167,7 @@ For all transitions that do not modify the non-home ledger, the non-home ledger 
 ### Release
 
 - Purpose: returns assets from an extension back to channel allocations
-- AccountId MUST reference the application session identifier
+- AccountId MUST reference the extension object identifier (e.g. application session id)
 - Amount MUST be the released quantity
 - The extension state MUST authorize the release
 - Home ledger effects: UB increases by Amount, NNF increases by Amount
@@ -176,7 +180,7 @@ For all transitions that do not modify the non-home ledger, the non-home ledger 
 - AccountId MUST reference the escrow channel identifier (derived from the home channel identifier and state version)
 - Amount MUST be the deposit quantity
 - A non-home ledger MUST be provided in the state
-- The non-home ledger MUST have a different blockchain identifier and token address than the home ledger
+- The non-home ledger MUST have a different blockchain identifier than the home ledger
 - Home ledger effects: NB increases by Amount, NNF increases by Amount
 - Non-home ledger is initialized: UB set to Amount, UNF set to Amount, NB and NNF set to zero
 
@@ -185,7 +189,7 @@ For all transitions that do not modify the non-home ledger, the non-home ledger 
 - Purpose: completes a cross-chain deposit previously initiated by an escrow deposit initiate
 - AccountId MUST reference the escrow channel identifier
 - Amount MUST match the amount from the initiating transition
-- Home ledger effects: UB increases by Amount, NNF increases by Amount
+- Home ledger effects: UB increases by Amount, NB decreases by Amount, NNF does not change
 - Non-home ledger effects: UB decreases by Amount, NNF decreases by Amount
 
 ### Escrow Withdrawal Initiate
@@ -194,7 +198,7 @@ For all transitions that do not modify the non-home ledger, the non-home ledger 
 - AccountId MUST reference the escrow channel identifier (derived from the home channel identifier and state version)
 - Amount MUST be the withdrawal quantity
 - A non-home ledger MUST be provided in the state
-- The non-home ledger MUST have a different blockchain identifier and token address than the home ledger
+- The non-home ledger MUST have a different blockchain identifier than the home ledger
 - Non-home ledger is initialized: NB set to Amount, NNF set to Amount, UB and UNF set to zero
 
 ### Escrow Withdrawal Finalize

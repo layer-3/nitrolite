@@ -60,7 +60,7 @@ The node maintains a **vault balance** per token on each chain. The vault is a p
 
 ## Channel Creation
 
-Channels are created through an enforcement operation. A channel does not need to be created with its initial state — any validly signed state MAY be used for on-chain creation, provided the channel does not yet exist on-chain. This allows participants to advance state off-chain before creating the channel on-chain, for example when the user's first action was receiving a transfer from another user, making the initial state carry a WITHDRAW intent.
+Channels are created through an enforcement operation. A channel does not need to be created on-chain with its initial off-chain-created state — any validly signed state MAY be used for on-chain creation, provided the channel does not yet exist on-chain. This allows participants to advance state off-chain before enforcing the channel on-chain, e.g. when the user's first action is to receive a transfer from another user, they can additionally perform several transfer send or receive operations before submitting the state on-chain with a "WITHDRAW" intent, receiving funds simultaneously with creating a channel, both on-chain.
 
 The creation process:
 
@@ -94,26 +94,29 @@ A challenge allows a participant to dispute the current on-chain state by submit
 
 ### Challenger Signature
 
-The challenger signature is distinct from the state signatures. It is produced by signing the enforcement representation of the candidate state with the string "challenge" appended to the signing data. This proves that the challenger explicitly intended to initiate a dispute, rather than merely having signed a state during normal operation.
+The challenger signature is distinct from the state signatures. It is produced by signing the enforcement representation of the candidate state with the string "challenge" appended to the signing data. This guarantees that only a User or a Node can start a challenge, and not the third-party. However, a channel participant MAY share a valid challenger signature with a third-party, who then can successfully initiate a challenge.
 
-Either the user or the node MAY act as the challenger.
+**Only** the user or the node MAY act as the challenger.
 
 ### Challenge Process
 
 1. The challenger submits a candidate state, state signatures, the challenger signature, and the challenger's participant index
-2. The channel MUST be in operating or migrating-in status
+2. The channel MUST NOT be in DISPUTE, MIGRATED_OUT or CLOSED statuses
 3. The candidate version MUST be greater than or equal to the current on-chain version
 4. If the candidate version is strictly greater than the current on-chain version, the blockchain layer validates and applies the new state (including fund effects)
-5. The channel status is set to **disputed** and the challenge expiry is set to the current time plus the challenge duration
-6. While disputed, no further state submissions (checkpoint, deposit, withdrawal) are accepted — only another challenge with a higher-version state or a cooperative close
+5. The channel status is set to **DISPUTED** and the challenge expiry is set to the current time plus the challenge duration
 
-### Challenge Response
+### Resolving a Challenge
 
-During the challenge period, any participant MAY respond by submitting a new challenge with a state whose version is strictly greater than the currently disputed state. This replaces the disputed state and resets the challenge timer.
+During the challenge period, any participant MAY respond by submitting a new valid state whose version is strictly greater than the currently disputed state. This replaces the disputed state, changes channel's status (transitions out from DISPUTED) and clears the challenge timer.
+
+It should be noted that it is NOT possible the file another challenge on a channel that is already disputed. The current challenge must be resolved first.
+
+Additionally, it is possible to close the channel unilaterally by submitting a valid "CLOSE" state (if present) even after a channel was challenged. In such case, the channel will transition to CLOSED status immediately, transferring out all funds to the User and the Node according to amounts agreed about in the CLOSE state.
 
 ### Challenge Finality
 
-After the challenge period expires without a higher-version state being submitted, the disputed state becomes **final**. However, a separate **close call** is still required to release the channel's locked funds. The close call after challenge expiry does not require any additional signatures — any party MAY invoke it.
+After the challenge period expires without being resolved, the disputed state becomes **final**. However, a separate **close call** is still required to release the channel's locked funds. Such close call does not require any state to be submitted alongside, only the id of a channel, and can be invoked by anyone.
 
 ## Close Operation
 
@@ -121,7 +124,7 @@ A close releases the channel's locked funds and terminates the channel lifecycle
 
 Two paths exist:
 
-**Cooperative close** — a participant submits a state with the CLOSE intent, signed by all participants. The blockchain layer validates that the final allocations do not exceed the locked funds. UserAllocation is released to the user, NodeAllocation is released to the node. The channel MAY be in operating, disputed, or migrating-in status.
+**Cooperative close** — a participant submits a state with the CLOSE intent, signed by all participants. The blockchain layer validates that amounts from the allocations are moved to the respective net flows (basically, it is a withdrawal operation). It should be noted that it is not possible to close an already CLOSED or MIGRATED_OUT channel.
 
 **Unilateral close** — after a challenge period has expired, any party MAY call close without additional signatures. The blockchain layer releases assets according to the last enforced state's allocations (UserAllocation to the user, NodeAllocation to the node).
 
@@ -148,9 +151,9 @@ Cross-chain transitions are enforced through dedicated operations on the blockch
 | Operation                  | On-Chain Effect                                                             |
 | -------------------------- | --------------------------------------------------------------------------- |
 | Escrow Deposit Initiate    | On home chain: state updated, node funds adjusted. On non-home chain: escrow record created, user funds locked. |
-| Escrow Deposit Finalize    | On home chain: state updated, user allocation increased. On non-home chain: escrowed funds released to node vault (or returned to user after timeout). |
+| Escrow Deposit Finalize    | On home chain: state updated, user allocation increased. On home chain: state updated, node funds adjusted. On non-home chain: escrow record created, user funds locked, automatic release to the Node timer started. |
 | Escrow Withdrawal Initiate | On home chain: state updated. On non-home chain: escrow record created, node funds locked from vault. |
-| Escrow Withdrawal Finalize | On home chain: state updated, user allocation decreased. On non-home chain: escrowed funds released to user (or returned to node after timeout). |
+| Escrow Withdrawal Finalize | On home chain: state updated, user allocation decreased. On non-home chain: escrowed funds released to user. |
 | Migration Initiate         | On old home chain: state updated. On new home chain: channel created with migrating-in status, node funds locked. |
 | Migration Finalize         | On new home chain: channel transitions to operating. On old home chain: all locked funds released, channel marked as migrated out. |
 
@@ -165,8 +168,8 @@ Enforcement MAY fail in the following situations:
 - **Unknown channel** — the channel identifier does not correspond to a registered channel (except for channel creation)
 - **Insufficient node funds** — the node's vault does not have enough assets to cover required fund locking
 - **Invalid intent** — the transition intent does not match the expected operation
-- **Chain mismatch** — the home ledger chain identifier does not match the current blockchain
-- **Incorrect channel status** — the operation is not permitted in the channel's current status (e.g. state submission while disputed)
+- **Chain mismatch** — the home / non-home ledger chain identifier does not match the current blockchain during home-chain / escrow operations
+- **Incorrect channel status** — the operation is not permitted in the channel's current status (e.g. challenging an already challenged channel)
 
 ---
 

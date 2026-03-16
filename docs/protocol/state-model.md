@@ -46,10 +46,13 @@ The channel state is the primary protocol state. It represents the current confi
 | Field         | Description                                            |
 | ------------- | ------------------------------------------------------ |
 | ChannelId     | 32-byte identifier derived from the channel definition |
+| Metadata      | 32-byte  Hash of channel metadata                      |
 | Version       | 64-bit unsigned integer, state version                 |
 | HomeLedger    | Asset allocations on the home chain                    |
 | NonHomeLedger | Asset allocations on the non-home chain                |
 | Transition    | Describes the operation that produced this state       |
+| UserSig       | User signature for the state                           |
+| NodeSig       | Node signature for the state                           |
 
 The channel identifier encodes a protocol version byte as its first byte, followed by the hash of the channel definition parameters. This ensures uniqueness across protocol deployments.
 
@@ -95,13 +98,13 @@ An empty non-home ledger is structurally present but zeroed. A non-home ledger w
 
 ## Off-Chain Representation
 
-The off-chain representation is the primary operational representation of a channel state. It is the representation exchanged between participants during state advancement, and it is the representation that is signed.
+The off-chain representation is the primary operational format of a channel state. It is the representation exchanged between participants during state advancement, and it is the representation that is signed.
 
 The off-chain representation contains all channel state fields directly, including the full transition data (type, transaction identifier, account identifier, and amount). This representation is optimized for human readability, ease of validation, and efficient signature generation.
 
 ## Enforcement Representation
 
-The off-chain and enforcement representations represent the **same logical state**. The enforcement representation is derived deterministically from the off-chain representation — no additional information is required.
+The off-chain and on-chain (enforcement) representations depict the **same logical state**. The on-chain (enforcement) representation is derived deterministically from the off-chain one — no additional information is required.
 
 When a state is submitted to the blockchain layer, it uses an enforcement representation optimized for on-chain verification, gas efficiency, and deterministic encoding.
 
@@ -129,7 +132,7 @@ Because the mapping is deterministic, both the off-chain and enforcement represe
 
 Each transition type maps to an intent value used in the enforcement representation. The intent determines how the blockchain layer processes the state.
 
-| Intent                     | Transition                  |
+| On-chain Intent                    | Transition                  |
 | -------------------------- | --------------------------- |
 | OPERATE                    | TransferSend, TransferReceive, Commit, Release, Acknowledgement |
 | CLOSE                      | Finalize                    |

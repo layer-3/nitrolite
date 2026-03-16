@@ -30,13 +30,7 @@ Keccak-256, producing a 32-byte digest.
 
 Protocol objects that require signing MUST be encoded into a canonical binary representation before hashing.
 
-The canonical encoding uses ABI encoding as defined by the Ethereum ABI specification. This ensures deterministic byte sequences regardless of implementation language.
-
-Rules:
-
-- All fields MUST be encoded in the order defined by the protocol structure
-- Dynamic types (byte arrays, strings) MUST follow ABI encoding rules for dynamic types
-- Encoding MUST be deterministic — the same logical object MUST always produce the same byte sequence
+The canonical encoding uses RLP encoding (`abi.encode` in Solidity) as defined in [this paper](https://doi.org/10.48550/arXiv.2009.13769) and by [Ethereum documentation](https://ethereum.org/developers/docs/data-structures-and-encoding/rlp/). This ensures deterministic byte sequences regardless of implementation language.
 
 ## Message Digest Construction
 
@@ -68,7 +62,7 @@ A protocol signature is a wrapper around the raw ECDSA signature that includes a
 ProtocolSignature = ValidationMode || SignatureData
 ```
 
-The first byte (`ValidationMode`) determines the validation method. The remaining bytes (`SignatureData`) contain mode-specific data including the raw signature.
+The first byte (`ValidationMode`) determines the validation method, which must map to a signature validator registered by the Node on the Smart Contract infrastructure. The remaining bytes (`SignatureData`) contain mode-specific data including the raw signature.
 
 ## Signature Validation Modes
 
@@ -84,12 +78,12 @@ Session-key signatures are valid for both off-chain state advancement and on-cha
 
 ## Signable Object Classes
 
-The protocol defines a general signing framework that accommodates multiple classes of signable objects. Each signable object is identified by a unique entity identifier and follows the same canonical encoding and digest construction rules.
+The protocol defines a general signing framework that accommodates multiple classes of signable objects:
 
-The following signable object classes are currently defined:
+- **Channel Objects**: primarily, the state of a channel, but also a session key registration and challenger signature
+- **Extension Objects**: primarily, the state of an extension entity (such as an application session), signed by the relevant session participants
 
-- **Channel State** — the primary state of a channel, signed by all participants
-- **Extension State** — the state of an extension entity (such as an application session), signed by the relevant session participants
+Please note that channel and extension states are identified by a unique entity identifier and follows the same canonical encoding and digest construction rules.
 
 This framework is extensible: future protocol extensions MAY introduce additional signable object classes without requiring changes to the core signing rules.
 
@@ -101,11 +95,11 @@ The authorization is constructed as follows:
 
 1. The participant signs a message containing:
    - the session key address
-   - authorization metadata (scope, expiration)
+   - authorization metadata hash (`keccak256` over scope, expiration and possible other data)
 2. The authorization signature is produced using the participant's primary key
 3. The session key MAY then produce signatures on behalf of the participant within the authorized scope
 
-Session key signatures MUST include the authorization proof alongside the session key signature. The authorization proof is ABI-encoded as a tuple containing the session key authorization and the raw signature bytes.
+Session key signatures MUST include the authorization proof alongside the session key signature. The authorization proof is canonically encoded as a tuple containing the session key authorization and the raw signature bytes.
 
 ## Replay Protection
 
@@ -120,8 +114,8 @@ Each state includes a monotonically increasing version number. The blockchain la
 **Blockchain Identifier**
 States include blockchain-specific identifiers preventing cross-chain replay.
 
-**Protocol Version**
-The entity identifier incorporates a protocol version byte, preventing replay across different protocol deployments.
+**Smart Contract Version**
+The channel entity identifier incorporates a contract version (currently as the first byte), preventing replay across different deployments.
 
 ---
 

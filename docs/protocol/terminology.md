@@ -108,7 +108,13 @@ A pool of available funds maintained by the node on a specific blockchain, separ
 
 ### WAD Normalization
 
-The process of scaling chain-specific asset amounts to the asset's configured decimal precision for exact, lossless cross-chain comparisons. Each unified asset defines a canonical decimal precision (e.g. 6 for USDC), which serves as the normalization target. The maximum supported decimal precision is 18.
+The process of scaling chain-specific asset amounts to the asset's configured decimal precision for exact, lossless cross-chain comparisons:
+
+```
+NormalizedAmount = Amount * 10^(18 - ChainDecimals)
+```
+
+Each unified asset defines a canonical decimal precision (e.g. 6 for USDC) that is used during User <> Clearnode interactions (e.g. on-chain deposit, on-chain state submission requests, transfers, app session operations etc.). The maximum supported decimal precision is 18.
 
 ## State Signing Categories
 
@@ -122,7 +128,7 @@ A state produced by the node that carries only the node's signature. A pending s
 
 ### Channel Status
 
-The on-chain state of a channel, which can be *operating*, *disputed*, *migrating-in*, or *migrated out*.
+A specific on-chain channel data configuration, which changes throughout channel lifecycle, and includes *operating*, *disputed*, *migrating-in*, *migrated out*, etc. This can be thought of as a Finite State-Machine State (do not confuse with State Channel State).
 
 ### Escrow Channel Identifier
 
@@ -148,7 +154,7 @@ The operation of returning assets from an extension back to the channel. Increas
 
 ### Escrow
 
-A two-phase mechanism for cross-chain operations. An escrow initiate locks funds, and an escrow finalize releases them upon cooperative completion or after a timeout period.
+A two-phase mechanism for cross-chain operations. An "escrow initiate" locks funds, and an "escrow finalize" releases them upon cooperative completion or after a timeout period.
 
 ## Extension Concepts
 

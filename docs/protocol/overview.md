@@ -51,7 +51,7 @@ The system operates in three conceptual layers:
 ## Core Protocol Concepts
 
 **Channels**
-A channel is a state container shared between a Node and a User. It escrows user asset allocations and supports off-chain state updates. Each channel is defined by immutable parameters including the participants, asset, challenge duration, and approved signature validators.
+A channel is a state container shared between a Node and a User. It holds user asset allocations and supports off-chain state updates. Each channel is defined by immutable parameters including the participants, asset, challenge duration, and approved signature validators.
 
 **States**
 A state represents the current agreed asset allocations and metadata shared between a Node and a User. Each state contains two ledgers (home and non-home), a version number, and a transition describing the operation that produced it.
@@ -63,7 +63,7 @@ User and a node advance states off-chain by exchanging signed state transitions.
 Any party MAY submit the latest signed state to the blockchain layer for on-chain enforcement. The blockchain layer validates signatures, version ordering, and ledger invariants before accepting a state.
 
 **Unified Assets**
-Assets from multiple blockchains are represented in a unified model, enabling cross-chain operations among users and apps. The protocol normalizes amounts by decimal precision when comparing allocations across chains.
+The same asset from multiple blockchains is represented in a unified model, enabling cross-chain operations among users and apps. The protocol normalizes amounts by decimal precision when comparing allocations across chains.
 
 **Extensions**
 Additional protocol functionality, such as application sessions, is provided through the extension layer without modifying core protocol rules. Extensions interact with channels through commit and release transitions.

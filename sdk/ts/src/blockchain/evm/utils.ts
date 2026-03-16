@@ -3,10 +3,10 @@
  */
 
 import { Address, Hex, hexToBytes } from 'viem';
-import Decimal from 'decimal.js';
-import * as core from '../../core/types';
-import { decimalToBigInt, generateChannelMetadata, getStateTransitionHash } from '../../core/utils';
-import { ChannelDefinition, Ledger, State } from './types';
+import { Decimal } from 'decimal.js';
+import * as core from '../../core/types.js';
+import { decimalToBigInt, generateChannelMetadata, getStateTransitionHash } from '../../core/utils.js';
+import { ChannelDefinition, Ledger, State } from './types.js';
 
 /**
  * hexToBytes32 converts a hex string to a 32-byte array

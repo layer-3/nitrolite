@@ -1,6 +1,6 @@
 import { Address, Hex, concatHex, encodeAbiParameters, keccak256 } from 'viem';
 
-import { RPCAppStateIntent } from './types';
+import { RPCAppStateIntent } from './types.js';
 
 const WALLET_QUORUM_PREFIX = '0xa1' as Hex;
 const SESSION_KEY_QUORUM_PREFIX = '0xa2' as Hex;

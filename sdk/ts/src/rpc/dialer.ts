@@ -1,5 +1,5 @@
-import { Message, marshalMessage, unmarshalMessage } from './message';
-import { ErrAlreadyConnected, ErrNotConnected } from './error';
+import { Message, marshalMessage, unmarshalMessage } from './message.js';
+import { ErrAlreadyConnected, ErrNotConnected } from './error.js';
 
 /**
  * Dialer is the interface for RPC client connections.

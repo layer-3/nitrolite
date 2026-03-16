@@ -1,7 +1,7 @@
 import { Address, Hex, encodeAbiParameters, concat, toHex } from 'viem';
-import { State } from './types';
-import { AssetStore, StatePacker } from './interface';
-import { getStateTransitionHash, transitionToIntent, decimalToBigInt } from './utils';
+import { State } from './types.js';
+import { AssetStore, StatePacker } from './interface.js';
+import { getStateTransitionHash, transitionToIntent, decimalToBigInt } from './utils.js';
 
 /**
  * ContractLedger matches Solidity's Ledger struct for ABI encoding

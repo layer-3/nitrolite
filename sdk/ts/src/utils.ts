@@ -2,10 +2,10 @@
  * Utility functions for type transformations and helper methods
  */
 
-import * as core from './core/types';
-import * as API from './rpc/api';
-import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1, ActionAllowanceV1 } from './rpc/types';
-import Decimal from 'decimal.js';
+import * as core from './core/types.js';
+import * as API from './rpc/api.js';
+import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1, ActionAllowanceV1 } from './rpc/types.js';
+import { Decimal } from 'decimal.js';
 import { Address } from 'viem';
 
 /**
@@ -298,8 +298,8 @@ export function transformActionAllowance(a: ActionAllowanceV1): core.ActionAllow
 // App Session Transformations
 // ============================================================================
 
-import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppParticipantV1, AppAllocationV1, AppSessionInfoV1 } from './app/types';
-import * as RPCApp from './rpc/api';
+import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppParticipantV1, AppAllocationV1, AppSessionInfoV1 } from './app/types.js';
+import * as RPCApp from './rpc/api.js';
 
 /**
  * Transform SDK AppDefinitionV1 to RPC AppDefinitionV1 for requests

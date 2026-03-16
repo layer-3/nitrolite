@@ -14,7 +14,7 @@ import type {
     ChannelSessionKeyStateV1,
 } from '@yellow-org/sdk';
 import type * as core from '@yellow-org/sdk';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import { Address, Hex, WalletClient, createPublicClient, http, formatUnits, parseUnits } from 'viem';
 
 import type {
@@ -36,17 +36,17 @@ import type {
     GetAppDefinitionResponseParams,
     CreateAppSessionRequestParams,
     CloseAppSessionRequestParams,
-} from './types';
-import { RPCAppStateIntent } from './types';
+} from './types.js';
+import { RPCAppStateIntent } from './types.js';
 
-import { buildClientOptions, type CompatClientConfig } from './config';
+import { buildClientOptions, type CompatClientConfig } from './config.js';
 import {
     AllowanceError,
     InsufficientFundsError,
     NotInitializedError,
     OngoingStateTransitionError,
     UserRejectedError,
-} from './errors';
+} from './errors.js';
 
 // ---------------------------------------------------------------------------
 // WalletClient-based signers for browser (MetaMask) environments

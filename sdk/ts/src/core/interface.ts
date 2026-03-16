@@ -1,12 +1,12 @@
 import { Address, Hex } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import {
   State,
   ChannelDefinition,
   HomeChannelDataResponse,
   EscrowDepositDataResponse,
   EscrowWithdrawalDataResponse,
-} from './types';
+} from './types.js';
 import {
   HomeChannelCreatedEvent,
   HomeChannelMigratedEvent,
@@ -19,7 +19,7 @@ import {
   EscrowWithdrawalInitiatedEvent,
   EscrowWithdrawalChallengedEvent,
   EscrowWithdrawalFinalizedEvent,
-} from './event';
+} from './event.js';
 
 // ============================================================================
 // Listener Interface

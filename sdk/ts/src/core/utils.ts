@@ -1,5 +1,5 @@
 import { Address, Hex, encodeAbiParameters, keccak256, toHex, pad, slice } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import {
   Transition,
   TransitionType,
@@ -12,7 +12,7 @@ import {
   INTENT_INITIATE_ESCROW_WITHDRAWAL,
   INTENT_FINALIZE_ESCROW_WITHDRAWAL,
   INTENT_INITIATE_MIGRATION,
-} from './types';
+} from './types.js';
 
 // Configure Decimal.js for high precision arithmetic
 Decimal.set({ precision: 50 });

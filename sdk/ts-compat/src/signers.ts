@@ -1,6 +1,6 @@
 import { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import type { MessageSigner, MessageSignerPayload } from './types';
+import type { MessageSigner, MessageSignerPayload } from './types.js';
 
 /**
  * v0.5.3-compatible WalletStateSigner.

@@ -4,8 +4,8 @@ import {
   AppStateUpdateV1,
   AppSessionKeyStateV1,
   AppSessionVersionV1,
-} from './types';
-import { AppV1 } from '../rpc/types';
+} from './types.js';
+import { AppV1 } from '../rpc/types.js';
 
 /**
  * PackCreateAppSessionRequestV1 packs the Definition and SessionData for signing using ABI encoding.

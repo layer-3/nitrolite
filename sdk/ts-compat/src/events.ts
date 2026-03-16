@@ -1,5 +1,5 @@
-import type { NitroliteClient } from './client';
-import type { LedgerChannel, LedgerBalance, ClearNodeAsset } from './types';
+import type { NitroliteClient } from './client.js';
+import type { LedgerChannel, LedgerBalance, ClearNodeAsset } from './types.js';
 
 export interface EventPollerCallbacks {
     onChannelUpdate?: (channels: LedgerChannel[]) => void;

@@ -3,8 +3,8 @@
  */
 
 import { Address } from 'viem';
-import { Erc20Abi } from './erc20_abi';
-import { EVMClient, WalletSigner } from './interface';
+import { Erc20Abi } from './erc20_abi.js';
+import { EVMClient, WalletSigner } from './interface.js';
 
 /**
  * ERC20 contract wrapper for token interactions

@@ -19,7 +19,7 @@ import {
   AppV1,
   AppInfoV1,
   ActionAllowanceV1,
-} from './types';
+} from './types.js';
 import {
   AppDefinitionV1,
   AppStateUpdateV1,
@@ -27,8 +27,8 @@ import {
   AppAllocationV1,
   AppSessionKeyStateV1,
   SignedAppStateUpdateV1,
-} from '../app/types';
-import { TransactionType } from '../core/types';
+} from '../app/types.js';
+import { TransactionType } from '../core/types.js';
 
 // ============================================================================
 // Channels Group - V1 API

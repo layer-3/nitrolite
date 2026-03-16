@@ -6,7 +6,7 @@
  */
 
 import { Address } from 'viem';
-import { TransitionType, TransactionType } from '../core/types';
+import { TransitionType, TransactionType } from '../core/types.js';
 
 // ============================================================================
 // Channel Types

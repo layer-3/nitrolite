@@ -298,8 +298,7 @@ export function transformActionAllowance(a: ActionAllowanceV1): core.ActionAllow
 // App Session Transformations
 // ============================================================================
 
-import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppParticipantV1, AppAllocationV1, AppSessionInfoV1 } from './app/types.js';
-import * as RPCApp from './rpc/api.js';
+import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppSessionInfoV1 } from './app/types.js';
 
 /**
  * Transform SDK AppDefinitionV1 to RPC AppDefinitionV1 for requests

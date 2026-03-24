@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import { Test } from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
-import { TestChannelHub } from "./TestChannelHub.sol";
-import { MockERC20 } from "./mocks/MockERC20.sol";
-import { NonReturningERC20 } from "./mocks/NonReturningERC20.sol";
-import { RevertingERC20 } from "./mocks/RevertingERC20.sol";
-import { GasConsumingERC20 } from "./mocks/GasConsumingERC20.sol";
-import { MalformedReturningERC20 } from "./mocks/MalformedReturningERC20.sol";
-import { RevertingEthReceiver } from "./mocks/RevertingEthReceiver.sol";
-import { GasConsumingEthReceiver } from "./mocks/GasConsumingEthReceiver.sol";
+import {TestChannelHub} from "./TestChannelHub.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
+import {NonReturningERC20} from "./mocks/NonReturningERC20.sol";
+import {RevertingERC20} from "./mocks/RevertingERC20.sol";
+import {GasConsumingERC20} from "./mocks/GasConsumingERC20.sol";
+import {MalformedReturningERC20} from "./mocks/MalformedReturningERC20.sol";
+import {RevertingEthReceiver} from "./mocks/RevertingEthReceiver.sol";
+import {GasConsumingEthReceiver} from "./mocks/GasConsumingEthReceiver.sol";
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { ChannelHub } from "../src/ChannelHub.sol";
-import { ECDSAValidator } from "../src/sigValidators/ECDSAValidator.sol";
+import {ChannelHub} from "../src/ChannelHub.sol";
+import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 
 /**
  * @notice Simple contract that can receive ETH for testing normal transfers

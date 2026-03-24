@@ -20,8 +20,12 @@ interface IParametricToken is IERC20 {
     event SubAccountCreated(address indexed superAccount, uint48 indexed subId);
     event TransferToSub(address indexed from, address indexed toSuper, uint48 indexed toSubId, uint256 amount);
     event TransferFromSub(address indexed fromSuper, uint48 indexed fromSubId, address indexed to, uint256 amount);
-    event TransferBetweenSubs(address indexed superAccount, uint48 indexed fromSubId, uint48 indexed toSubId, uint256 amount);
-    event TransferFromSubToSub(address indexed fromSuper, uint48 indexed fromSubId, address indexed toSuper, uint48 toSubId, uint256 amount);
+    event TransferBetweenSubs(
+        address indexed superAccount, uint48 indexed fromSubId, uint48 indexed toSubId, uint256 amount
+    );
+    event TransferFromSubToSub(
+        address indexed fromSuper, uint48 indexed fromSubId, address indexed toSuper, uint48 toSubId, uint256 amount
+    );
     event ApprovalForSub(address indexed owner, uint48 indexed subId, address indexed spender, uint256 amount);
 
     // Account management
@@ -54,7 +58,15 @@ interface IParametricToken is IERC20 {
     // Approved parametric transfers
     function approveForSub(uint48 ownerSubId, address spender, uint256 amount) external returns (bool);
 
-    function approvedTransferToSub(address from, address toSuper, uint48 toSubId, uint256 amount) external returns (bool);
+    function approvedTransferToSub(address from, address toSuper, uint48 toSubId, uint256 amount)
+        external
+        returns (bool);
 
-    function approvedTransferFromSubToSub(address fromSuper, uint48 fromSubId, address toSuper, uint48 toSubId, uint256 amount) external returns (bool);
+    function approvedTransferFromSubToSub(
+        address fromSuper,
+        uint48 fromSubId,
+        address toSuper,
+        uint48 toSubId,
+        uint256 amount
+    ) external returns (bool);
 }

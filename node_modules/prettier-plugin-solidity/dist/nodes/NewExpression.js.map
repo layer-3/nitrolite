@@ -1,0 +1,1 @@
+{"version":3,"file":"NewExpression.js","sourceRoot":"","sources":["../../src/nodes/NewExpression.js"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,aAAa,GAAG;IAC3B,KAAK,EAAE,CAAC,EAAE,IAAI,EAAE,KAAK,EAAE,EAAE,EAAE,CAAC,CAAC,MAAM,EAAE,IAAI,CAAC,IAAI,CAAC,KAAK,EAAE,UAAU,CAAC,CAAC;CACnE,CAAC"}

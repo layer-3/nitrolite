@@ -76,9 +76,7 @@ export function transitionToIntent(transition: Transition): number {
 export function validateDecimalPrecision(amount: Decimal, maxDecimals: number): void {
   const exponent = amount.decimalPlaces();
   if (exponent > maxDecimals) {
-    throw new Error(
-      `amount exceeds maximum decimal precision: max ${maxDecimals} decimals allowed, got ${exponent}`
-    );
+    throw new Error(`amount exceeds maximum decimal precision: max ${maxDecimals} decimals allowed, got ${exponent}`);
   }
 }
 
@@ -100,9 +98,7 @@ export function decimalToBigInt(amount: Decimal, decimals: number): bigint {
 
   // Check if it's an integer
   if (!scaled.isInteger()) {
-    throw new Error(
-      `amount ${amount.toString()} exceeds maximum decimal precision: max ${decimals} decimals allowed`
-    );
+    throw new Error(`amount ${amount.toString()} exceeds maximum decimal precision: max ${decimals} decimals allowed`);
   }
 
   // Convert to bigint
@@ -124,14 +120,7 @@ export function decimalToBigInt(amount: Decimal, decimals: number): bigint {
  * @param challengeDuration - Challenge period in seconds (uint32)
  * @returns Channel ID as hex string
  */
-export function getHomeChannelId(
-  node: Address,
-  user: Address,
-  asset: string,
-  nonce: bigint,
-  challengeDuration: number,
-  approvedSigValidators: string = '0x00'
-): string {
+export function getHomeChannelId(node: Address, user: Address, asset: string, nonce: bigint, challengeDuration: number, approvedSigValidators: string = '0x00'): string {
   // Generate metadata from asset
   const metadata = generateChannelMetadata(asset);
 
@@ -171,7 +160,7 @@ export function getHomeChannelId(
         approvedSignatureValidators: validatorsBigInt,
         metadata: metadata,
       },
-    ]
+    ],
   );
 
   // Calculate base channelId
@@ -191,10 +180,7 @@ export function getHomeChannelId(
  * @returns Escrow channel ID as hex string
  */
 export function getEscrowChannelId(homeChannelId: string, stateVersion: bigint): string {
-  const packed = encodeAbiParameters(
-    [{ type: 'bytes32' }, { type: 'uint64' }],
-    [homeChannelId as `0x${string}`, stateVersion]
-  );
+  const packed = encodeAbiParameters([{ type: 'bytes32' }, { type: 'uint64' }], [homeChannelId as `0x${string}`, stateVersion]);
 
   return keccak256(packed);
 }
@@ -211,16 +197,8 @@ export function getEscrowChannelId(homeChannelId: string, stateVersion: bigint):
  * @param version - State version (uint64)
  * @returns State ID as hex string
  */
-export function getStateId(
-  userWallet: Address,
-  asset: string,
-  epoch: bigint,
-  version: bigint
-): string {
-  const packed = encodeAbiParameters(
-    [{ type: 'address' }, { type: 'string' }, { type: 'uint256' }, { type: 'uint256' }],
-    [userWallet, asset, epoch, version]
-  );
+export function getStateId(userWallet: Address, asset: string, epoch: bigint, version: bigint): string {
+  const packed = encodeAbiParameters([{ type: 'address' }, { type: 'string' }, { type: 'uint256' }, { type: 'uint256' }], [userWallet, asset, epoch, version]);
 
   return keccak256(packed);
 }
@@ -250,7 +228,7 @@ export function getStateTransitionHash(transition: Transition): string {
         ],
       },
     ],
-    [contractTransition]
+    [contractTransition],
   );
 
   return keccak256(packed);
@@ -280,10 +258,7 @@ export function getReceiverTransactionId(fromAccount: string, receiverNewStateId
 }
 
 function getTransactionId(account: string, newStateId: string): string {
-  const packed = encodeAbiParameters(
-    [{ type: 'string' }, { type: 'bytes32' }],
-    [account, newStateId as `0x${string}`]
-  );
+  const packed = encodeAbiParameters([{ type: 'string' }, { type: 'bytes32' }], [account, newStateId as `0x${string}`]);
 
   return keccak256(packed);
 }
@@ -342,7 +317,7 @@ function hexToBytes32(hexStr: string): `0x${string}` {
   }
 
   // Convert to hex string and right-pad to 32 bytes (matches Go's BytesToHash)
-  const hexResult = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hexResult = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
   return pad(`0x${hexResult}` as `0x${string}`, { dir: 'left', size: 32 });
 }
 
@@ -374,7 +349,7 @@ function parseAccountIdToBytes32(accountId: string | undefined): `0x${string}` {
       // Valid hex - pad accordingly
       if (hexLength === 40) {
         // Address - left-pad with zeros
-        return pad((`0x${cleaned}`) as Address, { size: 32 });
+        return pad(`0x${cleaned}` as Address, { size: 32 });
       } else {
         // Already 32-byte hash
         return `0x${cleaned}` as `0x${string}`;
@@ -402,7 +377,7 @@ function parseAccountIdToBytes32(accountId: string | undefined): `0x${string}` {
   }
 
   // Convert to hex string and left-pad to 32 bytes (matches Go's behavior)
-  const hexResult = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hexResult = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
   return pad(`0x${hexResult}` as `0x${string}`, { dir: 'left', size: 32 });
 }
 
@@ -415,18 +390,14 @@ function parseAccountIdToBytes32(accountId: string | undefined): `0x${string}` {
  * @param expiresAt - Unix timestamp in seconds when the session key expires
  * @returns Keccak256 hash of the ABI-encoded metadata
  */
-export function getChannelSessionKeyAuthMetadataHashV1(
-  version: bigint,
-  assets: string[],
-  expiresAt: bigint
-): `0x${string}` {
+export function getChannelSessionKeyAuthMetadataHashV1(version: bigint, assets: string[], expiresAt: bigint): `0x${string}` {
   const packed = encodeAbiParameters(
     [
-      { type: 'uint64' },   // version
+      { type: 'uint64' }, // version
       { type: 'string[]' }, // assets
-      { type: 'uint64' },   // expires_at
+      { type: 'uint64' }, // expires_at
     ],
-    [version, assets, expiresAt]
+    [version, assets, expiresAt],
   );
   return keccak256(packed);
 }
@@ -439,15 +410,12 @@ export function getChannelSessionKeyAuthMetadataHashV1(
  * @param metadataHash - The metadata hash from getChannelSessionKeyAuthMetadataHashV1
  * @returns ABI-encoded (sessionKey, metadataHash) ready for EIP-191 signing
  */
-export function packChannelKeyStateV1(
-  sessionKey: Address,
-  metadataHash: `0x${string}`
-): `0x${string}` {
+export function packChannelKeyStateV1(sessionKey: Address, metadataHash: `0x${string}`): `0x${string}` {
   return encodeAbiParameters(
     [
-      { type: 'address' },  // session_key
-      { type: 'bytes32' },  // hashed metadata
+      { type: 'address' }, // session_key
+      { type: 'bytes32' }, // hashed metadata
     ],
-    [sessionKey, metadataHash]
+    [sessionKey, metadataHash],
   );
 }

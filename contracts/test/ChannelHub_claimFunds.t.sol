@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import { Test } from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
-import { TestChannelHub } from "./TestChannelHub.sol";
-import { MockERC20 } from "./mocks/MockERC20.sol";
-import { RevertingEthReceiver } from "./mocks/RevertingEthReceiver.sol";
+import {TestChannelHub} from "./TestChannelHub.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
+import {RevertingEthReceiver} from "./mocks/RevertingEthReceiver.sol";
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { ChannelHub } from "../src/ChannelHub.sol";
-import { ECDSAValidator } from "../src/sigValidators/ECDSAValidator.sol";
+import {ChannelHub} from "../src/ChannelHub.sol";
+import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 
 contract ChannelHubTest_claimFunds is Test {
     TestChannelHub public cHub;
@@ -37,7 +37,10 @@ contract ChannelHubTest_claimFunds is Test {
         vm.deal(address(cHub), BALANCE_AMOUNT);
     }
 
-    function _verifyTransferSuccess(address source, address destination_, address tokenAddr, uint256 transferredAmount) internal view {
+    function _verifyTransferSuccess(address source, address destination_, address tokenAddr, uint256 transferredAmount)
+        internal
+        view
+    {
         if (tokenAddr == address(0)) {
             uint256 userBalanceAfter = destination_.balance;
             assertEq(userBalanceAfter, transferredAmount, "Transfer amount mismatch");
@@ -139,7 +142,9 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(0), RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        vm.expectRevert(abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), RECLAIM_AMOUNT));
+        vm.expectRevert(
+            abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), RECLAIM_AMOUNT)
+        );
         cHub.claimFunds(address(0), SUB_ID_0, address(revertingReceiver));
     }
 

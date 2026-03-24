@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import { ChannelHubTest_Base } from "../ChannelHub_Base.t.sol";
-import { MockERC20 } from "../mocks/MockERC20.sol";
+import {ChannelHubTest_Base} from "../ChannelHub_Base.t.sol";
+import {MockERC20} from "../mocks/MockERC20.sol";
 
-import { Utils } from "../../src/Utils.sol";
-import { State, ChannelDefinition, StateIntent, Ledger, ChannelStatus, EscrowStatus } from "../../src/interfaces/Types.sol";
+import {Utils} from "../../src/Utils.sol";
+import {
+    State,
+    ChannelDefinition,
+    StateIntent,
+    Ledger,
+    ChannelStatus,
+    EscrowStatus
+} from "../../src/interfaces/Types.sol";
 
 // forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
@@ -40,7 +47,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         bytes32 channelId = Utils.getChannelId(def, CHANNEL_HUB_VERSION);
 
         // Check VOID status before channel creation
-        (ChannelStatus status, , , , ) = cHub.getChannelData(channelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(channelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID before creation");
 
         // Verify user balance before channel creation
@@ -61,7 +68,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: 0
             }),
-            nonHomeLedger: Ledger({ chainId: 0, token: address(0), decimals: 0, userAllocation: 0, userNetFlow: 0, nodeAllocation: 0, nodeNetFlow: 0 }),
+            nonHomeLedger: Ledger({
+                chainId: 0,
+                token: address(0),
+                decimals: 0,
+                userAllocation: 0,
+                userNetFlow: 0,
+                nodeAllocation: 0,
+                nodeNetFlow: 0
+            }),
             userSig: "",
             nodeSig: ""
         });
@@ -101,7 +116,9 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // Expected: user allocation = 958, user net flow = 1000, node allocation = 0, node net flow = -42
         vm.prank(alice);
         cHub.initiateEscrowDeposit(def, state);
-        verifyChannelState(channelId, [uint256(958), uint256(500)], [int256(1000), int256(458)], "after cross chain deposit");
+        verifyChannelState(
+            channelId, [uint256(958), uint256(500)], [int256(1000), int256(458)], "after cross chain deposit"
+        );
 
         // finalize escrow deposit
         state = nextState(
@@ -256,13 +273,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - 750, "User balance after migration");
 
         // Check MIGRATED_OUT status after channel was migrated
-        (ChannelStatus finalStatus, , , , ) = cHub.getChannelData(channelId);
-        assertEq(uint8(finalStatus), uint8(ChannelStatus.MIGRATED_OUT), "Channel should be MIGRATED_OUT after migration");
+        (ChannelStatus finalStatus,,,,) = cHub.getChannelData(channelId);
+        assertEq(
+            uint8(finalStatus), uint8(ChannelStatus.MIGRATED_OUT), "Channel should be MIGRATED_OUT after migration"
+        );
     }
 
     function test_depositEscrow_nonHomeChain() public {
         // Check VOID status
-        (ChannelStatus status, , , , ) = cHub.getChannelData(bobChannelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
         // Verify user balance before deposit
@@ -299,7 +318,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         bytes32 escrowId = Utils.getEscrowId(bobChannelId, state.version);
 
         // verify no escrow struct exists yet
-        (, EscrowStatus escrowStatus, , , , ) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus escrowStatus,,,,) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(escrowStatus), uint8(EscrowStatus.VOID), "Escrow should be VOID");
 
         vm.prank(bob);
@@ -309,8 +328,14 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - 500, "User balance after escrow deposit");
 
         // Verify escrow struct is updated on ChannelsHub
-        (, EscrowStatus finalEscrowStatus, uint64 unlockAt, uint64 challengeExpiresAt, uint256 lockedAmount, State memory initState) = cHub
-            .getEscrowDepositData(escrowId);
+        (
+            ,
+            EscrowStatus finalEscrowStatus,
+            uint64 unlockAt,
+            uint64 challengeExpiresAt,
+            uint256 lockedAmount,
+            State memory initState
+        ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.INITIALIZED), "Escrow should be INITIALIZED");
         uint64 expectedUnlockAt = uint64(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY());
         assertEq(unlockAt, expectedUnlockAt, "Escrow unlockAt is incorrect");
@@ -349,7 +374,8 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 500, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
-        (, finalEscrowStatus, unlockAt, challengeExpiresAt, lockedAmount, initState) = cHub.getEscrowDepositData(escrowId);
+        (, finalEscrowStatus, unlockAt, challengeExpiresAt, lockedAmount, initState) =
+            cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(unlockAt, expectedUnlockAt, "Escrow unlockAt should remain unchanged");
         assertEq(challengeExpiresAt, 0, "Escrow challengeExpiresAt should be zero");
@@ -367,7 +393,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         token14dec.approve(address(cHub), 1000 * 1e14);
 
         // Check VOID status on non-home chain
-        (ChannelStatus status, , , , ) = cHub.getChannelData(bobChannelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
         // Verify user balance before deposit
@@ -406,7 +432,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         bytes32 escrowId = Utils.getEscrowId(bobChannelId, state.version);
 
         // Verify no escrow struct exists yet
-        (, EscrowStatus escrowStatus, , , , ) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus escrowStatus,,,,) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(escrowStatus), uint8(EscrowStatus.VOID), "Escrow should be VOID");
 
         // Initiate escrow deposit on non-home chain
@@ -417,8 +443,14 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token14dec.balanceOf(bob), 990 * 1e14, "User balance after escrow deposit");
 
         // Verify escrow struct is updated on ChannelsHub
-        (, EscrowStatus finalEscrowStatus, uint64 unlockAt, uint64 challengeExpiresAt, uint256 lockedAmount, State memory initState) = cHub
-            .getEscrowDepositData(escrowId);
+        (
+            ,
+            EscrowStatus finalEscrowStatus,
+            uint64 unlockAt,
+            uint64 challengeExpiresAt,
+            uint256 lockedAmount,
+            State memory initState
+        ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.INITIALIZED), "Escrow should be INITIALIZED");
         uint64 expectedUnlockAt = uint64(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY());
         assertEq(unlockAt, expectedUnlockAt, "Escrow unlockAt is incorrect");
@@ -456,7 +488,8 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 10 * 1e14, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
-        (, finalEscrowStatus, unlockAt, challengeExpiresAt, lockedAmount, initState) = cHub.getEscrowDepositData(escrowId);
+        (, finalEscrowStatus, unlockAt, challengeExpiresAt, lockedAmount, initState) =
+            cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(unlockAt, expectedUnlockAt, "Escrow unlockAt should remain unchanged");
         assertEq(challengeExpiresAt, 0, "Escrow challengeExpiresAt should be zero");
@@ -466,7 +499,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
     function test_withdrawalEscrow_nonHomeChain() public {
         // Check VOID status
-        (ChannelStatus status, , , , ) = cHub.getChannelData(bobChannelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
         uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
@@ -476,7 +509,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
             version: 42,
             intent: StateIntent.INITIATE_ESCROW_WITHDRAWAL,
             metadata: bytes32(0),
-            homeLedger: Ledger({ chainId: 42, token: address(42), decimals: 18, userAllocation: 1217, userNetFlow: 750, nodeAllocation: 0, nodeNetFlow: 467 }),
+            homeLedger: Ledger({
+                chainId: 42,
+                token: address(42),
+                decimals: 18,
+                userAllocation: 1217,
+                userNetFlow: 750,
+                nodeAllocation: 0,
+                nodeNetFlow: 467
+            }),
             nonHomeLedger: Ledger({
                 chainId: uint64(block.chainid),
                 token: address(token),
@@ -494,7 +535,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         bytes32 escrowId = Utils.getEscrowId(bobChannelId, state.version);
 
         // verify no escrow struct exists yet
-        (, EscrowStatus escrowStatus, , , ) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus escrowStatus,,,) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(escrowStatus), uint8(EscrowStatus.VOID), "Escrow should be VOID");
 
         vm.prank(bob);
@@ -505,7 +546,8 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 750, "Node balance after escrow withdrawal");
 
         // Verify escrow struct is updated on ChannelsHub: escrow data exists, `locked` equals to withdrawalAmount
-        (, EscrowStatus finalEscrowStatus, uint64 challengeExpireAt, uint256 lockedAmount, State memory initState) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus finalEscrowStatus, uint64 challengeExpireAt, uint256 lockedAmount, State memory initState) =
+            cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.INITIALIZED), "Escrow should be INITIALIZED");
         assertEq(challengeExpireAt, 0, "Escrow challengeExpireAt should be zero");
         assertEq(lockedAmount, 750, "Escrow locked amount is incorrect");
@@ -590,7 +632,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         bytes32 escrowId = Utils.getEscrowId(bobChannelId, state.version);
 
         // Verify no escrow exists yet
-        (, EscrowStatus escrowStatus, , , ) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus escrowStatus,,,) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(escrowStatus), uint8(EscrowStatus.VOID), "Escrow should be VOID");
 
         // Initiate escrow withdrawal on non-home chain
@@ -602,7 +644,8 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 5 * 1e8, "Node balance after escrow withdrawal initiation");
 
         // Verify escrow struct is created
-        (, EscrowStatus finalEscrowStatus, uint64 challengeExpireAt, uint256 lockedAmount, State memory initState) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus finalEscrowStatus, uint64 challengeExpireAt, uint256 lockedAmount, State memory initState) =
+            cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(finalEscrowStatus), uint8(EscrowStatus.INITIALIZED), "Escrow should be INITIALIZED");
         assertEq(challengeExpireAt, 0, "Escrow challengeExpireAt should be zero");
         assertEq(lockedAmount, 5 * 1e8, "Escrow locked amount is incorrect");
@@ -642,7 +685,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
     function test_migration_nonHomeChain() public {
         // Check VOID status
-        (ChannelStatus status, , , , ) = cHub.getChannelData(bobChannelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
         uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
@@ -653,7 +696,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
             version: 42,
             intent: StateIntent.INITIATE_MIGRATION,
             metadata: bytes32(0),
-            homeLedger: Ledger({ chainId: 42, token: address(42), decimals: 18, userAllocation: 469, userNetFlow: 750, nodeAllocation: 0, nodeNetFlow: -281 }),
+            homeLedger: Ledger({
+                chainId: 42,
+                token: address(42),
+                decimals: 18,
+                userAllocation: 469,
+                userNetFlow: 750,
+                nodeAllocation: 0,
+                nodeNetFlow: -281
+            }),
             nonHomeLedger: Ledger({
                 chainId: uint64(block.chainid),
                 token: address(token),
@@ -680,7 +731,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(userBalanceAfter, userBalanceBefore, "User balance after migration initiation");
 
         // Check MIGRATING_IN status
-        (status, , , , ) = cHub.getChannelData(bobChannelId);
+        (status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.MIGRATING_IN), "Channel should be MIGRATING_IN after migration");
 
         // sign finalize migration state by swapping homeLedger and nonHomeLedger, and swapping allocations
@@ -688,7 +739,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
             version: 43,
             intent: StateIntent.FINALIZE_MIGRATION,
             metadata: bytes32(0),
-            nonHomeLedger: Ledger({ chainId: 42, token: address(42), decimals: 18, userAllocation: 0, userNetFlow: 750, nodeAllocation: 0, nodeNetFlow: -750 }),
+            nonHomeLedger: Ledger({
+                chainId: 42,
+                token: address(42),
+                decimals: 18,
+                userAllocation: 0,
+                userNetFlow: 750,
+                nodeAllocation: 0,
+                nodeNetFlow: -750
+            }),
             homeLedger: Ledger({
                 chainId: uint64(block.chainid),
                 token: address(token),
@@ -729,7 +788,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(bob), userBalanceBefore + 400, "User balance after withdrawal");
 
         // Verify channel is still operating after migration and withdrawal
-        (status, , , , ) = cHub.getChannelData(bobChannelId);
+        (status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.OPERATING), "Channel should be OPERATING after withdrawal");
     }
 
@@ -762,7 +821,15 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: 0
             }),
-            nonHomeLedger: Ledger({ chainId: 0, token: address(0), decimals: 0, userAllocation: 0, userNetFlow: 0, nodeAllocation: 0, nodeNetFlow: 0 }),
+            nonHomeLedger: Ledger({
+                chainId: 0,
+                token: address(0),
+                decimals: 0,
+                userAllocation: 0,
+                userNetFlow: 0,
+                nodeAllocation: 0,
+                nodeNetFlow: 0
+            }),
             userSig: "",
             nodeSig: ""
         });
@@ -772,12 +839,14 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.createChannel(bobDef, state);
 
         // Verify channel is created
-        (ChannelStatus status, , , , ) = cHub.getChannelData(bobChannelId);
+        (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.OPERATING), "Channel should be OPERATING");
 
         // 2. Perform some operations to build up channel state
         // Transfer 5 tokens (allocation decreases, node net flow decreases)
-        state = nextState(state, StateIntent.OPERATE, [uint256(45 * 1e10), uint256(0)], [int256(50 * 1e10), int256(-5 * 1e10)]);
+        state = nextState(
+            state, StateIntent.OPERATE, [uint256(45 * 1e10), uint256(0)], [int256(50 * 1e10), int256(-5 * 1e10)]
+        );
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
 
         // 3. Initiate Migration to New Home Chain (14 decimals)
@@ -812,7 +881,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateMigration(bobDef, state);
 
         // Verify state is updated correctly on old home chain
-        (, , State memory latestState, , ) = cHub.getChannelData(bobChannelId);
+        (,, State memory latestState,,) = cHub.getChannelData(bobChannelId);
         assertEq(latestState.version, 2, "State version should be 2");
         assertEq(latestState.homeLedger.userAllocation, 45 * 1e10, "User allocation unchanged on old home");
         assertEq(latestState.nonHomeLedger.nodeAllocation, 45 * 1e14, "Node locked 45e14 on new home");
@@ -841,11 +910,11 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.finalizeMigration(bobChannelId, state);
 
         // Verify channel is migrated out
-        (status, , , , ) = cHub.getChannelData(bobChannelId);
+        (status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.MIGRATED_OUT), "Channel should be MIGRATED_OUT");
 
         // Verify final state on old home chain
-        (, , latestState, , ) = cHub.getChannelData(bobChannelId);
+        (,, latestState,,) = cHub.getChannelData(bobChannelId);
         assertEq(latestState.version, 3, "State version should be 3");
         assertEq(latestState.homeLedger.userAllocation, 0, "User allocation should be 0 on old home");
         assertEq(latestState.homeLedger.nodeAllocation, 0, "Node allocation should be 0 on old home");

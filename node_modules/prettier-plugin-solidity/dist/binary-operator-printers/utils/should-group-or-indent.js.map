@@ -1,0 +1,1 @@
+{"version":3,"file":"should-group-or-indent.js","sourceRoot":"","sources":["../../../src/binary-operator-printers/utils/should-group-or-indent.js"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,mBAAmB,GAAG,CAAC,EAAE,IAAI,EAAE,QAAQ,EAAE,EAAE,QAAQ,EAAE,EAAE,CAClE,IAAI,KAAK,iBAAiB;IAC1B,QAAQ,CAAC,IAAI,CAAC,CAAC,OAAO,EAAE,EAAE,CAAC,OAAO,CAAC,KAAK,CAAC,QAAQ,CAAC,CAAC,CAAC"}

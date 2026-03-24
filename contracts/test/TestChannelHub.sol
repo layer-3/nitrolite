@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import { ChannelHub } from "../src/ChannelHub.sol";
-import { ISignatureValidator } from "../src/interfaces/ISignatureValidator.sol";
+import {ChannelHub} from "../src/ChannelHub.sol";
+import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
 
 /**
  * @title TestChannelHub

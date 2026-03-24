@@ -1,0 +1,1 @@
+{"version":3,"file":"print-warning.js","sourceRoot":"","sources":["../../src/common/print-warning.js"],"names":[],"mappings":"AAAA,MAAM,UAAU,YAAY,CAAC,OAAO;IAClC,6EAA6E;IAC7E,0EAA0E;IAC1E,uCAAuC;IACvC,EAAE;IACF,yBAAyB;IACzB,6CAA6C;IAC7C,wBAAwB;IACxB,MAAM,SAAS,GAAG,WAAW,CAAC;IAE9B,OAAO,CAAC,IAAI,CAAC,GAAG,SAAS,uBAAuB,OAAO,EAAE,CAAC,CAAC;AAC7D,CAAC"}

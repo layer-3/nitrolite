@@ -1,12 +1,6 @@
 import { Address, Hex } from 'viem';
 import Decimal from 'decimal.js';
-import {
-  State,
-  ChannelDefinition,
-  HomeChannelDataResponse,
-  EscrowDepositDataResponse,
-  EscrowWithdrawalDataResponse,
-} from './types';
+import { State, ChannelDefinition, HomeChannelDataResponse, EscrowDepositDataResponse, EscrowWithdrawalDataResponse } from './types';
 import {
   HomeChannelCreatedEvent,
   HomeChannelMigratedEvent,
@@ -180,11 +174,7 @@ export interface Client {
    * @param challengerIdx - Challenger participant index
    * @returns Transaction hash
    */
-  challengeEscrowDeposit(
-    candidate: State,
-    challengerSig: Uint8Array,
-    challengerIdx: number
-  ): Promise<Hex>;
+  challengeEscrowDeposit(candidate: State, challengerSig: Uint8Array, challengerIdx: number): Promise<Hex>;
 
   /**
    * Finalize escrow deposit
@@ -210,11 +200,7 @@ export interface Client {
    * @param challengerIdx - Challenger participant index
    * @returns Transaction hash
    */
-  challengeEscrowWithdrawal(
-    candidate: State,
-    challengerSig: Uint8Array,
-    challengerIdx: number
-  ): Promise<Hex>;
+  challengeEscrowWithdrawal(candidate: State, challengerSig: Uint8Array, challengerIdx: number): Promise<Hex>;
 
   /**
    * Finalize escrow withdrawal

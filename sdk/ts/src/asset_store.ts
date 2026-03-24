@@ -57,10 +57,7 @@ export class ClientAssetStore {
     const tokenAddrLower = tokenAddress.toLowerCase();
     for (const asset of this.cache.values()) {
       for (const token of asset.tokens) {
-        if (
-          token.blockchainId === blockchainId &&
-          token.address.toLowerCase() === tokenAddrLower
-        ) {
+        if (token.blockchainId === blockchainId && token.address.toLowerCase() === tokenAddrLower) {
           return token.decimals;
         }
       }

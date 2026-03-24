@@ -1,0 +1,1 @@
+{"version":3,"file":"AssemblyMemberAccess.js","sourceRoot":"","sources":["../../src/nodes/AssemblyMemberAccess.js"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,oBAAoB,GAAG;IAClC,KAAK,EAAE,CAAC,EAAE,IAAI,EAAE,KAAK,EAAE,EAAE,EAAE,CAAC;QAC1B,IAAI,CAAC,IAAI,CAAC,KAAK,EAAE,YAAY,CAAC;QAC9B,GAAG;QACH,IAAI,CAAC,IAAI,CAAC,KAAK,EAAE,YAAY,CAAC;KAC/B;CACF,CAAC"}

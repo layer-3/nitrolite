@@ -267,9 +267,7 @@ export function transformTransaction(tx: TransactionV1): core.Transaction {
 /**
  * Transform RPC PaginationMetadataV1 to core PaginationMetadata
  */
-export function transformPaginationMetadata(
-  metadata: PaginationMetadataV1
-): core.PaginationMetadata {
+export function transformPaginationMetadata(metadata: PaginationMetadataV1): core.PaginationMetadata {
   return {
     page: metadata.page,
     perPage: metadata.per_page,
@@ -308,7 +306,7 @@ import * as RPCApp from './rpc/api';
 export function transformAppDefinitionToRPC(def: AppDefinitionV1): any {
   return {
     application_id: def.applicationId,
-    participants: def.participants.map(p => ({
+    participants: def.participants.map((p) => ({
       wallet_address: p.walletAddress,
       signature_weight: p.signatureWeight,
     })),
@@ -326,7 +324,7 @@ export function transformAppStateUpdateToRPC(update: AppStateUpdateV1) {
     app_session_id: update.appSessionId,
     intent: update.intent,
     version: update.version.toString(),
-    allocations: update.allocations.map(a => ({
+    allocations: update.allocations.map((a) => ({
       participant: a.participant,
       asset: a.asset,
       amount: a.amount.toString(),

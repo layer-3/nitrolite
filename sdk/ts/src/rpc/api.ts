@@ -5,29 +5,8 @@
  */
 
 import { Address } from 'viem';
-import {
-  ChannelV1,
-  ChannelDefinitionV1,
-  ChannelSessionKeyStateV1,
-  StateV1,
-  BalanceEntryV1,
-  TransactionV1,
-  PaginationParamsV1,
-  PaginationMetadataV1,
-  AssetV1,
-  BlockchainInfoV1,
-  AppV1,
-  AppInfoV1,
-  ActionAllowanceV1,
-} from './types';
-import {
-  AppDefinitionV1,
-  AppStateUpdateV1,
-  AppSessionInfoV1,
-  AppAllocationV1,
-  AppSessionKeyStateV1,
-  SignedAppStateUpdateV1,
-} from '../app/types';
+import { ChannelV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, StateV1, BalanceEntryV1, TransactionV1, PaginationParamsV1, PaginationMetadataV1, AssetV1, BlockchainInfoV1, AppV1, AppInfoV1, ActionAllowanceV1 } from './types';
+import { AppDefinitionV1, AppStateUpdateV1, AppSessionInfoV1, AppAllocationV1, AppSessionKeyStateV1, SignedAppStateUpdateV1 } from '../app/types';
 import { TransactionType } from '../core/types';
 
 // ============================================================================

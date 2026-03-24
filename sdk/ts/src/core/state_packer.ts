@@ -39,10 +39,7 @@ export class StatePackerV1 implements StatePacker {
     const channelId = state.homeChannelId as `0x${string}`;
     const metadata = getStateTransitionHash(state.transition);
 
-    const homeDecimals = await this.assetStore.getTokenDecimals(
-      state.homeLedger.blockchainId,
-      state.homeLedger.tokenAddress
-    );
+    const homeDecimals = await this.assetStore.getTokenDecimals(state.homeLedger.blockchainId, state.homeLedger.tokenAddress);
 
     const homeLedger: ContractLedger = {
       chainId: state.homeLedger.blockchainId,
@@ -57,10 +54,7 @@ export class StatePackerV1 implements StatePacker {
     let nonHomeLedger: ContractLedger;
 
     if (state.escrowLedger) {
-      const escrowDecimals = await this.assetStore.getTokenDecimals(
-        state.escrowLedger.blockchainId,
-        state.escrowLedger.tokenAddress
-      );
+      const escrowDecimals = await this.assetStore.getTokenDecimals(state.escrowLedger.blockchainId, state.escrowLedger.tokenAddress);
 
       nonHomeLedger = {
         chainId: state.escrowLedger.blockchainId,
@@ -96,20 +90,8 @@ export class StatePackerV1 implements StatePacker {
     ] as const;
 
     const signingData = encodeAbiParameters(
-      [
-        { type: 'uint64' },
-        { type: 'uint8' },
-        { type: 'bytes32' },
-        { type: 'tuple', components: ledgerComponents },
-        { type: 'tuple', components: ledgerComponents },
-      ],
-      [
-        state.version,
-        intent,
-        metadata as `0x${string}`,
-        homeLedger,
-        nonHomeLedger,
-      ]
+      [{ type: 'uint64' }, { type: 'uint8' }, { type: 'bytes32' }, { type: 'tuple', components: ledgerComponents }, { type: 'tuple', components: ledgerComponents }],
+      [state.version, intent, metadata as `0x${string}`, homeLedger, nonHomeLedger],
     );
 
     return { channelId, signingData };
@@ -119,13 +101,7 @@ export class StatePackerV1 implements StatePacker {
    * Wraps signing data with channelId: abi.encode(channelId, signingData)
    */
   private packWithChannelId(channelId: `0x${string}`, signingData: Hex): `0x${string}` {
-    return encodeAbiParameters(
-      [
-        { type: 'bytes32' },
-        { type: 'bytes' },
-      ],
-      [channelId, signingData]
-    );
+    return encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes' }], [channelId, signingData]);
   }
 
   /**

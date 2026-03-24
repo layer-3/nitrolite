@@ -1,0 +1,1 @@
+{"version":3,"file":"join-existing.js","sourceRoot":"","sources":["../../src/slang-utils/join-existing.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,GAAG,EAAE,MAAM,UAAU,CAAC;AAI/B,MAAM,EAAE,IAAI,EAAE,GAAG,GAAG,CAAC,QAAQ,CAAC;AAE9B,MAAM,UAAU,YAAY,CAAC,GAAQ,EAAE,IAAyB;IAC9D,OAAO,IAAI,CAAC,GAAG,EAAE,IAAI,CAAC,MAAM,CAAC,OAAO,CAAU,CAAC,CAAC;AAClD,CAAC"}

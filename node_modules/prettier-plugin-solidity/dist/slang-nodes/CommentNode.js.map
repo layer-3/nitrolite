@@ -1,0 +1,1 @@
+{"version":3,"file":"CommentNode.js","sourceRoot":"","sources":["../../src/slang-nodes/CommentNode.ts"],"names":[],"mappings":"AAIA,MAAM,OAAO,WAAW;IAiBtB,YAAY,GAAiB,EAAE,MAAc;QAC3C,IAAI,CAAC,GAAG,GAAG;YACT,KAAK,EAAE,MAAM;YACb,GAAG,EAAE,MAAM,GAAG,GAAG,CAAC,UAAU,CAAC,KAAK;SACnC,CAAC;IACJ,CAAC;CACF"}

@@ -199,12 +199,7 @@ export class ChannelSessionKeyStateSigner implements StateSigner {
   private metadataHash: Hex;
   private authSignature: Hex;
 
-  constructor(
-    sessionKeyPrivateKey: Hex,
-    walletAddress: Address,
-    metadataHash: Hex,
-    authSignature: Hex
-  ) {
+  constructor(sessionKeyPrivateKey: Hex, walletAddress: Address, metadataHash: Hex, authSignature: Hex) {
     this.account = privateKeyToAccount(sessionKeyPrivateKey);
     this.walletAddress = walletAddress;
     this.metadataHash = metadataHash;
@@ -247,7 +242,7 @@ export class ChannelSessionKeyStateSigner implements StateSigner {
           authSignature: this.authSignature,
         },
         sessionKeySig,
-      ]
+      ],
     );
 
     // Prepend 0x01 type byte (ChannelSignerType_SessionKey)

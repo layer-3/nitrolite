@@ -239,7 +239,6 @@ export class WebsocketDialer implements Dialer {
       this.closeHandler(error);
     }
   }
-
 }
 
 /**

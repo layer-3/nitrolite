@@ -1,0 +1,1 @@
+{"version":3,"file":"NumberLiteral.js","sourceRoot":"","sources":["../../src/nodes/NumberLiteral.js"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,aAAa,GAAG;IAC3B,KAAK,EAAE,CAAC,EAAE,IAAI,EAAE,EAAE,EAAE,CAClB,IAAI,CAAC,eAAe;QAClB,CAAC,CAAC,CAAC,IAAI,CAAC,MAAM,EAAE,GAAG,EAAE,IAAI,CAAC,eAAe,CAAC;QAC1C,CAAC,CAAC,IAAI,CAAC,MAAM;CAClB,CAAC"}

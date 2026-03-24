@@ -1,0 +1,51 @@
+import { NonterminalKind } from '@nomicfoundation/slang/cst';
+import { util } from 'prettier';
+import { locEnd } from '../../slang-utils/loc.js';
+import addCollectionFirstComment from './add-collection-first-comment.js';
+const { addLeadingComment, addTrailingComment } = util;
+export default function handleIfStatementComments({ text, precedingNode, enclosingNode, followingNode, comment }) {
+    if ((enclosingNode === null || enclosingNode === void 0 ? void 0 : enclosingNode.kind) !== NonterminalKind.IfStatement || !followingNode) {
+        return false;
+    }
+    // We unfortunately have no way using the AST or location of nodes to know
+    // if the comment is positioned before the condition parenthesis:
+    //   if (a /* comment */) {}
+    // The only workaround I found is to look at the next character to see if
+    // it is a ).
+    const nextCharacter = util.getNextNonSpaceNonCommentCharacter(text, locEnd(comment));
+    if (nextCharacter === ')') {
+        addTrailingComment(precedingNode, comment);
+        return true;
+    }
+    // Comments before `else`:
+    // - treat as leading comments of the elseBranch, if it's a BlockStatement
+    // - treat as a dangling comment otherwise
+    if (precedingNode === enclosingNode.body &&
+        followingNode === enclosingNode.elseBranch) {
+        addTrailingComment(precedingNode, comment);
+        return true;
+    }
+    if (followingNode.kind === NonterminalKind.IfStatement) {
+        if (followingNode.body.kind === NonterminalKind.Block) {
+            addCollectionFirstComment(followingNode.body.statements, comment);
+        }
+        else {
+            addLeadingComment(followingNode.body, comment);
+        }
+        return true;
+    }
+    // For comments positioned after the condition parenthesis in an if statement
+    // before the consequent without brackets on, such as
+    // if (a) /* comment */ true
+    if (enclosingNode.body === followingNode) {
+        if (followingNode.kind === NonterminalKind.Block) {
+            addCollectionFirstComment(followingNode.statements, comment);
+        }
+        else {
+            addLeadingComment(followingNode, comment);
+        }
+        return true;
+    }
+    return false;
+}
+//# sourceMappingURL=handle-if-statement-comments.js.map

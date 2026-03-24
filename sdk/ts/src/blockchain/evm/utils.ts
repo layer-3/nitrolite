@@ -22,12 +22,7 @@ export function hexToBytes32(s: string): Uint8Array {
 /**
  * coreDefToContractDef converts a core channel definition to a contract channel definition
  */
-export function coreDefToContractDef(
-  def: core.ChannelDefinition,
-  asset: string,
-  userWallet: Address,
-  nodeAddress: Address
-): ChannelDefinition {
+export function coreDefToContractDef(def: core.ChannelDefinition, asset: string, userWallet: Address, nodeAddress: Address): ChannelDefinition {
   return {
     challengeDuration: def.challenge,
     user: userWallet,
@@ -41,23 +36,14 @@ export function coreDefToContractDef(
 /**
  * coreStateToContractState converts a core state to a contract state
  */
-export async function coreStateToContractState(
-  state: core.State,
-  tokenGetter: (blockchainId: bigint, tokenAddress: Address) => Promise<number>
-): Promise<State> {
-  const homeDecimals = await tokenGetter(
-    state.homeLedger.blockchainId,
-    state.homeLedger.tokenAddress
-  );
+export async function coreStateToContractState(state: core.State, tokenGetter: (blockchainId: bigint, tokenAddress: Address) => Promise<number>): Promise<State> {
+  const homeDecimals = await tokenGetter(state.homeLedger.blockchainId, state.homeLedger.tokenAddress);
 
   const homeLedger = coreLedgerToContractLedger(state.homeLedger, homeDecimals);
 
   let nonHomeLedger: Ledger;
   if (state.escrowLedger) {
-    const nonHomeDecimals = await tokenGetter(
-      state.escrowLedger.blockchainId,
-      state.escrowLedger.tokenAddress
-    );
+    const nonHomeDecimals = await tokenGetter(state.escrowLedger.blockchainId, state.escrowLedger.tokenAddress);
     nonHomeLedger = coreLedgerToContractLedger(state.escrowLedger, nonHomeDecimals);
   } else {
     nonHomeLedger = {
@@ -75,8 +61,8 @@ export async function coreStateToContractState(
 
   const metadata = getStateTransitionHash(state.transition) as `0x${string}`;
 
-  const userSig = state.userSig ? (state.userSig as `0x${string}`) : '0x' as `0x${string}`;
-  const nodeSig = state.nodeSig ? (state.nodeSig as `0x${string}`) : '0x' as `0x${string}`;
+  const userSig = state.userSig ? (state.userSig as `0x${string}`) : ('0x' as `0x${string}`);
+  const nodeSig = state.nodeSig ? (state.nodeSig as `0x${string}`) : ('0x' as `0x${string}`);
 
   return {
     version: state.version,
@@ -112,11 +98,7 @@ export function coreLedgerToContractLedger(ledger: core.Ledger, decimals: number
 /**
  * contractStateToCoreState converts a contract state to a core state
  */
-export function contractStateToCoreState(
-  contractState: State,
-  homeChannelId: string,
-  escrowChannelId?: string
-): core.State {
+export function contractStateToCoreState(contractState: State, homeChannelId: string, escrowChannelId?: string): core.State {
   const homeLedger = contractLedgerToCoreLedger(contractState.homeLedger);
 
   let escrowLedger: core.Ledger | undefined;

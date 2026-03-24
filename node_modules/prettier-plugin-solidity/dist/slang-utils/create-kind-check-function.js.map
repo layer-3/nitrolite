@@ -1,0 +1,1 @@
+{"version":3,"file":"create-kind-check-function.js","sourceRoot":"","sources":["../../src/slang-utils/create-kind-check-function.ts"],"names":[],"mappings":"AAOA,MAAM,UAAU,uBAAuB,CACrC,UAAwE;IAExE,MAAM,KAAK,GAAG,IAAI,GAAG,CAAC,UAAU,CAAC,CAAC;IAClC,OAAO,CAAC,IAA0B,EAAW,EAAE,CAAC,KAAK,CAAC,GAAG,CAAC,IAAI,CAAC,IAAI,CAAC,CAAC;AACvE,CAAC"}

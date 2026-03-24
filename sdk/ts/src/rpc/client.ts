@@ -31,11 +31,7 @@ export class RPCClient {
    * Call sends an RPC request with the specified method and parameters.
    * Returns the response payload or throws an error if the RPC call fails.
    */
-  private async call<TReq, TResp>(
-    method: string,
-    req: TReq,
-    signal?: AbortSignal
-  ): Promise<TResp> {
+  private async call<TReq, TResp>(method: string, req: TReq, signal?: AbortSignal): Promise<TResp> {
     // Generate unique request ID
     const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
@@ -60,52 +56,31 @@ export class RPCClient {
   // Channels Group - V1 API Methods
   // ============================================================================
 
-  async channelsV1GetHomeChannel(
-    req: API.ChannelsV1GetHomeChannelRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetHomeChannelResponse> {
+  async channelsV1GetHomeChannel(req: API.ChannelsV1GetHomeChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetHomeChannelResponse> {
     return this.call(Methods.ChannelsV1GetHomeChannelMethod, req, signal);
   }
 
-  async channelsV1GetEscrowChannel(
-    req: API.ChannelsV1GetEscrowChannelRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetEscrowChannelResponse> {
+  async channelsV1GetEscrowChannel(req: API.ChannelsV1GetEscrowChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetEscrowChannelResponse> {
     return this.call(Methods.ChannelsV1GetEscrowChannelMethod, req, signal);
   }
 
-  async channelsV1GetChannels(
-    req: API.ChannelsV1GetChannelsRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetChannelsResponse> {
+  async channelsV1GetChannels(req: API.ChannelsV1GetChannelsRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetChannelsResponse> {
     return this.call(Methods.ChannelsV1GetChannelsMethod, req, signal);
   }
 
-  async channelsV1GetLatestState(
-    req: API.ChannelsV1GetLatestStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetLatestStateResponse> {
+  async channelsV1GetLatestState(req: API.ChannelsV1GetLatestStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetLatestStateResponse> {
     return this.call(Methods.ChannelsV1GetLatestStateMethod, req, signal);
   }
 
-  async channelsV1GetStates(
-    req: API.ChannelsV1GetStatesRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetStatesResponse> {
+  async channelsV1GetStates(req: API.ChannelsV1GetStatesRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetStatesResponse> {
     return this.call(Methods.ChannelsV1GetStatesMethod, req, signal);
   }
 
-  async channelsV1RequestCreation(
-    req: API.ChannelsV1RequestCreationRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1RequestCreationResponse> {
+  async channelsV1RequestCreation(req: API.ChannelsV1RequestCreationRequest, signal?: AbortSignal): Promise<API.ChannelsV1RequestCreationResponse> {
     return this.call(Methods.ChannelsV1RequestCreationMethod, req, signal);
   }
 
-  async channelsV1SubmitState(
-    req: API.ChannelsV1SubmitStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1SubmitStateResponse> {
+  async channelsV1SubmitState(req: API.ChannelsV1SubmitStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1SubmitStateResponse> {
     return this.call(Methods.ChannelsV1SubmitStateMethod, req, signal);
   }
 
@@ -113,17 +88,11 @@ export class RPCClient {
   // Channel Session Key State - V1 API Methods
   // ============================================================================
 
-  async channelsV1SubmitSessionKeyState(
-    req: API.ChannelsV1SubmitSessionKeyStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1SubmitSessionKeyStateResponse> {
+  async channelsV1SubmitSessionKeyState(req: API.ChannelsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1SubmitSessionKeyStateResponse> {
     return this.call(Methods.ChannelsV1SubmitSessionKeyStateMethod, req, signal);
   }
 
-  async channelsV1GetLastKeyStates(
-    req: API.ChannelsV1GetLastKeyStatesRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetLastKeyStatesResponse> {
+  async channelsV1GetLastKeyStates(req: API.ChannelsV1GetLastKeyStatesRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetLastKeyStatesResponse> {
     return this.call(Methods.ChannelsV1GetLastKeyStatesMethod, req, signal);
   }
 
@@ -131,52 +100,31 @@ export class RPCClient {
   // App Sessions Group - V1 API Methods
   // ============================================================================
 
-  async appSessionsV1SubmitDepositState(
-    req: API.AppSessionsV1SubmitDepositStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1SubmitDepositStateResponse> {
+  async appSessionsV1SubmitDepositState(req: API.AppSessionsV1SubmitDepositStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitDepositStateResponse> {
     return this.call(Methods.AppSessionsV1SubmitDepositStateMethod, req, signal);
   }
 
-  async appSessionsV1SubmitAppState(
-    req: API.AppSessionsV1SubmitAppStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1SubmitAppStateResponse> {
+  async appSessionsV1SubmitAppState(req: API.AppSessionsV1SubmitAppStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitAppStateResponse> {
     return this.call(Methods.AppSessionsV1SubmitAppStateMethod, req, signal);
   }
 
-  async appSessionsV1RebalanceAppSessions(
-    req: API.AppSessionsV1RebalanceAppSessionsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1RebalanceAppSessionsResponse> {
+  async appSessionsV1RebalanceAppSessions(req: API.AppSessionsV1RebalanceAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1RebalanceAppSessionsResponse> {
     return this.call(Methods.AppSessionsV1RebalanceAppSessionsMethod, req, signal);
   }
 
-  async appSessionsV1GetAppDefinition(
-    req: API.AppSessionsV1GetAppDefinitionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1GetAppDefinitionResponse> {
+  async appSessionsV1GetAppDefinition(req: API.AppSessionsV1GetAppDefinitionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppDefinitionResponse> {
     return this.call(Methods.AppSessionsV1GetAppDefinitionMethod, req, signal);
   }
 
-  async appSessionsV1GetAppSessions(
-    req: API.AppSessionsV1GetAppSessionsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1GetAppSessionsResponse> {
+  async appSessionsV1GetAppSessions(req: API.AppSessionsV1GetAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppSessionsResponse> {
     return this.call(Methods.AppSessionsV1GetAppSessionsMethod, req, signal);
   }
 
-  async appSessionsV1CreateAppSession(
-    req: API.AppSessionsV1CreateAppSessionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1CreateAppSessionResponse> {
+  async appSessionsV1CreateAppSession(req: API.AppSessionsV1CreateAppSessionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1CreateAppSessionResponse> {
     return this.call(Methods.AppSessionsV1CreateAppSessionMethod, req, signal);
   }
 
-  async appSessionsV1CloseAppSession(
-    req: API.AppSessionsV1CloseAppSessionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1CloseAppSessionResponse> {
+  async appSessionsV1CloseAppSession(req: API.AppSessionsV1CloseAppSessionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1CloseAppSessionResponse> {
     return this.call(Methods.AppSessionsV1CloseAppSessionMethod, req, signal);
   }
 
@@ -184,17 +132,11 @@ export class RPCClient {
   // App Session Key State - V1 API Methods
   // ============================================================================
 
-  async appSessionsV1SubmitSessionKeyState(
-    req: API.AppSessionsV1SubmitSessionKeyStateRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1SubmitSessionKeyStateResponse> {
+  async appSessionsV1SubmitSessionKeyState(req: API.AppSessionsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitSessionKeyStateResponse> {
     return this.call(Methods.AppSessionsV1SubmitSessionKeyStateMethod, req, signal);
   }
 
-  async appSessionsV1GetLastKeyStates(
-    req: API.AppSessionsV1GetLastKeyStatesRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1GetLastKeyStatesResponse> {
+  async appSessionsV1GetLastKeyStates(req: API.AppSessionsV1GetLastKeyStatesRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetLastKeyStatesResponse> {
     return this.call(Methods.AppSessionsV1GetLastKeyStatesMethod, req, signal);
   }
 
@@ -202,17 +144,11 @@ export class RPCClient {
   // Apps Group - V1 API Methods
   // ============================================================================
 
-  async appsV1GetApps(
-    req: API.AppsV1GetAppsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppsV1GetAppsResponse> {
+  async appsV1GetApps(req: API.AppsV1GetAppsRequest, signal?: AbortSignal): Promise<API.AppsV1GetAppsResponse> {
     return this.call(Methods.AppsV1GetAppsMethod, req, signal);
   }
 
-  async appsV1SubmitAppVersion(
-    req: API.AppsV1SubmitAppVersionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppsV1SubmitAppVersionResponse> {
+  async appsV1SubmitAppVersion(req: API.AppsV1SubmitAppVersionRequest, signal?: AbortSignal): Promise<API.AppsV1SubmitAppVersionResponse> {
     return this.call(Methods.AppsV1SubmitAppVersionMethod, req, signal);
   }
 
@@ -220,24 +156,15 @@ export class RPCClient {
   // User Group - V1 API Methods
   // ============================================================================
 
-  async userV1GetBalances(
-    req: API.UserV1GetBalancesRequest,
-    signal?: AbortSignal
-  ): Promise<API.UserV1GetBalancesResponse> {
+  async userV1GetBalances(req: API.UserV1GetBalancesRequest, signal?: AbortSignal): Promise<API.UserV1GetBalancesResponse> {
     return this.call(Methods.UserV1GetBalancesMethod, req, signal);
   }
 
-  async userV1GetTransactions(
-    req: API.UserV1GetTransactionsRequest,
-    signal?: AbortSignal
-  ): Promise<API.UserV1GetTransactionsResponse> {
+  async userV1GetTransactions(req: API.UserV1GetTransactionsRequest, signal?: AbortSignal): Promise<API.UserV1GetTransactionsResponse> {
     return this.call(Methods.UserV1GetTransactionsMethod, req, signal);
   }
 
-  async userV1GetActionAllowances(
-    req: API.UserV1GetActionAllowancesRequest,
-    signal?: AbortSignal
-  ): Promise<API.UserV1GetActionAllowancesResponse> {
+  async userV1GetActionAllowances(req: API.UserV1GetActionAllowancesRequest, signal?: AbortSignal): Promise<API.UserV1GetActionAllowancesResponse> {
     return this.call(Methods.UserV1GetActionAllowancesMethod, req, signal);
   }
 
@@ -253,10 +180,7 @@ export class RPCClient {
     return this.call(Methods.NodeV1GetConfigMethod, {}, signal);
   }
 
-  async nodeV1GetAssets(
-    req: API.NodeV1GetAssetsRequest,
-    signal?: AbortSignal
-  ): Promise<API.NodeV1GetAssetsResponse> {
+  async nodeV1GetAssets(req: API.NodeV1GetAssetsRequest, signal?: AbortSignal): Promise<API.NodeV1GetAssetsResponse> {
     return this.call(Methods.NodeV1GetAssetsMethod, req, signal);
   }
 

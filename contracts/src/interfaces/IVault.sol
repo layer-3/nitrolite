@@ -13,7 +13,7 @@ interface IVault {
      * @param token Token address (use address(0) for native tokens)
      * @param amount Amount of tokens deposited
      */
-    event Deposited(address indexed wallet, address indexed token, uint256 amount);
+    event Deposited(address indexed wallet, address indexed token, uint48 indexed subId, uint256 amount);
 
     /**
      * @notice Emitted when tokens are withdrawn from the contract
@@ -21,7 +21,7 @@ interface IVault {
      * @param token Token address (use address(0) for native tokens)
      * @param amount Amount of tokens withdrawn
      */
-    event Withdrawn(address indexed wallet, address indexed token, uint256 amount);
+    event Withdrawn(address indexed wallet, address indexed token, uint48 indexed subId, uint256 amount);
 
     /**
      * @notice Gets the balances of multiple accounts for multiple tokens
@@ -30,7 +30,7 @@ interface IVault {
      * @param token Token address to check balance for (use address(0) for native tokens)
      * @return The balance of the specified token for the specified account
      */
-    function getAccountBalance(address account, address token) external view returns (uint256);
+    function getAccountBalance(address account, address token, uint48 subId) external view returns (uint256);
 
     /**
      * @notice Deposits tokens into the contract
@@ -39,7 +39,7 @@ interface IVault {
      * @param token Token address (use address(0) for native tokens)
      * @param amount Amount of tokens to deposit
      */
-    function depositToVault(address account, address token, uint256 amount) external payable;
+    function depositToVault(address account, address token, uint48 subId, uint256 amount) external payable;
 
     /**
      * @notice Withdraws tokens from the contract
@@ -48,5 +48,5 @@ interface IVault {
      * @param token Token address (use address(0) for native tokens)
      * @param amount Amount of tokens to withdraw
      */
-    function withdrawFromVault(address account, address token, uint256 amount) external;
+    function withdrawFromVault(address account, address token, uint48 subId, uint256 amount) external;
 }

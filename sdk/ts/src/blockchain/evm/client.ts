@@ -9,11 +9,7 @@ import * as core from '../../core/types';
 import { decimalToBigInt } from '../../core/utils';
 import { AssetStore, EVMClient, WalletSigner } from './interface';
 import { ChannelHubAbi } from './channel_hub_abi';
-import {
-  coreDefToContractDef,
-  coreStateToContractState,
-  contractStateToCoreState,
-} from './utils';
+import { coreDefToContractDef, coreStateToContractState, contractStateToCoreState } from './utils';
 import { newERC20 } from './erc20';
 
 /**
@@ -38,15 +34,7 @@ export class Client {
   private requireCheckAllowance: boolean;
   private requireCheckBalance: boolean;
 
-  constructor(
-    contractAddress: Address,
-    evmClient: EVMClient,
-    walletSigner: WalletSigner,
-    blockchainId: bigint,
-    nodeAddress: Address,
-    assetStore: AssetStore,
-    options?: ClientOptions
-  ) {
+  constructor(contractAddress: Address, evmClient: EVMClient, walletSigner: WalletSigner, blockchainId: bigint, nodeAddress: Address, assetStore: AssetStore, options?: ClientOptions) {
     this.contractAddress = contractAddress;
     this.evmClient = evmClient;
     this.walletSigner = walletSigner;
@@ -168,7 +156,6 @@ export class Client {
     return await erc20.allowance(owner, this.contractAddress);
   }
 
-
   // ========= Getters - ChannelHub =========
 
   async getNodeBalance(token: Address): Promise<Decimal> {
@@ -193,6 +180,19 @@ export class Client {
     return channelIds.map((id) => id);
   }
 
+  async getChannelSubId(channelId: string): Promise<number> {
+    const channelIdBytes = this.hexToBytes32(channelId);
+
+    const subId = (await this.evmClient.readContract({
+      address: this.contractAddress,
+      abi: ChannelHubAbi,
+      functionName: 'getChannelSubId',
+      args: [channelIdBytes],
+    })) as number;
+
+    return Number(subId);
+  }
+
   async getHomeChannelData(homeChannelId: string): Promise<core.HomeChannelDataResponse> {
     const channelIdBytes = this.hexToBytes32(homeChannelId);
 
@@ -206,6 +206,8 @@ export class Client {
     // getChannelData returns flat values: (status, definition, lastState, challengeExpiry, lockedFunds)
     const [, definition, lastState, challengeExpiry] = Array.isArray(data) ? data : [data.status, data.definition, data.lastState, data.challengeExpiry, data.lockedFunds];
 
+    const subId = await this.getChannelSubId(homeChannelId);
+
     const coreState = contractStateToCoreState(lastState, homeChannelId);
 
     return {
@@ -217,6 +219,7 @@ export class Client {
       node: definition.node,
       lastState: coreState,
       challengeExpiry,
+      subId,
     };
   }
 
@@ -226,9 +229,7 @@ export class Client {
     throw new Error('getEscrowDepositData not implemented - needs contract ABI update');
   }
 
-  async getEscrowWithdrawalData(
-    _escrowChannelId: string
-  ): Promise<core.EscrowWithdrawalDataResponse> {
+  async getEscrowWithdrawalData(_escrowChannelId: string): Promise<core.EscrowWithdrawalDataResponse> {
     throw new Error('getEscrowWithdrawalData not implemented - needs contract ABI update');
   }
 
@@ -246,7 +247,7 @@ export class Client {
       amount: amount.toString(),
       amountBig: amountBig.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     try {
@@ -304,7 +305,7 @@ export class Client {
       amount: amount.toString(),
       amountBig: amountBig.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     try {
@@ -345,22 +346,12 @@ export class Client {
   // ========= Channel Lifecycle =========
 
   async create(def: core.ChannelDefinition, initState: core.State): Promise<string> {
-    const contractDef = coreDefToContractDef(
-      def,
-      initState.asset,
-      initState.userWallet,
-      this.nodeAddress
-    );
+    const contractDef = coreDefToContractDef(def, initState.asset, initState.userWallet, this.nodeAddress);
 
-    const contractState = await coreStateToContractState(initState, (blockchainId, tokenAddress) =>
-      this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
-    );
+    const contractState = await coreStateToContractState(initState, (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress));
 
     // Check allowance and balance for deposits
-    if (
-      initState.transition.type === core.TransitionType.HomeDeposit ||
-      initState.transition.type === core.TransitionType.EscrowDeposit
-    ) {
+    if (initState.transition.type === core.TransitionType.HomeDeposit || initState.transition.type === core.TransitionType.EscrowDeposit) {
       if (this.requireCheckAllowance) {
         const allowance = await this.getAllowance(initState.asset, initState.userWallet);
         if (allowance.lessThan(initState.transition.amount)) {
@@ -380,16 +371,12 @@ export class Client {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     // Resolve native ETH value for deposit intents
     let nativeValue: bigint | undefined;
-    if (
-      (initState.transition.type === core.TransitionType.HomeDeposit ||
-        initState.transition.type === core.TransitionType.EscrowDeposit) &&
-      contractState.homeLedger.token === zeroAddress
-    ) {
+    if ((initState.transition.type === core.TransitionType.HomeDeposit || initState.transition.type === core.TransitionType.EscrowDeposit) && contractState.homeLedger.token === zeroAddress) {
       nativeValue = decimalToBigInt(initState.transition.amount, contractState.homeLedger.decimals);
     }
 
@@ -439,10 +426,7 @@ export class Client {
 
     const channelIdBytes = this.hexToBytes32(candidate.homeChannelId);
 
-    const contractCandidate = await coreStateToContractState(
-      candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
-    );
+    const contractCandidate = await coreStateToContractState(candidate, (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress));
 
     // Check for deposit intent
     if (candidate.transition.type === core.TransitionType.HomeDeposit) {
@@ -460,15 +444,13 @@ export class Client {
         }
       }
 
-      const nativeValue = contractCandidate.homeLedger.token === zeroAddress
-        ? decimalToBigInt(candidate.transition.amount, contractCandidate.homeLedger.decimals)
-        : undefined;
+      const nativeValue = contractCandidate.homeLedger.token === zeroAddress ? decimalToBigInt(candidate.transition.amount, contractCandidate.homeLedger.decimals) : undefined;
 
       console.log('💳 EVM Client - Deposit to channel transaction:', {
         contractAddress: this.contractAddress,
         blockchainId: this.blockchainId.toString(),
         channelId: channelIdBytes,
-        walletChain: this.walletSigner.chain?.id
+        walletChain: this.walletSigner.chain?.id,
       });
 
       const hash = await this.walletSigner.writeContract({
@@ -490,7 +472,7 @@ export class Client {
         contractAddress: this.contractAddress,
         blockchainId: this.blockchainId.toString(),
         channelId: channelIdBytes,
-        walletChain: this.walletSigner.chain?.id
+        walletChain: this.walletSigner.chain?.id,
       });
 
       const hash = await this.walletSigner.writeContract({
@@ -510,7 +492,7 @@ export class Client {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
-      walletChain: this.walletSigner.chain?.id
+      walletChain: this.walletSigner.chain?.id,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -532,16 +514,13 @@ export class Client {
 
     const channelIdBytes = this.hexToBytes32(candidate.homeChannelId);
 
-    const contractCandidate = await coreStateToContractState(
-      candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
-    );
+    const contractCandidate = await coreStateToContractState(candidate, (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress));
 
     console.log('💳 EVM Client - Challenge channel transaction:', {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
-      walletChain: this.walletSigner.chain?.id
+      walletChain: this.walletSigner.chain?.id,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -563,10 +542,7 @@ export class Client {
 
     const channelIdBytes = this.hexToBytes32(candidate.homeChannelId);
 
-    const contractCandidate = await coreStateToContractState(
-      candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
-    );
+    const contractCandidate = await coreStateToContractState(candidate, (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress));
 
     // Verify close intent
     if (candidate.transition.type !== core.TransitionType.Finalize) {
@@ -578,7 +554,7 @@ export class Client {
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -600,11 +576,7 @@ export class Client {
     throw new Error('initiateEscrowDeposit not implemented - needs contract ABI update');
   }
 
-  async challengeEscrowDeposit(
-    _candidate: core.State,
-    _challengerSig: `0x${string}`,
-    _challengerIdx: number = 0
-  ): Promise<string> {
+  async challengeEscrowDeposit(_candidate: core.State, _challengerSig: `0x${string}`, _challengerIdx: number = 0): Promise<string> {
     throw new Error('challengeEscrowDeposit not implemented - needs contract ABI update');
   }
 
@@ -612,18 +584,11 @@ export class Client {
     throw new Error('finalizeEscrowDeposit not implemented - needs contract ABI update');
   }
 
-  async initiateEscrowWithdrawal(
-    _def: core.ChannelDefinition,
-    _initState: core.State
-  ): Promise<string> {
+  async initiateEscrowWithdrawal(_def: core.ChannelDefinition, _initState: core.State): Promise<string> {
     throw new Error('initiateEscrowWithdrawal not implemented - needs contract ABI update');
   }
 
-  async challengeEscrowWithdrawal(
-    _candidate: core.State,
-    _challengerSig: `0x${string}`,
-    _challengerIdx: number = 0
-  ): Promise<string> {
+  async challengeEscrowWithdrawal(_candidate: core.State, _challengerSig: `0x${string}`, _challengerIdx: number = 0): Promise<string> {
     throw new Error('challengeEscrowWithdrawal not implemented - needs contract ABI update');
   }
 
@@ -639,22 +604,6 @@ export class Client {
 /**
  * Create a new blockchain client
  */
-export function newClient(
-  contractAddress: Address,
-  evmClient: EVMClient,
-  walletSigner: WalletSigner,
-  blockchainId: bigint,
-  nodeAddress: Address,
-  assetStore: AssetStore,
-  options?: ClientOptions
-): Client {
-  return new Client(
-    contractAddress,
-    evmClient,
-    walletSigner,
-    blockchainId,
-    nodeAddress,
-    assetStore,
-    options
-  );
+export function newClient(contractAddress: Address, evmClient: EVMClient, walletSigner: WalletSigner, blockchainId: bigint, nodeAddress: Address, assetStore: AssetStore, options?: ClientOptions): Client {
+  return new Client(contractAddress, evmClient, walletSigner, blockchainId, nodeAddress, assetStore, options);
 }

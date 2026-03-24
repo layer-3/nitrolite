@@ -100,6 +100,8 @@ export interface Channel {
   approvedSigValidators: string; // Hex string bitmap of approved signature validators
   status: ChannelStatus; // Current status of the channel (void, open, challenged, closed)
   stateVersion: bigint; // uint64 - On-chain state version of the channel
+  subId?: number; // uint48 - Optional sub-account ID for parametric tokens
+  isParametric?: boolean; // Whether this channel uses a parametric token
 }
 
 /**
@@ -253,6 +255,7 @@ export interface HomeChannelDataResponse {
   node: Address;
   lastState: State;
   challengeExpiry: bigint; // uint64
+  subId: number; // uint48
 }
 
 export interface EscrowDepositDataResponse {
@@ -286,7 +289,8 @@ export function newChannel(
   tokenAddress: Address,
   nonce: bigint,
   challenge: number,
-  approvedSigValidators: string = '0x00'
+  approvedSigValidators: string = '0x00',
+  subId?: number,
 ): Channel {
   return {
     channelId,
@@ -300,6 +304,7 @@ export function newChannel(
     approvedSigValidators,
     status: ChannelStatus.Void,
     stateVersion: 0n,
+    subId,
   };
 }
 
@@ -329,12 +334,7 @@ export function newVoidState(asset: string, userWallet: Address): State {
 /**
  * NewTransition creates a new Transition instance
  */
-export function newTransition(
-  type: TransitionType,
-  txId: string,
-  accountId: string,
-  amount: Decimal
-): Transition {
+export function newTransition(type: TransitionType, txId: string, accountId: string, amount: Decimal): Transition {
   return {
     type,
     txId,
@@ -346,14 +346,7 @@ export function newTransition(
 /**
  * NewTransaction creates a new Transaction instance
  */
-export function newTransaction(
-  id: string,
-  asset: string,
-  txType: TransactionType,
-  fromAccount: Address,
-  toAccount: Address,
-  amount: Decimal
-): Transaction {
+export function newTransaction(id: string, asset: string, txType: TransactionType, fromAccount: Address, toAccount: Address, amount: Decimal): Transaction {
   return {
     id,
     asset,
@@ -467,9 +460,7 @@ export function validateLedger(ledger: Ledger): void {
   const sumBalances = ledger.userBalance.add(ledger.nodeBalance);
   const sumNetFlows = ledger.userNetFlow.add(ledger.nodeNetFlow);
   if (!sumBalances.equals(sumNetFlows)) {
-    throw new Error(
-      `ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`
-    );
+    throw new Error(`ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`);
   }
 }
 
@@ -477,11 +468,7 @@ export function validateLedger(ledger: Ledger): void {
 // Pagination Utilities
 // ============================================================================
 
-export function getOffsetAndLimit(
-  params: PaginationParams | undefined,
-  defaultLimit: number,
-  maxLimit: number
-): { offset: number; limit: number } {
+export function getOffsetAndLimit(params: PaginationParams | undefined, defaultLimit: number, maxLimit: number): { offset: number; limit: number } {
   if (!params) {
     return { offset: 0, limit: defaultLimit };
   }

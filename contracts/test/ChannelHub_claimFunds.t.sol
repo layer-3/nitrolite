@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
-import {TestChannelHub} from "./TestChannelHub.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {RevertingEthReceiver} from "./mocks/RevertingEthReceiver.sol";
+import { TestChannelHub } from "./TestChannelHub.sol";
+import { MockERC20 } from "./mocks/MockERC20.sol";
+import { RevertingEthReceiver } from "./mocks/RevertingEthReceiver.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ChannelHub} from "../src/ChannelHub.sol";
-import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
+import { ChannelHub } from "../src/ChannelHub.sol";
+import { ECDSAValidator } from "../src/sigValidators/ECDSAValidator.sol";
 
 contract ChannelHubTest_claimFunds is Test {
     TestChannelHub public cHub;
@@ -19,6 +19,8 @@ contract ChannelHubTest_claimFunds is Test {
 
     address public claimer;
     address public destination;
+
+    uint48 SUB_ID_0 = 0;
 
     uint256 constant RECLAIM_AMOUNT = 100 ether;
     uint256 constant BALANCE_AMOUNT = RECLAIM_AMOUNT * 10;
@@ -35,10 +37,7 @@ contract ChannelHubTest_claimFunds is Test {
         vm.deal(address(cHub), BALANCE_AMOUNT);
     }
 
-    function _verifyTransferSuccess(address source, address destination_, address tokenAddr, uint256 transferredAmount)
-        internal
-        view
-    {
+    function _verifyTransferSuccess(address source, address destination_, address tokenAddr, uint256 transferredAmount) internal view {
         if (tokenAddr == address(0)) {
             uint256 userBalanceAfter = destination_.balance;
             assertEq(userBalanceAfter, transferredAmount, "Transfer amount mismatch");
@@ -61,10 +60,10 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(token), RECLAIM_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.FundsClaimed(claimer, address(token), claimer, RECLAIM_AMOUNT);
+        emit ChannelHub.FundsClaimed(claimer, address(token), 0, claimer, RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(token), claimer);
+        cHub.claimFunds(address(token), SUB_ID_0, claimer);
 
         _verifyTransferSuccess(claimer, claimer, address(token), RECLAIM_AMOUNT);
     }
@@ -73,10 +72,10 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(token), RECLAIM_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.FundsClaimed(claimer, address(token), destination, RECLAIM_AMOUNT);
+        emit ChannelHub.FundsClaimed(claimer, address(token), SUB_ID_0, destination, RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(token), destination);
+        cHub.claimFunds(address(token), SUB_ID_0, destination);
 
         _verifyTransferSuccess(claimer, destination, address(token), RECLAIM_AMOUNT);
     }
@@ -87,7 +86,7 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(token), totalAccumulated);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(token), destination);
+        cHub.claimFunds(address(token), SUB_ID_0, destination);
 
         _verifyTransferSuccess(claimer, destination, address(token), totalAccumulated);
     }
@@ -98,10 +97,10 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(0), RECLAIM_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.FundsClaimed(claimer, address(0), claimer, RECLAIM_AMOUNT);
+        emit ChannelHub.FundsClaimed(claimer, address(0), SUB_ID_0, claimer, RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(0), claimer);
+        cHub.claimFunds(address(0), SUB_ID_0, claimer);
 
         _verifyTransferSuccess(claimer, claimer, address(0), RECLAIM_AMOUNT);
     }
@@ -110,10 +109,10 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(0), RECLAIM_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.FundsClaimed(claimer, address(0), destination, RECLAIM_AMOUNT);
+        emit ChannelHub.FundsClaimed(claimer, address(0), SUB_ID_0, destination, RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(0), destination);
+        cHub.claimFunds(address(0), SUB_ID_0, destination);
 
         _verifyTransferSuccess(claimer, destination, address(0), RECLAIM_AMOUNT);
     }
@@ -125,7 +124,7 @@ contract ChannelHubTest_claimFunds is Test {
 
         vm.prank(claimer);
         vm.expectRevert(ChannelHub.InvalidAddress.selector);
-        cHub.claimFunds(address(token), address(0));
+        cHub.claimFunds(address(token), SUB_ID_0, address(0));
     }
 
     function test_revert_ifReclaimBalanceIsZero() public {
@@ -133,17 +132,15 @@ contract ChannelHubTest_claimFunds is Test {
 
         vm.prank(claimer);
         vm.expectRevert(ChannelHub.IncorrectAmount.selector);
-        cHub.claimFunds(address(token), destination);
+        cHub.claimFunds(address(token), SUB_ID_0, destination);
     }
 
     function test_revert_ifETHTransferFails() public {
         cHub.workaround_setReclaim(claimer, address(0), RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        vm.expectRevert(
-            abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), RECLAIM_AMOUNT)
-        );
-        cHub.claimFunds(address(0), address(revertingReceiver));
+        vm.expectRevert(abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), RECLAIM_AMOUNT));
+        cHub.claimFunds(address(0), SUB_ID_0, address(revertingReceiver));
     }
 
     // ========== State Change Tests ==========
@@ -156,7 +153,7 @@ contract ChannelHubTest_claimFunds is Test {
         // Other user tries to claim
         vm.prank(otherUser);
         vm.expectRevert(ChannelHub.IncorrectAmount.selector);
-        cHub.claimFunds(address(token), destination);
+        cHub.claimFunds(address(token), SUB_ID_0, destination);
 
         // Verify reclaim still exists for claimer
         assertEq(cHub.getReclaimBalance(claimer, address(token)), RECLAIM_AMOUNT, "Reclaim should still exist");
@@ -170,12 +167,12 @@ contract ChannelHubTest_claimFunds is Test {
         cHub.workaround_setReclaim(claimer, address(token2), RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(token), destination);
+        cHub.claimFunds(address(token), SUB_ID_0, destination);
 
         _verifyTransferSuccess(claimer, destination, address(token), RECLAIM_AMOUNT);
 
         vm.prank(claimer);
-        cHub.claimFunds(address(token2), destination);
+        cHub.claimFunds(address(token2), SUB_ID_0, destination);
 
         _verifyTransferSuccess(claimer, destination, address(token2), RECLAIM_AMOUNT);
     }

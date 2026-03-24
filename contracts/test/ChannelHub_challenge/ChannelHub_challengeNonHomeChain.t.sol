@@ -1,23 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
+import { ChannelHubTest_Challenge_Base } from "./ChannelHub_Challenge_Base.t.sol";
 
 // forge-lint: disable-start(unsafe-typecast)
 
-import {Utils} from "../../src/Utils.sol";
-import {
-    ChannelDefinition,
-    ChannelStatus,
-    State,
-    StateIntent,
-    Ledger,
-    EscrowStatus,
-    ParticipantIndex
-} from "../../src/interfaces/Types.sol";
-import {ChannelHub} from "../../src/ChannelHub.sol";
-import {EscrowDepositEngine} from "../../src/EscrowDepositEngine.sol";
-import {EscrowWithdrawalEngine} from "../../src/EscrowWithdrawalEngine.sol";
+import { Utils } from "../../src/Utils.sol";
+import { ChannelDefinition, ChannelStatus, State, StateIntent, Ledger, EscrowStatus, ParticipantIndex } from "../../src/interfaces/Types.sol";
+import { ChannelHub } from "../../src/ChannelHub.sol";
+import { EscrowDepositEngine } from "../../src/EscrowDepositEngine.sol";
+import { EscrowWithdrawalEngine } from "../../src/EscrowWithdrawalEngine.sol";
 
 /*
  * @dev This file uses integration / blackbox testing through ChannelHub to verify
@@ -75,8 +67,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
             userSig: "",
             nodeSig: ""
         });
-        initiateEscrowDepositState =
-            mutualSignStateBothWithEcdsaValidator(initiateEscrowDepositState, channelId, ALICE_PK);
+        initiateEscrowDepositState = mutualSignStateBothWithEcdsaValidator(initiateEscrowDepositState, channelId, ALICE_PK);
 
         vm.prank(alice);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
@@ -96,21 +87,18 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
             [uint256(0), uint256(0)],
             [int256(ESCROW_AMOUNT), -int256(ESCROW_AMOUNT)]
         );
-        finalizeEscrowDepositState =
-            mutualSignStateBothWithEcdsaValidator(finalizeEscrowDepositState, channelId, ALICE_PK);
+        finalizeEscrowDepositState = mutualSignStateBothWithEcdsaValidator(finalizeEscrowDepositState, channelId, ALICE_PK);
     }
 
     function _challengeEscrowDeposit() internal {
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
         vm.prank(node);
         cHub.challengeEscrowDeposit(escrowId, challengerSig, ParticipantIndex.NODE);
     }
 
     function test_revert_challengeEscrowDeposit_nonExistentEscrow() public {
         bytes32 nonExistentEscrowId = Utils.getEscrowId(channelId, 999);
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
         vm.prank(node);
         vm.expectRevert(ChannelHub.NoChannelIdFoundForEscrow.selector);
         cHub.challengeEscrowDeposit(nonExistentEscrowId, challengerSig, ParticipantIndex.NODE);
@@ -119,7 +107,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
     function test_success_challengeEscrowDeposit_beforeUnlockAt() public {
         _challengeEscrowDeposit();
 
-        (, EscrowStatus status,, uint64 challengeExpireAt,,) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus status, , uint64 challengeExpireAt, , ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(status), uint8(EscrowStatus.DISPUTED), "Escrow should be DISPUTED after challenge");
         assertEq(
             challengeExpireAt,
@@ -138,31 +126,27 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
     function test_resolveChallengedEscrowDeposit_withFinalizeState_beforeChallengeExpiry() public {
         _challengeEscrowDeposit();
 
-        (, EscrowStatus statusAfterChallenge,,,,) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus statusAfterChallenge, , , , ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
         cHub.finalizeEscrowDeposit(channelId, escrowId, finalizeEscrowDepositState);
 
-        (, EscrowStatus statusAfterFinalize,,, uint256 lockedAmount,) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus statusAfterFinalize, , , uint256 lockedAmount, ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterFinalize), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(lockedAmount, 0, "Locked amount should be 0 after finalization");
 
         // Cooperative path: locked funds released to node vault (node earned them for providing cross-chain liquidity)
-        assertEq(
-            cHub.getAccountBalance(node, address(token)),
-            nodeVaultBefore + ESCROW_AMOUNT,
-            "Node vault should receive locked amount"
-        );
+        assertEq(cHub.getAccountBalance(node, address(token), SUB_ID_0), nodeVaultBefore + ESCROW_AMOUNT, "Node vault should receive locked amount");
     }
 
     function test_challengedEscrowDeposit_canNotBeResolved_nodeReclaimsAfterChallengeExpiry() public {
         _challengeEscrowDeposit();
 
-        (, EscrowStatus statusAfterChallenge,,,,) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus statusAfterChallenge, , , , ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
         vm.warp(block.timestamp + EscrowDepositEngine.CHALLENGE_DURATION + 1);
@@ -173,7 +157,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         vm.prank(node);
         cHub.finalizeEscrowDeposit(channelId, escrowId, initiateEscrowDepositState);
 
-        (, EscrowStatus statusAfterFinalize,,, uint256 lockedAmount,) = cHub.getEscrowDepositData(escrowId);
+        (, EscrowStatus statusAfterFinalize, , , uint256 lockedAmount, ) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterFinalize), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(lockedAmount, 0, "Locked amount should be 0 after finalization");
 
@@ -185,8 +169,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         _challengeEscrowDeposit();
 
         // Attempt to challenge the same escrow deposit again
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowDepositState, NODE_PK);
         vm.prank(node);
         vm.expectRevert(EscrowDepositEngine.IncorrectEscrowStatus.selector);
         cHub.challengeEscrowDeposit(escrowId, challengerSig, ParticipantIndex.NODE);
@@ -240,8 +223,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
             userSig: "",
             nodeSig: ""
         });
-        initiateEscrowWithdrawalState =
-            mutualSignStateBothWithEcdsaValidator(initiateEscrowWithdrawalState, channelId, ALICE_PK);
+        initiateEscrowWithdrawalState = mutualSignStateBothWithEcdsaValidator(initiateEscrowWithdrawalState, channelId, ALICE_PK);
 
         vm.prank(alice);
         cHub.initiateEscrowWithdrawal(def, initiateEscrowWithdrawalState);
@@ -261,21 +243,18 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
             [uint256(0), uint256(0)],
             [-int256(WITHDRAWAL_AMOUNT), int256(WITHDRAWAL_AMOUNT)]
         );
-        finalizeEscrowWithdrawalState =
-            mutualSignStateBothWithEcdsaValidator(finalizeEscrowWithdrawalState, channelId, ALICE_PK);
+        finalizeEscrowWithdrawalState = mutualSignStateBothWithEcdsaValidator(finalizeEscrowWithdrawalState, channelId, ALICE_PK);
     }
 
     function _challengeEscrowWithdrawal() internal {
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
         vm.prank(node);
         cHub.challengeEscrowWithdrawal(escrowId, challengerSig, ParticipantIndex.NODE);
     }
 
     function test_revert_challengeEscrowWithdrawal_nonExistentEscrow() public {
         bytes32 nonExistentEscrowId = Utils.getEscrowId(channelId, 999);
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
         vm.prank(node);
         vm.expectRevert(ChannelHub.NoChannelIdFoundForEscrow.selector);
         cHub.challengeEscrowWithdrawal(nonExistentEscrowId, challengerSig, ParticipantIndex.NODE);
@@ -284,7 +263,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
     function test_challengeEscrowWithdrawal() public {
         _challengeEscrowWithdrawal();
 
-        (, EscrowStatus status, uint64 challengeExpireAt,,) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus status, uint64 challengeExpireAt, , ) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(status), uint8(EscrowStatus.DISPUTED), "Escrow should be DISPUTED after challenge");
         assertEq(
             challengeExpireAt,
@@ -296,26 +275,24 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
     function test_resolveChallengedEscrowWithdrawal_withFinalizeState_beforeChallengeExpiry() public {
         _challengeEscrowWithdrawal();
 
-        (, EscrowStatus statusAfterChallenge,,,) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus statusAfterChallenge, , , ) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(channelId, escrowId, finalizeEscrowWithdrawalState);
 
-        (, EscrowStatus statusAfterFinalize,, uint256 lockedAmount,) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus statusAfterFinalize, , uint256 lockedAmount, ) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(statusAfterFinalize), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(lockedAmount, 0, "Locked amount should be 0 after finalization");
 
         // Cooperative path: locked funds released to user wallet (withdrawal succeeded)
-        assertEq(
-            token.balanceOf(alice), aliceBalanceBefore + WITHDRAWAL_AMOUNT, "User should receive withdrawal amount"
-        );
+        assertEq(token.balanceOf(alice), aliceBalanceBefore + WITHDRAWAL_AMOUNT, "User should receive withdrawal amount");
         // Node vault should be unchanged (locked amount was already deducted at initiation)
-        assertEq(cHub.getAccountBalance(node, address(token)), nodeVaultBefore, "Node vault should be unchanged");
+        assertEq(cHub.getAccountBalance(node, address(token), SUB_ID_0), nodeVaultBefore, "Node vault should be unchanged");
     }
 
     function test_challengedEscrowWithdrawal_canNotBeResolved_nodeReclaimsAfterChallengeExpiry() public {
@@ -324,20 +301,20 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         vm.warp(block.timestamp + EscrowWithdrawalEngine.CHALLENGE_DURATION + 1);
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Attempt cooperative resolution with a valid FINALIZE state after challengeExpireAt
         // The unilateral path intercepts and ignores the candidate state
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(channelId, escrowId, finalizeEscrowWithdrawalState);
 
-        (, EscrowStatus status,, uint256 lockedAmount,) = cHub.getEscrowWithdrawalData(escrowId);
+        (, EscrowStatus status, , uint256 lockedAmount, ) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(status), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");
         assertEq(lockedAmount, 0, "Locked amount should be 0");
 
         // Unilateral path (not cooperative): locked funds returned to node vault (withdrawal failed)
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getAccountBalance(node, address(token), SUB_ID_0),
             nodeVaultBefore + WITHDRAWAL_AMOUNT,
             "Node vault should reclaim locked amount (cooperative resolution bypassed)"
         );
@@ -348,8 +325,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         _challengeEscrowWithdrawal();
 
         // Attempt to challenge the same escrow withdrawal again
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initiateEscrowWithdrawalState, NODE_PK);
         vm.prank(node);
         vm.expectRevert(EscrowWithdrawalEngine.IncorrectEscrowStatus.selector);
         cHub.challengeEscrowWithdrawal(escrowId, challengerSig, ParticipantIndex.NODE);
@@ -419,8 +395,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             userSig: "",
             nodeSig: ""
         });
-        newHomeInitiateMigrationState =
-            mutualSignStateBothWithEcdsaValidator(newHomeInitiateMigrationState, newHomeChannelId, ALICE_PK);
+        newHomeInitiateMigrationState = mutualSignStateBothWithEcdsaValidator(newHomeInitiateMigrationState, newHomeChannelId, ALICE_PK);
 
         // OPERATE state on NEW home chain after migration
         // After initiateMigration on NEW home, ledgers are swapped, so homeLedger becomes current chain
@@ -438,15 +413,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
                 nodeAllocation: 0,
                 nodeNetFlow: 450
             }),
-            nonHomeLedger: Ledger({
-                chainId: 0,
-                token: address(0),
-                decimals: 0,
-                userAllocation: 0,
-                userNetFlow: 0,
-                nodeAllocation: 0,
-                nodeNetFlow: 0
-            }),
+            nonHomeLedger: Ledger({ chainId: 0, token: address(0), decimals: 0, userAllocation: 0, userNetFlow: 0, nodeAllocation: 0, nodeNetFlow: 0 }),
             userSig: "",
             nodeSig: ""
         });
@@ -459,17 +426,10 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
-        verifyChannelData(
-            newHomeChannelId,
-            ChannelStatus.MIGRATING_IN,
-            initiateMigrationVersion,
-            0,
-            "newHomeInitiateMigrationState should be enforced"
-        );
+        verifyChannelData(newHomeChannelId, ChannelStatus.MIGRATING_IN, initiateMigrationVersion, 0, "newHomeInitiateMigrationState should be enforced");
 
         // Challenge with the same INITIATE_MIGRATION state (already enforced)
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeInitiateMigrationState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeInitiateMigrationState, NODE_PK);
 
         vm.prank(node);
         cHub.challengeChannel(newHomeChannelId, newHomeInitiateMigrationState, challengerSig, ParticipantIndex.NODE);
@@ -490,17 +450,10 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
-        verifyChannelData(
-            newHomeChannelId,
-            ChannelStatus.MIGRATING_IN,
-            initiateMigrationVersion,
-            0,
-            "newHomeInitiateMigrationState should be enforced"
-        );
+        verifyChannelData(newHomeChannelId, ChannelStatus.MIGRATING_IN, initiateMigrationVersion, 0, "newHomeInitiateMigrationState should be enforced");
 
         // Challenge with newer OPERATE state
-        bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeOperateState, NODE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeOperateState, NODE_PK);
 
         vm.prank(node);
         cHub.challengeChannel(newHomeChannelId, newHomeOperateState, challengerSig, ParticipantIndex.NODE);
@@ -513,12 +466,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             block.timestamp + CHALLENGE_DURATION,
             "newHomeOperateState should start a challenge"
         );
-        verifyChannelState(
-            newHomeChannelId,
-            [uint256(450), uint256(0)],
-            [int256(0), int256(450)],
-            "newHomeOperateState should be enforced"
-        );
+        verifyChannelState(newHomeChannelId, [uint256(450), uint256(0)], [int256(0), int256(450)], "newHomeOperateState should be enforced");
     }
 }
 // forge-lint: disable-end(unsafe-typecast)

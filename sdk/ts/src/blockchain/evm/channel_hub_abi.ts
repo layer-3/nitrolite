@@ -1465,6 +1465,13 @@ export const ChannelHubAbi = [
   },
   {
     type: 'function',
+    name: 'getChannelSubId',
+    inputs: [{ name: 'channelId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'uint48' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'getEscrowDepositData',
     inputs: [
       {

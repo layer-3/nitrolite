@@ -1,0 +1,22 @@
+environments:
+  sandbox-v1: {}
+  v1-rc: {}
+
+---
+
+releases:
+  - name: clearnode
+    namespace: clearnode-{{ .Environment.Name }}
+    chart: ./chart
+    installed: true
+    values:
+      - chart/config/{{ .Environment.Name }}/clearnode.yaml
+    set:
+      - name: image.tag
+        value: '{{ requiredEnv "IMAGE_TAG" }}'
+      - name: config.blockchains
+        file: chart/config/{{ .Environment.Name }}/blockchains.yaml
+      - name: config.assets
+        file: chart/config/{{ .Environment.Name }}/assets.yaml
+      - name: config.actionGateway
+        file: chart/config/{{ .Environment.Name }}/action_gateway.yaml

@@ -86,19 +86,60 @@ type AssetStore interface {
 
 // Channel lifecycle event handlers
 type ChannelHubEventHandler interface {
-	HandleHomeChannelCreated(context.Context, *HomeChannelCreatedEvent) error
-	HandleHomeChannelMigrated(context.Context, *HomeChannelMigratedEvent) error
-	HandleHomeChannelCheckpointed(context.Context, *HomeChannelCheckpointedEvent) error
-	HandleHomeChannelChallenged(context.Context, *HomeChannelChallengedEvent) error
-	HandleHomeChannelClosed(context.Context, *HomeChannelClosedEvent) error
-	HandleEscrowDepositInitiated(context.Context, *EscrowDepositInitiatedEvent) error
-	HandleEscrowDepositChallenged(context.Context, *EscrowDepositChallengedEvent) error
-	HandleEscrowDepositFinalized(context.Context, *EscrowDepositFinalizedEvent) error
-	HandleEscrowWithdrawalInitiated(context.Context, *EscrowWithdrawalInitiatedEvent) error
-	HandleEscrowWithdrawalChallenged(context.Context, *EscrowWithdrawalChallengedEvent) error
-	HandleEscrowWithdrawalFinalized(context.Context, *EscrowWithdrawalFinalizedEvent) error
+	HandleNodeBalanceUpdated(context.Context, ChannelHubEventHandlerStore, *NodeBalanceUpdatedEvent) error
+	HandleHomeChannelCreated(context.Context, ChannelHubEventHandlerStore, *HomeChannelCreatedEvent) error
+	HandleHomeChannelMigrated(context.Context, ChannelHubEventHandlerStore, *HomeChannelMigratedEvent) error
+	HandleHomeChannelCheckpointed(context.Context, ChannelHubEventHandlerStore, *HomeChannelCheckpointedEvent) error
+	HandleHomeChannelChallenged(context.Context, ChannelHubEventHandlerStore, *HomeChannelChallengedEvent) error
+	HandleHomeChannelClosed(context.Context, ChannelHubEventHandlerStore, *HomeChannelClosedEvent) error
+	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
+	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
+	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error
+	HandleEscrowWithdrawalInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalInitiatedEvent) error
+	HandleEscrowWithdrawalChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalChallengedEvent) error
+	HandleEscrowWithdrawalFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalFinalizedEvent) error
+}
+
+type ChannelHubEventHandlerStore interface {
+	// GetLastStateByChannelID retrieves the most recent state for a given channel.
+	// If signed is true, only returns states with both user and node signatures.
+	// Returns nil if no matching state exists.
+	GetLastStateByChannelID(channelID string, signed bool) (*State, error)
+
+	// GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
+	// Returns nil if the state with the specified version does not exist.
+	GetStateByChannelIDAndVersion(channelID string, version uint64) (*State, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	// The channel must already exist in the database.
+	UpdateChannel(channel Channel) error
+
+	// GetChannelByID retrieves a channel by its unique identifier.
+	// Returns nil if the channel does not exist.
+	GetChannelByID(channelID string) (*Channel, error)
+
+	// ScheduleCheckpoint schedules a checkpoint operation for a home channel state.
+	// This queues the state to be submitted on-chain to update the channel's on-chain state.
+	ScheduleCheckpoint(stateID string, chainID uint64) error
+
+	// ScheduleInitiateEscrowDeposit schedules an initiate for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowDeposit schedules a finalize for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleFinalizeEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowWithdrawal schedules a checkpoint for an escrow withdrawal operation.
+	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
+	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
 }
 
 type LockingContractEventHandler interface {
-	HandleUserLockedBalanceUpdated(context.Context, *UserLockedBalanceUpdatedEvent) error
+	HandleUserLockedBalanceUpdated(context.Context, LockingContractEventHandlerStore, *UserLockedBalanceUpdatedEvent) error
+}
+
+type LockingContractEventHandlerStore interface {
+	// UpdateUserStaked updates the total staked amount for a user on a specific blockchain.
+	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
 }

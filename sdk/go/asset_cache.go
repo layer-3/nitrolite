@@ -84,6 +84,29 @@ func (s *clientAssetStore) GetTokenDecimals(blockchainID uint64, tokenAddress st
 	return 0, fmt.Errorf("token %s on blockchain %d not found", tokenAddress, blockchainID)
 }
 
+// GetTokenAsset returns the asset for a specific token on a blockchain.
+func (s *clientAssetStore) GetTokenAsset(blockchainID uint64, tokenAddress string) (string, error) {
+	// Fetch all assets if cache is empty
+	if len(s.cache) == 0 {
+		if err := s.populateCache(); err != nil {
+			return "", err
+		}
+	}
+
+	// Search through all assets for matching token
+	tokenAddressLower := strings.ToLower(tokenAddress)
+	for _, asset := range s.cache {
+		for _, token := range asset.Tokens {
+			if token.BlockchainID == blockchainID &&
+				strings.EqualFold(token.Address, tokenAddressLower) {
+				return asset.Symbol, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("token %s on blockchain %d not found", tokenAddress, blockchainID)
+}
+
 // GetTokenAddress returns the token address for a given asset on a specific blockchain.
 func (s *clientAssetStore) GetTokenAddress(asset string, blockchainID uint64) (string, error) {
 	key := strings.ToLower(asset)

@@ -4,6 +4,13 @@ import "github.com/shopspring/decimal"
 
 // On-chain events
 
+// NodeBalanceUpdatedEvent represents the NodeBalanceUpdated event
+type NodeBalanceUpdatedEvent struct {
+	BlockchainID uint64          `json:"blockchain_id"`
+	Asset        string          `json:"asset"`
+	Balance      decimal.Decimal `json:"balance"`
+}
+
 // HomeChannelCreatedEvent represents the ChannelCreated event
 type HomeChannelCreatedEvent channelEvent
 

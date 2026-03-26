@@ -554,15 +554,20 @@ contract ChannelHub is IVault, ReentrancyGuard {
         State memory prevState = meta.lastState;
         require(candidate.version >= prevState.version, ChallengerVersionTooLow());
 
-        address user = def.user;
-        address node = def.node;
+        // removed due to stack too deep error
+        // address user = def.user;
+        // address node = def.node;
 
         // If version is higher, process the new state
         if (candidate.version > prevState.version) {
-            _validateSignatures(channelId, candidate, user, node, def.approvedSignatureValidators);
+            // Cannot challenge with a CLOSE intent, use `closeChannel(...)` function instead
+            require(candidate.intent != StateIntent.CLOSE, IncorrectStateIntent());
+            require(status != ChannelStatus.OPERATING || candidate.intent != StateIntent.FINALIZE_MIGRATION, IncorrectStateIntent());
+
+            _validateSignatures(channelId, candidate, def.user, def.node, def.approvedSignatureValidators);
 
             ChannelEngine.TransitionContext memory ctx =
-                _buildChannelContext(channelId, _nodeBalances[node][candidate.homeLedger.token]);
+                _buildChannelContext(channelId, _nodeBalances[def.node][candidate.homeLedger.token]);
             ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
             _applyTransitionEffects(channelId, def, candidate, effects);
@@ -570,8 +575,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // else: challenging with same version, state already processed
 
         (ISignatureValidator validator, bytes calldata sigData) =
-            _extractValidator(challengerSig, node, def.approvedSignatureValidators);
-        _validateChallengerSignature(channelId, candidate, sigData, validator, user, node, challengerIdx);
+            _extractValidator(challengerSig, def.node, def.approvedSignatureValidators);
+        _validateChallengerSignature(channelId, candidate, sigData, validator, def.user, def.node, challengerIdx);
 
         meta.status = ChannelStatus.DISPUTED;
         uint64 challengeExpiry = uint64(block.timestamp) + def.challengeDuration;

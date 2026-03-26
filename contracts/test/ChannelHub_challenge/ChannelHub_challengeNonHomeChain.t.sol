@@ -361,19 +361,17 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     Test cases:
     - a channel in Migrating_in status (empty channel after being called with `initiateMigration`) can be challenged with it
     - a channel in Migrating_in status (empty channel after being called with `initiateMigration`) can be challenged with a newer Operation state
+    - a channel in Migrating_in status can be challenged with FINALIZE_MIGRATION intent (with version+1)
     */
+
+    // New channel for testing NEW home chain behavior
+    ChannelDefinition newHomeDef;
+    bytes32 newHomeChannelId;
 
     uint64 initiateMigrationVersion = 1;
     State initiateMigrationState;
     uint64 finalizeMigrationVersion = 2;
     State finalizeMigrationState;
-    uint64 operateAfterMigrationInitVersion = 2;
-    State operateAfterMigrationInitState;
-
-    // New channel for testing NEW home chain behavior
-    ChannelDefinition newHomeDef;
-    bytes32 newHomeChannelId;
-    State newHomeInitiateMigrationState;
     uint64 newHomeOperateVersion = 3;
     State newHomeOperateState;
 
@@ -394,7 +392,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         // INITIATE_MIGRATION state for NEW home chain (migration IN)
         // homeLedger = OLD home chain (NON_HOME_CHAIN_ID)
         // nonHomeLedger = NEW home chain (current chain)
-        newHomeInitiateMigrationState = State({
+        initiateMigrationState = State({
             version: initiateMigrationVersion,
             intent: StateIntent.INITIATE_MIGRATION,
             metadata: bytes32(0),
@@ -419,8 +417,37 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             userSig: "",
             nodeSig: ""
         });
-        newHomeInitiateMigrationState =
-            mutualSignStateBothWithEcdsaValidator(newHomeInitiateMigrationState, newHomeChannelId, ALICE_PK);
+        initiateMigrationState =
+            mutualSignStateBothWithEcdsaValidator(initiateMigrationState, newHomeChannelId, ALICE_PK);
+
+        finalizeMigrationState = State({
+            version: finalizeMigrationVersion,
+            intent: StateIntent.FINALIZE_MIGRATION,
+            metadata: bytes32(0),
+            nonHomeLedger: Ledger({
+                chainId: NON_HOME_CHAIN_ID,
+                token: NON_HOME_TOKEN,
+                decimals: 18,
+                userAllocation: 0,
+                userNetFlow: 500,
+                nodeAllocation: 0,
+                nodeNetFlow: -500
+            }),
+            homeLedger: Ledger({
+                chainId: uint64(block.chainid),
+                token: address(token),
+                decimals: 18,
+                userAllocation: 500,
+                userNetFlow: 0,
+                nodeAllocation: 0,
+                nodeNetFlow: 500
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
+        finalizeMigrationState = mutualSignStateBothWithEcdsaValidator(
+            finalizeMigrationState, newHomeChannelId, ALICE_PK
+        );
 
         // OPERATE state on NEW home chain after migration
         // After initiateMigration on NEW home, ledgers are swapped, so homeLedger becomes current chain
@@ -456,7 +483,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     function test_challenge_newHomeChain_withInitiateMigration_asExisting() public {
         // Initiate migration IN on NEW home chain
         vm.prank(alice);
-        cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
         verifyChannelData(
@@ -469,10 +496,10 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
 
         // Challenge with the same INITIATE_MIGRATION state (already enforced)
         bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeInitiateMigrationState, NODE_PK);
+            signChallengeEip191WithEcdsaValidator(newHomeChannelId, initiateMigrationState, NODE_PK);
 
         vm.prank(node);
-        cHub.challengeChannel(newHomeChannelId, newHomeInitiateMigrationState, challengerSig, ParticipantIndex.NODE);
+        cHub.challengeChannel(newHomeChannelId, initiateMigrationState, challengerSig, ParticipantIndex.NODE);
 
         // Verify channel is DISPUTED and state is still version 0
         verifyChannelData(
@@ -487,7 +514,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     function test_challenge_newHomeChain_withOperate_inMigratingIn() public {
         // Initiate migration IN on NEW home chain
         vm.prank(alice);
-        cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
         verifyChannelData(
@@ -518,6 +545,43 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             [uint256(450), uint256(0)],
             [int256(0), int256(450)],
             "newHomeOperateState should be enforced"
+        );
+    }
+
+    function test_revert_challenge_newHomeChain_withFinalizeMigration() public {
+        // Initiate migration IN on NEW home chain
+        vm.prank(alice);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
+
+        // Verify channel is in MIGRATING_IN status
+        verifyChannelData(
+            newHomeChannelId,
+            ChannelStatus.MIGRATING_IN,
+            initiateMigrationVersion,
+            0,
+            "newHomeInitiateMigrationState should be enforced"
+        );
+
+        // Challenge with newer FINALIZE_MIGRATION state
+        bytes memory challengerSig =
+            signChallengeEip191WithEcdsaValidator(newHomeChannelId, finalizeMigrationState, NODE_PK);
+
+        vm.prank(node);
+        cHub.challengeChannel(newHomeChannelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
+
+        // Verify channel is DISPUTED and finalizeMigrationState was enforced
+        verifyChannelData(
+            newHomeChannelId,
+            ChannelStatus.DISPUTED,
+            finalizeMigrationVersion,
+            block.timestamp + CHALLENGE_DURATION,
+            "finalizeMigrationState should start a challenge"
+        );
+        verifyChannelState(
+            newHomeChannelId,
+            [uint256(500), uint256(0)],
+            [int256(0), int256(500)],
+            "finalizeMigrationState should be enforced"
         );
     }
 }

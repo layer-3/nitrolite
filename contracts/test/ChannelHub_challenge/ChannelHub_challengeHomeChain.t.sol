@@ -29,6 +29,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
     Test cases:
     - a channel can be challenged with a newer state, which is enforced during challenge
     - a channel can be challenged with existing state, which is NOT enforced the second time during challenge
+    - a channel can NOT be challenged with CLOSE intent (must use closeChannel function for that)
     - challenge is finalized (funds can be withdrawn) after `challengeExpireAt` time expires
     - challenged "operating" state can be resolved with a newer state until `challengeExpireAt` time has NOT passed
     - challenged state can NOT be resolved after `challengeExpireAt` time has passed
@@ -106,6 +107,18 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
             [int256(1000), int256(-100)],
             "State V1 should be enforced during challenge"
         );
+    }
+
+    function test_revert_challengeWithCloseIntent() public {
+        State memory closeState =
+            nextState(initState, StateIntent.CLOSE, [uint256(0), uint256(0)], [int256(0), int256(0)]);
+        closeState = mutualSignStateBothWithEcdsaValidator(closeState, channelId, ALICE_PK);
+
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, closeState, NODE_PK);
+
+        vm.prank(node);
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        cHub.challengeChannel(channelId, closeState, challengerSig, ParticipantIndex.NODE);
     }
 
     function test_challengeFinalization_afterTimeout() public {
@@ -805,7 +818,7 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
     - a channel challenged with "InitiateMigration" state can be resolved with "operation" state
         (although this should not happen in practice since the node should finalize migration instead of resolving with an older state, but just to be safe)
     - a channel can NOT be challenged when in MIGRATED_OUT status
-    - a channel can NOT be challenged in Operating status with finalize migration state (use `finalizeMigration` function instead)
+    - a channel can NOT be challenged with FINALIZE_MIGRATION intent on home chain (must use finalizeMigration function for that)
     */
 
     uint64 initiateMigrationVersion = 1;
@@ -969,15 +982,12 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         cHub.challengeChannel(channelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
     }
 
-    function test_revert_challenge_operating_withFinalizeMigration() public {
-        // Channel is in OPERATING status
-        // Try to challenge with FINALIZE_MIGRATION without INITIATE_MIGRATION first (should fail)
+
+    function test_revert_challengeWithFinalizeMigrationIntent() public {
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, finalizeMigrationState, NODE_PK);
 
         vm.prank(node);
-        // NOTE: IncorrectHomeChainId check happens before IncorrectPreviousStateIntent check
-        // finalizeMigrationState has swapped ledgers, so homeLedger.chainId != block.chainid
-        vm.expectRevert(ChannelEngine.IncorrectHomeChainId.selector);
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
         cHub.challengeChannel(channelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
     }
 }

@@ -228,11 +228,15 @@ Challenges protect against:
 
 ### Challenge rules
 
-* Only channels in `OPERATING` can be challenged.
+* Only channels in `OPERATING` or `MIGRATING_IN` can be challenged.
 * A challenge references a signed state.
 * If the challenged state is **older than the latest signed state**:
 
   * the newest valid signed state **must be enforced first**, regardless of its intent.
+* The following intents **cannot** be submitted via `challengeChannel`:
+
+  * `CLOSE` — channel closure is a terminal operation; enforcing it leaves no live channel to dispute. Parties holding a valid CLOSE state should call `closeChannel` directly instead.
+  * `FINALIZE_MIGRATION` on the **old home chain** (channel status `OPERATING`/`DISPUTED`) — this would release the node's funds and move the channel to `MIGRATED_OUT`, which is incompatible with entering `DISPUTED` state.
 
 Invariant:
 

@@ -11,7 +11,7 @@
  * lightweight placeholders while parse* helpers normalize response shapes.
  */
 
-import type { MessageSigner, RPCResponse, NitroliteRPCMessage } from './types';
+import type { MessageSigner, RPCResponse, NitroliteRPCMessage, GetLedgerTransactionsFilters } from './types';
 
 // ---------------------------------------------------------------------------
 // parseAnyRPCResponse -- pass-through
@@ -128,3 +128,76 @@ export const createPingMessage = noop;
 
 export const convertRPCToClientChannel = (ch: any) => ch;
 export const convertRPCToClientState = (st: any, _sig?: string) => st;
+
+// ---------------------------------------------------------------------------
+// Additional parse*Response helpers (v0.5.3 compat)
+// ---------------------------------------------------------------------------
+
+export const parseChannelUpdateResponse = (raw: string) => {
+    const d = JSON.parse(raw);
+    return { method: d?.res?.[1] ?? '', params: d?.res?.[2] ?? {} };
+};
+
+export const parseTransferResponse = (raw: string) => {
+    const d = JSON.parse(raw);
+    return { params: { transactions: d?.res?.[2]?.transactions ?? [] } };
+};
+
+export const parseGetLedgerTransactionsResponse = (raw: string) => {
+    const d = JSON.parse(raw);
+    return { params: { ledgerTransactions: d?.res?.[2]?.ledgerTransactions ?? [] } };
+};
+
+// ---------------------------------------------------------------------------
+// Additional create*Message helpers (v0.5.3 compat)
+// ---------------------------------------------------------------------------
+
+function _generateRequestId(): number {
+    return Math.floor(Date.now() + Math.random() * 10000);
+}
+
+/** Synchronous — integration tests call this without await. */
+export function createGetLedgerTransactionsMessageV2(
+    accountId: string,
+    filters?: GetLedgerTransactionsFilters,
+): string {
+    return JSON.stringify({
+        req: [_generateRequestId(), 'get_ledger_transactions', { account_id: accountId, ...filters }, Date.now()],
+        sig: '0x',
+    });
+}
+
+/** Synchronous — integration tests call this without await. */
+export function createGetAppSessionsMessageV2(accountId: string): string {
+    return JSON.stringify({
+        req: [_generateRequestId(), 'get_app_sessions', { account_id: accountId }, Date.now()],
+        sig: '0x',
+    });
+}
+
+export async function createCleanupSessionKeyCacheMessage(
+    signer: MessageSigner,
+): Promise<string> {
+    const request = NitroliteRPC.createRequest({
+        requestId: _generateRequestId(),
+        method: 'cleanup_session_key_cache',
+        params: {},
+        timestamp: Date.now(),
+    });
+    const signed = await NitroliteRPC.signRequestMessage(request, signer);
+    return JSON.stringify(signed);
+}
+
+export async function createRevokeSessionKeyMessage(
+    signer: MessageSigner,
+    sessionKeyAddress: string,
+): Promise<string> {
+    const request = NitroliteRPC.createRequest({
+        requestId: _generateRequestId(),
+        method: 'revoke_session_key',
+        params: { session_key: sessionKeyAddress },
+        timestamp: Date.now(),
+    });
+    const signed = await NitroliteRPC.signRequestMessage(request, signer);
+    return JSON.stringify(signed);
+}

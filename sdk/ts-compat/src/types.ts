@@ -30,6 +30,10 @@ export enum RPCMethod {
     Error = 'error',
     GetLedgerTransactions = 'get_ledger_transactions',
     TransferNotification = 'tr',
+    Pong = 'pong',
+    RevokeSessionKey = 'revoke_session_key',
+    CleanupSessionKeyCache = 'cleanup_session_key_cache',
+    GetSessionKeys = 'get_session_keys',
 }
 
 export enum RPCChannelStatus {
@@ -390,3 +394,46 @@ export const EIP712AuthTypes = {
         { name: 'amount', type: 'string' },
     ],
 } as const;
+
+// =============================================================================
+// v0.5.3 compat aliases & additional types used by integration tests
+// =============================================================================
+
+/** Alias for NitroliteRPCRequest — the v0.5.3 SDK exposed this as RPCData. */
+export type RPCData = NitroliteRPCRequest;
+
+export interface TransferRequestParams {
+    destination: string;
+    allocations: TransferAllocation[];
+}
+
+export interface ResizeChannelParams {
+    resizeState: {
+        channelId: string;
+        serverSignature: string;
+        data: Hex;
+        version: bigint;
+        [key: string]: any;
+    };
+    proofStates: State[];
+}
+
+export interface RPCChannelOperation {
+    channelId?: string;
+    state: {
+        intent: number;
+        version: number;
+        stateData: string;
+        allocations: any[];
+        [key: string]: any;
+    };
+    serverSignature: string;
+}
+
+export interface GetLedgerTransactionsFilters {
+    asset?: string;
+    tx_type?: RPCTxType;
+    offset?: number;
+    limit?: number;
+    sort?: 'asc' | 'desc';
+}

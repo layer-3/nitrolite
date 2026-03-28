@@ -6,6 +6,8 @@ This guide covers off-chain operations when migrating from v0.5.3 to the compat 
 
 v1.0.0 handles authentication internally when using `NitroliteClient`. For legacy WebSocket-auth code paths, the compat layer keeps `createAuthRequestMessage`, `createAuthVerifyMessage`, `createAuthVerifyMessageWithJWT`, and `createEIP712AuthMessageSigner` available.
 
+The compat layer also exports `parseAuthChallengeResponse` and `parseAuthVerifyResponse` for parsing raw WebSocket auth responses, plus `generateRequestId()` and `getCurrentTimestamp()` utilities.
+
 ## 2. App Sessions
 
 ### List
@@ -49,8 +51,10 @@ await sendRequest(msg);
 
 ## 4. Ledger Queries
 
-**Before:** `createGetLedgerBalancesMessage` / `createGetLedgerEntriesMessage` + send + parse  
+**Before:** `createGetLedgerBalancesMessage` / `createGetLedgerEntriesMessage` + send + parse
 **After:** `client.getBalances()`, `client.getLedgerEntries()`
+
+For ledger transactions, use `createGetLedgerTransactionsMessageV2(accountId, filters?)` and `parseGetLedgerTransactionsResponse(raw)` if you need the raw create-send-parse pattern.
 
 ## 5. Event Polling
 

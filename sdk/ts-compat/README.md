@@ -393,7 +393,13 @@ createCloseChannelMessage, parseCloseChannelResponse,
 createResizeChannelMessage, parseResizeChannelResponse,
 createPingMessage,
 convertRPCToClientChannel, convertRPCToClientState,
-parseAnyRPCResponse, NitroliteRPC
+parseAnyRPCResponse, NitroliteRPC,
+
+// Added in v1.2.1:
+parseChannelUpdateResponse, parseTransferResponse,
+parseGetLedgerTransactionsResponse, createGetLedgerTransactionsMessageV2,
+createGetAppSessionsMessageV2, createCleanupSessionKeyCacheMessage,
+createRevokeSessionKeyMessage,
 ```
 
 ## Auth Helpers
@@ -405,6 +411,10 @@ createAuthRequestMessage(params)            // builds auth_request RPC message
 createAuthVerifyMessage(signer, response)   // signs and builds auth_verify RPC message
 createAuthVerifyMessageWithJWT(jwt)         // builds JWT-based auth_verify RPC message
 createEIP712AuthMessageSigner(wallet, ...)  // creates EIP-712 signer for auth_verify challenge
+parseAuthChallengeResponse(raw)             // parses auth_challenge response
+parseAuthVerifyResponse(raw)                // parses auth_verify response
+generateRequestId()                         // generates a unique request ID
+getCurrentTimestamp()                       // returns Date.now()
 ```
 
 ## Types Reference
@@ -413,19 +423,24 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 
 ### Enums
 
-- `RPCMethod` — RPC method names (`Ping`, `GetConfig`, `GetChannels`, etc.)
+- `RPCMethod` — RPC method names (`Ping`, `GetConfig`, `GetChannels`, `Pong`, `RevokeSessionKey`, `CleanupSessionKeyCache`, `GetSessionKeys`, etc.)
 - `RPCChannelStatus` — Channel status values (`Open`, `Closed`, `Resizing`, `Challenged`)
 
 ### Wire Types
 
-- `MessageSigner` — `(payload: Uint8Array) => Promise<string>`
-- `NitroliteRPCMessage` — `{ req: [number, string, any, number]; sig: string }`
+- `MessageSigner` — `(payload: MessageSignerPayload) => Promise<string>`
+- `MessageSignerPayload` — `Uint8Array | NitroliteRPCRequest`
+- `NitroliteRPCRequest` — `[number, string, any, number]`
+- `NitroliteRPCMessage` — `{ req: NitroliteRPCRequest; sig: string }`
+- `RPCData` — Alias for `NitroliteRPCRequest` (v0.5.3 compat)
 - `RPCResponse` — `{ requestId, method, params }`
 - `RPCBalance` — `{ asset, amount }`
 - `RPCAsset` — `{ token, chainId, symbol, decimals }`
 - `RPCChannelUpdate` — Full channel update payload
 - `RPCLedgerEntry` — Ledger transaction entry
 - `AccountID` — String alias for account identifiers
+- `TransferRequestParams` — `{ destination, allocations }`
+- `GetLedgerTransactionsFilters` — Optional filters for ledger transaction queries
 
 ### Channel Operation Types
 
@@ -435,6 +450,8 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 - `ChannelData` — `{ lastValidState, stateData }`
 - `CreateChannelResponseParams`, `CloseChannelResponseParams`
 - `ResizeChannelRequestParams`
+- `ResizeChannelParams` — On-chain resize operation parameters
+- `RPCChannelOperation` — `{ channelId?, state, serverSignature }`
 - `TransferAllocation` — `{ asset, amount }`
 
 ### App Session Types

@@ -17,6 +17,10 @@ export {
     createAuthVerifyMessage,
     createAuthVerifyMessageWithJWT,
     createEIP712AuthMessageSigner,
+    generateRequestId,
+    getCurrentTimestamp,
+    parseAuthChallengeResponse,
+    parseAuthVerifyResponse,
     type AuthRequestParams,
 } from './auth';
 
@@ -61,6 +65,13 @@ export {
     createPingMessage,
     convertRPCToClientChannel,
     convertRPCToClientState,
+    parseChannelUpdateResponse,
+    parseTransferResponse,
+    parseGetLedgerTransactionsResponse,
+    createGetLedgerTransactionsMessageV2,
+    createGetAppSessionsMessageV2,
+    createCleanupSessionKeyCacheMessage,
+    createRevokeSessionKeyMessage,
 } from './rpc';
 
 // --- Types ---
@@ -104,6 +115,13 @@ export {
     type AuthChallengeResponse,
     type TransferNotificationResponseParams,
     type LedgerAccountType,
+    type RPCData,
+    type TransferRequestParams,
+    type ResizeChannelParams,
+    type RPCChannelOperation,
+    type GetLedgerTransactionsFilters,
+    type MessageSignerPayload,
+    type NitroliteRPCRequest,
 } from './types';
 
 // --- Clearnode response types (used by consuming apps' stores) ---
@@ -132,6 +150,10 @@ export { EventPoller, type EventPollerCallbacks } from './events';
 
 // --- Config ---
 export { buildClientOptions, blockchainRPCsFromEnv, type CompatClientConfig } from './config';
+
+// --- Re-exported from @yellow-org/sdk for integration-test compatibility ---
+// Type-only re-export: safe for SSR (erased at compile time, no eager module evaluation).
+export type { StateSigner } from '@yellow-org/sdk';
 
 // NOTE: SDK classes (Client, ChannelDefaultSigner, etc.) are intentionally NOT
 // re-exported here. Barrel re-exports from '@yellow-org/sdk' trigger eager

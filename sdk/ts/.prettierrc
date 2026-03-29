@@ -12,7 +12,7 @@
         }
     ],
     "jsxSingleQuote": false,
-    "printWidth": 240,
+    "printWidth": 100,
     "endOfLine": "auto",
     "semi": true,
     "tslintIntegration": true,

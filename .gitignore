@@ -1,1 +1,12 @@
 node_modules/
+.prettierrc
+.prettierignore
+.vscode/
+.prettierrc
+.prettierignore
+.vscode/
+.idea/
+*.swp
+.DS_Store
+contracts/foundry.toml
+package-lock.json

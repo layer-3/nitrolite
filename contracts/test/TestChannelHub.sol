@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.30;
 
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
@@ -9,7 +9,7 @@ import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
  * @notice Test harness contract that exposes internal ChannelHub functions for testing
  */
 contract TestChannelHub is ChannelHub {
-    uint48 constant subId = 0;
+    uint48 constant SUB_ID = 0;
 
     constructor(ISignatureValidator _defaultSigValidator) ChannelHub(_defaultSigValidator) {}
 
@@ -23,14 +23,14 @@ contract TestChannelHub is ChannelHub {
      * @notice Exposed version of _pushFunds for testing
      */
     function exposed_pushFunds(address to, address token, uint256 amount) external payable {
-        _pushFunds(subId, to, token, amount);
+        _pushFunds(SUB_ID, to, token, amount);
     }
 
     /**
      * @notice Exposed version of _pullFunds for testing
      */
     function exposed_pullFunds(address from, address token, uint256 amount) external payable {
-        _pullFunds(from, subId, token, amount);
+        _pullFunds(from, SUB_ID, token, amount);
     }
 
     /**

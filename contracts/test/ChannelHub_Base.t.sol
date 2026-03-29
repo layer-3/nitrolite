@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
@@ -60,9 +60,7 @@ contract ChannelHubTest_Base is Test {
         vm.stopPrank();
 
         // Register SessionKeyValidator for the node
-        bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
-            vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK
-        );
+        bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK);
         cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 
         vm.prank(alice);
@@ -72,36 +70,25 @@ contract ChannelHubTest_Base is Test {
         token.approve(address(cHub), INITIAL_BALANCE);
     }
 
-    function nextState(State memory state, StateIntent intent, uint256[2] memory allocations, int256[2] memory netFlows)
-        internal
-        pure
-        returns (State memory)
-    {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: 0,
-                token: address(0),
-                decimals: 0,
-                userAllocation: 0,
-                userNetFlow: 0,
-                nodeAllocation: 0,
-                nodeNetFlow: 0
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
+    function nextState(State memory state, StateIntent intent, uint256[2] memory allocations, int256[2] memory netFlows) internal pure returns (State memory) {
+        return
+            State({
+                version: state.version + 1,
+                intent: intent,
+                metadata: state.metadata,
+                homeLedger: Ledger({
+                    chainId: state.homeLedger.chainId,
+                    token: state.homeLedger.token,
+                    decimals: state.homeLedger.decimals,
+                    userAllocation: allocations[0],
+                    userNetFlow: netFlows[0],
+                    nodeAllocation: allocations[1],
+                    nodeNetFlow: netFlows[1]
+                }),
+                nonHomeLedger: Ledger({chainId: 0, token: address(0), decimals: 0, userAllocation: 0, userNetFlow: 0, nodeAllocation: 0, nodeNetFlow: 0}),
+                userSig: "",
+                nodeSig: ""
+            });
     }
 
     function nextState(
@@ -114,31 +101,32 @@ contract ChannelHubTest_Base is Test {
         uint256[2] memory nonHomeAllocations,
         int256[2] memory nonHomeNetFlows
     ) internal pure returns (State memory) {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: nonHomeChainId,
-                token: nonHomeChainToken,
-                decimals: 18,
-                userAllocation: nonHomeAllocations[0],
-                userNetFlow: nonHomeNetFlows[0],
-                nodeAllocation: nonHomeAllocations[1],
-                nodeNetFlow: nonHomeNetFlows[1]
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
+        return
+            State({
+                version: state.version + 1,
+                intent: intent,
+                metadata: state.metadata,
+                homeLedger: Ledger({
+                    chainId: state.homeLedger.chainId,
+                    token: state.homeLedger.token,
+                    decimals: state.homeLedger.decimals,
+                    userAllocation: allocations[0],
+                    userNetFlow: netFlows[0],
+                    nodeAllocation: allocations[1],
+                    nodeNetFlow: netFlows[1]
+                }),
+                nonHomeLedger: Ledger({
+                    chainId: nonHomeChainId,
+                    token: nonHomeChainToken,
+                    decimals: 18,
+                    userAllocation: nonHomeAllocations[0],
+                    userNetFlow: nonHomeNetFlows[0],
+                    nodeAllocation: nonHomeAllocations[1],
+                    nodeNetFlow: nonHomeNetFlows[1]
+                }),
+                userSig: "",
+                nodeSig: ""
+            });
     }
 
     function nextState(
@@ -152,38 +140,35 @@ contract ChannelHubTest_Base is Test {
         uint256[2] memory nonHomeAllocations,
         int256[2] memory nonHomeNetFlows
     ) internal pure returns (State memory) {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: nonHomeChainId,
-                token: nonHomeChainToken,
-                decimals: nonHomeDecimals,
-                userAllocation: nonHomeAllocations[0],
-                userNetFlow: nonHomeNetFlows[0],
-                nodeAllocation: nonHomeAllocations[1],
-                nodeNetFlow: nonHomeNetFlows[1]
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
+        return
+            State({
+                version: state.version + 1,
+                intent: intent,
+                metadata: state.metadata,
+                homeLedger: Ledger({
+                    chainId: state.homeLedger.chainId,
+                    token: state.homeLedger.token,
+                    decimals: state.homeLedger.decimals,
+                    userAllocation: allocations[0],
+                    userNetFlow: netFlows[0],
+                    nodeAllocation: allocations[1],
+                    nodeNetFlow: netFlows[1]
+                }),
+                nonHomeLedger: Ledger({
+                    chainId: nonHomeChainId,
+                    token: nonHomeChainToken,
+                    decimals: nonHomeDecimals,
+                    userAllocation: nonHomeAllocations[0],
+                    userNetFlow: nonHomeNetFlows[0],
+                    nodeAllocation: nonHomeAllocations[1],
+                    nodeNetFlow: nonHomeNetFlows[1]
+                }),
+                userSig: "",
+                nodeSig: ""
+            });
     }
 
-    function mutualSignStateBothWithEcdsaValidator(State memory state, bytes32 channelId, uint256 userPk)
-        internal
-        pure
-        returns (State memory)
-    {
+    function mutualSignStateBothWithEcdsaValidator(State memory state, bytes32 channelId, uint256 userPk) internal pure returns (State memory) {
         state.userSig = TestUtils.signStateEip191WithEcdsaValidator(vm, channelId, state, userPk);
         state.nodeSig = TestUtils.signStateEip191WithEcdsaValidator(vm, channelId, state, NODE_PK);
         return state;
@@ -200,11 +185,7 @@ contract ChannelHubTest_Base is Test {
         return state;
     }
 
-    function signChallengeEip191WithEcdsaValidator(bytes32 channelId_, State memory state, uint256 privateKey)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function signChallengeEip191WithEcdsaValidator(bytes32 channelId_, State memory state, uint256 privateKey) internal pure returns (bytes memory) {
         bytes memory signingData = Utils.toSigningData(state);
         bytes memory challengerSigningData = abi.encodePacked(signingData, "challenge");
         bytes memory message = Utils.pack(channelId_, challengerSigningData);
@@ -219,31 +200,21 @@ contract ChannelHubTest_Base is Test {
         uint256 expectedChallengeExpiry,
         string memory description
     ) internal view {
-        (ChannelStatus status,, State memory latestState, uint256 challengeExpiry,) = cHub.getChannelData(channelId);
+        (ChannelStatus status, , State memory latestState, uint256 challengeExpiry, ) = cHub.getChannelData(channelId);
         assertEq(uint8(status), uint8(expectedStatus), string.concat(description, ": Channel status: "));
         assertEq(latestState.version, expectedVersion, string.concat(description, ": Channel version: "));
         assertEq(challengeExpiry, expectedChallengeExpiry, string.concat(description, ": Challenge expiry: "));
     }
 
-    function verifyChannelState(
-        bytes32 channelId,
-        uint256[2] memory allocations,
-        int256[2] memory netFlows,
-        string memory description
-    ) internal view {
-        (,, State memory latestState,,) = cHub.getChannelData(channelId);
-        assertEq(
-            latestState.homeLedger.userAllocation, allocations[0], string.concat(description, ": User allocation: ")
-        );
+    function verifyChannelState(bytes32 channelId, uint256[2] memory allocations, int256[2] memory netFlows, string memory description) internal view {
+        (, , State memory latestState, , ) = cHub.getChannelData(channelId);
+        assertEq(latestState.homeLedger.userAllocation, allocations[0], string.concat(description, ": User allocation: "));
         assertEq(latestState.homeLedger.userNetFlow, netFlows[0], string.concat(description, ": User net flow: "));
-        assertEq(
-            latestState.homeLedger.nodeAllocation, allocations[1], string.concat(description, ": Node allocation: ")
-        );
+        assertEq(latestState.homeLedger.nodeAllocation, allocations[1], string.concat(description, ": Node allocation: "));
         assertEq(latestState.homeLedger.nodeNetFlow, netFlows[1], string.concat(description, ": Node net flow: "));
 
         uint256 nodeBalance = cHub.getAccountBalance(node, address(token), SUB_ID_0);
-        uint256 expectedNodeBalance =
-            netFlows[1] < 0 ? INITIAL_BALANCE + uint256(-netFlows[1]) : INITIAL_BALANCE - uint256(netFlows[1]);
+        uint256 expectedNodeBalance = netFlows[1] < 0 ? INITIAL_BALANCE + uint256(-netFlows[1]) : INITIAL_BALANCE - uint256(netFlows[1]);
         assertEq(nodeBalance, expectedNodeBalance, string.concat(description, ": Node balance: "));
     }
 }

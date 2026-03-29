@@ -1,6 +1,12 @@
 import { Address, Hex } from 'viem';
 import Decimal from 'decimal.js';
-import { State, ChannelDefinition, HomeChannelDataResponse, EscrowDepositDataResponse, EscrowWithdrawalDataResponse } from './types';
+import {
+  State,
+  ChannelDefinition,
+  HomeChannelDataResponse,
+  EscrowDepositDataResponse,
+  EscrowWithdrawalDataResponse,
+} from './types';
 import {
   HomeChannelCreatedEvent,
   HomeChannelMigratedEvent,
@@ -47,6 +53,19 @@ export interface Client {
    */
   getAccountsBalances(accounts: Address[], tokens: Address[]): Promise<Decimal[][]>;
 
+  /**
+   * Get parametric token sub balances for multiple accounts and subIds
+   * @param accounts - Array of account addresses
+   * @param token - Parametric token address
+   * @param subIds - Array of subaccount IDs
+   * @returns 2D array of balances [account][token]
+   */
+  getAccountsSubBalances(
+    accounts: Address[],
+    token: Address,
+    subIds: number[],
+  ): Promise<Decimal[][]>;
+
   // ========= Getters - Token Balance & Approval =========
 
   /**
@@ -69,8 +88,9 @@ export interface Client {
   /**
    * Get the node's balance for a specific token
    * @param token - Token address
+   * @param subId - Subaccount ID
    */
-  getNodeBalance(token: Address): Promise<Decimal>;
+  getNodeBalance(token: Address, subId: number): Promise<Decimal>;
 
   /**
    * Get all open channel IDs for a user
@@ -174,7 +194,11 @@ export interface Client {
    * @param challengerIdx - Challenger participant index
    * @returns Transaction hash
    */
-  challengeEscrowDeposit(candidate: State, challengerSig: Uint8Array, challengerIdx: number): Promise<Hex>;
+  challengeEscrowDeposit(
+    candidate: State,
+    challengerSig: Uint8Array,
+    challengerIdx: number,
+  ): Promise<Hex>;
 
   /**
    * Finalize escrow deposit
@@ -200,7 +224,11 @@ export interface Client {
    * @param challengerIdx - Challenger participant index
    * @returns Transaction hash
    */
-  challengeEscrowWithdrawal(candidate: State, challengerSig: Uint8Array, challengerIdx: number): Promise<Hex>;
+  challengeEscrowWithdrawal(
+    candidate: State,
+    challengerSig: Uint8Array,
+    challengerIdx: number,
+  ): Promise<Hex>;
 
   /**
    * Finalize escrow withdrawal

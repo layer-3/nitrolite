@@ -8,7 +8,7 @@ export const ParametricTokenAbi = [
     type: 'function',
     name: 'convertToSuper',
     inputs: [{ name: 'account', type: 'address' }],
-    outputs: [],
+    outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable',
   },
   {

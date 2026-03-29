@@ -334,7 +334,12 @@ export function newVoidState(asset: string, userWallet: Address): State {
 /**
  * NewTransition creates a new Transition instance
  */
-export function newTransition(type: TransitionType, txId: string, accountId: string, amount: Decimal): Transition {
+export function newTransition(
+  type: TransitionType,
+  txId: string,
+  accountId: string,
+  amount: Decimal,
+): Transition {
   return {
     type,
     txId,
@@ -346,7 +351,14 @@ export function newTransition(type: TransitionType, txId: string, accountId: str
 /**
  * NewTransaction creates a new Transaction instance
  */
-export function newTransaction(id: string, asset: string, txType: TransactionType, fromAccount: Address, toAccount: Address, amount: Decimal): Transaction {
+export function newTransaction(
+  id: string,
+  asset: string,
+  txType: TransactionType,
+  fromAccount: Address,
+  toAccount: Address,
+  amount: Decimal,
+): Transaction {
   return {
     id,
     asset,
@@ -460,7 +472,9 @@ export function validateLedger(ledger: Ledger): void {
   const sumBalances = ledger.userBalance.add(ledger.nodeBalance);
   const sumNetFlows = ledger.userNetFlow.add(ledger.nodeNetFlow);
   if (!sumBalances.equals(sumNetFlows)) {
-    throw new Error(`ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`);
+    throw new Error(
+      `ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`,
+    );
   }
 }
 
@@ -468,7 +482,11 @@ export function validateLedger(ledger: Ledger): void {
 // Pagination Utilities
 // ============================================================================
 
-export function getOffsetAndLimit(params: PaginationParams | undefined, defaultLimit: number, maxLimit: number): { offset: number; limit: number } {
+export function getOffsetAndLimit(
+  params: PaginationParams | undefined,
+  defaultLimit: number,
+  maxLimit: number,
+): { offset: number; limit: number } {
   if (!params) {
     return { offset: 0, limit: defaultLimit };
   }

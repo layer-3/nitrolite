@@ -54,13 +54,16 @@ export class ParametricToken extends ERC20 {
     if (!this.walletSigner) {
       throw new Error('Wallet signer required');
     }
+    if (!this.walletSigner.account?.address) {
+      throw new Error('Wallet signer account not configured');
+    }
 
     const { request } = await this.client.simulateContract({
       address: this.tokenAddress,
       abi: ParametricTokenAbi,
       functionName: 'convertToSuper',
       args: [account],
-      account: this.walletSigner.account!.address,
+      account: this.walletSigner.account.address,
     });
 
     const hash = await this.walletSigner.writeContract(request);
@@ -226,7 +229,12 @@ export class ParametricToken extends ERC20 {
   /**
    * Approved transfer from normal to sub-account
    */
-  async approvedTransferToSub(from: Address, toSuper: Address, toSubId: number, amount: bigint): Promise<string> {
+  async approvedTransferToSub(
+    from: Address,
+    toSuper: Address,
+    toSubId: number,
+    amount: bigint,
+  ): Promise<string> {
     if (!this.walletSigner) {
       throw new Error('Wallet signer required');
     }
@@ -247,7 +255,13 @@ export class ParametricToken extends ERC20 {
   /**
    * Approved transfer from one sub-account to another
    */
-  async approvedTransferFromSubToSub(fromSuper: Address, fromSubId: number, toSuper: Address, toSubId: number, amount: bigint): Promise<string> {
+  async approvedTransferFromSubToSub(
+    fromSuper: Address,
+    fromSubId: number,
+    toSuper: Address,
+    toSubId: number,
+    amount: bigint,
+  ): Promise<string> {
     if (!this.walletSigner) {
       throw new Error('Wallet signer required');
     }
@@ -269,6 +283,10 @@ export class ParametricToken extends ERC20 {
 /**
  * Create a new parametric ERC20 contract instance
  */
-export function newParametricToken(tokenAddress: Address, client: EVMClient, walletSigner?: WalletSigner): ParametricToken {
+export function newParametricToken(
+  tokenAddress: Address,
+  client: EVMClient,
+  walletSigner?: WalletSigner,
+): ParametricToken {
   return new ParametricToken(tokenAddress, client, walletSigner);
 }

@@ -127,6 +127,8 @@ contract ParametricToken is ERC20, IParametricToken {
             _allowances[owner][spender].sub = amount;
         }
 
+        super.approve(spender, amount);
+
         emit Approval(owner, spender, amount);
         return true;
     }
@@ -214,24 +216,22 @@ contract ParametricToken is ERC20, IParametricToken {
         return _accounts[account].parameters[paramIndex];
     }
 
-    function parameterOfSub(uint8 paramIndex, address account, uint48 subId)
-        external
-        view
-        onlyValidSub(account, subId)
-        returns (uint64)
-    {
+    function parameterOfSub(
+        uint8 paramIndex,
+        address account,
+        uint48 subId
+    ) external view onlyValidSub(account, subId) returns (uint64) {
         require(paramIndex < NUMBER_OF_PARAMETERS, "Index exceeds number of parameters");
         return _supers[account].subs[subId].parameters[paramIndex];
     }
 
     // ========== Allowances ==========
 
-    function allowanceForSub(address owner, uint48 subId, address spender)
-        external
-        view
-        onlyValidSub(owner, subId)
-        returns (uint256)
-    {
+    function allowanceForSub(
+        address owner,
+        uint48 subId,
+        address spender
+    ) external view onlyValidSub(owner, subId) returns (uint256) {
         Allowance storage al = _allowances[owner][spender];
         if (al.subId == subId) {
             return al.sub;
@@ -261,20 +261,22 @@ contract ParametricToken is ERC20, IParametricToken {
     }
 
     // Helper to check and consume allowance for a specific subId
-    function _sufficientAllowanceForSub(address owner, address spender, uint48 fromSubId, uint256 amount)
-        internal
-        view
-        onlyValidSub(owner, fromSubId)
-        returns (bool)
-    {
+    function _sufficientAllowanceForSub(
+        address owner,
+        address spender,
+        uint48 fromSubId,
+        uint256 amount
+    ) internal view onlyValidSub(owner, fromSubId) returns (bool) {
         Allowance storage al = _allowances[owner][spender];
         return fromSubId == al.subId ? al.sub >= amount : al.total - al.sub >= amount;
     }
 
-    function _consumeAllowanceForSub(address owner, address spender, uint48 fromSubId, uint256 amount)
-        internal
-        onlyValidSub(owner, fromSubId)
-    {
+    function _consumeAllowanceForSub(
+        address owner,
+        address spender,
+        uint48 fromSubId,
+        uint256 amount
+    ) internal onlyValidSub(owner, fromSubId) {
         Allowance storage al = _allowances[owner][spender];
 
         if (fromSubId == al.subId) {
@@ -317,11 +319,12 @@ contract ParametricToken is ERC20, IParametricToken {
         return true;
     }
 
-    function _weightedAverage(uint64 param1, uint256 amount1, uint64 param2, uint256 amount2)
-        private
-        pure
-        returns (uint64)
-    {
+    function _weightedAverage(
+        uint64 param1,
+        uint256 amount1,
+        uint64 param2,
+        uint256 amount2
+    ) private pure returns (uint64) {
         require(amount1 > 0 && amount2 > 0, "Invalid amounts");
         uint256 sumProduct = uint256(param1) * amount1 + uint256(param2) * amount2;
         uint256 sum = amount1 + amount2;
@@ -331,11 +334,11 @@ contract ParametricToken is ERC20, IParametricToken {
 
     // ========== Transfers ==========
 
-    function transferToSub(address toSuper, uint48 toSubId, uint256 amount)
-        external
-        onlyValidSub(toSuper, toSubId)
-        returns (bool)
-    {
+    function transferToSub(
+        address toSuper,
+        uint48 toSubId,
+        uint256 amount
+    ) external onlyValidSub(toSuper, toSubId) returns (bool) {
         address from = _msgSender();
         Account storage fromAcc = _accounts[from];
         Account storage toAcc = _accounts[toSuper];
@@ -356,8 +359,12 @@ contract ParametricToken is ERC20, IParametricToken {
         if (oldSubBalance > 0) {
             for (uint256 i = 0; i < NUMBER_OF_PARAMETERS; i++) {
                 if (PARAM_CONFIG[i].isMutable) {
-                    toSubAcc.parameters[i] =
-                        _weightedAverage(toSubAcc.parameters[i], oldSubBalance, fromAcc.parameters[i], amount);
+                    toSubAcc.parameters[i] = _weightedAverage(
+                        toSubAcc.parameters[i],
+                        oldSubBalance,
+                        fromAcc.parameters[i],
+                        amount
+                    );
                 }
             }
         } else {
@@ -397,7 +404,10 @@ contract ParametricToken is ERC20, IParametricToken {
             for (uint256 i = 0; i < NUMBER_OF_PARAMETERS; i++) {
                 if (PARAM_CONFIG[i].isMutable) {
                     toAcc.parameters[i] = _weightedAverage(
-                        toAcc.parameters[i], oldToBalance, fromSuperAcc.subs[fromSubId].parameters[i], amount
+                        toAcc.parameters[i],
+                        oldToBalance,
+                        fromSuperAcc.subs[fromSubId].parameters[i],
+                        amount
                     );
                 }
             }
@@ -459,11 +469,12 @@ contract ParametricToken is ERC20, IParametricToken {
 
     // ========== Approved Transfers ==========
 
-    function approvedTransferToSub(address from, address toSuper, uint48 toSubId, uint256 amount)
-        external
-        onlyValidSub(toSuper, toSubId)
-        returns (bool)
-    {
+    function approvedTransferToSub(
+        address from,
+        address toSuper,
+        uint48 toSubId,
+        uint256 amount
+    ) external onlyValidSub(toSuper, toSubId) returns (bool) {
         address spender = _msgSender();
 
         // Execute transfer
@@ -486,8 +497,12 @@ contract ParametricToken is ERC20, IParametricToken {
         if (oldSubBalance > 0) {
             for (uint256 i = 0; i < NUMBER_OF_PARAMETERS; i++) {
                 if (PARAM_CONFIG[i].isMutable) {
-                    toSubAcc.parameters[i] =
-                        _weightedAverage(toSubAcc.parameters[i], oldSubBalance, fromAcc.parameters[i], amount);
+                    toSubAcc.parameters[i] = _weightedAverage(
+                        toSubAcc.parameters[i],
+                        oldSubBalance,
+                        fromAcc.parameters[i],
+                        amount
+                    );
                 }
             }
         } else {
@@ -535,7 +550,10 @@ contract ParametricToken is ERC20, IParametricToken {
             for (uint256 i = 0; i < NUMBER_OF_PARAMETERS; i++) {
                 if (PARAM_CONFIG[i].isMutable) {
                     toSubAcc.parameters[i] = _weightedAverage(
-                        toSubAcc.parameters[i], oldSubBalance, fromSuperAcc.subs[fromSubId].parameters[i], amount
+                        toSubAcc.parameters[i],
+                        oldSubBalance,
+                        fromSuperAcc.subs[fromSubId].parameters[i],
+                        amount
                     );
                 }
             }
@@ -589,8 +607,12 @@ contract ParametricToken is ERC20, IParametricToken {
                         sub0.parameters[i] = uint64(block.timestamp);
                     } else {
                         // Weighted average for non-zero
-                        sub0.parameters[i] =
-                            _weightedAverage(sub0.parameters[i], oldBalance, uint64(block.timestamp), amount);
+                        sub0.parameters[i] = _weightedAverage(
+                            sub0.parameters[i],
+                            oldBalance,
+                            uint64(block.timestamp),
+                            amount
+                        );
                     }
                 } else {
                     // Immutable parameter
@@ -618,8 +640,12 @@ contract ParametricToken is ERC20, IParametricToken {
                         acc.parameters[i] = uint64(block.timestamp);
                     } else {
                         // Non-zero balance
-                        acc.parameters[i] =
-                            _weightedAverage(acc.parameters[i], oldBalance, uint64(block.timestamp), amount);
+                        acc.parameters[i] = _weightedAverage(
+                            acc.parameters[i],
+                            oldBalance,
+                            uint64(block.timestamp),
+                            amount
+                        );
                     }
                 } else {
                     // Immutable parameter

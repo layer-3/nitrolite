@@ -548,7 +548,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         );
     }
 
-    function test_revert_challenge_newHomeChain_withFinalizeMigration() public {
+    function test_challenge_newHomeChain_withFinalizeMigration() public {
         // Initiate migration IN on NEW home chain
         vm.prank(alice);
         cHub.initiateMigration(newHomeDef, initiateMigrationState);

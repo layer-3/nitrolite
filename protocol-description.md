@@ -91,6 +91,13 @@ The off-chain protocol is responsible for:
      * the Node **stops issuing new states**,
      * until the process completes or is challenged.
 
+   This is an **off-chain responsibility** enforced by the Node. The on-chain contract cannot enforce
+   operation ordering because it has no visibility into pending operations on other chains. Instead,
+   the contract is designed to handle concurrent cross-chain operations correctly — for example,
+   escrow operations remain reachable even after a subsequent migration on the same chain. Such
+   concurrent code paths should never be reached under correct Node behavior, but the on-chain
+   contract handles them safely to guarantee fund recovery in all cases.
+
 5. **Optimistic bridging**
 
    * Cross-chain actions are **not atomically verifiable** on-chain.

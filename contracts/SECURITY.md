@@ -119,6 +119,60 @@ e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock"
 
 ---
 
+## Cross-chain Operation Ordering
+
+### Invariant 21 is an off-chain, not an on-chain, guarantee
+
+Invariant 21 states that the Node must not issue new states during an in-progress escrow or migration.
+This ordering constraint **cannot be fully enforced by the on-chain contract** for a fundamental
+reason: a contract on chain B has no visibility into what is happening on chain A. It cannot query
+whether an escrow is `INITIALIZED` on the other chain, whether a migration is halfway through, or
+whether any other channel operation is pending.
+
+### Why a flag-based on-chain guard is insufficient
+
+An `actionStarted` flag per channel could block new operations while a cross-chain one is in
+progress, but it would be asymmetric:
+
+- **Escrow withdrawal**: flag can be raised on initiate and lowered on finalize — both happen on the
+  non-home chain, so the full lifecycle is visible.
+- **Escrow deposit**: flag raised on initiate (non-home chain), but the protocol-level finalization
+  that matters (user allocation credited) happens on the home chain. The non-home chain only sees
+  the node reclaiming locked funds, which is a different event.
+- **Migration**: flag raised on initiate (non-home chain, `MIGRATING_IN`), but finalization happens
+  on the old home chain, advancing the channel to `MIGRATED_OUT`.
+
+Applying the flag consistently across all three would require per-channel storage tracking active
+operations, cross-operation coordination logic, and would still not close the gap for deposit and
+migration, where the terminal event is on a different chain.
+
+### Design consequence: the on-chain contract must handle concurrent operations gracefully
+
+Because on-chain enforcement of ordering is incomplete, the contract is designed so that any
+reachable state sequence produces a correct outcome, even if the off-chain ordering invariant was
+violated. Version monotonicity is enforced independently on each chain: each contract tracks only
+the version of the last state it enforced locally, with no cross-chain synchronization of version
+counters. The canonical example is:
+
+1. Escrow withdrawal initiated on chain B (non-home) — `EscrowWithdrawalMeta` created, node funds
+   locked.
+2. Migration initiated on chain B — channel becomes `MIGRATING_IN`, chain B is now treated as home.
+3. Escrow withdrawal finalized on chain B — routed via metadata presence
+   (`_isEscrowWithdrawalHomeChain`), not via the mutable `_isChannelHomeChain` result, so the
+   non-home path remains reachable and funds are correctly released to the user.
+
+This flow is reachable on-chain only with submission order X → Y → X+1 (X = initiate escrow,
+X+1 = finalize escrow, Y = initiate migration, Y > X+1); the signing order must still be
+monotonically increasing — X+1 pre-signed as the execution phase before Y is signed — so only
+rule 21 is broken. If the signing order were also X → Y → X+1, the on-chain contract would
+behave identically; that would only add a violation of the version-monotonicity signing rule
+with no additional on-chain effect.
+
+Under correct Node behavior this sequence never occurs. But the contract handles it safely so that
+no funds can be permanently locked if it does.
+
+---
+
 ### Safety guarantees
 
 23. **Enforcement determinism**: Enforcing the same `(prevState, candidateState)` pair always yields the same on-chain result.

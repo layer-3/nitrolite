@@ -9,6 +9,7 @@ import {NonReturningERC20} from "./mocks/NonReturningERC20.sol";
 import {RevertingERC20} from "./mocks/RevertingERC20.sol";
 import {GasConsumingERC20} from "./mocks/GasConsumingERC20.sol";
 import {MalformedReturningERC20} from "./mocks/MalformedReturningERC20.sol";
+import {DonatingERC20} from "./mocks/DonatingERC20.sol";
 import {RevertingEthReceiver} from "./mocks/RevertingEthReceiver.sol";
 import {GasConsumingEthReceiver} from "./mocks/GasConsumingEthReceiver.sol";
 
@@ -118,6 +119,19 @@ contract ChannelHubTest_pushFunds is Test {
         _verifyTransferSuccess(recipient, address(nonReturningToken), TRANSFER_AMOUNT);
     }
 
+    // ========== False-Returning ERC20 Tests ==========
+
+    function test_accumulatesReclaims_whenERC20ReturnsFalse() public {
+        normalToken.setFailTransfers(true);
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.TransferFailed(recipient, address(normalToken), TRANSFER_AMOUNT);
+
+        cHub.exposed_pushFunds(recipient, address(normalToken), TRANSFER_AMOUNT);
+
+        _verifyBalancesNotChanged(recipient, address(normalToken), TRANSFER_AMOUNT);
+    }
+
     // ========== Reverting ERC20 Tests ==========
 
     function test_accumulatesReclaims_whenERC20Reverts() public {
@@ -157,6 +171,21 @@ contract ChannelHubTest_pushFunds is Test {
         cHub.exposed_pushFunds(recipient, address(malformedToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(malformedToken), TRANSFER_AMOUNT);
+    }
+
+    // ========== ERC777 Donation-Back Tests ==========
+
+    function test_succeeds_whenERC777DonatesBack() public {
+        uint256 donationAmount = 1 ether;
+        DonatingERC20 donatingToken = new DonatingERC20(address(cHub), donationAmount);
+        donatingToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        cHub.exposed_pushFunds(recipient, address(donatingToken), TRANSFER_AMOUNT);
+
+        // Recipient received the transferred amount
+        assertEq(donatingToken.balanceOf(recipient), TRANSFER_AMOUNT, "Recipient should have received tokens");
+        // No false reclaim: old balance-check code would have incorrectly added TRANSFER_AMOUNT here
+        assertEq(cHub.getReclaimBalance(recipient, address(donatingToken)), 0, "No reclaim should be created");
     }
 
     // ========== Native ETH Tests ==========

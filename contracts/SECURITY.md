@@ -351,7 +351,9 @@ When a transfer consumes all available gas, the transaction reverts, enabling:
 
 **ERC20 tokens with hooks**:
 
-- **ERC777** (most dangerous): Executes `tokensReceived()` hook on recipient even for standard `transfer()` calls
+- **ERC777** (most dangerous): Executes `tokensReceived()` hook on recipient even for standard `transfer()` calls. This creates two distinct attack vectors:
+  1. **Gas depletion**: hook consumes all forwarded gas, causing the transaction to revert
+  2. **Donation-back double-spend**: hook sends tokens back to ChannelHub during the transfer, increasing ChannelHub's balance above `balanceBefore - amount`. A balance-delta success check would misidentify this as a failed transfer and incorrectly credit `_reclaims`, letting the recipient claim the same amount twice. The protocol therefore uses **return-value checking** (not balance-delta checking) to detect ERC20 transfer success, matching `SafeERC20.trySafeTransfer` semantics with a gas cap.
 - **ERC1363/ERC677** (lower risk): Include `transferAndCall()` methods that trigger recipient hooks
 
 **Why it matters**: Even if protocol primarily supports standard ERC20, human error can introduce vulnerable tokens:

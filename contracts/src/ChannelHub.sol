@@ -637,7 +637,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         bytes32 escrowId = Utils.getEscrowId(channelId, candidate.version);
 
-        if (_isHomeChain(channelId)) {
+        if (_isChannelHomeChain(channelId)) {
             _processHomeChainEscrowInitiate(channelId, candidate);
             emit EscrowDepositInitiatedOnHome(escrowId, channelId, candidate);
         } else {
@@ -677,7 +677,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
     }
 
     function finalizeEscrowDeposit(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
-        if (_isHomeChain(channelId)) {
+        EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+
+        if (_isEscrowDepositHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user/node from channel definition
             ChannelMeta storage channelMeta = _channels[channelId];
             _processHomeChainEscrowFinalize(
@@ -688,7 +690,6 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
 
         // NON-HOME CHAIN: Use escrow metadata
-        EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
         require(meta.channelId == channelId, IncorrectChannelId()); // Validate consistency
         address user = meta.user;
         address node = meta.node;
@@ -732,7 +733,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         bytes32 escrowId = Utils.getEscrowId(channelId, candidate.version);
 
-        if (_isHomeChain(channelId)) {
+        if (_isChannelHomeChain(channelId)) {
             // HOME CHAIN: Process through channel state, no escrow metadata
             _processHomeChainEscrowInitiate(channelId, candidate);
             emit EscrowWithdrawalInitiatedOnHome(escrowId, channelId, candidate);
@@ -775,7 +776,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
     }
 
     function finalizeEscrowWithdrawal(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
-        if (_isHomeChain(channelId)) {
+        EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
+
+        if (_isEscrowWithdrawalHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user/node from channel definition
             ChannelMeta storage channelMeta = _channels[channelId];
             _processHomeChainEscrowFinalize(
@@ -786,7 +789,6 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
 
         // NON-HOME CHAIN: Use escrow metadata
-        EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
         require(meta.channelId == channelId, IncorrectChannelId()); // Validate consistency
         address user = meta.user;
         address node = meta.node;
@@ -832,7 +834,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, def.user, def.node, def.approvedSignatureValidators);
 
         State memory targetCandidate = candidate;
-        bool isHomeChain = _isHomeChain(channelId);
+        bool isHomeChain = _isChannelHomeChain(channelId);
 
         if (!isHomeChain) {
             // Initiate migration IN (on new home chain)
@@ -1300,13 +1302,36 @@ contract ChannelHub is IVault, ReentrancyGuard {
         require(def.challengeDuration >= MIN_CHALLENGE_DURATION, IncorrectChallengeDuration());
     }
 
-    function _isHomeChain(bytes32 channelId) internal view returns (bool) {
+    /// @dev Returns true when the channel is active and considers the current chain its home chain.
+    /// VOID and MIGRATED_OUT are excluded: no channel exists here yet, or the channel has moved away.
+    /// MIGRATING_IN is intentionally treated as home chain: initiateMigration() on the new home chain
+    /// swaps homeLedger <-> nonHomeLedger before storing, so lastState.homeLedger already represents
+    /// the current chain. ChannelEngine processes all subsequent operations (deposit, withdraw,
+    /// checkpoint, escrow, close) for MIGRATING_IN using home chain logic — the only thing pending is
+    /// a finalizeMigration() call to advance the status to OPERATING.
+    function _isChannelHomeChain(bytes32 channelId) internal view returns (bool) {
         ChannelStatus status = _channels[channelId].status;
         if (status == ChannelStatus.VOID || status == ChannelStatus.MIGRATED_OUT) {
             return false;
         }
 
         return _channels[channelId].lastState.homeLedger.chainId == block.chainid;
+    }
+
+    /// @dev Returns true when a finalizeEscrowDeposit call should be routed through the home chain path.
+    /// Escrow metadata is only written on the non-home chain during initiateEscrowDeposit, so its
+    /// presence means the escrow must always follow the non-home path — even if _isChannelHomeChain()
+    /// later returns true because of a subsequent migration.
+    function _isEscrowDepositHomeChain(bytes32 channelId, bytes32 escrowId) internal view returns (bool) {
+        return _escrowDeposits[escrowId].channelId == bytes32(0) && _isChannelHomeChain(channelId);
+    }
+
+    /// @dev Returns true when a finalizeEscrowWithdrawal call should be routed through the home chain path.
+    /// Escrow metadata is only written on the non-home chain during initiateEscrowWithdrawal, so its
+    /// presence means the escrow must always follow the non-home path — even if _isChannelHomeChain()
+    /// later returns true because of a subsequent migration.
+    function _isEscrowWithdrawalHomeChain(bytes32 channelId, bytes32 escrowId) internal view returns (bool) {
+        return _escrowWithdrawals[escrowId].channelId == bytes32(0) && _isChannelHomeChain(channelId);
     }
 
     function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {

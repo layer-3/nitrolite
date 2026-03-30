@@ -91,6 +91,13 @@ The off-chain protocol is responsible for:
      * the Node **stops issuing new states**,
      * until the process completes or is challenged.
 
+   This is an **off-chain responsibility** enforced by the Node. The on-chain contract cannot enforce
+   operation ordering because it has no visibility into pending operations on other chains. Instead,
+   the contract is designed to handle concurrent cross-chain operations correctly — for example,
+   escrow operations remain reachable even after a subsequent migration on the same chain. Such
+   concurrent code paths should never be reached under correct Node behavior, but the on-chain
+   contract handles them safely to guarantee fund recovery in all cases.
+
 5. **Optimistic bridging**
 
    * Cross-chain actions are **not atomically verifiable** on-chain.
@@ -393,6 +400,7 @@ The preparation phase establishes the channel on the target (non-home) chain:
   * creates a channel on the non-home chain with status `MIGRATING_IN`,
   * locks Node's funds on the non-home chain.
 * Implementation note: States are swapped before storing to maintain the invariant that `homeLedger` represents the current chain.
+* A `MIGRATING_IN` channel **is treated as the home chain** for all subsequent on-chain operations: because the swap has already been applied to the stored state, `homeLedger` already describes the current chain and ChannelEngine processes operations (deposit, withdraw, checkpoint, escrow, close) using standard home chain logic. The only distinction from `OPERATING` is that `finalizeMigration()` has not yet been called to confirm the migration on the old home chain.
 
 **On the home chain:**
 

@@ -678,6 +678,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     function finalizeEscrowDeposit(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+
         if (_isEscrowDepositHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user/node from channel definition
             ChannelMeta storage channelMeta = _channels[channelId];
@@ -776,6 +777,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     function finalizeEscrowWithdrawal(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
         EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
+
         if (_isEscrowWithdrawalHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user/node from channel definition
             ChannelMeta storage channelMeta = _channels[channelId];

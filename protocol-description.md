@@ -393,6 +393,7 @@ The preparation phase establishes the channel on the target (non-home) chain:
   * creates a channel on the non-home chain with status `MIGRATING_IN`,
   * locks Node's funds on the non-home chain.
 * Implementation note: States are swapped before storing to maintain the invariant that `homeLedger` represents the current chain.
+* A `MIGRATING_IN` channel **is treated as the home chain** for all subsequent on-chain operations: because the swap has already been applied to the stored state, `homeLedger` already describes the current chain and ChannelEngine processes operations (deposit, withdraw, checkpoint, escrow, close) using standard home chain logic. The only distinction from `OPERATING` is that `finalizeMigration()` has not yet been called to confirm the migration on the old home chain.
 
 **On the home chain:**
 

@@ -495,14 +495,15 @@ library ChannelEngine {
 
         if (ctx.status == ChannelStatus.MIGRATING_IN) {
             // NEW HOME CHAIN (IN): Move MIGRATING_IN → OPERATING
-            // The home state represents the new home (current chain)
+            // The homeLedger represents the new home (current chain) in candidate and prevState
             require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
             require(ctx.prevState.intent == StateIntent.INITIATE_MIGRATION, IncorrectPreviousStateIntent());
             require(candidate.version == ctx.prevState.version + 1, IncorrectStateVersion());
 
-            uint256 userMigratedAlloc = ctx.prevState.homeLedger.userAllocation;
+            // nonHomeLedger = old home (holds the user's migrated allocation)
+            uint256 userMigratedAlloc = ctx.prevState.nonHomeLedger.userAllocation;
 
-            // Validate that this completes the migration
+            // Validate that this completes the migration: user receives their migrated allocation on new home
             require(candidate.homeLedger.userAllocation == userMigratedAlloc, IncorrectUserAllocation());
             require(candidate.homeLedger.nodeAllocation == 0, IncorrectNodeAllocation());
             require(candidate.nonHomeLedger.userAllocation == 0, IncorrectUserAllocation());

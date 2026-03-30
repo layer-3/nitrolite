@@ -562,7 +562,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
         if (candidate.version > prevState.version) {
             // Cannot challenge with a CLOSE intent, use `closeChannel(...)` function instead
             require(candidate.intent != StateIntent.CLOSE, IncorrectStateIntent());
-            require(status != ChannelStatus.OPERATING || candidate.intent != StateIntent.FINALIZE_MIGRATION, IncorrectStateIntent());
+            require(
+                status != ChannelStatus.OPERATING || candidate.intent != StateIntent.FINALIZE_MIGRATION,
+                IncorrectStateIntent()
+            );
 
             _validateSignatures(channelId, candidate, def.user, def.node, def.approvedSignatureValidators);
 

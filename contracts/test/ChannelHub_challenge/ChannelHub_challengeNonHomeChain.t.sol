@@ -445,9 +445,8 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             userSig: "",
             nodeSig: ""
         });
-        finalizeMigrationState = mutualSignStateBothWithEcdsaValidator(
-            finalizeMigrationState, newHomeChannelId, ALICE_PK
-        );
+        finalizeMigrationState =
+            mutualSignStateBothWithEcdsaValidator(finalizeMigrationState, newHomeChannelId, ALICE_PK);
 
         // OPERATE state on NEW home chain after migration
         // After initiateMigration on NEW home, ledgers are swapped, so homeLedger becomes current chain

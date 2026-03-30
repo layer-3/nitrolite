@@ -982,7 +982,6 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         cHub.challengeChannel(channelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
     }
 
-
     function test_revert_challengeWithFinalizeMigrationIntent() public {
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, finalizeMigrationState, NODE_PK);
 

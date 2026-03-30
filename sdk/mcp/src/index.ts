@@ -80,9 +80,13 @@ function loadClientMethods(): void {
         if (name.startsWith('_') || content.substring(Math.max(0, match.index - 20), match.index).includes('private')) continue;
 
         const category = categorizeMethod(name);
+        const isAsync = content.substring(Math.max(0, match.index - 10), match.index).includes('async') ||
+            content.substring(match.index, match.index + match[0].length).includes('async');
+        const returnStr = isAsync ? `Promise<${returnType}>` : returnType;
+
         methods.push({
             name,
-            signature: `${name}(${params}): Promise<${returnType}>`,
+            signature: `${name}(${params}): ${returnStr}`,
             description: doc || `SDK method: ${name}`,
             category,
         });
@@ -203,7 +207,7 @@ const client = await Client.create(
 );
 
 // Deposit creates channel if needed
-const state = await client.deposit(11155111n, 'usdc', new Decimal('10.0'));
+const state = await client.deposit(11155111n, 'usdc', '10.0');
 console.log('New state version:', state.version);
 \`\`\`
 
@@ -232,7 +236,7 @@ server.resource('examples-transfers', 'nitrolite://examples/transfers', async ()
 ## Simple Transfer
 
 \`\`\`typescript
-const state = await client.transfer(recipientAddress, 'usdc', new Decimal('5.0'));
+const state = await client.transfer(recipientAddress, 'usdc', '5.0');
 \`\`\`
 
 ## Using the Compat Layer
@@ -263,8 +267,8 @@ const session = await client.createAppSession({
     appId: 'my-app-id',
     participants: [address1, address2],
     allocations: [
-        { participant: address1, asset: 'usdc', amount: new Decimal('10.0') },
-        { participant: address2, asset: 'usdc', amount: new Decimal('10.0') },
+        { participant: address1, asset: 'usdc', amount: '10.0' },
+        { participant: address2, asset: 'usdc', amount: '10.0' },
     ],
 });
 \`\`\`
@@ -370,7 +374,7 @@ server.tool(
 
 server.tool(
     'search_api',
-    'Fuzzy search across all SDK methods, types, and examples',
+    'Fuzzy search across all SDK methods and types',
     { query: z.string().describe('Search query (e.g. "session key", "balance", "transfer")') },
     async ({ query }) => {
         const q = query.toLowerCase();

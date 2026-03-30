@@ -18,7 +18,7 @@ Route to the correct test runner:
 - **contracts/** or .sol files -> `cd contracts && forge test`
 - **clearnode/** -> `go test ./clearnode/... -v` (from repo root)
 - **test/integration/** -> `cd test/integration && npm test`
-- **Repo root with no argument** -> run `go test ./...` and note TS tests need separate runs
+- **Repo root with no argument** -> run `go test ./...` (Go packages only — does NOT cover `sdk/ts`, `sdk/ts-compat`, `contracts`, or `test/integration`). Ask the user to specify a target for non-Go tests.
 
 If a specific test file is given (e.g., `sdk/ts/test/unit/utils.test.ts`), run only that file:
 - For Jest: `cd sdk/ts && npx jest test/unit/utils.test.ts`

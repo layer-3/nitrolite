@@ -8,6 +8,7 @@
             "Bash(npm run clean*)",
             "Bash(npx jest*)",
             "Bash(npx prettier*)",
+            "Bash(npx tsx *)",
             "Bash(go test *)",
             "Bash(go build *)",
             "Bash(go vet *)",

@@ -62,11 +62,12 @@ cd test/integration && npm test          # Requires a running clearnode
 - **Build order**: `sdk/ts` must build before `sdk/ts-compat` (has `"@yellow-org/sdk": "file:../ts"` dependency)
 - **sdk/ts build runs tests first**: `npm run build` = `npm run test && tsc`. Avoid `npm test && npm run build` (double-tests).
 - **Foundry** uses git submodules for deps (`forge-std`, `openzeppelin-contracts`). Use `--recurse-submodules` on clone.
+- **MCP server** (`sdk/mcp/`): run `cd sdk/mcp && npm install` before first use.
 - **Never** edit `.env` files or commit secrets.
 
 ## Commit Convention
 
-```
+```text
 feat|fix|chore|test|docs(scope): description
 
 # Examples:

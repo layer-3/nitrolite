@@ -554,7 +554,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         State memory prevState = meta.lastState;
         require(candidate.version >= prevState.version, ChallengerVersionTooLow());
 
-        // removed due to stack too deep error
+        // According to code style, local variables should be present, however they will introduce the "stack too deep" error
         // address user = def.user;
         // address node = def.node;
 
@@ -562,8 +562,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
         if (candidate.version > prevState.version) {
             // Cannot challenge with a CLOSE intent, use `closeChannel(...)` function instead
             require(candidate.intent != StateIntent.CLOSE, IncorrectStateIntent());
+            // Cannot challenge with a FINALIZE_MIGRATION intent on an old home channel, use `finalizeMigration(...)` function instead
             require(
-                status != ChannelStatus.OPERATING || candidate.intent != StateIntent.FINALIZE_MIGRATION,
+                !(status == ChannelStatus.OPERATING && candidate.intent == StateIntent.FINALIZE_MIGRATION),
                 IncorrectStateIntent()
             );
 

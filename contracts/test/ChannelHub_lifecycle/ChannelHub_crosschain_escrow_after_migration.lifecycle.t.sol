@@ -289,10 +289,17 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         // escrow metadata exists (channelId != 0). The non-home path is taken, correctly pushing the
         // locked 750 to the user.
         // The finalize state was pre-signed before migration (see above); only the submission is here.
+        uint256 nodeVaultBeforeFinalize = cHub.getAccountBalance(node, address(token));
+
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(bobChannelId, escrowId, escrowFinalizeState);
 
         assertEq(token.balanceOf(bob), bobBalanceBefore + 750, "User balance after escrow withdrawal finalization");
+        assertEq(
+            cHub.getAccountBalance(node, address(token)),
+            nodeVaultBeforeFinalize,
+            "Node vault unchanged after escrow withdrawal finalization (locked 750 went to user)"
+        );
 
         (, EscrowStatus finalStatus,, uint256 finalLocked,) = cHub.getEscrowWithdrawalData(escrowId);
         assertEq(uint8(finalStatus), uint8(EscrowStatus.FINALIZED), "Escrow should be FINALIZED");

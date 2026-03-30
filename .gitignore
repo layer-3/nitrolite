@@ -1,0 +1,6 @@
+# Claude Code (local/personal files)
+.claude/settings.local.json
+.claude/agent-memory/
+
+# OS
+.DS_Store

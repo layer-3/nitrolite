@@ -1335,23 +1335,25 @@ contract ChannelHub is IVault, ReentrancyGuard {
                 return;
             }
         } else {
-            // ERC20: Use balance-checking approach for maximum robustness
-            uint256 balanceBefore = IERC20(token).balanceOf(address(this));
-
-            // limit gas to prevent depletion attacks
-            (bool success,) =
-                address(token).call{gas: TRANSFER_GAS_LIMIT}(abi.encodeCall(IERC20.transfer, (to, amount)));
-
-            uint256 balanceAfter = IERC20(token).balanceOf(address(this));
-
-            // Success criteria: call succeeded AND sufficient balance AND balance decreased by exactly the expected amount
-            // Check balanceBefore >= amount first to prevent underflow revert
-            bool transferSucceeded = success && balanceBefore >= amount && balanceAfter == balanceBefore - amount;
-
-            if (!transferSucceeded) {
+            if (!_trySafeTransfer(token, to, amount)) {
                 _reclaims[to][token] += amount;
                 emit TransferFailed(to, token, amount);
             }
         }
+    }
+
+    /// @dev Gas-capped variant of SafeERC20.trySafeTransfer. Forwards at most TRANSFER_GAS_LIMIT gas
+    /// to prevent depletion attacks from malicious ERC777/ERC1363 hooks.
+    /// Returns true if the transfer succeeded, false otherwise.
+    /// - no return value: success if token is a contract (handles no-return-value tokens like old USDT)
+    /// - explicit return value: must decode to true
+    function _trySafeTransfer(address token, address to, uint256 amount) internal returns (bool) {
+        (bool success, bytes memory returnData) =
+            address(token).call{gas: TRANSFER_GAS_LIMIT}(abi.encodeCall(IERC20.transfer, (to, amount)));
+
+        if (!success) return false;
+        if (returnData.length == 0) return address(token).code.length > 0;
+        if (returnData.length >= 32) return abi.decode(returnData, (bool));
+        return false;
     }
 }

@@ -43,6 +43,7 @@ library EscrowWithdrawalEngine {
     error FundConservationOnInitiate();
     error FundConservationOnFinalize();
     error UserFundsDeltaAndLockedAmountMismatch();
+    error EscrowTokenMismatch();
 
     // ========== Constants ==========
 
@@ -190,6 +191,7 @@ library EscrowWithdrawalEngine {
 
         // Must be immediate successor
         require(candidate.version == ctx.initState.version + 1, IncorrectStateVersion());
+        require(candidate.nonHomeLedger.token == ctx.initState.nonHomeLedger.token, EscrowTokenMismatch());
         require(ctx.initState.intent == StateIntent.INITIATE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
 
         uint256 withdrawalAmount = ctx.initState.nonHomeLedger.nodeAllocation;

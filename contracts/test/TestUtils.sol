@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Vm} from "forge-std/Vm.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-import {DEFAULT_SIG_VALIDATOR_ID, State} from "../src/interfaces/Types.sol";
+import {DEFAULT_SIG_VALIDATOR_ID, State, Ledger, StateIntent} from "../src/interfaces/Types.sol";
 import {SessionKeyAuthorization, toSigningData} from "../src/sigValidators/SessionKeyValidator.sol";
 import {Utils} from "../src/Utils.sol";
 
@@ -64,5 +64,124 @@ library TestUtils {
     {
         bytes memory message = abi.encode(validatorId, validatorAddress, block.chainid);
         return signEip191(vm, nodePk, message);
+    }
+
+    function emptyLedger() internal pure returns (Ledger memory) {
+        return Ledger({
+            chainId: 0,
+            token: address(0),
+            decimals: 0,
+            userAllocation: 0,
+            userNetFlow: 0,
+            nodeAllocation: 0,
+            nodeNetFlow: 0
+        });
+    }
+
+    function nextState(State memory state, StateIntent intent, uint256[2] memory allocations, int256[2] memory netFlows)
+        internal
+        pure
+        returns (State memory)
+    {
+        return State({
+            version: state.version + 1,
+            intent: intent,
+            metadata: state.metadata,
+            homeLedger: Ledger({
+                chainId: state.homeLedger.chainId,
+                token: state.homeLedger.token,
+                decimals: state.homeLedger.decimals,
+                userAllocation: allocations[0],
+                userNetFlow: netFlows[0],
+                nodeAllocation: allocations[1],
+                nodeNetFlow: netFlows[1]
+            }),
+            nonHomeLedger: Ledger({
+                chainId: 0,
+                token: address(0),
+                decimals: 0,
+                userAllocation: 0,
+                userNetFlow: 0,
+                nodeAllocation: 0,
+                nodeNetFlow: 0
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
+    }
+
+    function nextState(
+        State memory state,
+        StateIntent intent,
+        uint256[2] memory allocations,
+        int256[2] memory netFlows,
+        uint64 nonHomeChainId,
+        address nonHomeChainToken,
+        uint256[2] memory nonHomeAllocations,
+        int256[2] memory nonHomeNetFlows
+    ) internal pure returns (State memory) {
+        return State({
+            version: state.version + 1,
+            intent: intent,
+            metadata: state.metadata,
+            homeLedger: Ledger({
+                chainId: state.homeLedger.chainId,
+                token: state.homeLedger.token,
+                decimals: state.homeLedger.decimals,
+                userAllocation: allocations[0],
+                userNetFlow: netFlows[0],
+                nodeAllocation: allocations[1],
+                nodeNetFlow: netFlows[1]
+            }),
+            nonHomeLedger: Ledger({
+                chainId: nonHomeChainId,
+                token: nonHomeChainToken,
+                decimals: 18,
+                userAllocation: nonHomeAllocations[0],
+                userNetFlow: nonHomeNetFlows[0],
+                nodeAllocation: nonHomeAllocations[1],
+                nodeNetFlow: nonHomeNetFlows[1]
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
+    }
+
+    function nextState(
+        State memory state,
+        StateIntent intent,
+        uint256[2] memory allocations,
+        int256[2] memory netFlows,
+        uint64 nonHomeChainId,
+        address nonHomeChainToken,
+        uint8 nonHomeDecimals,
+        uint256[2] memory nonHomeAllocations,
+        int256[2] memory nonHomeNetFlows
+    ) internal pure returns (State memory) {
+        return State({
+            version: state.version + 1,
+            intent: intent,
+            metadata: state.metadata,
+            homeLedger: Ledger({
+                chainId: state.homeLedger.chainId,
+                token: state.homeLedger.token,
+                decimals: state.homeLedger.decimals,
+                userAllocation: allocations[0],
+                userNetFlow: netFlows[0],
+                nodeAllocation: allocations[1],
+                nodeNetFlow: netFlows[1]
+            }),
+            nonHomeLedger: Ledger({
+                chainId: nonHomeChainId,
+                token: nonHomeChainToken,
+                decimals: nonHomeDecimals,
+                userAllocation: nonHomeAllocations[0],
+                userNetFlow: nonHomeNetFlows[0],
+                nodeAllocation: nonHomeAllocations[1],
+                nodeNetFlow: nonHomeNetFlows[1]
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
     }
 }

@@ -27,6 +27,7 @@ library ChannelEngine {
     error IncorrectChannelStatus();
     error IncorrectStateVersion();
     error ChallengeExpired();
+    error TokenMismatch();
 
     error IncorrectUserAllocation();
     error IncorrectNodeAllocation();
@@ -100,6 +101,11 @@ library ChannelEngine {
         // homeLedger always represents current chain
         require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
         require(candidate.version > ctx.prevState.version || Utils.isEmpty(ctx.prevState), IncorrectStateVersion());
+
+        // Token must remain constant throughout the channel's lifetime
+        if (!Utils.isEmpty(ctx.prevState)) {
+            require(candidate.homeLedger.token == ctx.prevState.homeLedger.token, TokenMismatch());
+        }
 
         // Validate token decimals for homeLedger
         Utils.validateTokenDecimals(candidate.homeLedger);

@@ -872,9 +872,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         State memory targetCandidate = candidate;
         // `_isHomeChain(...)` cannot be used here as channel exists on both chains
-        bool isHomeChain = candidate.nonHomeLedger.chainId == block.chainid;
+        bool isOldHomeChain = candidate.nonHomeLedger.chainId == block.chainid;
 
-        if (isHomeChain) {
+        if (isOldHomeChain) {
             // Finalize migration OUT (on old home chain)
             // Swap states before validation to maintain invariant, so that homeLedger = current chain
             targetCandidate.homeLedger = candidate.nonHomeLedger;
@@ -890,7 +890,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, targetCandidate);
         _applyEffects(channelId, def, targetCandidate, effects);
 
-        if (isHomeChain) {
+        if (isOldHomeChain) {
             emit MigrationOutFinalized(channelId, candidate);
         } else {
             emit MigrationInFinalized(channelId, candidate);

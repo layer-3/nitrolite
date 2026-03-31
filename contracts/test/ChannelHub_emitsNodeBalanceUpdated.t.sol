@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Vm} from "forge-std/Vm.sol";
 
 import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
+import {TestUtils} from "./TestUtils.sol";
 
 import {Utils} from "../src/Utils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
@@ -317,7 +318,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Deposit: both User and Node specify amounts
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState,
             StateIntent.DEPOSIT,
             [DEPOSIT_AMOUNT * 2, DEPOSIT_AMOUNT],
@@ -368,8 +369,9 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Off-chain: user transferred 500 to node.
-        State memory candidate =
-            nextState(prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, 0], [int256(DEPOSIT_AMOUNT), -500]);
+        State memory candidate = TestUtils.nextState(
+            prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, 0], [int256(DEPOSIT_AMOUNT), -500]
+        );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);
 
         uint256 expectedBalance = INITIAL_BALANCE + 500;
@@ -417,7 +419,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
         // Off-chain: user transferred 500 to node (nodeNF goes from 0 to -500)
         // Enforce via challenge: nodeFundsDelta = -500 - 0 = -500 → vault += 500
-        State memory stateV1 = nextState(
+        State memory stateV1 = TestUtils.nextState(
             initState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, uint256(0)], [int256(DEPOSIT_AMOUNT), -500]
         );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
@@ -530,7 +532,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Deposit: only user adds funds, nodeNetFlow stays at 0
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState, StateIntent.DEPOSIT, [DEPOSIT_AMOUNT * 2, uint256(0)], [int256(DEPOSIT_AMOUNT) * 2, int256(0)]
         );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);
@@ -548,7 +550,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Checkpoint: nodeNetFlow stays at 0, userNetFlow unchanged (OPERATE requires userNfDelta == 0)
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT, uint256(0)], [int256(DEPOSIT_AMOUNT), int256(0)]
         );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);

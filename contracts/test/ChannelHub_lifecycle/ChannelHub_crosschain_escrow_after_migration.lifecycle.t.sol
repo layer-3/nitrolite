@@ -12,6 +12,7 @@ import {
     ChannelStatus,
     EscrowStatus
 } from "../../src/interfaces/Types.sol";
+import {TestUtils} from "../TestUtils.sol";
 
 // These tests verify that escrow deposit and escrow withdrawal can be finalized on the non-home chain
 // even after a migration has been initiated to that same chain (making it `MIGRATING_IN` and treated as
@@ -97,7 +98,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         // Pre-sign the finalize state (v11) as the execution phase — before migration is signed.
         // This preserves version monotonicity in the signing sequence (v10 → v11 → v43).
         // The state is not submitted yet; it will be submitted after migration is on-chain.
-        State memory escrowFinalizeState = nextState(
+        State memory escrowFinalizeState = TestUtils.nextState(
             escrowInitiateState,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(1458), uint256(0)],
@@ -231,7 +232,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         // Pre-sign the finalize state (v11) as the execution phase — before migration is signed.
         // This preserves version monotonicity in the signing sequence (v10 → v11 → v43).
         // The state is not submitted yet; it will be submitted after migration is on-chain.
-        State memory escrowFinalizeState = nextState(
+        State memory escrowFinalizeState = TestUtils.nextState(
             escrowInitiateState,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(467), uint256(0)],

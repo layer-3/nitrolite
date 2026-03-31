@@ -6,6 +6,7 @@ import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
 // forge-lint: disable-start(unsafe-typecast)
 
 import {Utils} from "../../src/Utils.sol";
+import {TestUtils} from "../TestUtils.sol";
 import {
     ChannelDefinition,
     ChannelStatus,
@@ -86,7 +87,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         // Finalize state (version = ESCROW_VERSION + 1):
         // home: userAllocation += ESCROW_AMOUNT, nodeAllocation = 0, userNetFlow unchanged
         // non-home: allocations = 0; userNetFlow = +ESCROW_AMOUNT, nodeNetFlow = -ESCROW_AMOUNT
-        finalizeEscrowDepositState = nextState(
+        finalizeEscrowDepositState = TestUtils.nextState(
             initiateEscrowDepositState,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(500 + ESCROW_AMOUNT), uint256(0)],
@@ -251,7 +252,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         // Finalize state (version = WITHDRAWAL_VERSION + 1):
         // home: userAllocation decreases by WITHDRAWAL_AMOUNT, nodeNetFlow decreases by WITHDRAWAL_AMOUNT
         // non-home: allocations = 0; userNetFlow = -WITHDRAWAL_AMOUNT, nodeNetFlow = +WITHDRAWAL_AMOUNT
-        finalizeEscrowWithdrawalState = nextState(
+        finalizeEscrowWithdrawalState = TestUtils.nextState(
             initiateEscrowWithdrawalState,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(500 - WITHDRAWAL_AMOUNT), uint256(0)],

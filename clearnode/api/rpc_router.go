@@ -31,6 +31,7 @@ type RPCRouterConfig struct {
 	NodeVersion  string
 	MinChallenge uint32
 
+	AppRegistryEnabled        bool
 	MaxParticipants           int
 	MaxSessionDataLen         int
 	MaxAppMetadataLen         int
@@ -47,7 +48,7 @@ func NewRPCRouter(
 	signer sign.Signer,
 	dbStore database.DatabaseStore,
 	memoryStore memory.MemoryStore,
-	actionGateway *action_gateway.ActionGateway,
+	actionGateway action_gateway.ActionAllower,
 	runtimeMetrics metrics.RuntimeMetricExporter,
 	logger log.Logger,
 ) *RPCRouter {
@@ -100,7 +101,7 @@ func NewRPCRouter(
 	}
 
 	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
-	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, signer, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
+	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, signer, stateAdvancer, statePacker, nodeAddress, cfg.AppRegistryEnabled, runtimeMetrics,
 		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates)
 	appsV1Handler := apps_v1.NewHandler(dbStore, useAppV1StoreInTx, actionGateway, cfg.MaxAppMetadataLen)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)
@@ -134,6 +135,11 @@ func NewRPCRouter(
 	nodeV1Group.Handle(rpc.NodeV1GetConfigMethod.String(), nodeV1Handler.GetConfig)
 
 	appsV1Group := r.Node.NewGroup(rpc.AppsV1Group.String())
+	if !cfg.AppRegistryEnabled {
+		appsV1Group.Use(func(c *rpc.Context) {
+			c.Fail(nil, "apps.v1 group is disabled")
+		})
+	}
 	appsV1Group.Handle(rpc.AppsV1GetAppsMethod.String(), appsV1Handler.GetApps)
 	appsV1Group.Handle(rpc.AppsV1SubmitAppVersionMethod.String(), appsV1Handler.SubmitAppVersion)
 

@@ -34,6 +34,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -138,6 +139,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -240,6 +242,7 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -304,6 +307,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -374,6 +378,7 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -438,6 +443,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -520,6 +526,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -616,6 +623,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -709,6 +717,7 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -778,6 +787,7 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -847,6 +857,7 @@ func TestCreateAppSession_AppNotRegistered(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -916,6 +927,7 @@ func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -992,6 +1004,7 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -1068,5 +1081,94 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 	assert.Equal(t, "1", resp.Version)
 	assert.Equal(t, app.AppSessionStatusOpen.String(), resp.Status)
 
+	mockStore.AssertExpectations(t)
+}
+
+// TestCreateAppSession_AppRegistryDisabled verifies that when appRegistryEnabled=false,
+// app lookup, owner signature validation, and AllowAction are all skipped.
+func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
+	mockStore := new(MockStore)
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xnode",
+		false, // appRegistryEnabled=false
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	appDef := app.AppDefinitionV1{
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 1},
+			{WalletAddress: participant2, SignatureWeight: 1},
+		},
+		Quorum: 1,
+		Nonce:  12345,
+	}
+	sessionData := `{"test": "data"}`
+	sig1 := wallet1.SignCreateRequest(t, appDef, sessionData)
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 1},
+				{WalletAddress: participant2, SignatureWeight: 1},
+			},
+			Quorum: 1,
+			Nonce:  "12345",
+		},
+		QuorumSigs:  []string{sig1},
+		SessionData: sessionData,
+	}
+
+	// Only CreateAppSession should be called — NO GetApp, NO AllowAction
+	mockStore.On("CreateAppSession", mock.MatchedBy(func(session any) bool {
+		return true
+	})).Return(nil).Once()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	assert.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("Unexpected error response: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+
+	var resp rpc.AppSessionsV1CreateAppSessionResponse
+	err = ctx.Response.Payload.Translate(&resp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.AppSessionID)
+	assert.Equal(t, "1", resp.Version)
+	assert.Equal(t, app.AppSessionStatusOpen.String(), resp.Status)
+
+	// Strict: GetApp and AllowAction must NOT have been called
+	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertExpectations(t)
 }

@@ -108,50 +108,52 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	}
 
 	err = h.useStoreInTx(func(tx Store) error {
-		registeredApp, err := tx.GetApp(appDef.ApplicationID)
-		if err != nil {
-			return rpc.Errorf("failed to look up application: %v", err)
-		}
-
-		// App must be registered regardless of CreationApprovalNotRequired flag.
-		if registeredApp == nil {
-			return rpc.Errorf("application %s is not registered", appDef.ApplicationID)
-		}
-
-		if !registeredApp.App.CreationApprovalNotRequired {
-			if reqPayload.OwnerSig == "" {
-				return rpc.Errorf("owner_sig is required for this application")
-			}
-
-			sigBytes, err := hexutil.Decode(reqPayload.OwnerSig)
+		if h.appRegistryEnabled {
+			registeredApp, err := tx.GetApp(appDef.ApplicationID)
 			if err != nil {
-				return rpc.Errorf("failed to decode signature: %v", err)
-			}
-			if len(sigBytes) == 0 {
-				return rpc.Errorf("empty owner_sig after decode")
+				return rpc.Errorf("failed to look up application: %v", err)
 			}
 
-			sigType := app.AppSessionSignerTypeV1(sigBytes[0])
-			appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
-				func(sessionKeyAddr string) (string, error) {
-					return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID)
-				},
-			)
-			recoveredOwnerWallet, err := appSessionSignerValidator.Recover(packedRequest, sigBytes)
+			// App must be registered regardless of CreationApprovalNotRequired flag.
+			if registeredApp == nil {
+				return rpc.Errorf("application %s is not registered", appDef.ApplicationID)
+			}
+
+			if !registeredApp.App.CreationApprovalNotRequired {
+				if reqPayload.OwnerSig == "" {
+					return rpc.Errorf("owner_sig is required for this application")
+				}
+
+				sigBytes, err := hexutil.Decode(reqPayload.OwnerSig)
+				if err != nil {
+					return rpc.Errorf("failed to decode signature: %v", err)
+				}
+				if len(sigBytes) == 0 {
+					return rpc.Errorf("empty owner_sig after decode")
+				}
+
+				sigType := app.AppSessionSignerTypeV1(sigBytes[0])
+				appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
+					func(sessionKeyAddr string) (string, error) {
+						return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID)
+					},
+				)
+				recoveredOwnerWallet, err := appSessionSignerValidator.Recover(packedRequest, sigBytes)
+				if err != nil {
+					h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, false)
+					return rpc.Errorf("failed to recover user wallet: %v", err)
+				}
+				h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, true)
+
+				if !strings.EqualFold(recoveredOwnerWallet, registeredApp.App.OwnerWallet) {
+					return rpc.Errorf("invalid owner signature: signer %s is not the app owner", recoveredOwnerWallet)
+				}
+			}
+
+			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, core.GatedActionAppSessionCreation)
 			if err != nil {
-				h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, false)
-				return rpc.Errorf("failed to recover user wallet: %v", err)
+				return rpc.NewError(err)
 			}
-			h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, true)
-
-			if !strings.EqualFold(recoveredOwnerWallet, registeredApp.App.OwnerWallet) {
-				return rpc.Errorf("invalid owner signature: signer %s is not the app owner", recoveredOwnerWallet)
-			}
-		}
-
-		err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, core.GatedActionAppSessionCreation)
-		if err != nil {
-			return rpc.NewError(err)
 		}
 
 		// Create app session with 0 allocations

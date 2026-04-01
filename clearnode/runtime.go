@@ -35,6 +35,7 @@ var Version = "v1.0.0" // set at build time with -ldflags "-X main.Version=x.y.z
 type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
+	AppRegistryEnabled          bool
 	BlockchainRPCs              map[uint64]string
 	ValidationLimits            ValidationLimits
 	RateLimitPerSec             float64
@@ -42,7 +43,7 @@ type Backbone struct {
 
 	DbStore        database.DatabaseStore
 	MemoryStore    memory.MemoryStore
-	ActionGateway  *action_gateway.ActionGateway
+	ActionGateway  action_gateway.ActionAllower
 	RpcNode        rpc.Node
 	StateSigner    sign.Signer
 	TxSigner       sign.Signer
@@ -66,9 +67,11 @@ func (b *Backbone) Close() error {
 type Config struct {
 	Database                    database.DatabaseConfig
 	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"` // 24 hours
-	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"`                                         // "key" or "gcp-kms"
-	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                                                             // required when signer_type=key
-	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`                                                 // required when signer_type=gcp-kms
+	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"CLEARNODE_ACTION_LIMITS_ENABLED"`
+	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"CLEARNODE_APP_REGISTRY_ENABLED"`
+	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
+	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                     // required when signer_type=key
+	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`         // required when signer_type=gcp-kms
 	ValidationLimits            ValidationLimits `yaml:"validation_limits"`
 	RateLimitPerSec             float64          `yaml:"rate_limit_per_sec" env:"CLEARNODE_RATE_LIMIT_PER_SEC" env-default:"10"`
 	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"CLEARNODE_RATE_LIMIT_BURST" env-default:"20"`
@@ -143,9 +146,15 @@ func InitBackbone() *Backbone {
 	// Action Gateway
 	// ------------------------------------------------
 
-	actionGateway, err := action_gateway.NewActionGatewayFromYaml(configDirPath)
-	if err != nil {
-		logger.Fatal("failed to initialize action gateway", "error", err)
+	var actionGateway action_gateway.ActionAllower
+	if conf.ActionLimitsEnabled {
+		actionGateway, err = action_gateway.NewActionGatewayFromYaml(configDirPath)
+		if err != nil {
+			logger.Fatal("failed to initialize action gateway", "error", err)
+		}
+	} else {
+		actionGateway = action_gateway.NewPermissiveActionAllower()
+		logger.Info("action limits disabled, using permissive action allower")
 	}
 
 	// ------------------------------------------------
@@ -250,6 +259,7 @@ func InitBackbone() *Backbone {
 	return &Backbone{
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
+		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
 		ValidationLimits:            conf.ValidationLimits,
 		RateLimitPerSec:             conf.RateLimitPerSec,

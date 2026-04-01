@@ -48,6 +48,7 @@ func TestRebalanceAppSessions_Success_TwoSessions(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -219,6 +220,7 @@ func TestRebalanceAppSessions_Success_MultiAsset(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -379,6 +381,7 @@ func TestRebalanceAppSessions_Error_InsufficientSessions(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -437,6 +440,7 @@ func TestRebalanceAppSessions_Error_InvalidIntent(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -511,6 +515,7 @@ func TestRebalanceAppSessions_Error_DuplicateSession(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -587,6 +592,7 @@ func TestRebalanceAppSessions_Error_ConservationViolation(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -733,6 +739,7 @@ func TestRebalanceAppSessions_Error_SessionNotFound(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -814,6 +821,7 @@ func TestRebalanceAppSessions_Error_ClosedSession(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -909,6 +917,7 @@ func TestRebalanceAppSessions_Error_InvalidVersion(t *testing.T) {
 		nil,
 		nil,
 		"0xNode",
+		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -985,5 +994,133 @@ func TestRebalanceAppSessions_Error_InvalidVersion(t *testing.T) {
 	// Assert
 	// Error case
 	assertError(t, ctx, "invalid version")
+	mockStore.AssertExpectations(t)
+}
+
+// TestRebalanceAppSessions_AppRegistryDisabled verifies that when appRegistryEnabled=false,
+// app lookup and AllowAction are skipped but rebalance still succeeds.
+func TestRebalanceAppSessions_AppRegistryDisabled(t *testing.T) {
+	mockStore := new(MockStore)
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(
+		storeTxProvider,
+		nil,
+		&MockActionGateway{},
+		nil,
+		nil,
+		nil,
+		"0xNode",
+		false, // appRegistryEnabled=false
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	wallet1 := NewTestAppSessionWallet(t)
+	wallet2 := NewTestAppSessionWallet(t)
+
+	sessionID1 := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	sessionID2 := "0x2222222222222222222222222222222222222222222222222222222222222222"
+
+	session1 := &app.AppSessionV1{
+		SessionID:     sessionID1,
+		ApplicationID: "test-app",
+		Participants:  []app.AppParticipantV1{{WalletAddress: wallet1.Address, SignatureWeight: 10}},
+		Quorum:        10,
+		Status:        app.AppSessionStatusOpen,
+		Version:       5,
+	}
+
+	session2 := &app.AppSessionV1{
+		SessionID:     sessionID2,
+		ApplicationID: "test-app",
+		Participants:  []app.AppParticipantV1{{WalletAddress: wallet2.Address, SignatureWeight: 10}},
+		Quorum:        10,
+		Status:        app.AppSessionStatusOpen,
+		Version:       3,
+	}
+
+	currentAllocations1 := map[string]map[string]decimal.Decimal{
+		wallet1.Address: {"USDC": decimal.NewFromInt(200)},
+	}
+	currentAllocations2 := map[string]map[string]decimal.Decimal{
+		wallet2.Address: {"USDC": decimal.NewFromInt(50)},
+	}
+
+	appStateUpdate1 := app.AppStateUpdateV1{
+		AppSessionID: sessionID1,
+		Intent:       app.AppStateUpdateIntentRebalance,
+		Version:      6,
+		Allocations:  []app.AppAllocationV1{{Participant: wallet1.Address, Asset: "USDC", Amount: decimal.NewFromInt(100)}},
+	}
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdate1)
+
+	appStateUpdate2 := app.AppStateUpdateV1{
+		AppSessionID: sessionID2,
+		Intent:       app.AppStateUpdateIntentRebalance,
+		Version:      4,
+		Allocations:  []app.AppAllocationV1{{Participant: wallet2.Address, Asset: "USDC", Amount: decimal.NewFromInt(150)}},
+	}
+	sig2 := wallet2.SignAppStateUpdate(t, appStateUpdate2)
+
+	reqPayload := rpc.AppSessionsV1RebalanceAppSessionsRequest{
+		SignedUpdates: []rpc.SignedAppStateUpdateV1{
+			{
+				AppStateUpdate: rpc.AppStateUpdateV1{
+					AppSessionID: sessionID1,
+					Intent:       app.AppStateUpdateIntentRebalance,
+					Version:      "6",
+					Allocations:  []rpc.AppAllocationV1{{Participant: wallet1.Address, Asset: "USDC", Amount: "100"}},
+				},
+				QuorumSigs: []string{sig1},
+			},
+			{
+				AppStateUpdate: rpc.AppStateUpdateV1{
+					AppSessionID: sessionID2,
+					Intent:       app.AppStateUpdateIntentRebalance,
+					Version:      "4",
+					Allocations:  []rpc.AppAllocationV1{{Participant: wallet2.Address, Asset: "USDC", Amount: "150"}},
+				},
+				QuorumSigs: []string{sig2},
+			},
+		},
+	}
+
+	// NO GetApp mock — it should not be called
+	mockStore.On("GetAppSession", sessionID1).Return(session1, nil)
+	mockStore.On("GetParticipantAllocations", sessionID1).Return(currentAllocations1, nil)
+	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
+		return session.SessionID == sessionID1 && session.Version == 6
+	})).Return(nil).Once()
+
+	mockStore.On("GetAppSession", sessionID2).Return(session2, nil)
+	mockStore.On("GetParticipantAllocations", sessionID2).Return(currentAllocations2, nil)
+	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
+		return session.SessionID == sessionID2 && session.Version == 4
+	})).Return(nil).Once()
+
+	mockStore.On("RecordLedgerEntry", wallet1.Address, sessionID1, "USDC", decimal.NewFromInt(-100)).Return(nil)
+	mockStore.On("RecordLedgerEntry", wallet2.Address, sessionID2, "USDC", decimal.NewFromInt(100)).Return(nil)
+	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		return tx.TxType == core.TransactionTypeRebalance && tx.Asset == "USDC"
+	})).Return(nil).Twice()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, "app_sessions.v1.rebalance_app_sessions", payload),
+	}
+
+	handler.RebalanceAppSessions(ctx)
+
+	assertSuccess(t, ctx)
+
+	// Strict: GetApp must NOT have been called
+	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertExpectations(t)
 }

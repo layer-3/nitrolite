@@ -74,24 +74,6 @@ func NewActionGatewayFromYaml(configDirPath string) (*ActionGateway, error) {
 	return NewActionGateway(cfg)
 }
 
-type Store interface {
-	// GetAppCount returns the total number of applications owned by a specific wallet.
-	GetAppCount(ownerWallet string) (uint64, error)
-
-	// GetTotalUserStaked returns the total staked amount for a user across all blockchains.
-	GetTotalUserStaked(wallet string) (decimal.Decimal, error)
-
-	// RecordAction inserts a new action log entry for a user.
-	RecordAction(wallet string, gatedAction core.GatedAction) error
-
-	// GetUserActionCount returns the number of actions matching the given wallet and gated action
-	// within the specified time window (counting backwards from now).
-	GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error)
-
-	// GetUserActionCounts returns a map of gated actions to their respective counts for a user within the specified time window.
-	GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error)
-}
-
 func (a *ActionGateway) AllowAction(tx Store, userAddress string, gatedAction core.GatedAction) error {
 	if _, ok := a.cfg.ActionGates[gatedAction]; !ok {
 		return nil

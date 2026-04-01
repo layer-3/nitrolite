@@ -257,13 +257,11 @@ library ChannelEngine {
             IncorrectChannelStatus()
         );
 
-        uint256 allocsSum = candidate.homeLedger.userAllocation + candidate.homeLedger.nodeAllocation;
-        require(allocsSum <= ctx.lockedFunds, AllocationExceedsLockedFunds());
+        require(candidate.homeLedger.userAllocation == 0, IncorrectUserAllocation());
+        require(candidate.homeLedger.nodeAllocation == 0, IncorrectNodeAllocation());
 
-        // Ensure final locked funds will be sufficient for special nodeAllocation handling
         int256 finalLockedFunds = ctx.lockedFunds.toInt256() + userNfDelta + nodeNfDelta;
         require(finalLockedFunds >= 0, InsufficientLockedFunds());
-        require(finalLockedFunds >= candidate.homeLedger.nodeAllocation.toInt256(), InsufficientLockedFunds());
 
         // Calculate effects
         // Push allocations to parties (negative = push out from channel)

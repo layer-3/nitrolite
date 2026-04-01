@@ -71,17 +71,19 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			return rpc.Errorf("no signatures provided")
 		}
 
-		registeredApp, err := tx.GetApp(appSession.ApplicationID)
-		if err != nil {
-			return rpc.Errorf("failed to look up application: %v", err)
-		}
-		if registeredApp == nil {
-			return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
-		}
+		if h.appRegistryEnabled {
+			registeredApp, err := tx.GetApp(appSession.ApplicationID)
+			if err != nil {
+				return rpc.Errorf("failed to look up application: %v", err)
+			}
+			if registeredApp == nil {
+				return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
+			}
 
-		err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
-		if err != nil {
-			return rpc.NewError(err)
+			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
+			if err != nil {
+				return rpc.NewError(err)
+			}
 		}
 
 		// Lock the user's state to prevent concurrent modifications

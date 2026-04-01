@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
+import {EscrowStatus} from "../src/interfaces/Types.sol";
 
 /**
  * @title TestChannelHub
@@ -37,5 +38,52 @@ contract TestChannelHub is ChannelHub {
      */
     function workaround_setReclaim(address account, address token, uint256 amount) external {
         _reclaims[account][token] = amount;
+    }
+
+    /**
+     * @notice Workaround to write an escrow deposit record directly into storage
+     * @dev Only sets the fields relevant to purge/stats logic; avoids going through the full escrow lifecycle
+     */
+    function workaround_setEscrowDeposit(
+        bytes32 escrowId,
+        bytes32 channelId,
+        EscrowStatus status,
+        address user_,
+        address node_,
+        uint64 unlockAt,
+        uint64 challengeExpireAt,
+        uint256 lockedAmount,
+        address token
+    ) external {
+        EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+        meta.channelId = channelId;
+        meta.status = status;
+        meta.user = user_;
+        meta.node = node_;
+        meta.unlockAt = unlockAt;
+        meta.challengeExpireAt = challengeExpireAt;
+        meta.lockedAmount = lockedAmount;
+        meta.initState.nonHomeLedger.token = token;
+    }
+
+    /**
+     * @notice Workaround to append an escrow ID to the ordered purge queue
+     */
+    function workaround_addEscrowDepositId(bytes32 escrowId) external {
+        _escrowDepositIds.push(escrowId);
+    }
+
+    /**
+     * @notice Exposes the internal _escrowDepositIds array for assertions
+     */
+    function harness_escrowDepositIds() external view returns (bytes32[] memory) {
+        return _escrowDepositIds;
+    }
+
+    /**
+     * @notice Exposes the internal _purgeEscrowDeposits for direct invocation in tests
+     */
+    function harness_purgeEscrowDeposits(uint256 maxToPurge) external {
+        _purgeEscrowDeposits(maxToPurge);
     }
 }

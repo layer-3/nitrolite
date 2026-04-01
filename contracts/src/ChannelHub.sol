@@ -336,7 +336,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     }
 
     // ========= Escrow Deposit Purge ==========
-    function getUnlockableEscrowDepositStats() internal view returns (uint256 count, uint256 totalAmount) {
+    function getUnlockableEscrowDepositStats() public view returns (uint256 count, uint256 totalAmount) {
         uint256 totalDeposits = _escrowDepositIds.length;
         uint256 escrowHeadTemp = escrowHead;
 
@@ -344,6 +344,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
             bytes32 escrowId = _escrowDepositIds[escrowHeadTemp];
             EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
 
+            if (_isEscrowDepositSkippable(meta)) {
+                escrowHeadTemp++;
+                continue;
+            }
             if (_isEscrowDepositUnlockable(meta)) {
                 count++;
                 totalAmount += meta.lockedAmount;
@@ -387,12 +391,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
             bytes32 escrowId = _escrowDepositIds[escrowHeadTemp];
             EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
 
-            // Skip already-finalized escrows so they don't block the queue
-            if (meta.status == EscrowStatus.FINALIZED) {
+            if (_isEscrowDepositSkippable(meta)) {
                 escrowHeadTemp++;
                 continue;
             }
-            // Only INITIALIZED escrows can be purged; CHALLENGED escrows require manual finalization
             if (_isEscrowDepositUnlockable(meta)) {
                 uint256 updatedBalance =
                     _nodeBalances[meta.node][meta.initState.nonHomeLedger.token] + meta.lockedAmount;
@@ -416,9 +418,14 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
     }
 
-    /// @dev Check if an escrow deposit can be unlocked
+    /// @dev Check if an escrow deposit can be unlocked (INITIALIZED and past unlock time)
     function _isEscrowDepositUnlockable(EscrowDepositMeta storage meta) internal view returns (bool) {
         return meta.unlockAt <= block.timestamp && meta.status == EscrowStatus.INITIALIZED;
+    }
+
+    /// @dev Check if an escrow deposit should be skipped without action (FINALIZED or DISPUTED)
+    function _isEscrowDepositSkippable(EscrowDepositMeta storage meta) internal view returns (bool) {
+        return meta.status == EscrowStatus.FINALIZED || meta.status == EscrowStatus.DISPUTED;
     }
 
     // ========= Validator Registry ==========

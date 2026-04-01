@@ -54,6 +54,12 @@ import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
  *   - finalizeEscrowWithdrawal (cooperative)
  *   - finalizeEscrowWithdrawal (unilateral timeout)
  *
+ *   === migration flows ===
+ *   - initiateMigration (home chain OUT)
+ *   - initiateMigration (non-home chain IN)
+ *   - finalizeMigration (new home chain IN)
+ *   - finalizeMigration (old home chain OUT)
+ *
  *   - purgeEscrowDeposits (public)
  *
  * Does NOT invoke purge:
@@ -279,6 +285,65 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
         escrowId = Utils.getEscrowId(bobChannelId, initState.version);
         vm.prank(bob);
         cHub.initiateEscrowWithdrawal(bobDef, initState);
+    }
+
+    /// @dev Initiates migration OUT on the home chain (alice's channel must already be OPERATING).
+    function _initiateMigrationHomeChain(State memory prevState) internal returns (State memory initState) {
+        initState = TestUtils.nextState(
+            prevState,
+            StateIntent.INITIATE_MIGRATION,
+            [DEPOSIT_AMOUNT, uint256(0)],
+            [int256(DEPOSIT_AMOUNT), int256(0)],
+            FOREIGN_CHAIN_ID,
+            FOREIGN_TOKEN,
+            [uint256(0), DEPOSIT_AMOUNT],
+            [int256(0), int256(DEPOSIT_AMOUNT)]
+        );
+        initState = mutualSignStateBothWithEcdsaValidator(initState, channelId, ALICE_PK);
+        vm.prank(alice);
+        cHub.initiateMigration(def, initState);
+    }
+
+    /// @dev Initiates migration IN on the non-home chain (bob's channel, VOID → MIGRATING_IN).
+    ///      State is passed with homeLedger=FOREIGN, nonHomeLedger=LOCAL;
+    ///      the contract swaps them before storing, so the returned state reflects what is stored
+    ///      (homeLedger=LOCAL, nonHomeLedger=FOREIGN) — ready for use as prevState in nextState().
+    function _initiateMigrationNonHomeChain() internal returns (State memory storedState) {
+        State memory initState = State({
+            version: 1,
+            intent: StateIntent.INITIATE_MIGRATION,
+            metadata: bytes32(0),
+            homeLedger: Ledger({
+                chainId: FOREIGN_CHAIN_ID,
+                token: FOREIGN_TOKEN,
+                decimals: 18,
+                userAllocation: DEPOSIT_AMOUNT,
+                userNetFlow: int256(DEPOSIT_AMOUNT),
+                nodeAllocation: 0,
+                nodeNetFlow: 0
+            }),
+            nonHomeLedger: Ledger({
+                chainId: uint64(block.chainid),
+                token: address(token),
+                decimals: 18,
+                userAllocation: 0,
+                userNetFlow: 0,
+                nodeAllocation: DEPOSIT_AMOUNT,
+                nodeNetFlow: int256(DEPOSIT_AMOUNT)
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
+        initState = mutualSignStateBothWithEcdsaValidator(initState, bobChannelId, BOB_PK);
+        vm.prank(bob);
+        cHub.initiateMigration(bobDef, initState);
+
+        // Mirror the contract's ledger swap so the caller has the stored representation.
+        storedState = initState;
+        storedState.homeLedger = initState.nonHomeLedger;
+        storedState.nonHomeLedger = initState.homeLedger;
+        storedState.userSig = "";
+        storedState.nodeSig = "";
     }
 
     // ======== Tests: home chain flows ========
@@ -530,6 +595,76 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
 
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(bobChannelId, escrowId, initState);
+
+        _assertPurgeInvoked();
+    }
+
+    // ======== Tests: migration flows ========
+
+    function test_purgeInvoked_onInitiateMigration_homeChain() public {
+        State memory prevState = _createSimpleChannel();
+        _snapshotAndInjectSentinel();
+        _initiateMigrationHomeChain(prevState);
+        _assertPurgeInvoked();
+    }
+
+    function test_purgeInvoked_onInitiateMigration_nonHomeChain() public {
+        _snapshotAndInjectSentinel();
+        _initiateMigrationNonHomeChain();
+        _assertPurgeInvoked();
+    }
+
+    function test_purgeInvoked_onFinalizeMigration_newHomeChain() public {
+        // storedInitState has homeLedger=LOCAL (block.chainid), nonHomeLedger=FOREIGN
+        State memory storedInitState = _initiateMigrationNonHomeChain();
+        _snapshotAndInjectSentinel();
+
+        // userMigratedAlloc = storedInitState.nonHomeLedger.userAlloc = DEPOSIT_AMOUNT
+        // userNfDelta = 0 (userNF must equal storedInitState.homeLedger.userNF = 0)
+        // nodeNfDelta = 0 (nodeNF must equal storedInitState.homeLedger.nodeNF = DEPOSIT_AMOUNT)
+        State memory finalizeState = TestUtils.nextState(
+            storedInitState,
+            StateIntent.FINALIZE_MIGRATION,
+            [DEPOSIT_AMOUNT, uint256(0)],
+            [int256(0), int256(DEPOSIT_AMOUNT)],
+            FOREIGN_CHAIN_ID,
+            FOREIGN_TOKEN,
+            [uint256(0), uint256(0)],
+            [int256(0), int256(0)]
+        );
+        finalizeState = mutualSignStateBothWithEcdsaValidator(finalizeState, bobChannelId, BOB_PK);
+        vm.prank(bob);
+        cHub.finalizeMigration(bobChannelId, finalizeState);
+
+        _assertPurgeInvoked();
+    }
+
+    function test_purgeInvoked_onFinalizeMigration_oldHomeChain() public {
+        State memory prevState = _createSimpleChannel();
+        State memory initState = _initiateMigrationHomeChain(prevState);
+        _snapshotAndInjectSentinel();
+
+        // Candidate has homeLedger=FOREIGN (new home), nonHomeLedger=LOCAL (block.chainid).
+        // Contract detects nonHomeLedger.chainId == block.chainid → swaps before validation.
+        // Swap initState ledgers to get a base whose homeLedger.chainId == FOREIGN_CHAIN_ID,
+        // so that nextState preserves the correct chainId/token for the finalize candidate.
+        State memory swappedBase = initState;
+        swappedBase.homeLedger = initState.nonHomeLedger;
+        swappedBase.nonHomeLedger = initState.homeLedger;
+
+        State memory finalizeState = TestUtils.nextState(
+            swappedBase,
+            StateIntent.FINALIZE_MIGRATION,
+            [DEPOSIT_AMOUNT, uint256(0)],
+            [int256(DEPOSIT_AMOUNT), int256(0)],
+            uint64(block.chainid),
+            address(token),
+            [uint256(0), uint256(0)],
+            [int256(0), int256(0)]
+        );
+        finalizeState = mutualSignStateBothWithEcdsaValidator(finalizeState, channelId, ALICE_PK);
+        vm.prank(alice);
+        cHub.finalizeMigration(channelId, finalizeState);
 
         _assertPurgeInvoked();
     }

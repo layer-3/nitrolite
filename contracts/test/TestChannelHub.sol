@@ -83,7 +83,7 @@ contract TestChannelHub is ChannelHub {
     /**
      * @notice Exposes the internal _purgeEscrowDeposits for direct invocation in tests
      */
-    function harness_purgeEscrowDeposits(uint256 maxToPurge) external {
-        _purgeEscrowDeposits(maxToPurge);
+    function harness_purgeEscrowDeposits(uint256 maxSteps) external {
+        _purgeEscrowDeposits(maxSteps);
     }
 }

@@ -147,9 +147,10 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _assertNodeBalance(amount1 + amount2 + amount3, "Node balance should reflect all purged amounts");
     }
 
-    // ========== maxToPurge limit ==========
+    // ========== maxSteps limit ==========
 
-    function test_respectsMaxToPurge_stopsAfterLimit() public {
+    // Trivial case: all entries are UNLOCKABLE, so steps == purgedCount.
+    function test_respectsMaxSteps_stopsAfterLimit_allUnlockable() public {
         bytes32 id1 = _addUnlockable(LOCKED_AMOUNT);
         bytes32 id2 = _addUnlockable(LOCKED_AMOUNT);
         bytes32 id3 = _addUnlockable(LOCKED_AMOUNT);
@@ -159,11 +160,89 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
 
         _purge(2);
 
-        _assertEscrowHead(2, "Head should advance by exactly maxToPurge");
+        _assertEscrowHead(2, "Head should advance by exactly maxSteps");
         _assertEscrowStatus(id1, EscrowStatus.FINALIZED, "First entry should be purged");
         _assertEscrowStatus(id2, EscrowStatus.FINALIZED, "Second entry should be purged");
         _assertEscrowStatus(id3, EscrowStatus.INITIALIZED, "Third entry should remain INITIALIZED");
         _assertNodeBalance(LOCKED_AMOUNT * 2, "Node balance should reflect only the two purged entries");
+    }
+
+    function test_disputedSkip_consumesStep_preventsReachingUnlockable() public {
+        _addDisputed(uint64(block.timestamp) + 1 days);
+        bytes32 id = _addUnlockable(LOCKED_AMOUNT);
+
+        _purge(1);
+
+        _assertEscrowHead(1, "DISPUTED skip consumed the only step; head stopped after it");
+        _assertEscrowStatus(id, EscrowStatus.INITIALIZED, "UNLOCKABLE not reached within step budget");
+        _assertNodeBalance(0, "No purge occurred");
+    }
+
+    function test_disputedSkipWithOnePurge_consumesStep_withBudgetOfTwo() public {
+        _addDisputed(uint64(block.timestamp) + 1 days);
+        bytes32 id = _addUnlockable(LOCKED_AMOUNT);
+
+        vm.expectEmit(true, true, true, true);
+        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+
+        _purge(2);
+
+        _assertEscrowHead(2, "FINALIZED skip consumed the first step; first UNLOCKABLE purge consumed the second step");
+        _assertEscrowStatus(id, EscrowStatus.FINALIZED, "UNLOCKABLE was purged");
+        _assertNodeBalance(LOCKED_AMOUNT, "Node credited for one purge");
+    }
+
+    function test_finalizedSkip_consumesStep_preventsReachingUnlockable() public {
+        _addFinalized();
+        bytes32 id = _addUnlockable(LOCKED_AMOUNT);
+
+        _purge(1);
+
+        _assertEscrowHead(1, "FINALIZED skip consumed the only step; head stopped after it");
+        _assertEscrowStatus(id, EscrowStatus.INITIALIZED, "UNLOCKABLE not reached within step budget");
+        _assertNodeBalance(0, "No purge occurred");
+    }
+
+    function test_finalizedSkipWithOnePurge_consumesStep_withBudgetOfTwo() public {
+        _addFinalized();
+        bytes32 id = _addUnlockable(LOCKED_AMOUNT);
+
+        vm.expectEmit(true, true, true, true);
+        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+
+        _purge(2);
+
+        _assertEscrowHead(2, "FINALIZED skip consumed the first step; first UNLOCKABLE purge consumed the second step");
+        _assertEscrowStatus(id, EscrowStatus.FINALIZED, "UNLOCKABLE was purged");
+        _assertNodeBalance(LOCKED_AMOUNT, "Node credited for one purge");
+    }
+
+    function test_twoFinalizedSkips_exhaustBudgetOfTwo_unlockableNotReached() public {
+        _addFinalized();
+        _addFinalized();
+        bytes32 id = _addUnlockable(LOCKED_AMOUNT);
+
+        _purge(2);
+
+        _assertEscrowHead(2, "Both steps consumed by FINALIZED skips");
+        _assertEscrowStatus(id, EscrowStatus.INITIALIZED, "UNLOCKABLE not reached within step budget");
+        _assertNodeBalance(0, "No purge occurred");
+    }
+
+    function test_finalizedSkipPlusOnePurge_withBudgetOfTwo() public {
+        _addFinalized();
+        bytes32 id1 = _addUnlockable(LOCKED_AMOUNT);
+        bytes32 id2 = _addUnlockable(LOCKED_AMOUNT);
+
+        vm.expectEmit(true, true, true, true);
+        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+
+        _purge(2);
+
+        _assertEscrowHead(2, "Step 1 = FINALIZED skip, step 2 = first UNLOCKABLE purge");
+        _assertEscrowStatus(id1, EscrowStatus.FINALIZED, "First UNLOCKABLE was purged");
+        _assertEscrowStatus(id2, EscrowStatus.INITIALIZED, "Second UNLOCKABLE not reached");
+        _assertNodeBalance(LOCKED_AMOUNT, "Only one purge credited to node");
     }
 
     // ========== Mixed queue ==========

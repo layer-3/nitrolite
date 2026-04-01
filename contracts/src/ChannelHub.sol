@@ -141,9 +141,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     uint32 public constant ESCROW_DEPOSIT_UNLOCK_DELAY = 3 hours;
 
-    // NOTE: this value should not be small, so that as much escrow deposits as possible can be purged in one tx
-    // but also not too large, to avoid hitting block gas limit during purge and incurring Denial-Of-Service attacks
-    uint32 public constant MAX_DEPOSIT_ESCROW_PURGE = 64;
+    // NOTE: bounds the total number of queue entries inspected per purge call (including FINALIZED/DISPUTED entries
+    // that are skipped). Every loop iteration counts against this limit, so per-call gas cost is always bounded
+    // regardless of how large a FINALIZED prefix has accumulated in front of the first live entry.
+    uint32 public constant MAX_DEPOSIT_ESCROW_STEPS = 64;
 
     // Gas limit for outbound transfers to prevent gas depletion attacks
     // Sufficient for: ETH transfers to smart wallets (6k-9k gas), ERC20 standard transfers (~50k gas),
@@ -374,22 +375,24 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
     }
 
-    function purgeEscrowDeposits(uint256 maxToPurge) external {
-        _purgeEscrowDeposits(maxToPurge);
+    function purgeEscrowDeposits(uint256 maxSteps) external {
+        _purgeEscrowDeposits(maxSteps);
     }
 
     function _purgeEscrowDeposits() internal {
-        _purgeEscrowDeposits(MAX_DEPOSIT_ESCROW_PURGE);
+        _purgeEscrowDeposits(MAX_DEPOSIT_ESCROW_STEPS);
     }
 
-    function _purgeEscrowDeposits(uint256 maxToPurge) internal {
+    function _purgeEscrowDeposits(uint256 maxSteps) internal {
         uint256 purgedCount = 0;
+        uint256 steps = 0;
         uint256 totalDeposits = _escrowDepositIds.length;
         uint256 escrowHeadTemp = escrowHead;
 
-        while (escrowHeadTemp < totalDeposits && purgedCount < maxToPurge) {
+        while (escrowHeadTemp < totalDeposits && steps < maxSteps) {
             bytes32 escrowId = _escrowDepositIds[escrowHeadTemp];
             EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+            steps++;
 
             if (_isEscrowDepositSkippable(meta)) {
                 escrowHeadTemp++;
@@ -712,6 +715,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
             // Release to user as "deposit exchange" has not been signed yet (it is the "finalizeEscrowDeposit" state)
             _pushFunds(user, meta.initState.nonHomeLedger.token, lockedAmount);
 
+            // Eagerly advance the queue head so FINALIZED entries don't accumulate
+            _purgeEscrowDeposits();
+
             emit EscrowDepositFinalized(escrowId, channelId, candidate);
             return;
         }
@@ -814,6 +820,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
             _nodeBalances[node][withdrawalToken] = updatedWithdrawalBalance;
 
             emit NodeBalanceUpdated(node, withdrawalToken, updatedWithdrawalBalance);
+
+            // Eagerly advance the queue head so FINALIZED entries don't accumulate
+            _purgeEscrowDeposits();
+
             emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
             return;
         }

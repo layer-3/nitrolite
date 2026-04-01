@@ -428,3 +428,38 @@ When a transfer consumes all available gas, the transaction reverts, enabling:
 **Combined with reclaim pattern**: Gas limiting prevents depletion attacks; reclaim pattern handles all other failure modes (blacklists, paused tokens). Both protections are essential.
 
 ---
+
+## Escrow Deposit Purge Queue
+
+### Overview
+
+The contract maintains a FIFO queue of escrow deposit IDs (`_escrowDepositIds`), sorted by `unlockAt` ascending, with a monotonically advancing head pointer (`escrowHead`). After an escrow deposit's challenge period expires without resolution, the node's locked funds are returned to the node vault during a purge pass. Every protocol operation automatically calls `_purgeEscrowDeposits(MAX_DEPOSIT_ESCROW_STEPS)` to advance the queue; the public `purgeEscrowDeposits(maxSteps)` function allows any external caller to drain accumulated backlog.
+
+### DoS via unbounded iteration
+
+Without a step cap, an adversary could create many escrow deposits, allow them to accumulate without finalization, and cause every subsequent protocol operation to exhaust block gas iterating over the backlog.
+
+`maxSteps` caps the number of entries **inspected**, not the number **purged**. Every loop iteration — skip over FINALIZED, skip over DISPUTED, successful purge, or halt on not-yet-unlockable — consumes one step from the budget. If only successful purges counted, an attacker could pad the queue prefix with FINALIZED entries (by completing many cheap escrows) to make the loop exhaust its entire budget on no-op skips before ever reaching purgeable entries, defeating the mechanism entirely.
+
+### Entry disposition
+
+| Status | Action | Head advances | Step consumed |
+|--------|--------|:---:|:---:|
+| FINALIZED | Skipped | Yes | Yes |
+| DISPUTED (challenge active) | Skipped | Yes | Yes |
+| INITIALIZED, `unlockAt ≤ now` | Purged — locked amount credited to node vault | Yes | Yes |
+| INITIALIZED, `unlockAt > now` | Scan stops | No | Yes |
+
+The scan halts on the first not-yet-unlockable INITIALIZED entry. Because the queue is sorted by `unlockAt` ascending, no entry deeper in the queue can have an earlier expiry, so continuing would yield no purges and only waste gas.
+
+### DISPUTED entries: skipped but not purged
+
+A DISPUTED entry has an active challenge and its locked funds are still contested — they cannot be unconditionally returned to the node. The purge skips such entries and advances the head past them so that purgeable entries later in the queue are not permanently blocked by an unresolved dispute.
+
+Critically, DISPUTED entries still consume a step. Without this, an actor could keep many escrow deposits in DISPUTED state indefinitely (by repeatedly challenging before the unlock window closes) to pad the queue prefix with cheap-to-produce DISPUTED entries, suppressing purge progress for other nodes' entries within the fixed step budget.
+
+### Formal invariant
+
+> **Bounded purge iteration** (complements invariant 22): `_purgeEscrowDeposits(maxSteps)` inspects at most `maxSteps` queue entries per call. Every inspected entry, regardless of disposition (skipped, purged, or halting), counts against the budget. The per-operation automatic budget is `MAX_DEPOSIT_ESCROW_STEPS = 64`.
+
+---

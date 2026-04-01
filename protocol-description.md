@@ -377,6 +377,21 @@ This logic mirrors the channel closure mechanism: if a challenge is not substant
 
 ---
 
+## Escrow deposit purge queue
+
+After an escrow deposit is resolved, the node's locked funds must be returned to the node vault. The contract maintains a FIFO queue of escrow deposit IDs (`_escrowDepositIds`), sorted by `unlockAt` ascending, and a monotonically advancing head pointer (`escrowHead`).
+
+A purge pass processes queue entries in order:
+
+* **FINALIZED** entries are skipped — funds were already credited during finalization.
+* **DISPUTED** entries (challenge still active) are skipped — the challenge outcome is pending.
+* **INITIALIZED** entries past their `unlockAt` timestamp are purged — the node's locked amount is returned to the node vault and the entry is marked FINALIZED.
+* **INITIALIZED** entries not yet at `unlockAt` stop the scan — because the queue is sorted by `unlockAt` ascending, no subsequent entry can be purgeable either.
+
+The scan is bounded by a `maxSteps` budget that counts every inspected entry, whether skipped, purged, or halting. `_purgeEscrowDeposits` is called automatically on every protocol operation with a budget of `MAX_DEPOSIT_ESCROW_STEPS = 64`. The public `purgeEscrowDeposits(maxSteps)` function allows any caller to drain a backlog explicitly.
+
+---
+
 ## Home chain migration
 
 Migration enables moving the channel's "home" security chain from one blockchain to another, preserving allocations and cumulative accounting.

@@ -1,5 +1,6 @@
 environments:
   sandbox-v1: {}
+  stress-v1: {}
   v1-rc: {}
 
 ---
@@ -9,6 +10,9 @@ releases:
     namespace: clearnode-{{ .Environment.Name }}
     chart: ./chart
     installed: true
+    secrets:
+      - chart/config/secrets.yaml
+      - chart/config/{{ .Environment.Name }}/secrets.yaml
     values:
       - chart/config/{{ .Environment.Name }}/clearnode.yaml
     set:
@@ -18,5 +22,3 @@ releases:
         file: chart/config/{{ .Environment.Name }}/blockchains.yaml
       - name: config.assets
         file: chart/config/{{ .Environment.Name }}/assets.yaml
-      - name: config.actionGateway
-        file: chart/config/{{ .Environment.Name }}/action_gateway.yaml

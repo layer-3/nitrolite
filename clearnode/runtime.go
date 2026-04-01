@@ -64,19 +64,23 @@ func (b *Backbone) Close() error {
 	return firstErr
 }
 
-type Config struct {
+type FullConfig struct {
 	Database                    database.DatabaseConfig
 	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"` // 24 hours
 	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"CLEARNODE_ACTION_LIMITS_ENABLED"`
 	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"CLEARNODE_APP_REGISTRY_ENABLED"`
-	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
-	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                     // required when signer_type=key
-	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`         // required when signer_type=gcp-kms
+	Signer                      SignerConfig     `yaml:"signer"`
 	ValidationLimits            ValidationLimits `yaml:"validation_limits"`
 	RateLimitPerSec             float64          `yaml:"rate_limit_per_sec" env:"CLEARNODE_RATE_LIMIT_PER_SEC" env-default:"10"`
 	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"CLEARNODE_RATE_LIMIT_BURST" env-default:"20"`
 	WsProcessBufferSize         int              `yaml:"ws_process_buffer_size" env:"CLEARNODE_WS_PROCESS_BUFFER_SIZE" env-default:"64"`
 	WsWriteBufferSize           int              `yaml:"ws_write_buffer_size" env:"CLEARNODE_WS_WRITE_BUFFER_SIZE" env-default:"64"`
+}
+
+type SignerConfig struct {
+	Type          string `yaml:"type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
+	Key           string `yaml:"key" env:"CLEARNODE_SIGNER_KEY"`                     // required when type=key
+	GCPKMSKeyName string `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`  // required when type=gcp-kms
 }
 
 // ValidationLimits defines configurable upper bounds for dynamic-length request fields.
@@ -90,33 +94,21 @@ type ValidationLimits struct {
 
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
+	closers := []func() error{} // collect closer functions for resources that need cleanup
+
 	// ------------------------------------------------
 	// Logger
 	// ------------------------------------------------
 
-	var loggerConf log.Config
-	if err := cleanenv.ReadEnv(&loggerConf); err != nil {
-		panic("failed to read logger config from env: " + err.Error())
-	}
-	logger := log.NewZapLogger(loggerConf)
-	logger = logger.WithName("main")
+	logger := initLogger()
 
 	// ------------------------------------------------
 	// (Preparation)
 	// ------------------------------------------------
 
-	configDirPath := os.Getenv("CLEARNODE_CONFIG_DIR_PATH")
-	if configDirPath == "" {
-		configDirPath = "."
-	}
+	configDirPath := initBase(logger)
 
-	configDotEnvPath := filepath.Join(configDirPath, ".env")
-	logger.Info("loading .env file", "path", configDotEnvPath)
-	if err := godotenv.Load(configDotEnvPath); err != nil {
-		logger.Warn(".env file not found")
-	}
-
-	var conf Config
+	var conf FullConfig
 	if err := cleanenv.ReadEnv(&conf); err != nil {
 		logger.Fatal("failed to read env", "err", err)
 	}
@@ -161,42 +153,15 @@ func InitBackbone() *Backbone {
 	// Signer
 	// ------------------------------------------------
 
-	var (
-		stateSigner, txSigner sign.Signer
-		signerErr             error
-		closers               []func() error
-	)
+	txSigner, closer := initSigner(logger, conf.Signer.Type, conf.Signer.Key, conf.Signer.GCPKMSKeyName)
+	closers = append(closers, closer)
 
-	switch conf.SignerType {
-	case "key":
-		if conf.SignerKey == "" {
-			logger.Fatal("CLEARNODE_SIGNER_KEY is required when CLEARNODE_SIGNER_TYPE=key")
-		}
-		txSigner, signerErr = sign.NewEthereumRawSigner(conf.SignerKey)
-		if signerErr != nil {
-			logger.Fatal("failed to initialise tx signer", "error", signerErr)
-		}
-	case "gcp-kms":
-		if conf.GCPKMSKeyName == "" {
-			logger.Fatal("CLEARNODE_GCP_KMS_KEY_NAME is required when CLEARNODE_SIGNER_TYPE=gcp-kms")
-		}
-		kmsCtx, kmsCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer kmsCancel()
-		kmsSigner, kmsErr := gcp.NewSigner(kmsCtx, conf.GCPKMSKeyName)
-		if kmsErr != nil {
-			logger.Fatal("failed to initialise GCP KMS signer", "error", kmsErr)
-		}
-		closers = append(closers, kmsSigner.Close)
-		txSigner = kmsSigner
-	default:
-		logger.Fatal("unsupported CLEARNODE_SIGNER_TYPE", "type", conf.SignerType)
-	}
-	stateSigner, signerErr = sign.NewEthereumMsgSignerFromRaw(txSigner)
-	if signerErr != nil {
-		logger.Fatal("failed to wrap KMS signer as state signer", "error", signerErr)
+	stateSigner, err := sign.NewEthereumMsgSignerFromRaw(txSigner)
+	if err != nil {
+		logger.Fatal("failed to wrap tx signer as state signer", "error", err)
 	}
 
-	logger.Info("signer initialized", "type", conf.SignerType, "address", stateSigner.PublicKey().Address())
+	logger.Info("signer initialized", "type", conf.Signer.Type, "address", stateSigner.PublicKey().Address())
 
 	// ------------------------------------------------
 	// Metrics
@@ -229,6 +194,88 @@ func InitBackbone() *Backbone {
 	// Blockchain RPCs
 	// ------------------------------------------------
 
+	blockchainRPCs := initBlockchainRPCs(logger, memoryStore)
+
+	return &Backbone{
+		NodeVersion:                 Version,
+		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
+		AppRegistryEnabled:          conf.AppRegistryEnabled,
+		BlockchainRPCs:              blockchainRPCs,
+		ValidationLimits:            conf.ValidationLimits,
+		RateLimitPerSec:             conf.RateLimitPerSec,
+		RateLimitBurst:              conf.RateLimitBurst,
+
+		DbStore:        dbStore,
+		MemoryStore:    memoryStore,
+		ActionGateway:  actionGateway,
+		RpcNode:        rpcNode,
+		StateSigner:    stateSigner,
+		TxSigner:       txSigner,
+		Logger:         logger,
+		RuntimeMetrics: runtimeMetrics,
+		StoreMetrics:   storeMetrics,
+		closers:        closers,
+	}
+}
+
+func initBase(logger log.Logger) string {
+	configDirPath := os.Getenv("CLEARNODE_CONFIG_DIR_PATH")
+	if configDirPath == "" {
+		configDirPath = "."
+	}
+
+	configDotEnvPath := filepath.Join(configDirPath, ".env")
+	logger.Info("loading .env file", "path", configDotEnvPath)
+	if err := godotenv.Load(configDotEnvPath); err != nil {
+		logger.Warn(".env file not found")
+	}
+
+	return configDirPath
+}
+
+func initLogger() log.Logger {
+	var loggerConf log.Config
+	if err := cleanenv.ReadEnv(&loggerConf); err != nil {
+		panic("failed to read logger config from env: " + err.Error())
+	}
+	return log.NewZapLogger(loggerConf).WithName("main")
+}
+
+func initSigner(logger log.Logger, signerType, privateKey, gcpKMSKeyName string) (sign.Signer, func() error) {
+	var signer sign.Signer
+	var err error
+
+	closer := func() error { return nil } // default no-op closer
+
+	switch signerType {
+	case "key":
+		if privateKey == "" {
+			logger.Fatal("CLEARNODE_SIGNER_KEY is required when CLEARNODE_SIGNER_TYPE=key")
+		}
+		signer, err = sign.NewEthereumRawSigner(privateKey)
+		if err != nil {
+			logger.Fatal("failed to initialise tx signer", "error", err)
+		}
+	case "gcp-kms":
+		if gcpKMSKeyName == "" {
+			logger.Fatal("CLEARNODE_GCP_KMS_KEY_NAME is required when CLEARNODE_SIGNER_TYPE=gcp-kms")
+		}
+		kmsCtx, kmsCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer kmsCancel()
+		kmsSigner, kmsErr := gcp.NewSigner(kmsCtx, gcpKMSKeyName)
+		if kmsErr != nil {
+			logger.Fatal("failed to initialise GCP KMS signer", "error", kmsErr)
+		}
+		closer = kmsSigner.Close
+		signer = kmsSigner
+	default:
+		logger.Fatal("unsupported CLEARNODE_SIGNER_TYPE", "type", signerType)
+	}
+
+	return signer, closer
+}
+
+func initBlockchainRPCs(logger log.Logger, memoryStore memory.MemoryStore) map[uint64]string {
 	blockchains, err := memoryStore.GetBlockchains()
 	if err != nil {
 		logger.Fatal("failed to get blockchains", "error", err)
@@ -256,26 +303,7 @@ func InitBackbone() *Backbone {
 		blockchainRPCs[bc.ID] = rpcURL
 	}
 
-	return &Backbone{
-		NodeVersion:                 Version,
-		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
-		AppRegistryEnabled:          conf.AppRegistryEnabled,
-		BlockchainRPCs:              blockchainRPCs,
-		ValidationLimits:            conf.ValidationLimits,
-		RateLimitPerSec:             conf.RateLimitPerSec,
-		RateLimitBurst:              conf.RateLimitBurst,
-
-		DbStore:        dbStore,
-		MemoryStore:    memoryStore,
-		ActionGateway:  actionGateway,
-		RpcNode:        rpcNode,
-		StateSigner:    stateSigner,
-		TxSigner:       txSigner,
-		Logger:         logger,
-		RuntimeMetrics: runtimeMetrics,
-		StoreMetrics:   storeMetrics,
-		closers:        closers,
-	}
+	return blockchainRPCs
 }
 
 // checkChainId connects to an RPC endpoint and verifies it returns the expected chain ID.

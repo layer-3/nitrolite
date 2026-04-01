@@ -95,8 +95,12 @@ resources:
     # memory: 256Mi
     # ephemeral-storage: 100Mi
 
-# -- Service account name
-serviceAccount: ""
+serviceAccount:
+  # -- Create a ServiceAccount resource
+  create: false
+  # -- Annotations to add to the ServiceAccount (e.g. for GKE Workload Identity)
+  annotations: {}
+    # iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com
 
 autoscaling:
   # -- Enable autoscaling
@@ -139,6 +143,9 @@ networking:
 
 # -- Image pull secret name
 imagePullSecret: ""
+
+# -- Base64-encoded .dockerconfigjson for GHCR pull secret (provided via SOPS-encrypted secrets)
+ghcrPullDockerConfigJson: ""
 
 # -- Node selector
 nodeSelector: {}

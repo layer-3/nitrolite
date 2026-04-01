@@ -42,9 +42,13 @@ func ComputeReport(method string, totalReqs, connections int, results []Result, 
 		report.MedianLatency = durationPercentile(durations, 50)
 		report.P95Latency = durationPercentile(durations, 95)
 		report.P99Latency = durationPercentile(durations, 99)
-		// Uses only successful request latencies so that timeouts and
-		// straggler failures don't deflate the measured server throughput.
-		report.RequestsPerSec = float64(connections) / report.AvgLatency.Seconds()
+		if connections > 0 {
+			// Pool-based: theoretical throughput = connections / avg latency.
+			report.RequestsPerSec = float64(connections) / report.AvgLatency.Seconds()
+		} else {
+			// Custom orchestration (storm): measured throughput = successful / wall time.
+			report.RequestsPerSec = float64(report.Successful) / totalTime.Seconds()
+		}
 	}
 
 	return report

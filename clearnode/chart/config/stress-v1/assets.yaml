@@ -1,0 +1,47 @@
+assets:
+  - name: "Yellow USD"
+    symbol: "yusd"
+    decimals: 6
+    suggested_blockchain_id: 11155111
+    tokens:
+      - blockchain_id: 11155111
+        address: "0xD3E8Eb01Ae895262f187c4aAe936eC5c0665bbf8"
+        decimals: 6
+      - blockchain_id: 80002
+        address: "0x0827b6aAA03475A8BF59Ee1A2bD76903DDFbaDB6"
+        decimals: 8
+  - name: "BNB"
+    symbol: "bnb"
+    decimals: 18
+    suggested_blockchain_id: 11155111
+    tokens:
+      - blockchain_id: 11155111
+        address: "0x719a00F9e8b831335F156337cEF7dC48986b2e84"
+        decimals: 18
+      - blockchain_id: 80002
+        address: "0x9d8193e5655a36FFB9CD7D88D31c91d2650896D0"
+        decimals: 18
+  - name: "Ether"
+    symbol: "eth"
+    decimals: 18
+    suggested_blockchain_id: 11155111
+    tokens:
+      - blockchain_id: 11155111
+        address: "0x0000000000000000000000000000000000000000"
+        decimals: 18
+  - name: "POL"
+    symbol: "pol"
+    decimals: 18
+    suggested_blockchain_id: 80002
+    tokens:
+      - blockchain_id: 80002
+        address: "0x0000000000000000000000000000000000000000"
+        decimals: 18
+  - name: "Yellow"
+    symbol: "yellow"
+    decimals: 18
+    suggested_blockchain_id: 11155111
+    tokens:
+      - blockchain_id: 11155111
+        address: "0x236eB848C95b231299B4AA9f56c73D6893462720"
+        decimals: 18

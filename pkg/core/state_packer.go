@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -160,6 +161,13 @@ func (p *StatePackerV1) packSigningData(state State) (common.Hash, []byte, error
 		nonHomeLedger,
 	)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "%d, %d, %x, %+v, %+v\n",
+			state.Version,
+			intent,
+			metadata,
+			homeLedger,
+			nonHomeLedger,
+		)
 		return common.Hash{}, nil, fmt.Errorf("failed to pack signing data: %w", err)
 	}
 

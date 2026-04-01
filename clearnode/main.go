@@ -11,12 +11,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/layer-3/nitrolite/clearnode/api"
 	"github.com/layer-3/nitrolite/clearnode/event_handlers"
 	"github.com/layer-3/nitrolite/clearnode/metrics"
 	"github.com/layer-3/nitrolite/clearnode/store/database"
+	"github.com/layer-3/nitrolite/clearnode/store/memory"
 	"github.com/layer-3/nitrolite/clearnode/stress"
 	"github.com/layer-3/nitrolite/pkg/blockchain/evm"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -234,19 +236,47 @@ func runOperatorCommand(args []string) {
 }
 
 func runOperatorAddress() {
-	bb := InitBackbone()
-	defer bb.Close()
+	logger := initLogger()
+	_ = initBase(logger)
 
-	fmt.Println(bb.StateSigner.PublicKey().Address().String())
-	time.Sleep(5 * time.Second)
+	var signerConf SignerConfig
+	if err := cleanenv.ReadEnv(&signerConf); err != nil {
+		logger.Fatal("failed to read signer configuration from env", "error", err)
+	}
+
+	signer, close := initSigner(
+		logger,
+		signerConf.Type,
+		signerConf.Key,
+		signerConf.GCPKMSKeyName)
+	defer close()
+
+	logger.Info("node signer initialized", "address", signer.PublicKey().Address().String(), "signerType", signerConf.Type)
 }
 
 func runRegisterValidators() {
-	bb := InitBackbone()
-	defer bb.Close()
-	logger := bb.Logger
+	logger := initLogger()
+	configDirPath := initBase(logger)
 
-	blockchains, err := bb.MemoryStore.GetBlockchains()
+	memoryStore, err := memory.NewMemoryStoreV1FromConfig(configDirPath)
+	if err != nil {
+		logger.Fatal("failed to load blockchains", "error", err)
+	}
+
+	var signerConf SignerConfig
+	if err := cleanenv.ReadEnv(&signerConf); err != nil {
+		logger.Fatal("failed to read signer configuration from env", "error", err)
+	}
+	signer, close := initSigner(
+		logger,
+		signerConf.Type,
+		signerConf.Key,
+		signerConf.GCPKMSKeyName)
+	defer close()
+
+	blockchainRPCs := initBlockchainRPCs(logger, memoryStore)
+
+	blockchains, err := memoryStore.GetBlockchains()
 	if err != nil {
 		logger.Fatal("failed to get blockchains from memory store", "error", err)
 	}
@@ -256,7 +286,7 @@ func runRegisterValidators() {
 			continue
 		}
 
-		rpcURL, ok := bb.BlockchainRPCs[b.ID]
+		rpcURL, ok := blockchainRPCs[b.ID]
 		if !ok {
 			logger.Fatal("no RPC URL configured for blockchain", "blockchainID", b.ID)
 		}
@@ -266,18 +296,18 @@ func runRegisterValidators() {
 			logger.Fatal("failed to connect to EVM Node", "blockchainID", b.ID)
 		}
 
-		nodeAddress := bb.StateSigner.PublicKey().Address().String()
+		nodeAddress := signer.PublicKey().Address().String()
 		clientOpts := []evm.ClientOption{
 			evm.ClientBalanceCheck{RequireBalanceCheck: false},
 			evm.ClientAllowanceCheck{RequireAllowanceCheck: false},
 		}
 
-		blockchainClient, err := evm.NewBlockchainClient(common.HexToAddress(b.ChannelHubAddress), client, bb.TxSigner, b.ID, nodeAddress, bb.MemoryStore, clientOpts...)
+		blockchainClient, err := evm.NewBlockchainClient(common.HexToAddress(b.ChannelHubAddress), client, signer, b.ID, nodeAddress, memoryStore, clientOpts...)
 		if err != nil {
 			logger.Fatal("failed to create EVM client", "blockchainID", b.ID)
 		}
 
-		sigValidators, err := bb.MemoryStore.GetChannelSigValidators(b.ID)
+		sigValidators, err := memoryStore.GetChannelSigValidators(b.ID)
 		if err != nil {
 			logger.Fatal("failed to get channel signature validators from memory store", "error", err, "blockchainID", b.ID)
 		}

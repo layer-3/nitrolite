@@ -221,19 +221,62 @@ func TestState_ApplyMutualLockTransition(t *testing.T) {
 
 func TestState_ApplyEscrowDepositTransition(t *testing.T) {
 	t.Parallel()
-	state := NewVoidState("USDC", "0xUser")
-	state.ID = "0xStateID"
 
-	escrowID := "0xEscrow"
-	state.EscrowChannelID = &escrowID
-	state.EscrowLedger = &Ledger{UserBalance: decimal.NewFromInt(100)}
+	t.Run("user_balance_increases_escrow_balance_decreases", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		state.ID = "0xStateID"
 
-	amount := decimal.NewFromInt(10)
-	transition, err := state.ApplyEscrowDepositTransition(amount)
-	require.NoError(t, err)
-	assert.Equal(t, TransitionTypeEscrowDeposit, transition.Type)
-	assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
-	assert.Equal(t, "90", state.EscrowLedger.UserBalance.String())
+		escrowID := "0xEscrow"
+		state.EscrowChannelID = &escrowID
+		state.EscrowLedger = &Ledger{UserBalance: decimal.NewFromInt(100)}
+
+		amount := decimal.NewFromInt(10)
+		transition, err := state.ApplyEscrowDepositTransition(amount)
+		require.NoError(t, err)
+		assert.Equal(t, TransitionTypeEscrowDeposit, transition.Type)
+		assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
+		assert.Equal(t, "90", state.EscrowLedger.UserBalance.String())
+	})
+
+	t.Run("clears_node_balance_and_leaves_net_flows_unchanged", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		state.ID = "0xStateID"
+
+		escrowID := "0xEscrow"
+		state.EscrowChannelID = &escrowID
+
+		// Realistic precondition: state after ApplyMutualLockTransition where the
+		// node has locked funds on the home chain.
+		state.HomeLedger.NodeBalance = decimal.NewFromInt(10)
+		state.HomeLedger.NodeNetFlow = decimal.NewFromInt(10)
+		state.EscrowLedger = &Ledger{
+			UserBalance: decimal.NewFromInt(10),
+			UserNetFlow: decimal.NewFromInt(10),
+		}
+
+		prevNodeNetFlow := state.HomeLedger.NodeNetFlow
+		prevUserNetFlow := state.HomeLedger.UserNetFlow
+
+		amount := decimal.NewFromInt(10)
+		_, err := state.ApplyEscrowDepositTransition(amount)
+		require.NoError(t, err)
+
+		// User receives funds on the home chain.
+		assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
+
+		// Node's locked allocation must be cleared (on-chain: nodeAllocation == 0).
+		assert.Equal(t, "0", state.HomeLedger.NodeBalance.String())
+
+		// Net flows must not change (on-chain: nodeNfDelta == 0, userNfDelta == 0).
+		assert.True(t, state.HomeLedger.NodeNetFlow.Equal(prevNodeNetFlow),
+			"NodeNetFlow must remain unchanged: got %s, want %s",
+			state.HomeLedger.NodeNetFlow.String(), prevNodeNetFlow.String())
+		assert.True(t, state.HomeLedger.UserNetFlow.Equal(prevUserNetFlow),
+			"UserNetFlow must remain unchanged: got %s, want %s",
+			state.HomeLedger.UserNetFlow.String(), prevUserNetFlow.String())
+	})
 }
 
 func TestState_ApplyEscrowLockTransition(t *testing.T) {

@@ -1154,12 +1154,6 @@ contract ChannelHub is IVault, ReentrancyGuard {
             emit NodeBalanceUpdated(def.node, token, updatedBalance);
         }
 
-        // Special handling for CLOSE: push nodeAllocation directly to node address
-        if (effects.closeChannel && candidate.homeLedger.nodeAllocation > 0) {
-            _pushFunds(def.node, token, candidate.homeLedger.nodeAllocation);
-            meta.lockedFunds -= candidate.homeLedger.nodeAllocation;
-        }
-
         // NOTE: purge escrow deposits to unlock unutilized node liquidity
         _purgeEscrowDeposits();
     }

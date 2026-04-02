@@ -286,8 +286,9 @@ A channel can be closed:
 
 Closure:
 
-* pushes all remaining allocations to User and Node,
-* sets channel status to CLOSED.
+* Both parties encode their final payouts as negative net flow deltas (equivalent to a full withdrawal), so the CLOSE state must have `userAllocation == 0` and `nodeAllocation == 0`.
+* The net flow deltas push all remaining funds to User and Node.
+* Sets channel status to CLOSED.
 
 ---
 

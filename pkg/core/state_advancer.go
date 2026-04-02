@@ -75,6 +75,12 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("invalid amount for asset %s: %w", proposedState.Asset, err)
 	}
 
+	if newTransition.Type != TransitionTypeAcknowledgement && newTransition.Type != TransitionTypeFinalize {
+		if !newTransition.Amount.IsPositive() {
+			return fmt.Errorf("transition amount must be positive, got %s", newTransition.Amount.String())
+		}
+	}
+
 	lastTransition := currentState.Transition
 
 	switch newTransition.Type {

@@ -118,3 +118,39 @@ func TestValidateAdvancement_EscrowDeposit(t *testing.T) {
 		assert.Contains(t, err.Error(), "escrow deposit transition must follow a mutual lock transition")
 	})
 }
+
+func TestValidateAdvancement_RejectsNonPositiveAmount(t *testing.T) {
+	t.Parallel()
+
+	advancer := NewStateAdvancerV1(newMockAssetStore())
+	sig := "0xSig"
+	chanID := "0xChannel"
+
+	newCurrentState := func() State {
+		s := NewVoidState("USDC", "0xUser")
+		s.HomeChannelID = &chanID
+		s.ID = GetStateID("0xUser", "USDC", 0, 0)
+		return *s
+	}
+
+	for _, tc := range []struct {
+		name   string
+		amount decimal.Decimal
+	}{
+		{"zero", decimal.Zero},
+		{"negative", decimal.NewFromInt(-1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			current := newCurrentState()
+			proposed := current.NextState()
+			proposed.Transition = *NewTransition(TransitionTypeTransferSend, "0xTxID", "0xRecipient", tc.amount)
+			proposed.UserSig = &sig
+
+			err := advancer.ValidateAdvancement(current, *proposed)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "must be positive")
+		})
+	}
+}

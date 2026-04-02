@@ -433,3 +433,115 @@ func TestPaginationParams_GetOffsetAndLimit(t *testing.T) {
 	o, l = p.GetOffsetAndLimit(10, 100)
 	assert.Equal(t, uint32(100), l) // Capped at max
 }
+
+func TestApplyTransition_RejectsNonPositiveAmount(t *testing.T) {
+	t.Parallel()
+
+	newState := func() *State {
+		s := NewVoidState("USDC", "0xUser")
+		s.ID = "0xStateID"
+		return s
+	}
+
+	cases := []struct {
+		name  string
+		apply func(amount decimal.Decimal) error
+	}{
+		{
+			"HomeDeposit",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyHomeDepositTransition(amount)
+				return err
+			},
+		},
+		{
+			"HomeWithdrawal",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyHomeWithdrawalTransition(amount)
+				return err
+			},
+		},
+		{
+			"TransferSend",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyTransferSendTransition("0xRecipient", amount)
+				return err
+			},
+		},
+		{
+			"TransferReceive",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyTransferReceiveTransition("0xSender", amount, "0xTxID")
+				return err
+			},
+		},
+		{
+			"Commit",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyCommitTransition("0xAccount", amount)
+				return err
+			},
+		},
+		{
+			"Release",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyReleaseTransition("0xAccount", amount)
+				return err
+			},
+		},
+		{
+			"MutualLock",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyMutualLockTransition(1, "0xToken", amount)
+				return err
+			},
+		},
+		{
+			"EscrowDeposit",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyEscrowDepositTransition(amount)
+				return err
+			},
+		},
+		{
+			"EscrowLock",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyEscrowLockTransition(1, "0xToken", amount)
+				return err
+			},
+		},
+		{
+			"EscrowWithdraw",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyEscrowWithdrawTransition(amount)
+				return err
+			},
+		},
+		{
+			"Migrate",
+			func(amount decimal.Decimal) error {
+				_, err := newState().ApplyMigrateTransition(amount)
+				return err
+			},
+		},
+	}
+
+	amounts := []struct {
+		name   string
+		amount decimal.Decimal
+	}{
+		{"zero", decimal.Zero},
+		{"negative", decimal.NewFromInt(-1)},
+	}
+
+	for _, tc := range cases {
+		for _, a := range amounts {
+			t.Run(tc.name+"/"+a.name, func(t *testing.T) {
+				t.Parallel()
+				err := tc.apply(a.amount)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "must be positive")
+			})
+		}
+	}
+}

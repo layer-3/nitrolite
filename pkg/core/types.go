@@ -248,6 +248,18 @@ func (state *State) IsFinal() bool {
 	return state.Transition.Type == TransitionTypeFinalize
 }
 
+// validateTransitionInputs checks the two universal preconditions for any amount-bearing transition:
+// that the state has no active transition yet, and that the amount is strictly positive.
+func (state *State) validateTransitionInputs(amount decimal.Decimal) error {
+	if state.Transition.Type != TransitionTypeVoid {
+		return fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	}
+	if !amount.IsPositive() {
+		return fmt.Errorf("transition amount must be positive, got %s", amount.String())
+	}
+	return nil
+}
+
 func (state *State) ApplyAcknowledgementTransition() (Transition, error) {
 	if state.Transition.Type != TransitionTypeVoid {
 		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
@@ -262,8 +274,8 @@ func (state *State) ApplyAcknowledgementTransition() (Transition, error) {
 }
 
 func (state *State) ApplyHomeDepositTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -284,8 +296,8 @@ func (state *State) ApplyHomeDepositTransition(amount decimal.Decimal) (Transiti
 }
 
 func (state *State) ApplyHomeWithdrawalTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -306,8 +318,8 @@ func (state *State) ApplyHomeWithdrawalTransition(amount decimal.Decimal) (Trans
 }
 
 func (state *State) ApplyTransferSendTransition(recipient string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	accountID := recipient
@@ -325,8 +337,8 @@ func (state *State) ApplyTransferSendTransition(recipient string, amount decimal
 }
 
 func (state *State) ApplyTransferReceiveTransition(sender string, amount decimal.Decimal, txID string) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	accountID := sender
@@ -339,8 +351,8 @@ func (state *State) ApplyTransferReceiveTransition(sender string, amount decimal
 }
 
 func (state *State) ApplyCommitTransition(accountID string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that AccountID has correct AppSessionID format
 	txID, err := GetSenderTransactionID(accountID, state.ID)
@@ -357,8 +369,8 @@ func (state *State) ApplyCommitTransition(accountID string, amount decimal.Decim
 }
 
 func (state *State) ApplyReleaseTransition(accountID string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	txID, err := GetReceiverTransactionID(accountID, state.ID)
@@ -374,8 +386,8 @@ func (state *State) ApplyReleaseTransition(accountID string, amount decimal.Deci
 }
 
 func (state *State) ApplyMutualLockTransition(blockchainID uint64, tokenAddress string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -418,8 +430,8 @@ func (state *State) ApplyMutualLockTransition(blockchainID uint64, tokenAddress 
 }
 
 func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.EscrowChannelID == nil {
 		return Transition{}, fmt.Errorf("internal error: escrow channel ID is nil")
@@ -447,8 +459,8 @@ func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transi
 }
 
 func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -488,8 +500,8 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 }
 
 func (state *State) ApplyEscrowWithdrawTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	if state.EscrowChannelID == nil {
 		return Transition{}, fmt.Errorf("internal error: escrow channel ID is nil")
@@ -517,8 +529,8 @@ func (state *State) ApplyEscrowWithdrawTransition(amount decimal.Decimal) (Trans
 }
 
 func (state *State) ApplyMigrateTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(amount); err != nil {
+		return Transition{}, err
 	}
 	return Transition{}, fmt.Errorf("migrate transition not implemented yet")
 }

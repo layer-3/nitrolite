@@ -438,7 +438,7 @@ func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transi
 	state.Transition = *newTransition
 
 	state.HomeLedger.UserBalance = state.HomeLedger.UserBalance.Add(newTransition.Amount)
-	state.HomeLedger.NodeNetFlow = state.HomeLedger.NodeNetFlow.Add(newTransition.Amount)
+	state.HomeLedger.NodeBalance = decimal.Zero
 
 	state.EscrowLedger.UserBalance = state.EscrowLedger.UserBalance.Sub(newTransition.Amount)
 	state.EscrowLedger.NodeNetFlow = state.EscrowLedger.NodeNetFlow.Sub(newTransition.Amount)

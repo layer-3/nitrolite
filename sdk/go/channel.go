@@ -72,7 +72,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 			ApprovedSigValidators: bitmap,
 		}
 
-		if state == nil {
+		if state == nil || state.HomeChannelID == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}
 		newState := state.NextState()
@@ -180,7 +180,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 			ApprovedSigValidators: bitmap,
 		}
 
-		if state == nil {
+		if state == nil || state.HomeChannelID == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}
 		newState := state.NextState()
@@ -274,7 +274,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 			ApprovedSigValidators: bitmap,
 		}
 
-		if state == nil {
+		if state == nil || state.HomeChannelID == nil {
 			state = core.NewVoidState(asset, senderWallet)
 		}
 		newState := state.NextState()
@@ -446,7 +446,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 			ApprovedSigValidators: bitmap,
 		}
 
-		if state == nil {
+		if state == nil || state.HomeChannelID == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}
 		newState := state.NextState()

@@ -216,11 +216,11 @@ export class StateAdvancerV1 implements StateAdvancer {
 
     if (expectedState.escrowLedger && proposedState.escrowLedger) {
       const escrowLedgerMismatch = ledgerEqual(
-        proposedState.escrowLedger,
-        expectedState.escrowLedger
+        expectedState.escrowLedger,
+        proposedState.escrowLedger
       );
       if (escrowLedgerMismatch) {
-        throw new Error(`escrow ledger mismatch: ${escrowLedgerMismatch}`);
+        throw new Error(`escrow ledger mismatch: expected=${JSON.stringify(expectedState.escrowLedger)}, proposed=${JSON.stringify(proposedState.escrowLedger)}: ${escrowLedgerMismatch}`);
       }
       validateLedger(proposedState.escrowLedger);
 

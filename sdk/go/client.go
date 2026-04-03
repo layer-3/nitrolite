@@ -224,8 +224,8 @@ func (c *Client) WaitCh() <-chan struct{} {
 // construct and sign states. Most users should use the high-level methods like
 // Transfer, Deposit, and Withdraw instead.
 func (c *Client) ValidateAndSignState(currentState, proposedState *core.State) (string, error) {
-	if proposedState == nil {
-		return "", fmt.Errorf("state cannot be nil")
+	if currentState == nil || proposedState == nil {
+		return "", fmt.Errorf("current or proposed state cannot be nil")
 	}
 
 	// Validate the state

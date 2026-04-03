@@ -22,3 +22,6 @@ export * from './state';
 
 // Export state packer
 export * from './state_packer';
+
+// Export state advancer
+export * from './state_advancer';

@@ -175,6 +175,10 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to get latest state: %w", err)
 	}
 
+	if currentState == nil || currentState.HomeChannelID == nil {
+		return "", fmt.Errorf("no channel exists for asset %s", asset)
+	}
+
 	nextState := currentState.NextState()
 
 	_, err = nextState.ApplyCommitTransition(appUpdate.AppSessionID, depositAmount)

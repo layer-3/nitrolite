@@ -16,7 +16,7 @@ export STRESS_PRIVATE_KEY=<hex-encoded-private-key>
 clearnode stress-test basic transfer-roundtrip:10:20:usdc
 
 # Storm test (cascading load patterns)
-clearnode stress-test storm transfers:3:usdc:1
+clearnode stress-test storm transfers:3:3:usdc:1
 ```
 
 ## Architecture

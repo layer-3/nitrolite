@@ -19,6 +19,10 @@ func NewStateAdvancerV1(assetStore AssetStore) *StateAdvancerV1 {
 }
 
 // ValidateAdvancement validates that the proposed state is a valid advancement of the current state
+//
+// NOTE: User signature is not validated here
+//
+// TODO: Add shared JSON fixture suite consumed by both Go and TS test suites to guarantee validation parity
 func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State) error {
 	expectedState := currentState.NextState()
 	if proposedState.HomeChannelID == nil {
@@ -58,10 +62,6 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 	// State ID must match
 	if proposedState.ID != expectedState.ID {
 		return fmt.Errorf("state ID mismatch: expected=%s, proposed=%s", expectedState.ID, proposedState.ID)
-	}
-
-	if proposedState.UserSig == nil {
-		return fmt.Errorf("user signature is required")
 	}
 
 	newTransition := proposedState.Transition

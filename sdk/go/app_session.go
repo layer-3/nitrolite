@@ -182,7 +182,7 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to apply commit transition: %w", err)
 	}
 
-	stateSig, err := c.SignState(nextState)
+	stateSig, err := c.ValidateAndSignState(currentState, nextState)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state: %w", err)
 	}

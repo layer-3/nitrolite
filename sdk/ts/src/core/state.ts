@@ -404,7 +404,7 @@ export function applyEscrowDepositTransition(state: State, amount: Decimal): Tra
   state.transition = newTransitionObj;
 
   state.homeLedger.userBalance = state.homeLedger.userBalance.add(newTransitionObj.amount);
-  state.homeLedger.nodeNetFlow = state.homeLedger.nodeNetFlow.add(newTransitionObj.amount);
+  state.homeLedger.nodeBalance = new Decimal(0);
 
   state.escrowLedger.userBalance = state.escrowLedger.userBalance.sub(newTransitionObj.amount);
   state.escrowLedger.nodeNetFlow = state.escrowLedger.nodeNetFlow.sub(newTransitionObj.amount);

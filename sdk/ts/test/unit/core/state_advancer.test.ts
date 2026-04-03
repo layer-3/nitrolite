@@ -54,11 +54,11 @@ describe('ValidateAdvancement_EscrowDeposit', () => {
     await expect(advancer.validateAdvancement(mutualLockState, proposed)).resolves.toBeUndefined();
   });
 
-  test('reject_tampered_home_node_balance', async () => {
+  test('reject_non_zero_home_node_balance', async () => {
     const mutualLockState = newMutualLockState(amount);
     const proposed = nextState(mutualLockState);
     applyEscrowDepositTransition(proposed, amount);
-    proposed.homeLedger.nodeBalance = proposed.homeLedger.nodeBalance.add(new Decimal(1));
+    proposed.homeLedger.nodeBalance = amount;
 
     await expect(advancer.validateAdvancement(mutualLockState, proposed)).rejects.toThrow(
       'home ledger mismatch'

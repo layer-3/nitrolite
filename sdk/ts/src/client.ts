@@ -54,10 +54,7 @@ function stripSignerTypePrefix(sig: Hex): Hex {
   }
   const prefixByte = parseInt(sig.slice(2, 4), 16);
   if (prefixByte !== core.ChannelSignerType.Default) {
-    throw new Error(
-      `expected ChannelDefaultSigner prefix 0x00, got 0x${prefixByte.toString(16).padStart(2, '0')}; ` +
-      `session key signing requires the default wallet signer, not a session key signer`
-    );
+    throw new Error(`expected ChannelDefaultSigner prefix 0x00, got 0x${prefixByte.toString(16).padStart(2, '0')}; ` + `session key signing requires the default wallet signer, not a session key signer`);
   }
   return `0x${sig.slice(4)}` as Hex;
 }
@@ -109,13 +106,7 @@ export class Client {
   private txSigner: TransactionSigner;
   private assetStore: ClientAssetStore;
 
-  private constructor(
-    rpcClient: RPCClient,
-    config: Config,
-    stateSigner: StateSigner,
-    txSigner: TransactionSigner,
-    assetStore: ClientAssetStore
-  ) {
+  private constructor(rpcClient: RPCClient, config: Config, stateSigner: StateSigner, txSigner: TransactionSigner, assetStore: ClientAssetStore) {
     this.rpcClient = rpcClient;
     this.config = config;
     this.stateSigner = stateSigner;
@@ -154,12 +145,7 @@ export class Client {
    * );
    * ```
    */
-  static async create(
-    wsURL: string,
-    stateSigner: StateSigner,
-    txSigner: TransactionSigner,
-    ...opts: Option[]
-  ): Promise<Client> {
+  static async create(wsURL: string, stateSigner: StateSigner, txSigner: TransactionSigner, ...opts: Option[]): Promise<Client> {
     // Build config starting with defaults
     const config: Config = {
       url: wsURL,
@@ -224,9 +210,7 @@ export class Client {
   async setHomeBlockchain(asset: string, blockchainId: bigint): Promise<void> {
     const existingBlockchainId = this.homeBlockchains.get(asset);
     if (existingBlockchainId !== undefined) {
-      throw new Error(
-        `home blockchain is already set for asset ${asset} to ${existingBlockchainId}, please use Migrate() if you want to change home blockchain`
-      );
+      throw new Error(`home blockchain is already set for asset ${asset} to ${existingBlockchainId}, please use Migrate() if you want to change home blockchain`);
     }
 
     const exists = await this.assetStore.assetExistsOnBlockchain(blockchainId, asset);
@@ -779,8 +763,7 @@ export class Client {
       case core.TransitionType.TransferSend:
       case core.TransitionType.TransferReceive:
       case core.TransitionType.Commit:
-      case core.TransitionType.Release:  
-      {
+      case core.TransitionType.Release: {
         if (channel.status === core.ChannelStatus.Void) {
           // Channel not yet created on-chain, reconstruct definition and call Create
           const channelDef: core.ChannelDefinition = {
@@ -800,9 +783,7 @@ export class Client {
       }
 
       default:
-        throw new Error(
-          `transition type ${state.transition.type} does not require a blockchain operation`
-        );
+        throw new Error(`transition type ${state.transition.type} does not require a blockchain operation`);
     }
   }
 
@@ -895,18 +876,11 @@ export class Client {
    * @param owner - The owner address
    * @returns Current allowance amount (in smallest unit)
    */
-  async checkTokenAllowance(
-    chainId: bigint,
-    tokenAddress: string,
-    owner: string
-  ): Promise<bigint> {
+  async checkTokenAllowance(chainId: bigint, tokenAddress: string, owner: string): Promise<bigint> {
     await this.initializeBlockchainClient(chainId);
     const blockchainClient = this.blockchainClients.get(chainId)!;
 
-    return await blockchainClient.checkAllowanceByAddress(
-      tokenAddress as `0x${string}`,
-      owner as `0x${string}`
-    );
+    return await blockchainClient.checkAllowanceByAddress(tokenAddress as `0x${string}`, owner as `0x${string}`);
   }
 
   // ============================================================================
@@ -925,10 +899,7 @@ export class Client {
    */
   async escrowSecurityTokens(targetWalletAddress: string, blockchainId: bigint, amount: Decimal): Promise<string> {
     await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.lock(
-      targetWalletAddress as Address,
-      amount,
-    );
+    return this.blockchainLockingClients.get(blockchainId)!.lock(targetWalletAddress as Address, amount);
   }
 
   /**
@@ -965,9 +936,7 @@ export class Client {
    */
   async withdrawSecurityTokens(blockchainId: bigint, destinationWalletAddress: string): Promise<string> {
     await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.withdraw(
-      destinationWalletAddress as Address,
-    );
+    return this.blockchainLockingClients.get(blockchainId)!.withdraw(destinationWalletAddress as Address);
   }
 
   /**
@@ -1122,7 +1091,7 @@ export class Client {
       toTime?: bigint;
       page?: number;
       pageSize?: number;
-    }
+    },
   ): Promise<{ transactions: core.Transaction[]; metadata: core.PaginationMetadata }> {
     const req: API.UserV1GetTransactionsRequest = {
       wallet,
@@ -1130,10 +1099,13 @@ export class Client {
       tx_type: options?.txType,
       from_time: options?.fromTime,
       to_time: options?.toTime,
-      pagination: options?.page && options?.pageSize ? {
-        offset: (options.page - 1) * options.pageSize,
-        limit: options.pageSize,
-      } : undefined,
+      pagination:
+        options?.page && options?.pageSize
+          ? {
+              offset: (options.page - 1) * options.pageSize,
+              limit: options.pageSize,
+            }
+          : undefined,
     };
     const resp = await this.rpcClient.userV1GetTransactions(req);
     return {
@@ -1181,10 +1153,7 @@ export class Client {
    * }
    * ```
    */
-  async getChannels(
-    wallet: Address,
-    options?: { status?: string; asset?: string; channelType?: string; pagination?: core.PaginationParams }
-  ): Promise<{ channels: core.Channel[]; metadata: core.PaginationMetadata }> {
+  async getChannels(wallet: Address, options?: { status?: string; asset?: string; channelType?: string; pagination?: core.PaginationParams }): Promise<{ channels: core.Channel[]; metadata: core.PaginationMetadata }> {
     const req: API.ChannelsV1GetChannelsRequest = {
       wallet,
       status: options?.status,
@@ -1290,21 +1259,18 @@ export class Client {
    * });
    * ```
    */
-  async getAppSessions(options?: {
-    appSessionId?: string;
-    wallet?: Address;
-    status?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{ sessions: app.AppSessionInfoV1[]; metadata: core.PaginationMetadata }> {
+  async getAppSessions(options?: { appSessionId?: string; wallet?: Address; status?: string; page?: number; pageSize?: number }): Promise<{ sessions: app.AppSessionInfoV1[]; metadata: core.PaginationMetadata }> {
     const req: API.AppSessionsV1GetAppSessionsRequest = {
       app_session_id: options?.appSessionId,
       participant: options?.wallet,
       status: options?.status,
-      pagination: options?.page && options?.pageSize ? {
-        offset: (options.page - 1) * options.pageSize,
-        limit: options.pageSize,
-      } : undefined,
+      pagination:
+        options?.page && options?.pageSize
+          ? {
+              offset: (options.page - 1) * options.pageSize,
+              limit: options.pageSize,
+            }
+          : undefined,
     };
     const resp = await this.rpcClient.appSessionsV1GetAppSessions(req);
     return {
@@ -1360,12 +1326,7 @@ export class Client {
    * console.log('Created session:', appSessionId);
    * ```
    */
-  async createAppSession(
-    definition: app.AppDefinitionV1,
-    sessionData: string,
-    quorumSigs: string[],
-    opts?: { ownerSig?: string }
-  ): Promise<{ appSessionId: string; version: string; status: string }> {
+  async createAppSession(definition: app.AppDefinitionV1, sessionData: string, quorumSigs: string[], opts?: { ownerSig?: string }): Promise<{ appSessionId: string; version: string; status: string }> {
     const req: API.AppSessionsV1CreateAppSessionRequest = {
       definition: transformAppDefinitionToRPC(definition) as any, // RPC type
       session_data: sessionData,
@@ -1411,12 +1372,7 @@ export class Client {
    * );
    * ```
    */
-  async submitAppSessionDeposit(
-    appStateUpdate: app.AppStateUpdateV1,
-    quorumSigs: string[],
-    asset: string,
-    depositAmount: Decimal
-  ): Promise<string> {
+  async submitAppSessionDeposit(appStateUpdate: app.AppStateUpdateV1, quorumSigs: string[], asset: string, depositAmount: Decimal): Promise<string> {
     // Get current state
     const currentState = await this.getLatestState(this.getUserAddress(), asset, false);
 
@@ -1465,10 +1421,7 @@ export class Client {
    * await client.submitAppState(appUpdate, ['sig1', 'sig2']);
    * ```
    */
-  async submitAppState(
-    appStateUpdate: app.AppStateUpdateV1,
-    quorumSigs: string[]
-  ): Promise<void> {
+  async submitAppState(appStateUpdate: app.AppStateUpdateV1, quorumSigs: string[]): Promise<void> {
     const appUpdate = transformAppStateUpdateToRPC(appStateUpdate);
 
     const req: API.AppSessionsV1SubmitAppStateRequest = {
@@ -1504,9 +1457,7 @@ export class Client {
    * console.log('Rebalance batch ID:', batchId);
    * ```
    */
-  async rebalanceAppSessions(
-    signedUpdates: app.SignedAppStateUpdateV1[]
-  ): Promise<string> {
+  async rebalanceAppSessions(signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string> {
     // Transform SDK types to RPC types
     const rpcUpdates = signedUpdates.map(transformSignedAppStateUpdateToRPC);
 
@@ -1536,19 +1487,17 @@ export class Client {
    * }
    * ```
    */
-  async getApps(options?: {
-    appId?: string;
-    ownerWallet?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata }> {
+  async getApps(options?: { appId?: string; ownerWallet?: string; page?: number; pageSize?: number }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata }> {
     const req: API.AppsV1GetAppsRequest = {
       app_id: options?.appId,
       owner_wallet: options?.ownerWallet,
-      pagination: options?.page && options?.pageSize ? {
-        offset: (options.page - 1) * options.pageSize,
-        limit: options.pageSize,
-      } : undefined,
+      pagination:
+        options?.page && options?.pageSize
+          ? {
+              offset: (options.page - 1) * options.pageSize,
+              limit: options.pageSize,
+            }
+          : undefined,
     };
     const resp = await this.rpcClient.appsV1GetApps(req);
     return {
@@ -1612,15 +1561,8 @@ export class Client {
    * @returns The hex-encoded signature string
    */
   async signChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<Hex> {
-    const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
-      BigInt(state.version),
-      state.assets,
-      BigInt(state.expires_at)
-    );
-    const packed = core.packChannelKeyStateV1(
-      state.session_key as Address,
-      metadataHash
-    );
+    const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(BigInt(state.version), state.assets, BigInt(state.expires_at));
+    const packed = core.packChannelKeyStateV1(state.session_key as Address, metadataHash);
     const channelSig = await this.stateSigner.signMessage(packed);
     return stripSignerTypePrefix(channelSig);
   }
@@ -1645,10 +1587,7 @@ export class Client {
    * @param sessionKey - Optional session key address to filter by
    * @returns List of active channel session key states
    */
-  async getLastChannelKeyStates(
-    userAddress: string,
-    sessionKey?: string
-  ): Promise<ChannelSessionKeyStateV1[]> {
+  async getLastChannelKeyStates(userAddress: string, sessionKey?: string): Promise<ChannelSessionKeyStateV1[]> {
     const req: API.ChannelsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
@@ -1695,10 +1634,7 @@ export class Client {
    * @param sessionKey - Optional session key address to filter by
    * @returns List of active session key states
    */
-  async getLastKeyStates(
-    userAddress: string,
-    sessionKey?: string
-  ): Promise<app.AppSessionKeyStateV1[]> {
+  async getLastKeyStates(userAddress: string, sessionKey?: string): Promise<app.AppSessionKeyStateV1[]> {
     const req: API.AppSessionsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
@@ -1718,9 +1654,7 @@ export class Client {
   private async getBlockchainRPCInfo(chainId: bigint): Promise<{ rpcUrl: string; blockchainInfo: core.Blockchain; config: core.NodeConfig }> {
     const rpcUrl = this.config.blockchainRPCs?.get(chainId);
     if (!rpcUrl) {
-      throw new Error(
-        `blockchain RPC not configured for chain ${chainId} (use withBlockchainRPC)`
-      );
+      throw new Error(`blockchain RPC not configured for chain ${chainId} (use withBlockchainRPC)`);
     }
 
     const config = await this.getConfig();
@@ -1794,14 +1728,7 @@ export class Client {
       throw new Error('Node.js environment requires a TransactionSigner that implements getAccount() (e.g., EthereumRawSigner)');
     }
 
-    const blockchainClient = new blockchain.evm.Client(
-      blockchainInfo.channelHubAddress,
-      publicClient,
-      walletClient,
-      chainId,
-      config.nodeAddress,
-      this.assetStore
-    );
+    const blockchainClient = new blockchain.evm.Client(blockchainInfo.channelHubAddress, publicClient, walletClient, chainId, config.nodeAddress, this.assetStore);
 
     this.blockchainClients.set(chainId, blockchainClient);
   }
@@ -1823,11 +1750,7 @@ export class Client {
 
     const { publicClient, walletClient } = this.createEVMClients(chainId, rpcUrl);
 
-    const lockingClient = new blockchain.evm.LockingClient(
-      blockchainInfo.lockingContractAddress,
-      publicClient,
-      walletClient || undefined,
-    );
+    const lockingClient = new blockchain.evm.LockingClient(blockchainInfo.lockingContractAddress, publicClient, walletClient || undefined);
 
     this.blockchainLockingClients.set(chainId, lockingClient);
   }
@@ -1885,10 +1808,7 @@ export class Client {
    * Request the node to co-sign a channel creation state.
    * Used when creating a new channel (via deposit, withdraw, transfer, or acknowledge).
    */
-  private async requestChannelCreation(
-    state: core.State,
-    channelDef: core.ChannelDefinition
-  ): Promise<string> {
+  private async requestChannelCreation(state: core.State, channelDef: core.ChannelDefinition): Promise<string> {
     const req: API.ChannelsV1RequestCreationRequest = {
       state: this.transformStateToRPC(state),
       channel_definition: this.transformChannelDefinitionToRPC(channelDef),

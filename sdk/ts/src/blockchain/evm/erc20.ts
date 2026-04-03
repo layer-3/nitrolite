@@ -10,9 +10,9 @@ import { EVMClient, WalletSigner } from './interface';
  * ERC20 contract wrapper for token interactions
  */
 export class ERC20 {
-  private tokenAddress: Address;
-  private client: EVMClient;
-  private walletSigner?: WalletSigner;
+  protected tokenAddress: Address;
+  protected client: EVMClient;
+  protected walletSigner?: WalletSigner;
 
   constructor(tokenAddress: Address, client: EVMClient, walletSigner?: WalletSigner) {
     this.tokenAddress = tokenAddress;
@@ -52,7 +52,6 @@ export class ERC20 {
       throw new Error('Wallet signer is required for approve operation');
     }
 
-
     try {
       const { request } = (await this.client.simulateContract({
         address: this.tokenAddress,
@@ -65,7 +64,6 @@ export class ERC20 {
       const hash = await this.walletSigner.writeContract(request as any);
 
       await this.client.waitForTransactionReceipt({ hash });
-
 
       return hash;
     } catch (error: any) {

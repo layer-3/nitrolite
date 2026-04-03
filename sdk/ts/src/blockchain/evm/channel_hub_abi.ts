@@ -830,6 +830,11 @@ export const ChannelHubAbi = [
         internalType: 'address',
       },
       {
+        name: 'subId',
+        type: 'uint48',
+        internalType: 'uint48',
+      },
+      {
         name: 'amount',
         type: 'uint256',
         internalType: 'uint256',
@@ -1252,6 +1257,11 @@ export const ChannelHubAbi = [
         type: 'address',
         internalType: 'address',
       },
+      {
+        name: 'subId',
+        type: 'uint48',
+        internalType: 'uint48',
+      },
     ],
     outputs: [
       {
@@ -1461,6 +1471,13 @@ export const ChannelHubAbi = [
         internalType: 'bytes32[]',
       },
     ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getChannelSubId',
+    inputs: [{ name: 'channelId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'uint48' }],
     stateMutability: 'view',
   },
   {
@@ -2529,6 +2546,11 @@ export const ChannelHubAbi = [
         internalType: 'address',
       },
       {
+        name: 'subId',
+        type: 'uint48',
+        internalType: 'uint48',
+      },
+      {
         name: 'amount',
         type: 'uint256',
         internalType: 'uint256',
@@ -3388,6 +3410,12 @@ export const ChannelHubAbi = [
         type: 'address',
         indexed: true,
         internalType: 'address',
+      },
+      {
+        name: 'subId',
+        type: 'uint48',
+        indexed: true,
+        internalType: 'uint48',
       },
       {
         name: 'amount',
@@ -5322,6 +5350,12 @@ export const ChannelHubAbi = [
     inputs: [
       {
         name: 'wallet',
+        type: 'address',
+        indexed: true,
+        internalType: 'address',
+      },
+      {
+        name: 'token',
         type: 'address',
         indexed: true,
         internalType: 'address',

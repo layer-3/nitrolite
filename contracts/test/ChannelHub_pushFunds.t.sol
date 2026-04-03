@@ -38,6 +38,8 @@ contract ChannelHubTest_pushFunds is Test {
 
     address public recipient;
 
+    uint48 constant SUB_ID_0 = 0;
+
     uint256 constant TRANSFER_AMOUNT = 1000 ether;
     uint256 constant BALANCE_AMOUNT = TRANSFER_AMOUNT * 10;
 
@@ -122,7 +124,7 @@ contract ChannelHubTest_pushFunds is Test {
 
     function test_accumulatesReclaims_whenERC20Reverts() public {
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.TransferFailed(recipient, address(revertingToken), TRANSFER_AMOUNT);
+        emit ChannelHub.TransferFailed(SUB_ID_0, recipient, address(revertingToken), TRANSFER_AMOUNT);
 
         cHub.exposed_pushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
 
@@ -141,7 +143,7 @@ contract ChannelHubTest_pushFunds is Test {
 
     function test_accumulatesReclaims_whenERC20ConsumesAllGas() public {
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.TransferFailed(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
+        emit ChannelHub.TransferFailed(SUB_ID_0, recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
 
         cHub.exposed_pushFunds(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
 
@@ -152,7 +154,7 @@ contract ChannelHubTest_pushFunds is Test {
 
     function test_accumulatesReclaims_whenERC20ReturnsMalformedData() public {
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.TransferFailed(recipient, address(malformedToken), TRANSFER_AMOUNT);
+        emit ChannelHub.TransferFailed(SUB_ID_0, recipient, address(malformedToken), TRANSFER_AMOUNT);
 
         cHub.exposed_pushFunds(recipient, address(malformedToken), TRANSFER_AMOUNT);
 
@@ -177,7 +179,7 @@ contract ChannelHubTest_pushFunds is Test {
 
     function test_accumulatesReclaims_whenETHReceiverReverts() public {
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.TransferFailed(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
+        emit ChannelHub.TransferFailed(SUB_ID_0, address(revertingReceiver), address(0), TRANSFER_AMOUNT);
 
         cHub.exposed_pushFunds(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
 
@@ -188,7 +190,7 @@ contract ChannelHubTest_pushFunds is Test {
 
     function test_accumulatesReclaims_whenETHReceiverConsumesAllGas() public {
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.TransferFailed(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
+        emit ChannelHub.TransferFailed(SUB_ID_0, address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
 
         cHub.exposed_pushFunds(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
 

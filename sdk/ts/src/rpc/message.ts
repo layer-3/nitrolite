@@ -116,12 +116,7 @@ export function messageError(message: Message): Error | null {
  * NewMessage creates a new Message with the given request ID, type, method, and parameters.
  * The timestamp is automatically set to the current time in Unix milliseconds.
  */
-export function newMessage(
-  type: MsgType,
-  requestId: number,
-  method: string,
-  payload: Payload = {}
-): Message {
+export function newMessage(type: MsgType, requestId: number, method: string, payload: Payload = {}): Message {
   return {
     type,
     requestId,
@@ -168,13 +163,7 @@ export function newErrorResponse(requestId: number, method: string, errMsg: stri
  * MarshalJSON serializes Message to JSON array format
  */
 export function marshalMessage(message: Message): string {
-  const arr = [
-    message.type,
-    message.requestId,
-    message.method,
-    message.payload,
-    message.timestamp,
-  ];
+  const arr = [message.type, message.requestId, message.method, message.payload, message.timestamp];
   return JSON.stringify(arr, bigIntReplacer);
 }
 

@@ -1,13 +1,6 @@
 import { Address } from 'viem';
 import Decimal from 'decimal.js';
-import {
-  State,
-  Ledger,
-  Transition,
-  TransitionType,
-  ChannelDefinition,
-  newTransition,
-} from './types';
+import { State, Ledger, Transition, TransitionType, ChannelDefinition, newTransition } from './types';
 import { getHomeChannelId, getEscrowChannelId, getStateId, getSenderTransactionId, getReceiverTransactionId } from './utils';
 
 // ============================================================================
@@ -25,10 +18,7 @@ export function getLastTransition(state: State): Transition | null {
     return null;
   }
 
-  if (
-    state.transition.type === TransitionType.TransferReceive ||
-    state.transition.type === TransitionType.Release
-  ) {
+  if (state.transition.type === TransitionType.TransferReceive || state.transition.type === TransitionType.Release) {
     return null;
   }
 
@@ -103,10 +93,7 @@ export function nextState(state: State): State {
       // Copy transition if user hasn't signed yet
       newState.transition = { ...state.transition };
     } else {
-      if (
-        state.transition.type === TransitionType.EscrowDeposit ||
-        state.transition.type === TransitionType.EscrowWithdraw
-      ) {
+      if (state.transition.type === TransitionType.EscrowDeposit || state.transition.type === TransitionType.EscrowWithdraw) {
         // Clear escrow channel and ledger after escrow operations complete
         newState.escrowChannelId = undefined;
         newState.escrowLedger = undefined;
@@ -133,26 +120,13 @@ export function nextState(state: State): State {
  * @param nodeAddress - Node address
  * @returns Home channel ID
  */
-export function applyChannelCreation(
-  state: State,
-  channelDef: ChannelDefinition,
-  blockchainId: bigint,
-  tokenAddress: Address,
-  nodeAddress: Address
-): string {
+export function applyChannelCreation(state: State, channelDef: ChannelDefinition, blockchainId: bigint, tokenAddress: Address, nodeAddress: Address): string {
   // Set home ledger
   state.homeLedger.tokenAddress = tokenAddress;
   state.homeLedger.blockchainId = blockchainId;
 
   // Calculate home channel ID
-  const homeChannelId = getHomeChannelId(
-    nodeAddress,
-    state.userWallet,
-    state.asset,
-    channelDef.nonce,
-    channelDef.challenge,
-    channelDef.approvedSigValidators
-  );
+  const homeChannelId = getHomeChannelId(nodeAddress, state.userWallet, state.asset, channelDef.nonce, channelDef.challenge, channelDef.approvedSigValidators);
 
   state.homeChannelId = homeChannelId;
 
@@ -259,11 +233,7 @@ export function applyHomeWithdrawalTransition(state: State, amount: Decimal): Tr
  * @param amount - Amount to send
  * @returns The created transition
  */
-export function applyTransferSendTransition(
-  state: State,
-  recipient: string,
-  amount: Decimal
-): Transition {
+export function applyTransferSendTransition(state: State, recipient: string, amount: Decimal): Transition {
   const accountId = recipient;
   const txId = getSenderTransactionId(accountId, state.id);
 
@@ -283,12 +253,7 @@ export function applyTransferSendTransition(
  * @param txId - Transaction ID
  * @returns The created transition
  */
-export function applyTransferReceiveTransition(
-  state: State,
-  sender: string,
-  amount: Decimal,
-  txId: string
-): Transition {
+export function applyTransferReceiveTransition(state: State, sender: string, amount: Decimal, txId: string): Transition {
   const accountId = sender;
 
   const newTransitionObj = newTransition(TransitionType.TransferReceive, txId, accountId, amount);
@@ -343,12 +308,7 @@ export function applyReleaseTransition(state: State, accountId: string, amount: 
  * @param amount - Amount to lock
  * @returns The created transition
  */
-export function applyMutualLockTransition(
-  state: State,
-  blockchainId: bigint,
-  tokenAddress: Address,
-  amount: Decimal
-): Transition {
+export function applyMutualLockTransition(state: State, blockchainId: bigint, tokenAddress: Address, amount: Decimal): Transition {
   if (!state.homeChannelId) {
     throw new Error('missing home channel ID');
   }
@@ -420,12 +380,7 @@ export function applyEscrowDepositTransition(state: State, amount: Decimal): Tra
  * @param amount - Amount to lock for withdrawal
  * @returns The created transition
  */
-export function applyEscrowLockTransition(
-  state: State,
-  blockchainId: bigint,
-  tokenAddress: Address,
-  amount: Decimal
-): Transition {
+export function applyEscrowLockTransition(state: State, blockchainId: bigint, tokenAddress: Address, amount: Decimal): Transition {
   if (!state.homeChannelId) {
     throw new Error('missing home channel ID');
   }

@@ -22,11 +22,7 @@ export class LockingClient {
   private tokenAddress?: Address;
   private tokenDecimals?: number;
 
-  constructor(
-    contractAddress: Address,
-    evmClient: EVMClient,
-    walletSigner?: WalletSigner,
-  ) {
+  constructor(contractAddress: Address, evmClient: EVMClient, walletSigner?: WalletSigner) {
     this.contractAddress = contractAddress;
     this.evmClient = evmClient;
     this.walletSigner = walletSigner;
@@ -47,17 +43,17 @@ export class LockingClient {
       return { address: this.tokenAddress, decimals: this.tokenDecimals };
     }
 
-    const tokenAddress = await this.evmClient.readContract({
+    const tokenAddress = (await this.evmClient.readContract({
       address: this.contractAddress,
       abi: AppRegistryAbi,
       functionName: 'asset',
-    }) as Address;
+    })) as Address;
 
-    const decimals = await this.evmClient.readContract({
+    const decimals = (await this.evmClient.readContract({
       address: tokenAddress,
       abi: Erc20Abi,
       functionName: 'decimals',
-    }) as number;
+    })) as number;
 
     this.tokenAddress = tokenAddress;
     this.tokenDecimals = decimals;
@@ -185,12 +181,12 @@ export class LockingClient {
   async getBalance(user: Address): Promise<Decimal> {
     const { decimals } = await this.ensureTokenInfo();
 
-    const balance = await this.evmClient.readContract({
+    const balance = (await this.evmClient.readContract({
       address: this.contractAddress,
       abi: AppRegistryAbi,
       functionName: 'balanceOf',
       args: [user],
-    }) as bigint;
+    })) as bigint;
 
     return new Decimal(balance.toString()).div(Decimal.pow(10, decimals));
   }
@@ -203,12 +199,12 @@ export class LockingClient {
    * @returns Lock state (0=None, 1=Locked, 2=Unlocking)
    */
   async getLockState(user: Address): Promise<number> {
-    return await this.evmClient.readContract({
+    return (await this.evmClient.readContract({
       address: this.contractAddress,
       abi: AppRegistryAbi,
       functionName: 'lockStateOf',
       args: [user],
-    }) as number;
+    })) as number;
   }
 
   /**

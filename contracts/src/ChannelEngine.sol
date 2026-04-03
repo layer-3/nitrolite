@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.30;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ChannelStatus, State, StateIntent} from "./interfaces/Types.sol";
@@ -54,13 +54,14 @@ library ChannelEngine {
         uint256 lockedFunds;
         uint256 nodeAvailableFunds;
         uint64 challengeExpiry;
+        bool isParametricToken;
+        uint48 channelSubId;
     }
 
     struct TransitionEffects {
         // Fund movements (positive = pull/lock, negative = push/release)
         int256 userFundsDelta; // Funds to pull from user (>0) or push to user (<0)
         int256 nodeFundsDelta; // Funds to lock from node vault (>0) or release (<0)
-
         // State updates
         ChannelStatus newStatus;
         uint64 newChallengeExpiry;
@@ -100,6 +101,12 @@ library ChannelEngine {
         // homeLedger always represents current chain
         require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
         require(candidate.version > ctx.prevState.version || Utils.isEmpty(ctx.prevState), IncorrectStateVersion());
+        if (ctx.isParametricToken) {
+            require(
+                Utils.isEmpty(ctx.prevState) || candidate.homeLedger.token == ctx.prevState.homeLedger.token,
+                "Parametric token cannot change during channel lifetime"
+            );
+        }
 
         // Validate token decimals for homeLedger
         Utils.validateTokenDecimals(candidate.homeLedger);

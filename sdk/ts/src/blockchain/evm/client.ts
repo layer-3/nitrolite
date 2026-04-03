@@ -9,11 +9,7 @@ import * as core from '../../core/types';
 import { decimalToBigInt } from '../../core/utils';
 import { AssetStore, EVMClient, WalletSigner } from './interface';
 import { ChannelHubAbi } from './channel_hub_abi';
-import {
-  coreDefToContractDef,
-  coreStateToContractState,
-  contractStateToCoreState,
-} from './utils';
+import { coreDefToContractDef, coreStateToContractState, contractStateToCoreState } from './utils';
 import { newERC20 } from './erc20';
 
 /**
@@ -45,7 +41,7 @@ export class Client {
     blockchainId: bigint,
     nodeAddress: Address,
     assetStore: AssetStore,
-    options?: ClientOptions
+    options?: ClientOptions,
   ) {
     this.contractAddress = contractAddress;
     this.evmClient = evmClient;
@@ -84,11 +80,38 @@ export class Client {
           address: this.contractAddress,
           abi: ChannelHubAbi,
           functionName: 'getAccountBalance',
-          args: [account, token],
+          args: [account, token, 0],
         })) as bigint;
         accountBalances.push(new Decimal(balance.toString()));
       }
       result.push(accountBalances);
+    }
+
+    return result;
+  }
+
+  async getAccountsSubBalances(
+    accounts: Address[],
+    token: Address,
+    subIds: number[],
+  ): Promise<Decimal[][]> {
+    if (accounts.length === 0 || subIds.length === 0) {
+      return [];
+    }
+
+    const result: Decimal[][] = [];
+    for (const account of accounts) {
+      const accountSubBalances: Decimal[] = [];
+      for (const subId of subIds) {
+        const balance = (await this.evmClient.readContract({
+          address: this.contractAddress,
+          abi: ChannelHubAbi,
+          functionName: 'getAccountBalance',
+          args: [account, token, subId],
+        })) as bigint;
+        accountSubBalances.push(new Decimal(balance.toString()));
+      }
+      result.push(accountSubBalances);
     }
 
     return result;
@@ -114,7 +137,9 @@ export class Client {
 
     // Native token (zero address) — query ETH balance directly
     if (tokenAddress === zeroAddress) {
-      const balance = await this.evmClient.getBalance({ address: walletAddress });
+      const balance = await this.evmClient.getBalance({
+        address: walletAddress,
+      });
       // Native tokens use 18 decimals
       return new Decimal(balance.toString()).div(Decimal.pow(10, 18));
     }
@@ -168,15 +193,14 @@ export class Client {
     return await erc20.allowance(owner, this.contractAddress);
   }
 
-
   // ========= Getters - ChannelHub =========
 
-  async getNodeBalance(token: Address): Promise<Decimal> {
+  async getNodeBalance(token: Address, subId: number = 0): Promise<Decimal> {
     const balance = (await this.evmClient.readContract({
       address: this.contractAddress,
       abi: ChannelHubAbi,
       functionName: 'getAccountBalance',
-      args: [this.nodeAddress, token],
+      args: [this.nodeAddress, token, subId],
     })) as bigint;
 
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
@@ -193,6 +217,19 @@ export class Client {
     return channelIds.map((id) => id);
   }
 
+  async getChannelSubId(channelId: string): Promise<number> {
+    const channelIdBytes = this.hexToBytes32(channelId);
+
+    const subId = (await this.evmClient.readContract({
+      address: this.contractAddress,
+      abi: ChannelHubAbi,
+      functionName: 'getChannelSubId',
+      args: [channelIdBytes],
+    })) as number;
+
+    return Number(subId);
+  }
+
   async getHomeChannelData(homeChannelId: string): Promise<core.HomeChannelDataResponse> {
     const channelIdBytes = this.hexToBytes32(homeChannelId);
 
@@ -204,7 +241,11 @@ export class Client {
     })) as any;
 
     // getChannelData returns flat values: (status, definition, lastState, challengeExpiry, lockedFunds)
-    const [, definition, lastState, challengeExpiry] = Array.isArray(data) ? data : [data.status, data.definition, data.lastState, data.challengeExpiry, data.lockedFunds];
+    const [, definition, lastState, challengeExpiry] = Array.isArray(data)
+      ? data
+      : [data.status, data.definition, data.lastState, data.challengeExpiry, data.lockedFunds];
+
+    const subId = await this.getChannelSubId(homeChannelId);
 
     const coreState = contractStateToCoreState(lastState, homeChannelId);
 
@@ -217,6 +258,7 @@ export class Client {
       node: definition.node,
       lastState: coreState,
       challengeExpiry,
+      subId,
     };
   }
 
@@ -227,14 +269,19 @@ export class Client {
   }
 
   async getEscrowWithdrawalData(
-    _escrowChannelId: string
+    _escrowChannelId: string,
   ): Promise<core.EscrowWithdrawalDataResponse> {
     throw new Error('getEscrowWithdrawalData not implemented - needs contract ABI update');
   }
 
   // ========= IVault Functions =========
 
-  async deposit(node: Address, token: Address, amount: Decimal): Promise<string> {
+  async deposit(
+    node: Address,
+    token: Address,
+    amount: Decimal,
+    subId: number = 0,
+  ): Promise<string> {
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
     const amountBig = decimalToBigInt(amount, decimals);
 
@@ -243,10 +290,11 @@ export class Client {
       blockchainId: this.blockchainId.toString(),
       node,
       token,
+      subId,
       amount: amount.toString(),
       amountBig: amountBig.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     try {
@@ -256,7 +304,7 @@ export class Client {
         address: this.contractAddress,
         abi: ChannelHubAbi,
         functionName: 'depositToVault',
-        args: [node, token, amountBig],
+        args: [node, token, subId, amountBig],
         account: this.walletSigner.account!.address,
         ...(token === zeroAddress ? { value: amountBig } : {}),
       });
@@ -281,18 +329,29 @@ export class Client {
     } catch (error: any) {
       console.error('❌ Deposit transaction failed at blockchain level');
       if (error.message?.includes('not supported') || error.message?.includes('not available')) {
-        console.error('⚠️  RPC ENDPOINT ISSUE: The RPC endpoint does not support sending transactions.');
-        console.error('    This usually means the RPC only supports read operations (eth_call, eth_getBalance, etc.)');
+        console.error(
+          '⚠️  RPC ENDPOINT ISSUE: The RPC endpoint does not support sending transactions.',
+        );
+        console.error(
+          '    This usually means the RPC only supports read operations (eth_call, eth_getBalance, etc.)',
+        );
         console.error('    but not write operations (eth_sendTransaction).');
         console.error('    Solutions:');
-        console.error('      1. Use an RPC provider that supports transactions (Infura, Alchemy, etc.)');
+        console.error(
+          '      1. Use an RPC provider that supports transactions (Infura, Alchemy, etc.)',
+        );
         console.error('      2. Make sure your RPC endpoint includes transaction capabilities');
       }
       throw error;
     }
   }
 
-  async withdraw(node: Address, token: Address, amount: Decimal): Promise<string> {
+  async withdraw(
+    node: Address,
+    token: Address,
+    amount: Decimal,
+    subId: number = 0,
+  ): Promise<string> {
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
     const amountBig = decimalToBigInt(amount, decimals);
 
@@ -304,7 +363,7 @@ export class Client {
       amount: amount.toString(),
       amountBig: amountBig.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     try {
@@ -314,7 +373,7 @@ export class Client {
         address: this.contractAddress,
         abi: ChannelHubAbi,
         functionName: 'withdrawFromVault',
-        args: [node, token, amountBig],
+        args: [node, token, subId, amountBig],
         account: this.walletSigner.account!.address,
       });
 
@@ -349,11 +408,11 @@ export class Client {
       def,
       initState.asset,
       initState.userWallet,
-      this.nodeAddress
+      this.nodeAddress,
     );
 
     const contractState = await coreStateToContractState(initState, (blockchainId, tokenAddress) =>
-      this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
+      this.assetStore.getTokenDecimals(blockchainId, tokenAddress),
     );
 
     // Check allowance and balance for deposits
@@ -380,7 +439,7 @@ export class Client {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     // Resolve native ETH value for deposit intents
@@ -441,7 +500,7 @@ export class Client {
 
     const contractCandidate = await coreStateToContractState(
       candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
+      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress),
     );
 
     // Check for deposit intent
@@ -460,15 +519,16 @@ export class Client {
         }
       }
 
-      const nativeValue = contractCandidate.homeLedger.token === zeroAddress
-        ? decimalToBigInt(candidate.transition.amount, contractCandidate.homeLedger.decimals)
-        : undefined;
+      const nativeValue =
+        contractCandidate.homeLedger.token === zeroAddress
+          ? decimalToBigInt(candidate.transition.amount, contractCandidate.homeLedger.decimals)
+          : undefined;
 
       console.log('💳 EVM Client - Deposit to channel transaction:', {
         contractAddress: this.contractAddress,
         blockchainId: this.blockchainId.toString(),
         channelId: channelIdBytes,
-        walletChain: this.walletSigner.chain?.id
+        walletChain: this.walletSigner.chain?.id,
       });
 
       const hash = await this.walletSigner.writeContract({
@@ -490,7 +550,7 @@ export class Client {
         contractAddress: this.contractAddress,
         blockchainId: this.blockchainId.toString(),
         channelId: channelIdBytes,
-        walletChain: this.walletSigner.chain?.id
+        walletChain: this.walletSigner.chain?.id,
       });
 
       const hash = await this.walletSigner.writeContract({
@@ -510,7 +570,7 @@ export class Client {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
-      walletChain: this.walletSigner.chain?.id
+      walletChain: this.walletSigner.chain?.id,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -525,7 +585,11 @@ export class Client {
     return hash;
   }
 
-  async challenge(candidate: core.State, challengerSig: `0x${string}`, challengerIdx: number = 0): Promise<string> {
+  async challenge(
+    candidate: core.State,
+    challengerSig: `0x${string}`,
+    challengerIdx: number = 0,
+  ): Promise<string> {
     if (!candidate.homeChannelId) {
       throw new Error('Candidate state must have a home channel ID');
     }
@@ -534,14 +598,14 @@ export class Client {
 
     const contractCandidate = await coreStateToContractState(
       candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
+      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress),
     );
 
     console.log('💳 EVM Client - Challenge channel transaction:', {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
-      walletChain: this.walletSigner.chain?.id
+      walletChain: this.walletSigner.chain?.id,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -565,7 +629,7 @@ export class Client {
 
     const contractCandidate = await coreStateToContractState(
       candidate,
-      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress)
+      (blockchainId, tokenAddress) => this.assetStore.getTokenDecimals(blockchainId, tokenAddress),
     );
 
     // Verify close intent
@@ -578,7 +642,7 @@ export class Client {
       blockchainId: this.blockchainId.toString(),
       channelId: channelIdBytes,
       walletChain: this.walletSigner.chain?.id,
-      walletChainName: this.walletSigner.chain?.name
+      walletChainName: this.walletSigner.chain?.name,
     });
 
     const hash = await this.walletSigner.writeContract({
@@ -596,14 +660,17 @@ export class Client {
   // ========= Escrow Operations =========
   // Note: These would need the full escrow methods in the ABI
 
-  async initiateEscrowDeposit(_def: core.ChannelDefinition, _initState: core.State): Promise<string> {
+  async initiateEscrowDeposit(
+    _def: core.ChannelDefinition,
+    _initState: core.State,
+  ): Promise<string> {
     throw new Error('initiateEscrowDeposit not implemented - needs contract ABI update');
   }
 
   async challengeEscrowDeposit(
     _candidate: core.State,
     _challengerSig: `0x${string}`,
-    _challengerIdx: number = 0
+    _challengerIdx: number = 0,
   ): Promise<string> {
     throw new Error('challengeEscrowDeposit not implemented - needs contract ABI update');
   }
@@ -614,7 +681,7 @@ export class Client {
 
   async initiateEscrowWithdrawal(
     _def: core.ChannelDefinition,
-    _initState: core.State
+    _initState: core.State,
   ): Promise<string> {
     throw new Error('initiateEscrowWithdrawal not implemented - needs contract ABI update');
   }
@@ -622,7 +689,7 @@ export class Client {
   async challengeEscrowWithdrawal(
     _candidate: core.State,
     _challengerSig: `0x${string}`,
-    _challengerIdx: number = 0
+    _challengerIdx: number = 0,
   ): Promise<string> {
     throw new Error('challengeEscrowWithdrawal not implemented - needs contract ABI update');
   }
@@ -646,7 +713,7 @@ export function newClient(
   blockchainId: bigint,
   nodeAddress: Address,
   assetStore: AssetStore,
-  options?: ClientOptions
+  options?: ClientOptions,
 ): Client {
   return new Client(
     contractAddress,
@@ -655,6 +722,6 @@ export function newClient(
     blockchainId,
     nodeAddress,
     assetStore,
-    options
+    options,
   );
 }

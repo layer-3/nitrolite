@@ -348,7 +348,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // escrow deposit locked funds should also be unlocked after `unlockAt` time passes alongside any other on-chain call
         vm.warp(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY() + 1);
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // state from the "happyPath" test, but with home and nonHome states swapped
         state = nextState(
@@ -370,7 +370,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // Verify user balance after deposit finalized has NOT changed
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - 500, "User balance after escrow deposit finalized");
 
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token), SUB_ID_0);
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 500, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
@@ -461,7 +461,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // ====== Finalize escrow deposit ======
         vm.warp(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY() + 1);
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token14dec));
+        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token14dec), SUB_ID_0);
 
         // After finalization, home chain user allocation increases, non-home releases funds to node
         state = nextState(
@@ -484,7 +484,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token14dec.balanceOf(bob), 990 * 1e14, "User balance after escrow deposit finalized");
 
         // Verify node received the deposited tokens
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token14dec));
+        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token14dec), SUB_ID_0);
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 10 * 1e14, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
@@ -502,7 +502,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // state from the "happyPath" test, but with home and nonHome states swapped
         State memory state = State({
@@ -542,7 +542,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateEscrowWithdrawal(bobDef, state);
 
         // Verify user node's after deposit (deposited 500)
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token), SUB_ID_0);
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 750, "Node balance after escrow withdrawal");
 
         // Verify escrow struct is updated on ChannelsHub: escrow data exists, `locked` equals to withdrawalAmount
@@ -596,10 +596,10 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token8dec.mint(node, 100 * 1e8);
         token8dec.approve(address(cHub), 100 * 1e8);
-        cHub.depositToVault(node, address(token8dec), 100 * 1e8);
+        cHub.depositToVault(node, address(token8dec), SUB_ID_0, 100 * 1e8);
         vm.stopPrank();
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token8dec));
+        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token8dec), SUB_ID_0);
 
         // Bob wants to withdraw 5 tokens on non-home chain (5e8 with 8 decimals = 5e2 with 2 decimals)
         State memory state = State({
@@ -640,7 +640,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateEscrowWithdrawal(bobDef, state);
 
         // Verify node locked the withdrawal amount
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token8dec));
+        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token8dec), SUB_ID_0);
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 5 * 1e8, "Node balance after escrow withdrawal initiation");
 
         // Verify escrow struct is created
@@ -688,7 +688,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
         uint256 userBalanceBefore = token.balanceOf(bob);
 
         // state from the "happyPath" test
@@ -723,7 +723,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateMigration(bobDef, state);
 
         // Verify node's balance after migration (should have locked 469)
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token), SUB_ID_0);
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 469, "Node balance after migration initiation");
 
         // user balance should not have changed
@@ -803,7 +803,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token10dec.mint(node, 100 * 1e10);
         token10dec.approve(address(cHub), 100 * 1e10);
-        cHub.depositToVault(node, address(token10dec), 100 * 1e10);
+        cHub.depositToVault(node, address(token10dec), SUB_ID_0, 100 * 1e10);
         vm.stopPrank();
 
         // 1. Create Channel with 10-decimal token on Old Home Chain
@@ -857,7 +857,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token14dec.mint(node, 100 * 1e14);
         token14dec.approve(address(cHub), 100 * 1e14);
-        cHub.depositToVault(node, address(token14dec), 100 * 1e14);
+        cHub.depositToVault(node, address(token14dec), SUB_ID_0, 100 * 1e14);
         vm.stopPrank();
 
         // Initiate migration: Old home has 45 tokens (45e10 with 10 decimals)

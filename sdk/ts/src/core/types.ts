@@ -100,6 +100,8 @@ export interface Channel {
   approvedSigValidators: string; // Hex string bitmap of approved signature validators
   status: ChannelStatus; // Current status of the channel (void, open, challenged, closed)
   stateVersion: bigint; // uint64 - On-chain state version of the channel
+  subId?: number; // uint48 - Optional sub-account ID for parametric tokens
+  isParametric?: boolean; // Whether this channel uses a parametric token
 }
 
 /**
@@ -253,6 +255,7 @@ export interface HomeChannelDataResponse {
   node: Address;
   lastState: State;
   challengeExpiry: bigint; // uint64
+  subId: number; // uint48
 }
 
 export interface EscrowDepositDataResponse {
@@ -286,7 +289,8 @@ export function newChannel(
   tokenAddress: Address,
   nonce: bigint,
   challenge: number,
-  approvedSigValidators: string = '0x00'
+  approvedSigValidators: string = '0x00',
+  subId?: number,
 ): Channel {
   return {
     channelId,
@@ -300,6 +304,7 @@ export function newChannel(
     approvedSigValidators,
     status: ChannelStatus.Void,
     stateVersion: 0n,
+    subId,
   };
 }
 
@@ -333,7 +338,7 @@ export function newTransition(
   type: TransitionType,
   txId: string,
   accountId: string,
-  amount: Decimal
+  amount: Decimal,
 ): Transition {
   return {
     type,
@@ -352,7 +357,7 @@ export function newTransaction(
   txType: TransactionType,
   fromAccount: Address,
   toAccount: Address,
-  amount: Decimal
+  amount: Decimal,
 ): Transaction {
   return {
     id,
@@ -468,7 +473,7 @@ export function validateLedger(ledger: Ledger): void {
   const sumNetFlows = ledger.userNetFlow.add(ledger.nodeNetFlow);
   if (!sumBalances.equals(sumNetFlows)) {
     throw new Error(
-      `ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`
+      `ledger balances do not match net flows: balances=${sumBalances.toString()}, net_flows=${sumNetFlows.toString()}`,
     );
   }
 }
@@ -480,7 +485,7 @@ export function validateLedger(ledger: Ledger): void {
 export function getOffsetAndLimit(
   params: PaginationParams | undefined,
   defaultLimit: number,
-  maxLimit: number
+  maxLimit: number,
 ): { offset: number; limit: number } {
   if (!params) {
     return { offset: 0, limit: defaultLimit };

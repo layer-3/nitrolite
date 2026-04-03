@@ -141,7 +141,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         (, EscrowStatus statusAfterChallenge,,,,) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
@@ -153,7 +153,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
 
         // Cooperative path: locked funds released to node vault (node earned them for providing cross-chain liquidity)
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getAccountBalance(node, address(token), SUB_ID_0),
             nodeVaultBefore + ESCROW_AMOUNT,
             "Node vault should receive locked amount"
         );
@@ -300,7 +300,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
@@ -315,7 +315,9 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
             token.balanceOf(alice), aliceBalanceBefore + WITHDRAWAL_AMOUNT, "User should receive withdrawal amount"
         );
         // Node vault should be unchanged (locked amount was already deducted at initiation)
-        assertEq(cHub.getAccountBalance(node, address(token)), nodeVaultBefore, "Node vault should be unchanged");
+        assertEq(
+            cHub.getAccountBalance(node, address(token), SUB_ID_0), nodeVaultBefore, "Node vault should be unchanged"
+        );
     }
 
     function test_challengedEscrowWithdrawal_canNotBeResolved_nodeReclaimsAfterChallengeExpiry() public {
@@ -324,7 +326,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         vm.warp(block.timestamp + EscrowWithdrawalEngine.CHALLENGE_DURATION + 1);
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token), SUB_ID_0);
 
         // Attempt cooperative resolution with a valid FINALIZE state after challengeExpireAt
         // The unilateral path intercepts and ignores the candidate state
@@ -337,7 +339,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
 
         // Unilateral path (not cooperative): locked funds returned to node vault (withdrawal failed)
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getAccountBalance(node, address(token), SUB_ID_0),
             nodeVaultBefore + WITHDRAWAL_AMOUNT,
             "Node vault should reclaim locked amount (cooperative resolution bypassed)"
         );

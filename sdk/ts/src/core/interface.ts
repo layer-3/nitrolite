@@ -53,6 +53,19 @@ export interface Client {
    */
   getAccountsBalances(accounts: Address[], tokens: Address[]): Promise<Decimal[][]>;
 
+  /**
+   * Get parametric token sub balances for multiple accounts and subIds
+   * @param accounts - Array of account addresses
+   * @param token - Parametric token address
+   * @param subIds - Array of subaccount IDs
+   * @returns 2D array of balances [account][token]
+   */
+  getAccountsSubBalances(
+    accounts: Address[],
+    token: Address,
+    subIds: number[],
+  ): Promise<Decimal[][]>;
+
   // ========= Getters - Token Balance & Approval =========
 
   /**
@@ -75,8 +88,9 @@ export interface Client {
   /**
    * Get the node's balance for a specific token
    * @param token - Token address
+   * @param subId - Subaccount ID
    */
-  getNodeBalance(token: Address): Promise<Decimal>;
+  getNodeBalance(token: Address, subId: number): Promise<Decimal>;
 
   /**
    * Get all open channel IDs for a user
@@ -183,7 +197,7 @@ export interface Client {
   challengeEscrowDeposit(
     candidate: State,
     challengerSig: Uint8Array,
-    challengerIdx: number
+    challengerIdx: number,
   ): Promise<Hex>;
 
   /**
@@ -213,7 +227,7 @@ export interface Client {
   challengeEscrowWithdrawal(
     candidate: State,
     challengerSig: Uint8Array,
-    challengerIdx: number
+    challengerIdx: number,
   ): Promise<Hex>;
 
   /**

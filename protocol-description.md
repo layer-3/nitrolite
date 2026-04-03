@@ -110,11 +110,12 @@ The off-chain protocol is responsible for:
 * When a User **sends** funds off-chain:
 
   * user allocation decreases,
-  * node net flow increases.
+  * node net flow decreases.
+
 * When a User **receives** funds off-chain:
 
   * user allocation increases,
-  * node net flow decreases.
+  * node net flow increases.
 
 These changes are reflected only in cumulative net flows until enforced on-chain.
 

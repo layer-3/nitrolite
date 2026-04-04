@@ -1,6 +1,6 @@
 {
     "name": "@yellow-org/sdk-compat",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Compatibility layer bridging Nitrolite SDK v0.5.3 API to v1.0.0, minimising migration effort for existing dApps.",
     "type": "module",
     "sideEffects": false,
@@ -14,7 +14,9 @@
         "build": "tsc",
         "build:prod": "tsc -p tsconfig.prod.json",
         "typecheck": "tsc --noEmit",
-        "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+        "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+        "test": "jest",
+        "test:watch": "jest --watch"
     },
     "keywords": [
         "yellow",
@@ -43,7 +45,10 @@
     },
     "devDependencies": {
         "@yellow-org/sdk": "file:../ts",
+        "@types/jest": "^29.5.0",
         "@types/node": "^25.3.0",
+        "jest": "^29.7.0",
+        "ts-jest": "^29.2.0",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
         "viem": "^2.46.2"

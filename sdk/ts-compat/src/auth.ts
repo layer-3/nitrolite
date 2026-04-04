@@ -7,7 +7,7 @@
 
 import { NitroliteRPC } from './rpc';
 import { RPCMethod, EIP712AuthTypes } from './types';
-import type { MessageSigner, MessageSignerPayload } from './types';
+import type { MessageSigner, MessageSignerPayload, AuthChallengeResponse } from './types';
 
 export interface AuthRequestParams {
     address: string;
@@ -18,8 +18,12 @@ export interface AuthRequestParams {
     allowances: { asset: string; amount: string }[];
 }
 
-function generateRequestId(): number {
+export function generateRequestId(): number {
     return Math.floor(Date.now() + Math.random() * 10000);
+}
+
+export function getCurrentTimestamp(): number {
+    return Date.now();
 }
 
 export async function createAuthRequestMessage(
@@ -131,4 +135,21 @@ export function createEIP712AuthMessageSigner(
             throw new Error(`EIP-712 signing failed: ${errorMessage}`);
         }
     };
+}
+
+export function parseAuthChallengeResponse(raw: string): AuthChallengeResponse {
+    const d = JSON.parse(raw);
+    return {
+        method: RPCMethod.AuthChallenge,
+        params: {
+            challengeMessage: d?.res?.[2]?.challengeMessage ?? '',
+        },
+    };
+}
+
+export function parseAuthVerifyResponse(raw: string): {
+    params: { success: boolean; sessionKey: string; address: string; jwtToken?: string };
+} {
+    const d = JSON.parse(raw);
+    return { params: d?.res?.[2] ?? {} };
 }

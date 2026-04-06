@@ -41,8 +41,9 @@ contract ChannelEngineTest_ValidateTransition is Test {
 
         // Same net flows as prevState -> userNfDelta == 0, so no funds would move, but
         // userAllocation = 1000 is still positive — previously led to stuck funds.
-        State memory candidate =
-            TestUtils.nextState(ctx.prevState, StateIntent.CLOSE, [uint256(1000), uint256(0)], [int256(1000), int256(0)]);
+        State memory candidate = TestUtils.nextState(
+            ctx.prevState, StateIntent.CLOSE, [uint256(1000), uint256(0)], [int256(1000), int256(0)]
+        );
 
         vm.expectRevert(ChannelEngine.IncorrectUserAllocation.selector);
         ChannelEngine.validateTransition(ctx, candidate);
@@ -53,8 +54,9 @@ contract ChannelEngineTest_ValidateTransition is Test {
 
         // userAllocation = 0 (passes first check), but nodeAllocation = 1000 must fail.
         // netFlowsSum = 0 + 1000 = 1000 = allocsSum (passes universal validation)
-        State memory candidate =
-            TestUtils.nextState(ctx.prevState, StateIntent.CLOSE, [uint256(0), uint256(1000)], [int256(0), int256(1000)]);
+        State memory candidate = TestUtils.nextState(
+            ctx.prevState, StateIntent.CLOSE, [uint256(0), uint256(1000)], [int256(0), int256(1000)]
+        );
 
         vm.expectRevert(ChannelEngine.IncorrectNodeAllocation.selector);
         ChannelEngine.validateTransition(ctx, candidate);

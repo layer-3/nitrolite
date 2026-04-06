@@ -90,7 +90,7 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
 
         // Deploy TestChannelHub (a ChannelHub subtype) and assign it to the base's
         // cHub field so all inherited helpers keep working.
-        tHub = new TestChannelHub(ECDSA_SIG_VALIDATOR);
+        tHub = new TestChannelHub(ECDSA_SIG_VALIDATOR, node);
         cHub = tHub;
 
         // super.setUp() already spent node's INITIAL_BALANCE on the old cHub vault.

@@ -470,6 +470,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         ISignatureValidator validator,
         bytes calldata signature
     ) external {
+        require(node == NODE, IncorrectNode());
         require(validatorId != DEFAULT_SIG_VALIDATOR_ID, InvalidValidatorId());
         require(address(validator) != address(0), InvalidAddress());
         require(
@@ -662,6 +663,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     function initiateEscrowDeposit(ChannelDefinition calldata def, State calldata candidate) external payable {
         require(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT, IncorrectStateIntent());
+        _requireValidDefinition(def);
 
         bytes32 channelId = Utils.getChannelId(def, VERSION);
         _validateSignatures(channelId, candidate, def.user, def.node, def.approvedSignatureValidators);
@@ -761,6 +763,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     function initiateEscrowWithdrawal(ChannelDefinition calldata def, State calldata candidate) external {
         require(candidate.intent == StateIntent.INITIATE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
+        _requireValidDefinition(def);
 
         bytes32 channelId = Utils.getChannelId(def, VERSION);
         _validateSignatures(channelId, candidate, def.user, def.node, def.approvedSignatureValidators);

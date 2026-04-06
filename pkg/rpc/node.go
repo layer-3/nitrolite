@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -312,15 +313,21 @@ func (wn *WebsocketNode) processRequests(conn Connection, parentCtx context.Cont
 			handlers: routeHandlers,
 			Storage:  safeStorage,
 		}
+		recovered := false
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					wn.cfg.Logger.Error("panic in handler", "method", req.Method, "recover", r)
+					wn.cfg.Logger.Error("panic in handler", "method", req.Method, "recover", r, "stack", string(debug.Stack()))
 					wn.sendErrorResponse(conn, req.RequestID, req.Method, defaultNodeErrorMessage)
+					recovered = true
 				}
 			}()
 			ctx.Next()
 		}()
+
+		if recovered {
+			continue
+		}
 
 		// Marshal the response
 		responseBytes, err := json.Marshal(ctx.Response)

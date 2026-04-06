@@ -250,6 +250,53 @@ See `signature-validators.md` for detailed documentation on each validator.
 
 ---
 
+### Bootstrap vulnerability: initial user signature at `createChannel`
+
+> Full analysis with all considered options and trade-offs: [`initial-user-sig-validation.md`](initial-user-sig-validation.md).
+
+#### Root cause
+
+The `approvedSignatureValidators` bitmask protects user signatures on existing channels because the bitmask is embedded in `channelId`, which every prior state already covers. At `createChannel` time there is no prior state — the `ChannelDefinition` (and therefore the bitmask) arrives in calldata from the transaction sender.
+
+This creates a circular dependency:
+
+```txt
+approvedSignatureValidators  (attacker-controlled calldata)
+    → selects which validator verifies user's consent
+        → verifies user's "approval" of approvedSignatureValidators
+```
+
+**Attack**: A node (basically, any address can be a node) registers a malicious `ISignatureValidator` that always returns `VALIDATION_SUCCESS`, then calls `createChannel` with a `ChannelDefinition` that sets the bitmask to include that validator. The channel is created without the user's knowledge. The same bypass applies to `closeChannel`, allowing the node to push locked funds to itself.
+
+The `approvedSignatureValidators`-in-`channelId` protection prevents retroactive validator swapping on *existing* channels but does nothing to prevent a node from crafting a fresh `ChannelDefinition` for a brand-new channel, because there is no pre-existing signed state to protect.
+
+#### Current mitigation: per-node ChannelHub deployment
+
+Each ChannelHub is constructed with an immutable and trusted `NODE` address. `_requireValidDefinition` enforces `def.node == NODE`, rejecting any channel creation attempt that references a different (non-trusted) node.
+
+**Security properties of this mitigation:**
+
+- Attacks by any address are structurally impossible: a hacker cannot open channels on a ChannelHub bound to a different node, so users of deployment A are fully isolated from the node operating deployment B.
+- The attack surface is reduced to the single bound node. Users who interact with a deployment already trust that node (they sign off-chain states with it and grant it ERC20 allowances); the forgery capability sits within that existing trust boundary.
+- No governance, no admin key, no multisig required.
+
+**Residual risk:** The bound node itself can still exploit the vulnerability — it retains the ability to register a malicious validator and forge a user signature for `createChannel` or `closeChannel`. This risk is accepted under the per-node deployment trust model.
+
+**Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes.
+
+#### Stronger alternatives
+
+**Option F — Protocol-managed bootstrap registry.** A separate registry controlled by a `bootstrapAdmin` multisig lists the validators permitted for `createChannel` user-sig validation. Nodes have no influence over this registry. New schemes (e.g. an ERC-4337 freezer validator) can be added without redeployment. The remaining attack requires compromising the multisig; using a timelock gives users a guaranteed observation window. Supports multiple nodes in one deployment.
+
+**Option G — Two-registry system with tiered trusted validators.** The trusted validator set is split into a hardcoded tier (IDs 0–2, immutable in bytecode) and a governance tier (IDs 3+, multisig-extensible with a contract-enforced activation delay). `createChannel` accepts **only hardcoded-tier IDs** for user-sig validation; no governance action can influence it. Subsequent operations accept both tiers, gated by the bitmask stored at creation time. Properties:
+
+- `createChannel` is fully admin-proof: no governance compromise can affect bootstrap validation.
+- Existing channels are bitmask-isolated: a newly added (even malicious) governance-tier validator cannot be used on channels that did not opt in at creation time.
+- Future wallet formats (ERC-4337, etc.) are supported incrementally via governance without redeployment.
+- Supports multiple nodes in one deployment.
+
+---
+
 ### SessionKeyValidator Security Considerations
 
 ⚠️ **CRITICAL: SessionKeyValidator is designed primarily for USER usage, not NODE usage.**

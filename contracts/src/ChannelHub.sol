@@ -98,6 +98,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     error ChallengerVersionTooLow();
     error NoChannelIdFoundForEscrow();
     error IncorrectChannelId();
+    error IncorrectNode();
 
     struct ChannelMeta {
         ChannelStatus status;
@@ -135,6 +136,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
     uint8 public constant VERSION = 1;
 
     ISignatureValidator public immutable DEFAULT_SIG_VALIDATOR;
+
+    address public immutable NODE;
 
     // TODO: estimate these values better
     uint32 public constant MIN_CHALLENGE_DURATION = 1 days;
@@ -176,9 +179,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     // ========== Constructor ==========
 
-    constructor(ISignatureValidator _defaultSigValidator) {
+    constructor(ISignatureValidator _defaultSigValidator, address _node) {
         require(address(_defaultSigValidator) != address(0), InvalidAddress());
+        require(_node != address(0), InvalidAddress());
         DEFAULT_SIG_VALIDATOR = _defaultSigValidator;
+        NODE = _node;
     }
 
     // ========== Getters ==========
@@ -1306,9 +1311,9 @@ contract ChannelHub is IVault, ReentrancyGuard {
         meta.approvedSignatureValidators = approvedSignatureValidators;
     }
 
-    function _requireValidDefinition(ChannelDefinition calldata def) internal pure {
+    function _requireValidDefinition(ChannelDefinition calldata def) internal view {
         require(def.user != address(0), InvalidAddress());
-        require(def.node != address(0), InvalidAddress());
+        require(def.node == NODE, IncorrectNode());
         require(def.user != def.node, AddressCollision(def.user));
         require(def.challengeDuration >= MIN_CHALLENGE_DURATION, IncorrectChallengeDuration());
     }

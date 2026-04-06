@@ -43,7 +43,7 @@ contract ChannelHubTest_nonRevertingPushFunds is Test {
     uint256 constant BALANCE_AMOUNT = TRANSFER_AMOUNT * 10;
 
     function setUp() public {
-        cHub = new TestChannelHub(new ECDSAValidator());
+        cHub = new TestChannelHub(new ECDSAValidator(), makeAddr("node"));
         normalToken = new MockERC20("Normal Token", "NRM", 18);
         nonReturningToken = new NonReturningERC20();
         revertingToken = new RevertingERC20();

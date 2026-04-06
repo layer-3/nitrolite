@@ -10,7 +10,7 @@ import {EscrowStatus} from "../src/interfaces/Types.sol";
  * @notice Test harness contract that exposes internal ChannelHub functions for testing
  */
 contract TestChannelHub is ChannelHub {
-    constructor(ISignatureValidator _defaultSigValidator) ChannelHub(_defaultSigValidator) {}
+    constructor(ISignatureValidator _defaultSigValidator, address _node) ChannelHub(_defaultSigValidator, _node) {}
 
     /**
      * @notice Marks this contract as a test contract for Forge

@@ -39,12 +39,12 @@ contract ChannelHubTest_Base is Test {
     uint256 constant INITIAL_BALANCE = 10000;
 
     function setUp() public virtual {
-        // Deploy contracts
-        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR);
-        token = new MockERC20("Test Token", "TST", 18);
-
         node = vm.addr(NODE_PK);
         alice = vm.addr(ALICE_PK);
+
+        // Deploy contracts
+        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR, node);
+        token = new MockERC20("Test Token", "TST", 18);
         aliceSk1 = vm.addr(ALICE_SK1_PK);
         bob = vm.addr(BOB_PK);
 

@@ -95,4 +95,16 @@ contract TestChannelHub is ChannelHub {
     function harness_purgeEscrowDeposits(uint256 maxSteps) external {
         _purgeEscrowDeposits(maxSteps);
     }
+
+    /**
+     * @notice Exposed version of _extractValidator for testing
+     * @dev Returns only the resolved validator address; sigData slice is not useful to callers
+     */
+    function exposed_extractValidator(bytes calldata signature, address node_, uint256 approvedSignatureValidators)
+        external
+        view
+        returns (ISignatureValidator validator)
+    {
+        (validator,) = _extractValidator(signature, node_, approvedSignatureValidators);
+    }
 }

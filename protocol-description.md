@@ -663,6 +663,8 @@ The current implementation binds each ChannelHub to a single node address at dep
 
 Within the trust boundary of the bound node the original vulnerability remains. Users who interact with a given deployment must already trust that node — they sign off-chain states with it and grant it ERC20 allowances — so the residual risk sits inside an existing trust relationship rather than being exploitable by an arbitrary third party.
 
+A contract-enforced `VALIDATOR_ACTIVATION_DELAY` (1 day) provides a partial, targeted defence within this trust boundary: a newly registered validator cannot be used until the delay has elapsed, creating an observable window during which a key compromise can be detected and users can revoke ERC20 approvals before the attack on undeposited funds can execute.
+
 A consequence of this model is that each node requires its own ChannelHub deployment; a single contract instance cannot serve multiple independent nodes.
 
 #### Stronger alternatives

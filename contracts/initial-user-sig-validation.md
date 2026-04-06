@@ -429,25 +429,42 @@ that contract, etc.). The validator forgery attack therefore sits within the exi
 boundary — it is one more thing a malicious version of an already-trusted node could do,
 rather than something any third-party node can do against users of a shared hub.
 
+**Validator activation delay (`VALIDATOR_ACTIVATION_DELAY`):**
+
+Within Option H the bound node still has the ability to register a malicious validator and
+immediately weaponise it. A contract-enforced activation delay partially closes this window
+for one specific attack surface:
+
+- Exploiting a newly registered validator to drain **user ERC20 approvals** via a fake
+  `createChannel(DEPOSIT)` requires the validator to be active first.
+- With a 1-day delay, the registration is visible on-chain before it can be used, giving
+  the node operator (or watchers) time to detect the compromise, broadcast an alert, and
+  give users time to revoke ERC20 approvals.
+
 **Pros:**
 
-- Trivially simple to implement — two lines of code.
-- No changes to the validator system required.
+- Trivially simple to implement — two lines of code for the node-binding; small struct
+  change + one timestamp check for the activation delay.
+- No changes to the validator selection logic required.
 - Cross-node attacks are structurally impossible: a rogue node cannot exploit another node's
   ChannelHub to drain users of that node.
 - No admin, no governance, no multisig dependency.
+- Activation delay creates a detectable, on-chain signal for monitoring before an attack
+  on ERC20 approvals can execute.
 - Compatible with any other option: H can be combined with G to get both per-node scoping
   and a proper validator fix.
 
 **Cons:**
 
 - **Does not fix the vulnerability within the trust boundary.** The bound node itself retains
-  the ability to forge user signatures. Users must accept that residual risk or combine H
-  with a validator-level fix.
+  the ability to forge user signatures (after the activation delay). Users must accept that
+  residual risk or combine H with a validator-level fix.
 - **One deployment per node.** Nodes cannot share a ChannelHub; each requires its own
   deployment and its own separate ERC20 approval from users.
 - **Operational fragmentation.** Users interacting with multiple nodes must track multiple
   contract addresses and manage approvals per deployment.
+- **Activation delay adds operational overhead.** Nodes must pre-register validators 1 day
+  before first use — a minor one-time cost per validator.
 
 ---
 

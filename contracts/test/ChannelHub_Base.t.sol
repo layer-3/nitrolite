@@ -67,6 +67,9 @@ contract ChannelHubTest_Base is Test {
         );
         cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 
+        // Advance past VALIDATOR_ACTIVATION_DELAY so the registered validator is usable
+        vm.warp(block.timestamp + cHub.VALIDATOR_ACTIVATION_DELAY() + 1);
+
         vm.prank(alice);
         token.approve(address(cHub), INITIAL_BALANCE);
 

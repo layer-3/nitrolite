@@ -280,9 +280,15 @@ Each ChannelHub is constructed with an immutable and trusted `NODE` address. `_r
 - The attack surface is reduced to the single bound node. Users who interact with a deployment already trust that node (they sign off-chain states with it and grant it ERC20 allowances); the forgery capability sits within that existing trust boundary.
 - No governance, no admin key, no multisig required.
 
-**Residual risk:** The bound node itself can still exploit the vulnerability — it retains the ability to register a malicious validator and forge a user signature for `createChannel` or `closeChannel`. This risk is accepted under the per-node deployment trust model.
+**Validator activation delay (`VALIDATOR_ACTIVATION_DELAY = 1 day`):**
 
-**Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes.
+A newly registered validator cannot be used until `registeredAt + VALIDATOR_ACTIVATION_DELAY` has elapsed. This adds a partial, targeted defence against draininig user ERC20 approvals via fake `createChannel(DEPOSIT)`.
+
+The registration is an observable on-chain event, and with monitoring in place, the node operator can detect a compromise and alert users to revoke ERC20 approvals before the delay expires. Without the delay, registration and exploitation can occur in the same block with no response possible.
+
+**Residual risk:** After the activation delay, the bound node can still exploit the vulnerability. This risk is accepted under the per-node deployment trust model.
+
+**Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes. Validators must be registered 1 day before first use (one-time cost per validator).
 
 #### Stronger alternatives
 

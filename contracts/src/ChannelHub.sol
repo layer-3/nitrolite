@@ -89,6 +89,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     error ValidatorAlreadyRegistered(address node, uint8 validatorId);
     error ValidatorNotRegistered(address node, uint8 validatorId);
     error ValidatorNotApproved();
+    error ValidatorNotActive(address node, uint8 validatorId, uint64 activatesAt);
 
     error EmptySignature();
     error IncorrectSignature();
@@ -131,6 +132,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
         State initState;
     }
 
+    struct NodeValidator {
+        ISignatureValidator validator;
+        uint64 registeredAt;
+    }
+
     // ======== Contract Storage ==========
 
     uint8 public constant VERSION = 1;
@@ -154,6 +160,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
     // ERC777 hooks (~2.6k registry lookup + <5k hook execution)
     uint256 public constant TRANSFER_GAS_LIMIT = 100000;
 
+    // Delay between validator registration and first use.
+    // Gives users a window to observe a newly registered validator on-chain and revoke
+    // ERC20 approvals before a compromised NODE key can weaponise it to forge user signatures.
+    uint64 public constant VALIDATOR_ACTIVATION_DELAY = 1 days;
+
     mapping(bytes32 channelId => ChannelMeta meta) internal _channels;
     mapping(address user => EnumerableSet.Bytes32Set channelIds) internal _userChannels;
 
@@ -169,8 +180,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     // Validator ID 0x00 is reserved for DEFAULT_SIG_VALIDATOR
     // Validator IDs 0x01-0xFF are available for node-registered validators
-    mapping(address node => mapping(uint8 validatorId => ISignatureValidator validator)) internal
-        _nodeValidatorRegistry;
+    mapping(address node => mapping(uint8 validatorId => NodeValidator validatorInfo)) internal _nodeValidatorRegistry;
 
     // Reclaim balances for failed outbound transfers
     // Accumulates funds when transfers fail (blacklists, hooks, gas depletion)
@@ -192,8 +202,13 @@ contract ChannelHub is IVault, ReentrancyGuard {
         return _nodeBalances[node][token];
     }
 
-    function getNodeValidator(address node, uint8 validatorId) external view returns (ISignatureValidator) {
-        return _nodeValidatorRegistry[node][validatorId];
+    function getNodeValidator(address node, uint8 validatorId)
+        external
+        view
+        returns (ISignatureValidator validator, uint64 registeredAt)
+    {
+        NodeValidator memory validatorInfo = _nodeValidatorRegistry[node][validatorId];
+        return (validatorInfo.validator, validatorInfo.registeredAt);
     }
 
     function getChannelIds(address user) external view returns (bytes32[] memory) {
@@ -458,14 +473,15 @@ contract ChannelHub is IVault, ReentrancyGuard {
         require(validatorId != DEFAULT_SIG_VALIDATOR_ID, InvalidValidatorId());
         require(address(validator) != address(0), InvalidAddress());
         require(
-            address(_nodeValidatorRegistry[node][validatorId]) == address(0),
+            address(_nodeValidatorRegistry[node][validatorId].validator) == address(0),
             ValidatorAlreadyRegistered(node, validatorId)
         );
 
         bytes memory message = Utils.getValidatorRegistrationMessage(address(this), validatorId, address(validator));
         require(EcdsaSignatureUtils.validateEcdsaSigner(message, signature, node), IncorrectSignature());
 
-        _nodeValidatorRegistry[node][validatorId] = validator;
+        _nodeValidatorRegistry[node][validatorId] =
+            NodeValidator({validator: validator, registeredAt: uint64(block.timestamp)});
 
         emit ValidatorRegistered(node, validatorId, validator);
     }
@@ -971,8 +987,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
         } else {
             // Look up validator in node's registry
             require((approvedSignatureValidators >> validatorId) & 1 == 1, ValidatorNotApproved());
-            validator = _nodeValidatorRegistry[node][validatorId];
-            require(address(validator) != address(0), ValidatorNotRegistered(node, validatorId));
+            NodeValidator storage entry = _nodeValidatorRegistry[node][validatorId];
+            require(address(entry.validator) != address(0), ValidatorNotRegistered(node, validatorId));
+            uint64 activatesAt = entry.registeredAt + VALIDATOR_ACTIVATION_DELAY;
+            require(block.timestamp >= activatesAt, ValidatorNotActive(node, validatorId, activatesAt));
+            validator = entry.validator;
         }
 
         sigData = _sliceCalldata(signature, 1);

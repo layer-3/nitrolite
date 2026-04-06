@@ -257,22 +257,22 @@ func (c *Client) GetUserAddress() string {
 
 // signAndSubmitState is a helper that validates, signs a state and submits it to the node.
 // It returns the node's signature.
-func (c *Client) signAndSubmitState(ctx context.Context, previousState, state *core.State) (string, error) {
+func (c *Client) signAndSubmitState(ctx context.Context, currentState, proposedState *core.State) (string, error) {
 	// Sign state
-	sig, err := c.ValidateAndSignState(previousState, state)
+	sig, err := c.ValidateAndSignState(currentState, proposedState)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state: %w", err)
 	}
-	state.UserSig = &sig
+	proposedState.UserSig = &sig
 
 	// Submit to node
-	nodeSig, err := c.submitState(ctx, *state)
+	nodeSig, err := c.submitState(ctx, *proposedState)
 	if err != nil {
 		return "", fmt.Errorf("failed to submit state: %w", err)
 	}
 
 	// Update state with node signature
-	state.NodeSig = &nodeSig
+	proposedState.NodeSig = &nodeSig
 
 	return nodeSig, nil
 }

@@ -57,6 +57,10 @@ contract ChannelHubTest_Base is Test {
         cHub.depositToVault(node, address(token), INITIAL_BALANCE);
         vm.stopPrank();
 
+        vm.deal(node, INITIAL_BALANCE);
+        vm.prank(node);
+        cHub.depositToVault{value: INITIAL_BALANCE}(node, address(0), INITIAL_BALANCE);
+
         // Register SessionKeyValidator for the node
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
             vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK

@@ -614,8 +614,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
             meta.lockedFunds = 0;
             meta.challengeExpireAt = 0;
 
-            _pushFunds(user, prevState.homeLedger.token, prevState.homeLedger.userAllocation);
-            _pushFunds(node, prevState.homeLedger.token, prevState.homeLedger.nodeAllocation);
+            _nonRevertingPushFunds(user, prevState.homeLedger.token, prevState.homeLedger.userAllocation);
+            _nonRevertingPushFunds(node, prevState.homeLedger.token, prevState.homeLedger.nodeAllocation);
 
             _userChannels[user].remove(channelId);
 
@@ -713,7 +713,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             meta.challengeExpireAt = 0;
 
             // Release to user as "deposit exchange" has not been signed yet (it is the "finalizeEscrowDeposit" state)
-            _pushFunds(user, meta.initState.nonHomeLedger.token, lockedAmount);
+            _nonRevertingPushFunds(user, meta.initState.nonHomeLedger.token, lockedAmount);
 
             // Eagerly advance the queue head so FINALIZED entries don't accumulate
             _purgeEscrowDeposits();
@@ -1141,7 +1141,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // Then process NEGATIVE deltas (subtractions from lockedFunds)
         if (effects.userFundsDelta < 0) {
             uint256 amount = (-effects.userFundsDelta).toUint256();
-            _pushFunds(def.user, token, amount);
+            _nonRevertingPushFunds(def.user, token, amount);
             meta.lockedFunds -= amount;
         }
 
@@ -1195,7 +1195,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             meta.lockedAmount += amount;
         } else if (effects.userFundsDelta < 0) {
             uint256 amount = (-effects.userFundsDelta).toUint256();
-            _pushFunds(user, token, amount);
+            _nonRevertingPushFunds(user, token, amount);
             meta.lockedAmount -= amount;
         }
 
@@ -1251,7 +1251,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             meta.lockedAmount += amount;
         } else if (effects.userFundsDelta < 0) {
             uint256 amount = (-effects.userFundsDelta).toUint256();
-            _pushFunds(user, token, amount);
+            _nonRevertingPushFunds(user, token, amount);
             meta.lockedAmount -= amount;
         }
 
@@ -1359,7 +1359,22 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
     }
 
+    /// @dev Reverts if the transfer fails. Used in non-adversarial contexts where atomicity is required
+    /// (e.g. voluntary vault withdrawals where the caller controls the destination).
     function _pushFunds(address to, address token, uint256 amount) internal nonReentrant {
+        if (amount == 0) return;
+
+        if (token == address(0)) {
+            (bool success,) = payable(to).call{value: amount}("");
+            require(success, NativeTransferFailed(to, amount));
+        } else {
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
+
+    /// @dev Never reverts. On failure, accumulates funds in `_reclaims[to]` for later recovery via `claimFunds()`.
+    /// Used in adversarial contexts (e.g. channel settlement) where a reverting recipient must not block progress.
+    function _nonRevertingPushFunds(address to, address token, uint256 amount) internal nonReentrant {
         if (amount == 0) return;
 
         if (token == address(0)) {

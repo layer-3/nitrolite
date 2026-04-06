@@ -390,7 +390,7 @@ export class Client {
     }
 
     // Scenario A: Channel doesn't exist or is closed - create it
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -401,6 +401,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -484,7 +488,7 @@ export class Client {
     }
 
     // Channel doesn't exist or is closed - create it and withdraw
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -495,6 +499,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -556,7 +564,11 @@ export class Client {
       // Channel doesn't exist
     }
 
-    if (!state || !state.homeChannelId) {
+    // homeChannelId is intentionally not checked here: a non-null state with
+    // an undefined homeChannelId is valid — it represents a user who received
+    // funds but has not yet opened a channel. Only enter the creation path when
+    // there is truly no prior state at all.
+    if (!state) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -646,8 +658,12 @@ export class Client {
       // No state exists
     }
 
+    // homeChannelId is intentionally not checked here: a non-null state with
+    // an undefined homeChannelId is valid — it represents a user who received
+    // funds but has not yet opened a channel. Only enter the creation path when
+    // there is truly no prior state at all.
     // No channel path - create channel with acknowledgement
-    if (!state || !state.homeChannelId) {
+    if (!state) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -794,7 +810,7 @@ export class Client {
       case core.TransitionType.TransferSend:
       case core.TransitionType.TransferReceive:
       case core.TransitionType.Commit:
-      case core.TransitionType.Release:  
+      case core.TransitionType.Release:
       {
         if (channel.status === core.ChannelStatus.Void) {
           // Channel not yet created on-chain, reconstruct definition and call Create

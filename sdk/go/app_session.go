@@ -175,8 +175,10 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to get latest state: %w", err)
 	}
 
-	if currentState == nil || currentState.HomeChannelID == nil {
-		return "", fmt.Errorf("no channel exists for asset %s", asset)
+	// HomeChannelID is intentionally not checked here: a non-nil state with a nil HomeChannelID is valid —
+	// it represents a user who received funds but has not yet opened a channel
+	if currentState == nil {
+		return "", fmt.Errorf("no channel state to advance for AppSession")
 	}
 
 	nextState := currentState.NextState()

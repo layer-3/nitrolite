@@ -479,4 +479,4 @@ for one specific attack surface:
 | **E** (msg.sender check) | ✓ | ✓ | ✓ | **✗ (breaks model)** | ✓ | ✓ | **Yes** (must be online) | ✓ |
 | **F** (protocol registry) | ✓ | ✗ | ✓ (via freezer) | ✗ | ✓ | ✓ | No | ✓ |
 | **G** (two-registry + tiered) | ✓ | ✓ | ✓ (via FreezerProxy) | ✗ | ✓ | ✓ | No | ✓ |
-| **H** (per-node hub) | ✓ (cross-node only) | ✓ (cross-node only) | — | ✓ | ✓ | ✓ | No | **✗** |
+| **H** (per-node hub) | Partial (cross-node only) | Partial (cross-node only) | — | ✓ | ✓ | ✓ | No | **✗** |

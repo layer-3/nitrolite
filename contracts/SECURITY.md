@@ -195,7 +195,7 @@ The protocol uses two mechanisms for validator selection to prevent signature fo
 - The default ECDSA validator (0x00) is **always** available, regardless of the bitmask value
 - The bitmask specifies additional validators from the node's registry that are agreed validators (e.g., if bit 42 is 1, validator ID 42 is approved)
 - Since `approvedSignatureValidators` is part of `channelId` computation, agreed validators cannot be changed during cross-chain operations without invalidating signatures
-- This prevents malicious nodes from forging user signatures by controlling validator selection
+- This prevents malicious nodes from forging user signatures on **already-created channels** (where `channelId` embeds the agreed bitmask); it does **not** protect `createChannel` or `closeChannel`, where the `ChannelDefinition` — including its bitmask — arrives in calldata and there is no prior signed state to bind it
 
 **Node validator registry:**
 

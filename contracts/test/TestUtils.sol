@@ -57,12 +57,14 @@ library TestUtils {
         return SessionKeyAuthorization({sessionKey: sessionKey, metadataHash: metadataHash, authSignature: signature});
     }
 
-    function buildAndSignValidatorRegistration(Vm vm, uint8 validatorId, address validatorAddress, uint256 nodePk)
-        internal
-        view
-        returns (bytes memory)
-    {
-        bytes memory message = abi.encode(validatorId, validatorAddress, block.chainid);
+    function buildAndSignValidatorRegistration(
+        Vm vm,
+        uint8 validatorId,
+        address validatorAddress,
+        uint256 nodePk,
+        address channelHub
+    ) internal view returns (bytes memory) {
+        bytes memory message = Utils.getValidatorRegistrationMessage(channelHub, validatorId, validatorAddress);
         return signEip191(vm, nodePk, message);
     }
 

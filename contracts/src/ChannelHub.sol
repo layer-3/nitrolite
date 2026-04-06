@@ -438,11 +438,11 @@ contract ChannelHub is IVault, ReentrancyGuard {
      * @dev Anyone can submit this transaction with a valid node signature, enabling relayer-friendly registration.
      *      The node's private key only signs the registration data, never sends transactions directly.
      *      This allows nodes to use cold storage or HSMs without exposing keys to transaction submission.
-     *      The signature includes block.chainid to prevent cross-chain replay attacks.
+     *      The signature includes block.chainid and address(this) to prevent cross-chain and cross-deployment replay attacks.
      * @param node The node address that signed the registration
      * @param validatorId The validator ID (0x01-0xFF, 0x00 reserved for DEFAULT)
      * @param validator The validator contract address
-     * @param signature Node's signature over abi.encode(validatorId, validator, block.chainid)
+     * @param signature Node's signature over abi.encode(block.chainid, address(this), validatorId, validator)
      */
     function registerNodeValidator(
         address node,
@@ -457,7 +457,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             ValidatorAlreadyRegistered(node, validatorId)
         );
 
-        bytes memory message = abi.encode(validatorId, validator, block.chainid);
+        bytes memory message = Utils.getValidatorRegistrationMessage(address(this), validatorId, address(validator));
         require(EcdsaSignatureUtils.validateEcdsaSigner(message, signature, node), IncorrectSignature());
 
         _nodeValidatorRegistry[node][validatorId] = validator;

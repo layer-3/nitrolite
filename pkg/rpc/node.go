@@ -312,7 +312,15 @@ func (wn *WebsocketNode) processRequests(conn Connection, parentCtx context.Cont
 			handlers: routeHandlers,
 			Storage:  safeStorage,
 		}
-		ctx.Next() // Start processing the handlers
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					wn.cfg.Logger.Error("panic in handler", "method", req.Method, "recover", r)
+					wn.sendErrorResponse(conn, req.RequestID, req.Method, defaultNodeErrorMessage)
+				}
+			}()
+			ctx.Next()
+		}()
 
 		// Marshal the response
 		responseBytes, err := json.Marshal(ctx.Response)

@@ -54,8 +54,8 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		c.Fail(rpc.Errorf(
 			"asset %s is not supported on blockchain %d with token address %s",
 			incomingState.Asset,
-			incomingState.EscrowLedger.BlockchainID,
-			incomingState.EscrowLedger.TokenAddress), "")
+			incomingState.HomeLedger.BlockchainID,
+			incomingState.HomeLedger.TokenAddress), "")
 		return
 	}
 

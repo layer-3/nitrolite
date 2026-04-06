@@ -266,7 +266,7 @@ An attacker cannot inject a malicious freezer by manipulating `userSig` bytes.
 **Security comparison with original vulnerability:**
 
 | | Original attack | Option F attack |
-|---|---|---|---|
+| --- | --- | --- |
 | Who adds the malicious validator? | Any node (permissionless) | Only `bootstrapAdmin` (governance) |
 | Precondition | None | Admin key compromise |
 | Scope | Per-channel, any node can exploit | Affects all channels globally |

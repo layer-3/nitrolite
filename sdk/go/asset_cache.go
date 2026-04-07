@@ -8,6 +8,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 )
 
+// TODO: refactor by not using client as a dependency as this creates a circular usage.
 // clientAssetStore implements core.AssetStore by fetching data from the Clearnode API.
 type clientAssetStore struct {
 	client *Client

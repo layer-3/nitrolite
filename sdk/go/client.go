@@ -56,6 +56,7 @@ type Client struct {
 	blockchainClients        map[uint64]core.BlockchainClient
 	blockchainLockingClients map[uint64]*evm.LockingClient
 	homeBlockchains          map[string]uint64
+	stateAdvancer            core.StateAdvancer
 	stateSigner              core.ChannelSigner
 	rawSigner                sign.Signer
 	assetStore               *clientAssetStore
@@ -116,6 +117,7 @@ func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Sign
 
 	// Create asset store
 	client.assetStore = newClientAssetStore(client)
+	client.stateAdvancer = core.NewStateAdvancerV1(client.assetStore)
 
 	// Error handler wrapper
 	handleError := func(err error) {
@@ -215,19 +217,24 @@ func (c *Client) WaitCh() <-chan struct{} {
 // Shared Helper Methods
 // ============================================================================
 
-// SignState signs a channel state by packing it, hashing it, and signing the hash.
+// ValidateAndSignState firstly validates and then signs a channel state by packing it, hashing it, and signing the hash.
 // Returns the signature as a hex-encoded string (with 0x prefix).
 //
 // This is a low-level method exposed for advanced users who want to manually
 // construct and sign states. Most users should use the high-level methods like
 // Transfer, Deposit, and Withdraw instead.
-func (c *Client) SignState(state *core.State) (string, error) {
-	if state == nil {
-		return "", fmt.Errorf("state cannot be nil")
+func (c *Client) ValidateAndSignState(currentState, proposedState *core.State) (string, error) {
+	if currentState == nil || proposedState == nil {
+		return "", fmt.Errorf("current or proposed state cannot be nil")
+	}
+
+	// Validate the state
+	if err := c.stateAdvancer.ValidateAdvancement(*currentState, *proposedState); err != nil {
+		return "", fmt.Errorf("state validation failed: %w", err)
 	}
 
 	// Pack the state into ABI-encoded bytes
-	packedState, err := core.PackState(*state, c.assetStore)
+	packedState, err := core.PackState(*proposedState, c.assetStore)
 	if err != nil {
 		return "", fmt.Errorf("failed to pack state: %w", err)
 	}
@@ -248,24 +255,24 @@ func (c *Client) GetUserAddress() string {
 	return c.rawSigner.PublicKey().Address().String()
 }
 
-// signAndSubmitState is a helper that signs a state and submits it to the node.
+// signAndSubmitState is a helper that validates, signs a state and submits it to the node.
 // It returns the node's signature.
-func (c *Client) signAndSubmitState(ctx context.Context, state *core.State) (string, error) {
+func (c *Client) signAndSubmitState(ctx context.Context, currentState, proposedState *core.State) (string, error) {
 	// Sign state
-	sig, err := c.SignState(state)
+	sig, err := c.ValidateAndSignState(currentState, proposedState)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state: %w", err)
 	}
-	state.UserSig = &sig
+	proposedState.UserSig = &sig
 
 	// Submit to node
-	nodeSig, err := c.submitState(ctx, *state)
+	nodeSig, err := c.submitState(ctx, *proposedState)
 	if err != nil {
 		return "", fmt.Errorf("failed to submit state: %w", err)
 	}
 
 	// Update state with node signature
-	state.NodeSig = &nodeSig
+	proposedState.NodeSig = &nodeSig
 
 	return nodeSig, nil
 }

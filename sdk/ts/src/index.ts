@@ -3,7 +3,7 @@
 // ============================================================================
 
 // Export SDK Client (main entry point)
-export { Client, DEFAULT_CHALLENGE_PERIOD, type StateSigner, type TransactionSigner } from './client';
+export { Client, DEFAULT_CHALLENGE_PERIOD, type StateSigner, type TransactionSigner } from './client.js';
 
 // Export signers
 export {
@@ -14,7 +14,7 @@ export {
   AppSessionWalletSignerV1,
   AppSessionKeySignerV1,
   createSigners,
-} from './signers';
+} from './signers.js';
 
 // Export configuration
 export {
@@ -24,29 +24,29 @@ export {
   withHandshakeTimeout,
   withErrorHandler,
   withBlockchainRPC
-} from './config';
+} from './config.js';
 
 // Export asset store
-export { ClientAssetStore } from './asset_store';
+export { ClientAssetStore } from './asset_store.js';
 
 // Export utility functions
-export * from './utils';
+export * from './utils.js';
 
 // ============================================================================
 // Core Modules (types, state management, utilities)
 // ============================================================================
 
-export * from './core';
-export * from './app';
+export * from './core/index.js';
+export * from './app/index.js';
 
 // ============================================================================
 // Blockchain Modules
 // ============================================================================
 
-export * from './blockchain';
+export * from './blockchain/index.js';
 
 // ============================================================================
 // RPC Modules
 // ============================================================================
 
-export * from './rpc';
+export * from './rpc/index.js';

@@ -11,7 +11,7 @@
  * lightweight placeholders while parse* helpers normalize response shapes.
  */
 
-import type { MessageSigner, RPCResponse, NitroliteRPCMessage } from './types';
+import type { MessageSigner, RPCResponse, NitroliteRPCMessage } from './types.js';
 
 // ---------------------------------------------------------------------------
 // parseAnyRPCResponse -- pass-through

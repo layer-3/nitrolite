@@ -2,7 +2,7 @@
  * Core message structure for RPC communication
  */
 
-import { newErrorPayload, ERROR_PARAM_KEY } from './error';
+import { newErrorPayload, ERROR_PARAM_KEY } from './error.js';
 
 export enum MsgType {
   Req = 1,

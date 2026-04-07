@@ -1,5 +1,5 @@
 import { Address } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import {
   State,
   Ledger,
@@ -7,8 +7,8 @@ import {
   TransitionType,
   ChannelDefinition,
   newTransition,
-} from './types';
-import { getHomeChannelId, getEscrowChannelId, getStateId, getSenderTransactionId, getReceiverTransactionId } from './utils';
+} from './types.js';
+import { getHomeChannelId, getEscrowChannelId, getStateId, getSenderTransactionId, getReceiverTransactionId } from './utils.js';
 
 // ============================================================================
 // State Query Methods

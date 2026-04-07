@@ -2,7 +2,7 @@
  * RPC error types and error handling utilities
  */
 
-import { Payload } from './message';
+import { Payload } from './message.js';
 
 /**
  * Standard key for storing error messages in payloads

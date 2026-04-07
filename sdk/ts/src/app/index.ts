@@ -3,5 +3,5 @@
  * This module contains types and functions for managing application sessions
  */
 
-export * from './types';
-export * from './packing';
+export * from './types.js';
+export * from './packing.js';

@@ -1,5 +1,5 @@
 import { Address, Hex } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 
 // ============================================================================
 // Enums

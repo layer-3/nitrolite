@@ -6,15 +6,15 @@
  */
 
 import { Address, Hex, createPublicClient, createWalletClient, http, custom, verifyMessage } from 'viem';
-import Decimal from 'decimal.js';
-import * as core from './core';
-import * as app from './app';
-import * as API from './rpc/api';
-import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types';
-import { RPCClient } from './rpc/client';
-import { WebsocketDialer } from './rpc/dialer';
-import { ClientAssetStore } from './asset_store';
-import { Config, DefaultConfig, Option } from './config';
+import { Decimal } from 'decimal.js';
+import * as core from './core/index.js';
+import * as app from './app/index.js';
+import * as API from './rpc/api.js';
+import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types.js';
+import { RPCClient } from './rpc/client.js';
+import { WebsocketDialer } from './rpc/dialer.js';
+import { ClientAssetStore } from './asset_store.js';
+import { Config, DefaultConfig, Option } from './config.js';
 import {
   generateNonce,
   transformNodeConfig,
@@ -30,12 +30,12 @@ import {
   transformAppSessionInfo,
   transformAppDefinitionFromRPC,
   transformActionAllowance,
-} from './utils';
-import * as blockchain from './blockchain';
-import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state';
-import { newVoidState } from './core/types';
-import { packState, packChallengeState } from './core/state_packer';
-import { StateSigner, TransactionSigner } from './signers';
+} from './utils.js';
+import * as blockchain from './blockchain/index.js';
+import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state.js';
+import { newVoidState } from './core/types.js';
+import { packState, packChallengeState } from './core/state_packer.js';
+import { StateSigner, TransactionSigner } from './signers.js';
 
 /**
  * Default challenge period for channels (1 day in seconds)

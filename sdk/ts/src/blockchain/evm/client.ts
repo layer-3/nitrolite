@@ -4,17 +4,17 @@
  */
 
 import { Address, Hex, hexToBytes, zeroAddress } from 'viem';
-import Decimal from 'decimal.js';
-import * as core from '../../core/types';
-import { decimalToBigInt } from '../../core/utils';
-import { AssetStore, EVMClient, WalletSigner } from './interface';
-import { ChannelHubAbi } from './channel_hub_abi';
+import { Decimal } from 'decimal.js';
+import * as core from '../../core/types.js';
+import { decimalToBigInt } from '../../core/utils.js';
+import { AssetStore, EVMClient, WalletSigner } from './interface.js';
+import { ChannelHubAbi } from './channel_hub_abi.js';
 import {
   coreDefToContractDef,
   coreStateToContractState,
   contractStateToCoreState,
-} from './utils';
-import { newERC20 } from './erc20';
+} from './utils.js';
+import { newERC20 } from './erc20.js';
 
 /**
  * ClientOptions for configuring the blockchain client

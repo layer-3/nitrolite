@@ -19,10 +19,10 @@ contract TestChannelHub is ChannelHub {
     function IS_TEST() external pure {}
 
     /**
-     * @notice Exposed version of _pushFunds for testing
+     * @notice Exposed version of _nonRevertingPushFunds for testing
      */
-    function exposed_pushFunds(address to, address token, uint256 amount) external payable {
-        _pushFunds(to, token, amount);
+    function exposed_nonRevertingPushFunds(address to, address token, uint256 amount) external payable {
+        _nonRevertingPushFunds(to, token, amount);
     }
 
     /**
@@ -30,6 +30,15 @@ contract TestChannelHub is ChannelHub {
      */
     function exposed_pullFunds(address from, address token, uint256 amount) external payable {
         _pullFunds(from, token, amount);
+    }
+
+    /**
+     * @notice Workaround to set a node's vault balance directly for testing
+     * @dev Allows tests to set up vault state without going through depositToVault (useful for tokens
+     *      that revert on transferFrom, making a normal deposit impossible)
+     */
+    function workaround_setNodeBalance(address node, address token, uint256 amount) external {
+        _nodeBalances[node][token] = amount;
     }
 
     /**

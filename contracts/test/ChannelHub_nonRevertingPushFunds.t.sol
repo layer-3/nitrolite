@@ -25,7 +25,7 @@ contract SimpleReceiver {
     receive() external payable {}
 }
 
-contract ChannelHubTest_pushFunds is Test {
+contract ChannelHubTest_nonRevertingPushFunds is Test {
     TestChannelHub public cHub;
     MockERC20 public normalToken;
     NonReturningERC20 public nonReturningToken;
@@ -102,20 +102,20 @@ contract ChannelHubTest_pushFunds is Test {
     // ========== Normal ERC20 Tests ==========
 
     function test_succeeds_withNormalERC20() public {
-        cHub.exposed_pushFunds(recipient, address(normalToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(normalToken), TRANSFER_AMOUNT);
         _verifyTransferSuccess(recipient, address(normalToken), TRANSFER_AMOUNT);
     }
 
     function test_succeeds_withZeroAmount() public {
         // Should not revert, should be a no-op
-        cHub.exposed_pushFunds(recipient, address(normalToken), 0);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(normalToken), 0);
         _verifyBalancesNotChanged(recipient, address(normalToken), 0);
     }
 
     // ========== Non-Returning ERC20 Tests ==========
 
     function test_succeeds_withNonReturningERC20() public {
-        cHub.exposed_pushFunds(recipient, address(nonReturningToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(nonReturningToken), TRANSFER_AMOUNT);
         _verifyTransferSuccess(recipient, address(nonReturningToken), TRANSFER_AMOUNT);
     }
 
@@ -127,7 +127,7 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(recipient, address(normalToken), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(normalToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(normalToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(normalToken), TRANSFER_AMOUNT);
     }
@@ -138,15 +138,15 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(recipient, address(revertingToken), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(revertingToken), TRANSFER_AMOUNT);
     }
 
     function test_accumulatesReclaims_multipleFailedTransfers() public {
-        cHub.exposed_pushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(revertingToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(revertingToken), TRANSFER_AMOUNT * 2);
     }
@@ -157,7 +157,7 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(gasConsumingToken), TRANSFER_AMOUNT);
     }
@@ -168,7 +168,7 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(recipient, address(malformedToken), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(malformedToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(malformedToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(malformedToken), TRANSFER_AMOUNT);
     }
@@ -180,7 +180,7 @@ contract ChannelHubTest_pushFunds is Test {
         DonatingERC20 donatingToken = new DonatingERC20(address(cHub), donationAmount);
         donatingToken.mint(address(cHub), BALANCE_AMOUNT);
 
-        cHub.exposed_pushFunds(recipient, address(donatingToken), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(donatingToken), TRANSFER_AMOUNT);
 
         // Recipient received the transferred amount
         assertEq(donatingToken.balanceOf(recipient), TRANSFER_AMOUNT, "Recipient should have received tokens");
@@ -191,13 +191,13 @@ contract ChannelHubTest_pushFunds is Test {
     // ========== Native ETH Tests ==========
 
     function test_succeeds_withNativeETH() public {
-        cHub.exposed_pushFunds(recipient, address(0), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(recipient, address(0), TRANSFER_AMOUNT);
 
         _verifyTransferSuccess(recipient, address(0), TRANSFER_AMOUNT);
     }
 
     function test_succeeds_withNativeETH_toContract() public {
-        cHub.exposed_pushFunds(address(simpleReceiver), address(0), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(address(simpleReceiver), address(0), TRANSFER_AMOUNT);
 
         _verifyTransferSuccess(address(simpleReceiver), address(0), TRANSFER_AMOUNT);
     }
@@ -208,7 +208,7 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(address(revertingReceiver), address(0), TRANSFER_AMOUNT);
     }
@@ -219,7 +219,7 @@ contract ChannelHubTest_pushFunds is Test {
         vm.expectEmit(true, true, false, true);
         emit ChannelHub.TransferFailed(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
 
-        cHub.exposed_pushFunds(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
+        cHub.exposed_nonRevertingPushFunds(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(address(gasConsumingReceiver), address(0), TRANSFER_AMOUNT);
     }

@@ -63,7 +63,7 @@ contract ChannelHubTest_Base is Test {
 
         // Register SessionKeyValidator for the node
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
-            vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK
+            vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
         cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 

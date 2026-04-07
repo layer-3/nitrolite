@@ -9,6 +9,7 @@ import {TestUtils} from "../test/TestUtils.sol";
 
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
+import {Utils} from "../src/Utils.sol";
 
 /**
  * @title RegisterNodeValidator
@@ -59,7 +60,7 @@ contract RegisterNodeValidator is Script {
         console.log("Validator address:", validatorAddress);
         console.log("Chain ID:", block.chainid);
 
-        bytes memory message = abi.encode(validatorId, validatorAddress, block.chainid);
+        bytes memory message = Utils.getValidatorRegistrationMessage(channelHubAddress, validatorId, validatorAddress);
         console.log("Message hash:", vm.toString(keccak256(message)));
 
         bytes memory signature = TestUtils.signEip191(vm, nodePrivateKey, message);

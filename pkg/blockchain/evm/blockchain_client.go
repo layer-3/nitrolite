@@ -768,11 +768,12 @@ func (c *BlockchainClient) EnsureSigValidatorRegistered(validatorID uint8, valid
 	addressType, _ := abi.NewType("address", "", nil)
 	uint256Type, _ := abi.NewType("uint256", "", nil)
 	args := abi.Arguments{
+		{Type: uint256Type},
+		{Type: addressType},
 		{Type: uint8Type},
 		{Type: addressType},
-		{Type: uint256Type},
 	}
-	message, err := args.Pack(validatorID, validatorAddr, new(big.Int).SetUint64(c.blockchainID))
+	message, err := args.Pack(new(big.Int).SetUint64(c.blockchainID), c.channelHubContractAddress, validatorID, validatorAddr)
 	if err != nil {
 		return errors.Wrap(err, "failed to encode validator registration message")
 	}

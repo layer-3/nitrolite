@@ -17,7 +17,7 @@ import (
 )
 
 // runStorm is the entry point for the "storm" stress test strategy.
-// Currently supports: transfers
+// Currently supports: transfers, sessions.
 func runStorm(args []string) int {
 	if len(args) == 0 {
 		printStormUsage()

@@ -72,10 +72,6 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 			ApprovedSigValidators: bitmap,
 		}
 
-		// HomeChannelID is intentionally not checked here: a non-nil state with a
-		// nil HomeChannelID is valid — it represents a user who received funds but
-		// has not yet opened a channel. Only replace with a void state when there
-		// is truly no prior state at all.
 		if state == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}
@@ -184,10 +180,6 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 			ApprovedSigValidators: bitmap,
 		}
 
-		// HomeChannelID is intentionally not checked here: a non-nil state with a
-		// nil HomeChannelID is valid — it represents a user who received funds but
-		// has not yet opened a channel. Only replace with a void state when there
-		// is truly no prior state at all.
 		if state == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}
@@ -282,10 +274,6 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 			ApprovedSigValidators: bitmap,
 		}
 
-		// HomeChannelID is intentionally not checked here: a non-nil state with a
-		// nil HomeChannelID is valid — it represents a user who received funds but
-		// has not yet opened a channel. Only replace with a void state when there
-		// is truly no prior state at all.
 		if state == nil {
 			state = core.NewVoidState(asset, senderWallet)
 		}
@@ -458,10 +446,6 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 			ApprovedSigValidators: bitmap,
 		}
 
-		// HomeChannelID is intentionally not checked here: a non-nil state with a
-		// nil HomeChannelID is valid — it represents a user who received funds but
-		// has not yet opened a channel. Only replace with a void state when there
-		// is truly no prior state at all.
 		if state == nil {
 			state = core.NewVoidState(asset, userWallet)
 		}

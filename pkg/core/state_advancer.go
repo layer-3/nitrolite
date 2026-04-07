@@ -29,6 +29,8 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("home channel ID cannot be nil")
 	}
 
+	// A non-nil state with a nil HomeChannelID is valid — it represents a user who received
+	// funds but has not yet opened a channel. In that case, adopt the proposed state's channel info.
 	if expectedState.HomeChannelID == nil {
 		expectedState.HomeChannelID = proposedState.HomeChannelID
 		expectedState.HomeLedger.BlockchainID = proposedState.HomeLedger.BlockchainID

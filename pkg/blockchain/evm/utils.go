@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/layer-3/nitrolite/pkg/core"
-	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/sign"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
@@ -47,17 +46,17 @@ func signerTxOpts(signer sign.Signer, blockchainID uint64) *bind.TransactOpts {
 	}
 }
 
-// waitForBackOffTimeout implements exponential backoff between retries
-func waitForBackOffTimeout(logger log.Logger, backOffCount int, originator string) {
+// backOffDuration returns the exponential backoff delay for the given attempt count.
+// Returns 0 when backOffCount is 0 (no delay).
+// Returns -1 when backOffCount exceeds maxBackOffCount (caller should abort).
+func backOffDuration(backOffCount int) time.Duration {
 	if backOffCount > maxBackOffCount {
-		logger.Fatal("back off limit reached, exiting", "originator", originator, "backOffCollisionCount", backOffCount)
-		return
+		return -1
 	}
-
-	if backOffCount > 0 {
-		logger.Info("backing off", "originator", originator, "backOffCollisionCount", backOffCount)
-		<-time.After(time.Duration(2^backOffCount-1) * time.Second)
+	if backOffCount == 0 {
+		return 0
 	}
+	return time.Duration((1<<backOffCount)-1) * time.Second
 }
 
 // ========= Client Helper Functions =========

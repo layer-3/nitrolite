@@ -39,124 +39,100 @@ func TestStoreContractEvent(t *testing.T) {
 	assert.Equal(t, event.LogIndex, storedEvent.LogIndex)
 }
 
-func TestGetLatestEvent(t *testing.T) {
+func TestGetLatestContractEventBlockNumber(t *testing.T) {
 	db, cleanup := SetupTestDB(t)
 	defer cleanup()
 
 	store := NewDBStore(db)
 
 	contractAddress := "0x1234567890123456789012345678901234567890"
-	networkID := uint64(1)
+	blockchainID := uint64(1)
 
-	t.Run("no events returns empty event", func(t *testing.T) {
-		event, err := store.GetLatestEvent(contractAddress, networkID)
+	t.Run("no events returns zero", func(t *testing.T) {
+		block, err := store.GetLatestContractEventBlockNumber(contractAddress, blockchainID)
 		require.NoError(t, err)
-		assert.Equal(t, core.BlockchainEvent{}, event)
+		assert.Equal(t, uint64(0), block)
 	})
 
-	t.Run("returns latest event", func(t *testing.T) {
-		// Store multiple events
+	t.Run("returns max block number across multiple events", func(t *testing.T) {
 		events := []core.BlockchainEvent{
-			{
-				ContractAddress: contractAddress,
-				BlockchainID:    networkID,
-				Name:            "Event1",
-				BlockNumber:     100,
-				TransactionHash: "0xaaa",
-				LogIndex:        1,
-			},
-			{
-				ContractAddress: contractAddress,
-				BlockchainID:    networkID,
-				Name:            "Event2",
-				BlockNumber:     100,
-				TransactionHash: "0xbbb",
-				LogIndex:        2,
-			},
-			{
-				ContractAddress: contractAddress,
-				BlockchainID:    networkID,
-				Name:            "Event3",
-				BlockNumber:     150,
-				TransactionHash: "0xccc",
-				LogIndex:        0,
-			},
+			{ContractAddress: contractAddress, BlockchainID: blockchainID, Name: "E1", BlockNumber: 100, TransactionHash: "0xaaa", LogIndex: 0},
+			{ContractAddress: contractAddress, BlockchainID: blockchainID, Name: "E2", BlockNumber: 200, TransactionHash: "0xbbb", LogIndex: 0},
+			{ContractAddress: contractAddress, BlockchainID: blockchainID, Name: "E3", BlockNumber: 150, TransactionHash: "0xccc", LogIndex: 0},
 		}
-
 		for _, ev := range events {
-			err := store.StoreContractEvent(ev)
-			require.NoError(t, err)
+			require.NoError(t, store.StoreContractEvent(ev))
 		}
 
-		// Get latest event
-		latestEvent, err := store.GetLatestEvent(contractAddress, networkID)
+		block, err := store.GetLatestContractEventBlockNumber(contractAddress, blockchainID)
 		require.NoError(t, err)
-
-		// Should return the event with highest block number
-		assert.Equal(t, uint64(150), latestEvent.BlockNumber)
-		assert.Equal(t, uint32(0), latestEvent.LogIndex)
-		assert.Equal(t, "Event3", latestEvent.Name)
-		assert.Equal(t, contractAddress, latestEvent.ContractAddress)
-		assert.Equal(t, networkID, latestEvent.BlockchainID)
+		assert.Equal(t, uint64(200), block)
 	})
 
-	t.Run("different contract returns empty event", func(t *testing.T) {
-		differentContract := "0x9999999999999999999999999999999999999999"
-		event, err := store.GetLatestEvent(differentContract, networkID)
+	t.Run("different contract returns zero", func(t *testing.T) {
+		block, err := store.GetLatestContractEventBlockNumber("0x9999999999999999999999999999999999999999", blockchainID)
 		require.NoError(t, err)
-		assert.Equal(t, core.BlockchainEvent{}, event)
+		assert.Equal(t, uint64(0), block)
 	})
 
-	t.Run("different network returns empty event", func(t *testing.T) {
-		differentNetwork := uint64(999)
-		event, err := store.GetLatestEvent(contractAddress, differentNetwork)
+	t.Run("different blockchain returns zero", func(t *testing.T) {
+		block, err := store.GetLatestContractEventBlockNumber(contractAddress, 999)
 		require.NoError(t, err)
-		assert.Equal(t, core.BlockchainEvent{}, event)
+		assert.Equal(t, uint64(0), block)
+	})
+}
+
+func TestIsContractEventPresent(t *testing.T) {
+	db, cleanup := SetupTestDB(t)
+	defer cleanup()
+
+	store := NewDBStore(db)
+
+	// Store a known event
+	ev := core.BlockchainEvent{
+		ContractAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		BlockchainID:    1,
+		Name:            "TestEvent",
+		BlockNumber:     500,
+		TransactionHash: "0xAbCdEf1234567890AbCdEf1234567890AbCdEf1234567890AbCdEf1234567890",
+		LogIndex:        3,
+	}
+	require.NoError(t, store.StoreContractEvent(ev))
+
+	t.Run("existing event returns true", func(t *testing.T) {
+		present, err := store.IsContractEventPresent(1, 500, ev.TransactionHash, 3)
+		require.NoError(t, err)
+		assert.True(t, present)
 	})
 
-	t.Run("returns highest log index when same block", func(t *testing.T) {
-		contractAddr := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		chainID := uint64(42)
-
-		// Store events in same block with different log indices
-		events := []core.BlockchainEvent{
-			{
-				ContractAddress: contractAddr,
-				BlockchainID:    chainID,
-				Name:            "EventA",
-				BlockNumber:     200,
-				TransactionHash: "0x111",
-				LogIndex:        5,
-			},
-			{
-				ContractAddress: contractAddr,
-				BlockchainID:    chainID,
-				Name:            "EventB",
-				BlockNumber:     200,
-				TransactionHash: "0x222",
-				LogIndex:        10,
-			},
-			{
-				ContractAddress: contractAddr,
-				BlockchainID:    chainID,
-				Name:            "EventC",
-				BlockNumber:     200,
-				TransactionHash: "0x333",
-				LogIndex:        3,
-			},
-		}
-
-		for _, ev := range events {
-			err := store.StoreContractEvent(ev)
-			require.NoError(t, err)
-		}
-
-		// Get latest event - should return highest log index for the block
-		latestEvent, err := store.GetLatestEvent(contractAddr, chainID)
+	t.Run("case-insensitive txHash match", func(t *testing.T) {
+		// Query with uppercase — stored value was lowercased by StoreContractEvent
+		present, err := store.IsContractEventPresent(1, 500, "0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890", 3)
 		require.NoError(t, err)
+		assert.True(t, present)
+	})
 
-		assert.Equal(t, uint64(200), latestEvent.BlockNumber)
-		assert.Equal(t, uint32(10), latestEvent.LogIndex)
-		assert.Equal(t, "EventB", latestEvent.Name)
+	t.Run("wrong block number returns false", func(t *testing.T) {
+		present, err := store.IsContractEventPresent(1, 501, ev.TransactionHash, 3)
+		require.NoError(t, err)
+		assert.False(t, present)
+	})
+
+	t.Run("wrong log index returns false", func(t *testing.T) {
+		present, err := store.IsContractEventPresent(1, 500, ev.TransactionHash, 4)
+		require.NoError(t, err)
+		assert.False(t, present)
+	})
+
+	t.Run("wrong blockchain returns false", func(t *testing.T) {
+		present, err := store.IsContractEventPresent(2, 500, ev.TransactionHash, 3)
+		require.NoError(t, err)
+		assert.False(t, present)
+	})
+
+	t.Run("wrong txHash returns false", func(t *testing.T) {
+		present, err := store.IsContractEventPresent(1, 500, "0x0000000000000000000000000000000000000000000000000000000000000000", 3)
+		require.NoError(t, err)
+		assert.False(t, present)
 	})
 }

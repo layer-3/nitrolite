@@ -3,15 +3,49 @@ package evm
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/pkg/core"
 )
+
+// ========= backOffDuration Tests =========
+
+func TestBackOffDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		count    int
+		expected time.Duration
+	}{
+		{"zero returns no delay", 0, 0},
+		{"1 returns 1s", 1, 1 * time.Second},
+		{"2 returns 3s", 2, 3 * time.Second},
+		{"3 returns 7s", 3, 7 * time.Second},
+		{"4 returns 15s", 4, 15 * time.Second},
+		{"5 returns 31s", 5, 31 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, backOffDuration(tt.count))
+		})
+	}
+}
+
+func TestBackOffDuration_ExceedsMax(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, time.Duration(-1), backOffDuration(maxBackOffCount+1))
+	assert.Equal(t, time.Duration(-1), backOffDuration(100))
+}
 
 // ========= hexToBytes32 Tests =========
 

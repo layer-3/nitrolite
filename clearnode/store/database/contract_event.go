@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/core"
-	"gorm.io/gorm"
 )
 
 var ErrEventHasAlreadyBeenProcessed = errors.New("contract event has already been processed")
@@ -34,7 +33,7 @@ func (s *DBStore) StoreContractEvent(ev core.BlockchainEvent) error {
 		BlockchainID:    ev.BlockchainID,
 		Name:            ev.Name,
 		BlockNumber:     ev.BlockNumber,
-		TransactionHash: ev.TransactionHash,
+		TransactionHash: strings.ToLower(ev.TransactionHash),
 		LogIndex:        ev.LogIndex,
 		CreatedAt:       time.Now(),
 	}
@@ -42,29 +41,28 @@ func (s *DBStore) StoreContractEvent(ev core.BlockchainEvent) error {
 	return s.db.Create(contractEvent).Error
 }
 
-// GetLatestEvent returns the latest block number and log index for a given contract.
-// This function matches the signature required by pkg/blockchain/evm.GetLatestEvent.
-func (s *DBStore) GetLatestEvent(contractAddress string, blockchainID uint64) (core.BlockchainEvent, error) {
-	var ev ContractEvent
-	err := s.db.Where("blockchain_id = ? AND contract_address = ?", blockchainID, strings.ToLower(contractAddress)).
-		Order("block_number DESC, log_index DESC").
-		First(&ev).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// No events found, return zeros (will start from beginning)
-		return core.BlockchainEvent{}, nil
-	}
-
+// GetLatestContractEventBlockNumber returns the highest block number stored for a given contract.
+func (s *DBStore) GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (uint64, error) {
+	var blockNumber uint64
+	err := s.db.Model(&ContractEvent{}).
+		Where("blockchain_id = ? AND contract_address = ?", blockchainID, strings.ToLower(contractAddress)).
+		Select("COALESCE(MAX(block_number), 0)").
+		Scan(&blockNumber).Error
 	if err != nil {
-		return core.BlockchainEvent{}, err
+		return 0, err
 	}
+	return blockNumber, nil
+}
 
-	return core.BlockchainEvent{
-		BlockNumber:     ev.BlockNumber,
-		BlockchainID:    ev.BlockchainID,
-		Name:            ev.Name,
-		ContractAddress: ev.ContractAddress,
-		TransactionHash: ev.TransactionHash,
-		LogIndex:        ev.LogIndex,
-	}, nil
+// IsContractEventPresent checks whether a specific contract event has already been stored.
+func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
+	var count int64
+	err := s.db.Model(&ContractEvent{}).
+		Where("blockchain_id = ? AND block_number = ? AND transaction_hash = ? AND log_index = ?",
+			blockchainID, blockNumber, strings.ToLower(txHash), logIndex).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

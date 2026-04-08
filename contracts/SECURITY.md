@@ -69,8 +69,8 @@ e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock"
 1. **Channel uniqueness**: A channel identified by `channelId = hash(Definition)` can be created at most once.
 2. **Cross-deployment replay protection**: Each ChannelHub deployment has a `VERSION` constant (currently 1). The version is encoded as the first byte of `channelId = setFirstByte(hash(Definition), VERSION)`, ensuring that the same channel definition produces different `channelId` values across different ChannelHub versions. This prevents signature replay attacks across different ChannelHub deployments on the same chain. Only one ChannelHub deployment per version per chain is intended. The `escrowId = hash(channelId, stateVersion)` inherits this protection.
 3. **Signature authorization**: Every enforceable state must be signed by both User and Node (unless explicitly relaxed in future versions).
-4. **Pluggable signature validation**: Signature validation is performed by validator contracts implementing the `ISignatureValidator` interface. The ChannelHub has a `defaultSigValidator` (0x00), and nodes maintain a registry of validators (0x01-0xFF). The first byte of each signature determines which validator is used: `0x00` for default, `0x01-0xFF` for node-registered validators.
-5. **Validator security requirements**: Signature validators must be trustworthy, gas-efficient, and correctly implement validation logic. A compromised or buggy validator can break authorization for all channels using that validator. Validators should be immutable or have strict upgrade controls. Nodes are responsible for registering only trusted validators in their registry.
+4. **Pluggable signature validation**: Signature validation is performed by validator contracts implementing the `ISignatureValidator` interface. The ChannelHub has a `defaultSigValidator` (0x00), and NODE maintains a registry of validators (0x01-0xFF). The first byte of each signature determines which validator is used: `0x00` for default, `0x01-0xFF` for NODE-registered validators.
+5. **Validator security requirements**: Signature validators must be trustworthy, gas-efficient, and correctly implement validation logic. A compromised or buggy validator can break authorization for all channels using that validator. Validators should be immutable or have strict upgrade controls. NODE is responsible for registering only trusted validators in its registry.
 6. **Version monotonicity**: For a given channel, every valid state has a strictly increasing `version`.
 7. **Version uniqueness**: No two different states with the same `version` may exist for the same channel.
 
@@ -199,18 +199,18 @@ The protocol uses two mechanisms for validator selection to prevent signature fo
 
 **Node validator registry:**
 
-- Nodes register signature validators and assign them 1-byte identifiers (0x01-0xFF)
-- Both users and nodes can only use agreed validators (from the bitmask) or the default validator
+- NODE registers signature validators and assigns them 1-byte identifiers (0x01-0xFF)
+- Both users and NODE can only use agreed validators (from the bitmask) or the default validator
 - The first byte of each signature determines which validator is used for verification
 
 **Validator selection:**
 
 - **Default validator** (0x00): The ChannelHub is initialized with a `defaultSigValidator` address that implements `ISignatureValidator`. This validator is used when the signature's first byte is `0x00`. **Always available**, regardless of `approvedSignatureValidators` bitmask.
-- **Node-registered validators** (0x01-0xFF): Nodes register validators on-chain with unique IDs. Only available if the corresponding bit is set in `ChannelDefinition.approvedSignatureValidators` (e.g., bit 42 set = validator ID 42 approved).
+- **NODE-registered validators** (0x01-0xFF): NODE registers validators on-chain with unique IDs. Only available if the corresponding bit is set in `ChannelDefinition.approvedSignatureValidators` (e.g., bit 42 set = validator ID 42 approved).
 
 **Registration security:**
 
-- Nodes register validators by signing `abi.encode(validatorId, validatorAddress, block.chainid)` off-chain
+- NODE registers validators by signing `abi.encode(validatorId, validatorAddress, block.chainid)` off-chain
 - The signature includes `block.chainid` for cross-chain replay protection (chain-specific registrations)
 - Anyone can relay the registration transaction (relayer-friendly)
 - Registration uses ECDSA recovery (EIP-191 with raw ECDSA fallback)

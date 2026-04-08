@@ -572,7 +572,7 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
 ## Signature validation
 
-The protocol supports flexible signature validation through two complementary systems: a per-node validator registry and a bitmask for agreed validators. This design prevents signature forgery attacks while enabling custom signature schemes and maintaining cross-chain compatibility.
+The protocol supports flexible signature validation through two complementary systems: a validator registry and a bitmask for agreed validators. This design prevents signature forgery attacks while enabling custom signature schemes and maintaining cross-chain compatibility.
 
 ### Validator selection via approved validators bitmask
 
@@ -590,12 +590,12 @@ Since `approvedSignatureValidators` is part of the `channelId` computation, agre
 
 ### Node validator registry
 
-The protocol uses a per-node validator registry where nodes register signature validators and assign them 1-byte identifiers (0x01-0xFF).
+The protocol uses a validator registry where NODE registers signature validators and assigns them 1-byte identifiers (0x01-0xFF).
 
-**Design rationale:** This allows nodes to use flexible signature schemes (SessionKey, multi-sig, etc.) for their own signatures while preventing them from controlling user signature validation. Benefits:
+**Design rationale:** This allows NODE to use flexible signature schemes (SessionKey, multi-sig, etc.) for its own signatures while preventing it from controlling user signature validation. Benefits:
 
-* Nodes can enforce their security requirements for node signatures
-* Nodes benefit from flexible validator implementations
+* NODE can enforce its security requirements for node signatures
+* NODE benefits from flexible validator implementations
 * Cross-chain compatibility (validator addresses don't affect channelId or signature verification)
 * User signatures remain protected via approved validators bitmask
 

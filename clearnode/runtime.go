@@ -35,6 +35,7 @@ var Version = "v1.0.0" // set at build time with -ldflags "-X main.Version=x.y.z
 type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
+	ChannelMaxChallengeDuration uint32
 	BlockchainRPCs              map[uint64]string
 	ValidationLimits            ValidationLimits
 	RateLimitPerSec             float64
@@ -65,10 +66,11 @@ func (b *Backbone) Close() error {
 
 type Config struct {
 	Database                    database.DatabaseConfig
-	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"` // 24 hours
-	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"`                                         // "key" or "gcp-kms"
-	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                                                             // required when signer_type=key
-	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`                                                 // required when signer_type=gcp-kms
+	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
+	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"CLEARNODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
+	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"`                                          // "key" or "gcp-kms"
+	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                                                              // required when signer_type=key
+	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`                                                  // required when signer_type=gcp-kms
 	ValidationLimits            ValidationLimits `yaml:"validation_limits"`
 	RateLimitPerSec             float64          `yaml:"rate_limit_per_sec" env:"CLEARNODE_RATE_LIMIT_PER_SEC" env-default:"10"`
 	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"CLEARNODE_RATE_LIMIT_BURST" env-default:"20"`
@@ -250,6 +252,7 @@ func InitBackbone() *Backbone {
 	return &Backbone{
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
+		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
 		BlockchainRPCs:              blockchainRPCs,
 		ValidationLimits:            conf.ValidationLimits,
 		RateLimitPerSec:             conf.RateLimitPerSec,

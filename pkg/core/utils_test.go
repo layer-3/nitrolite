@@ -10,6 +10,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNormalizeHexAddress(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "valid_lowercase",
+			input: "0x1234567890abcdef1234567890abcdef12345678",
+			want:  "0x1234567890abcdef1234567890abcdef12345678",
+		},
+		{
+			name:  "valid_uppercase_normalized",
+			input: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12",
+			want:  "0xabcdef1234567890abcdef1234567890abcdef12",
+		},
+		{
+			name:  "valid_mixed_case",
+			input: "0xAbCdEf1234567890aBcDeF1234567890AbCdEf12",
+			want:  "0xabcdef1234567890abcdef1234567890abcdef12",
+		},
+		{
+			name:  "valid_checksum_address",
+			input: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+			want:  "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+		},
+		{
+			name:    "missing_0x_prefix",
+			input:   "1234567890abcdef1234567890abcdef12345678",
+			wantErr: true,
+		},
+		{
+			name:    "too_short",
+			input:   "0x1234",
+			wantErr: true,
+		},
+		{
+			name:    "too_long",
+			input:   "0x1234567890abcdef1234567890abcdef1234567890",
+			wantErr: true,
+		},
+		{
+			name:    "empty_string",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid_hex_char",
+			input:   "0x1234567890abcdef1234567890abcdef1234567g",
+			wantErr: true,
+		},
+		{
+			name:  "all_zeros",
+			input: "0x0000000000000000000000000000000000000000",
+			want:  "0x0000000000000000000000000000000000000000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := NormalizeHexAddress(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestValidateDecimalPrecision(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

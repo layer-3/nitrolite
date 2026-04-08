@@ -250,6 +250,12 @@ func (l *Listener) processEvents(
 			eventSubscription.Unsubscribe()
 			return nil
 		case eventLog := <-currentCh:
+			// During a chain reorganization geth re-delivers orphaned logs with
+			// Removed: true. Skip them to avoid applying phantom state changes.
+			if eventLog.Removed {
+				l.logger.Warn("skipping removed log from reorg", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index, "txHash", eventLog.TxHash.Hex())
+				continue
+			}
 			*lastBlock = eventLog.BlockNumber
 			if !currentCheckDone {
 				present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
@@ -353,3 +359,12 @@ func (l *Listener) reconcileBlockRange(
 		endBlock += l.blockStep
 	}
 }
+
+// TODO: the current reorg handling (skipping Removed logs) prevents new damage but
+// does not undo side effects from the original delivery if it was already processed.
+// A more robust approach is a confirmation buffer: hold live logs in memory keyed by
+// block number, only apply them after N confirmations (new blocks on top), and discard
+// any log that arrives with Removed: true while still in the buffer. This adds N blocks
+// of latency (~12s × N on mainnet) but guarantees that only finalized events reach the
+// handler. On L2s where reorgs are near-zero, the latency trade-off may not be worth it,
+// so this should be configurable per chain.

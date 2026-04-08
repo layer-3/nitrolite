@@ -57,7 +57,7 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.NodeBalanceUpdated(node, address(token), LOCKED_AMOUNT);
+        emit ChannelHub.NodeBalanceUpdated(address(token), LOCKED_AMOUNT);
         vm.expectEmit(true, true, true, true);
         emit ChannelHub.EscrowDepositsPurged(1);
 

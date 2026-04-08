@@ -63,7 +63,7 @@ contract ChannelHubTest_withdrawFromVault is ChannelHubTest_Base {
         emit IVault.Withdrawn(node, address(token), DEPOSIT_AMOUNT);
 
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.NodeBalanceUpdated(node, address(token), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        emit ChannelHub.NodeBalanceUpdated(address(token), INITIAL_BALANCE - DEPOSIT_AMOUNT);
 
         vm.prank(node);
         cHub.withdrawFromVault(recipient, address(token), DEPOSIT_AMOUNT);
@@ -100,7 +100,7 @@ contract ChannelHubTest_withdrawFromVault is ChannelHubTest_Base {
         emit IVault.Withdrawn(node, address(0), DEPOSIT_AMOUNT);
 
         vm.expectEmit(true, true, false, true);
-        emit ChannelHub.NodeBalanceUpdated(node, address(0), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        emit ChannelHub.NodeBalanceUpdated(address(0), INITIAL_BALANCE - DEPOSIT_AMOUNT);
 
         vm.prank(node);
         cHub.withdrawFromVault(recipient, address(0), DEPOSIT_AMOUNT);

@@ -66,7 +66,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
     ChannelDefinition internal bobDef;
     bytes32 internal bobChannelId;
 
-    bytes32 constant NODE_BALANCE_UPDATED_SIG = keccak256("NodeBalanceUpdated(address,address,uint256)");
+    bytes32 constant NODE_BALANCE_UPDATED_SIG = keccak256("NodeBalanceUpdated(address,uint256)");
 
     // Non-home chain constants (fake foreign chain)
     uint64 constant FOREIGN_CHAIN_ID = 42;
@@ -104,10 +104,10 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
     // ======== Helpers ========
 
-    /// @dev Expects the next NodeBalanceUpdated(node, token, expectedBalance) emission.
+    /// @dev Expects the next NodeBalanceUpdated(token, expectedBalance) emission.
     function _expectEmitNodeBalanceUpdated(uint256 expectedBalance) internal {
         vm.expectEmit(true, true, true, true, address(cHub));
-        emit ChannelHub.NodeBalanceUpdated(node, address(token), expectedBalance);
+        emit ChannelHub.NodeBalanceUpdated(address(token), expectedBalance);
     }
 
     /// @dev Asserts NodeBalanceUpdated was NOT emitted in the logs recorded since the last vm.recordLogs().

@@ -33,12 +33,12 @@ contract TestChannelHub is ChannelHub {
     }
 
     /**
-     * @notice Workaround to set a node's vault balance directly for testing
-     * @dev Allows tests to set up vault state without going through depositToVault (useful for tokens
+     * @notice Workaround to set the node balance directly for testing
+     * @dev Allows tests to set up node state without going through depositToNode (useful for tokens
      *      that revert on transferFrom, making a normal deposit impossible)
      */
-    function workaround_setNodeBalance(address node, address token, uint256 amount) external {
-        _nodeBalances[node][token] = amount;
+    function workaround_setNodeBalance(address token, uint256 amount) external {
+        _nodeBalances[token] = amount;
     }
 
     /**

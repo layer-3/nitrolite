@@ -9,7 +9,6 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-import {IVault} from "./interfaces/IVault.sol";
 import {ISignatureValidator, ValidationResult, VALIDATION_FAILURE} from "./interfaces/ISignatureValidator.sol";
 import {
     ChannelDefinition,
@@ -32,13 +31,16 @@ import {EcdsaSignatureUtils} from "./sigValidators/EcdsaSignatureUtils.sol";
  * @notice Main contract implementing the Nitrolite state channel protocol (single-chain operations)
  * @dev Uses unified transition pattern with ChannelEngine library for validation
  */
-contract ChannelHub is IVault, ReentrancyGuard {
+contract ChannelHub is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using SafeERC20 for IERC20;
     using SafeCast for int256;
     using SafeCast for uint256;
     using ECDSA for bytes32;
     using MessageHashUtils for bytes;
+
+    event Deposited(address indexed token, uint256 amount);
+    event Withdrawn(address indexed token, uint256 amount);
 
     event EscrowDepositsPurged(uint256 purgedCount);
 
@@ -173,7 +175,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     mapping(bytes32 escrowId => EscrowWithdrawalMeta meta) internal _escrowWithdrawals;
 
-    mapping(address node => mapping(address token => uint256 balance)) internal _nodeBalances;
+    mapping(address token => uint256 balance) internal _nodeBalances;
 
     // Validator ID 0x00 is reserved for DEFAULT_SIG_VALIDATOR
     // Validator IDs 0x01-0xFF are available for node-registered validators
@@ -195,8 +197,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
     // ========== Getters ==========
 
-    function getAccountBalance(address node, address token) external view returns (uint256) {
-        return _nodeBalances[node][token];
+    function getNodeBalance(address token) external view returns (uint256) {
+        return _nodeBalances[token];
     }
 
     function getNodeValidator(uint8 validatorId)
@@ -295,35 +297,34 @@ contract ChannelHub is IVault, ReentrancyGuard {
         return _reclaims[account][token];
     }
 
-    // ========= IVault ==========
+    // ========= Node ==========
 
-    function depositToVault(address node, address token, uint256 amount) external payable {
-        require(node != address(0), InvalidAddress());
+    function depositToNode(address token, uint256 amount) external payable {
         require(amount > 0, IncorrectAmount());
 
-        uint256 updatedBalance = _nodeBalances[node][token] + amount;
-        _nodeBalances[node][token] = updatedBalance;
+        uint256 updatedBalance = _nodeBalances[token] + amount;
+        _nodeBalances[token] = updatedBalance;
 
         _pullFunds(msg.sender, token, amount);
 
-        emit Deposited(node, token, amount);
+        emit Deposited(token, amount);
         emit NodeBalanceUpdated(token, updatedBalance);
     }
 
-    function withdrawFromVault(address to, address token, uint256 amount) external {
+    function withdrawFromNode(address to, address token, uint256 amount) external {
         require(to != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
+        require(msg.sender == NODE, IncorrectNode());
 
-        address node = msg.sender;
-        uint256 currentBalance = _nodeBalances[node][token];
+        uint256 currentBalance = _nodeBalances[token];
         require(currentBalance >= amount, InsufficientBalance());
 
         uint256 updatedBalance = currentBalance - amount;
-        _nodeBalances[node][token] = updatedBalance;
+        _nodeBalances[token] = updatedBalance;
 
         _pushFunds(to, token, amount);
 
-        emit Withdrawn(node, token, amount);
+        emit Withdrawn(token, amount);
         emit NodeBalanceUpdated(token, updatedBalance);
     }
 
@@ -417,8 +418,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
             }
             if (_isEscrowDepositUnlockable(meta)) {
                 address token = meta.initState.nonHomeLedger.token;
-                uint256 updatedBalance = _nodeBalances[NODE][token] + meta.lockedAmount;
-                _nodeBalances[NODE][token] = updatedBalance;
+                uint256 updatedBalance = _nodeBalances[token] + meta.lockedAmount;
+                _nodeBalances[token] = updatedBalance;
 
                 meta.status = EscrowStatus.FINALIZED;
                 meta.lockedAmount = 0;
@@ -451,10 +452,10 @@ contract ChannelHub is IVault, ReentrancyGuard {
     // ========= Validator Registry ==========
 
     /**
-     * @notice Register a signature validator for a node using signature-based authorization
-     * @dev Anyone can submit this transaction with a valid node signature, enabling relayer-friendly registration.
-     *      The node's private key only signs the registration data, never sends transactions directly.
-     *      This allows nodes to use cold storage or HSMs without exposing keys to transaction submission.
+     * @notice Register a signature validator for NODE using signature-based authorization
+     * @dev Anyone can submit this transaction with a valid NODE signature, enabling relayer-friendly registration.
+     *      NODE's private key only signs the registration data, never sends transactions directly.
+     *      This allows NODE to use cold storage or HSMs without exposing keys to transaction submission.
      *      The signature includes block.chainid and address(this) to prevent cross-chain and cross-deployment replay attacks.
      * @param validatorId The validator ID (0x01-0xFF, 0x00 reserved for DEFAULT)
      * @param validator The validator contract address
@@ -494,7 +495,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, initState, user, def.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][initState.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[initState.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, initState);
 
         _applyEffects(channelId, def, initState, effects);
@@ -519,7 +520,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, def.user, def.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, def, candidate, effects);
@@ -534,7 +535,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, def.user, def.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, def, candidate, effects);
@@ -549,7 +550,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, def.user, def.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, def, candidate, effects);
@@ -588,7 +589,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             _validateSignatures(channelId, candidate, user, approvedSignatureValidators);
 
             ChannelEngine.TransitionContext memory ctx =
-                _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+                _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
             ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
             _applyTransitionEffects(channelId, def, candidate, effects);
@@ -634,7 +635,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, user, def.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, def, candidate, effects);
@@ -764,7 +765,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         } else {
             // NON-HOME CHAIN
             EscrowWithdrawalEngine.TransitionContext memory ctx =
-                _buildEscrowWithdrawalContext(escrowId, _nodeBalances[NODE][candidate.nonHomeLedger.token]);
+                _buildEscrowWithdrawalContext(escrowId, _nodeBalances[candidate.nonHomeLedger.token]);
             EscrowWithdrawalEngine.TransitionEffects memory effects =
                 EscrowWithdrawalEngine.validateTransition(ctx, candidate);
 
@@ -825,8 +826,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
             // Release locked amount back to node as "withdrawal exchange" has not been signed yet (it is the "finalizeEscrowWithdrawal" state)
             address withdrawalToken = meta.initState.nonHomeLedger.token;
-            uint256 updatedWithdrawalBalance = _nodeBalances[NODE][withdrawalToken] + lockedAmount;
-            _nodeBalances[NODE][withdrawalToken] = updatedWithdrawalBalance;
+            uint256 updatedWithdrawalBalance = _nodeBalances[withdrawalToken] + lockedAmount;
+            _nodeBalances[withdrawalToken] = updatedWithdrawalBalance;
 
             emit NodeBalanceUpdated(withdrawalToken, updatedWithdrawalBalance);
 
@@ -878,7 +879,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][targetCandidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[targetCandidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, targetCandidate);
         _applyEffects(channelId, def, targetCandidate, effects);
 
@@ -913,7 +914,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         }
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][targetCandidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[targetCandidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, targetCandidate);
         _applyEffects(channelId, def, targetCandidate, effects);
 
@@ -1023,7 +1024,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         ChannelDefinition memory metaDef = _channels[channelId].definition;
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, metaDef, candidate, effects);
@@ -1037,7 +1038,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
         _validateSignatures(channelId, candidate, user, channelDef.approvedSignatureValidators);
 
         ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[NODE][candidate.homeLedger.token]);
+            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, channelDef, candidate, effects);
@@ -1142,8 +1143,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] - amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] - amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedFunds += amount;
 
             emit NodeBalanceUpdated(token, updatedBalance);
@@ -1158,8 +1159,8 @@ contract ChannelHub is IVault, ReentrancyGuard {
 
         if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] + amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] + amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedFunds -= amount;
 
             emit NodeBalanceUpdated(token, updatedBalance);
@@ -1212,14 +1213,14 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // Handle node funds (positive = pull from node vault, negative = release to vault)
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] - amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] - amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedAmount += amount;
             emit NodeBalanceUpdated(token, updatedBalance);
         } else if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] + amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] + amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedAmount -= amount;
             emit NodeBalanceUpdated(token, updatedBalance);
         }
@@ -1267,14 +1268,14 @@ contract ChannelHub is IVault, ReentrancyGuard {
         // Handle node funds (positive = pull from node vault, negative = release to vault)
         if (effects.nodeFundsDelta > 0) {
             uint256 amount = effects.nodeFundsDelta.toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] - amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] - amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedAmount += amount;
             emit NodeBalanceUpdated(token, updatedBalance);
         } else if (effects.nodeFundsDelta < 0) {
             uint256 amount = (-effects.nodeFundsDelta).toUint256();
-            uint256 updatedBalance = _nodeBalances[NODE][token] + amount;
-            _nodeBalances[NODE][token] = updatedBalance;
+            uint256 updatedBalance = _nodeBalances[token] + amount;
+            _nodeBalances[token] = updatedBalance;
             meta.lockedAmount -= amount;
             emit NodeBalanceUpdated(token, updatedBalance);
         }

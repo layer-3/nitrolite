@@ -56,7 +56,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID before escrow");
 
         uint256 bobBalanceBefore = token.balanceOf(bob);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getNodeBalance(address(token));
 
         State memory escrowInitiateState = State({
             version: 10,
@@ -148,7 +148,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         (status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.MIGRATING_IN), "Channel should be MIGRATING_IN after migration");
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBefore - 469,
             "Node vault after migration (locked 469 for migration)"
         );
@@ -160,14 +160,14 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         // The finalize state was pre-signed before migration (see above); only the submission is here.
         vm.warp(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY() + 1);
 
-        uint256 nodeVaultBeforeFinalize = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBeforeFinalize = cHub.getNodeBalance(address(token));
 
         vm.prank(node);
         cHub.finalizeEscrowDeposit(bobChannelId, escrowId, escrowFinalizeState);
 
         assertEq(token.balanceOf(bob), bobBalanceBefore - 500, "User balance unchanged after escrow finalization");
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBeforeFinalize + 500,
             "Node vault after escrow deposit finalization (500 returned)"
         );
@@ -186,7 +186,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID before escrow");
 
         uint256 bobBalanceBefore = token.balanceOf(bob);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getNodeBalance(address(token));
 
         State memory escrowInitiateState = State({
             version: 10,
@@ -221,7 +221,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         cHub.initiateEscrowWithdrawal(bobDef, escrowInitiateState);
 
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBefore - 750,
             "Node vault after escrow withdrawal initiation (locked 750)"
         );
@@ -280,7 +280,7 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         (status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.MIGRATING_IN), "Channel should be MIGRATING_IN after migration");
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBefore - 750 - 469,
             "Node vault after migration (escrow 750 + migration 469)"
         );
@@ -290,14 +290,14 @@ contract ChannelHubTest_CrossChain_EscrowAfterMigration is ChannelHubTest_Base {
         // escrow metadata exists (channelId != 0). The non-home path is taken, correctly pushing the
         // locked 750 to the user.
         // The finalize state was pre-signed before migration (see above); only the submission is here.
-        uint256 nodeVaultBeforeFinalize = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBeforeFinalize = cHub.getNodeBalance(address(token));
 
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(bobChannelId, escrowId, escrowFinalizeState);
 
         assertEq(token.balanceOf(bob), bobBalanceBefore + 750, "User balance after escrow withdrawal finalization");
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBeforeFinalize,
             "Node vault unchanged after escrow withdrawal finalization (locked 750 went to user)"
         );

@@ -63,8 +63,8 @@ import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
  *   - purgeEscrowDeposits (public)
  *
  * Does NOT invoke purge:
- *   - depositToVault
- *   - withdrawFromVault
+ *   - depositToNode
+ *   - withdrawFromNode
  */
 contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
     TestChannelHub internal tHub;
@@ -98,7 +98,7 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
         token.mint(node, INITIAL_BALANCE);
         vm.startPrank(node);
         token.approve(address(cHub), INITIAL_BALANCE);
-        cHub.depositToVault(node, address(token), INITIAL_BALANCE);
+        cHub.depositToNode(address(token), INITIAL_BALANCE);
         vm.stopPrank();
 
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
@@ -679,23 +679,23 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
 
     // ======== Tests: does NOT invoke purge ========
 
-    function test_purgeNotInvoked_onDepositToVault() public {
+    function test_purgeNotInvoked_onDepositToNode() public {
         _snapshotAndInjectSentinel();
 
         token.mint(node, DEPOSIT_AMOUNT);
         vm.startPrank(node);
         token.approve(address(cHub), DEPOSIT_AMOUNT);
-        cHub.depositToVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.depositToNode(address(token), DEPOSIT_AMOUNT);
         vm.stopPrank();
 
         _assertPurgeNotInvoked();
     }
 
-    function test_purgeNotInvoked_onWithdrawFromVault() public {
+    function test_purgeNotInvoked_onWithdrawFromNode() public {
         _snapshotAndInjectSentinel();
 
         vm.prank(node);
-        cHub.withdrawFromVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.withdrawFromNode(node, address(token), DEPOSIT_AMOUNT);
 
         _assertPurgeNotInvoked();
     }

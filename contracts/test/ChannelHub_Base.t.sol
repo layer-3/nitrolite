@@ -54,12 +54,12 @@ contract ChannelHubTest_Base is Test {
 
         vm.startPrank(node);
         token.approve(address(cHub), INITIAL_BALANCE);
-        cHub.depositToVault(node, address(token), INITIAL_BALANCE);
+        cHub.depositToNode(address(token), INITIAL_BALANCE);
         vm.stopPrank();
 
         vm.deal(node, INITIAL_BALANCE);
         vm.prank(node);
-        cHub.depositToVault{value: INITIAL_BALANCE}(node, address(0), INITIAL_BALANCE);
+        cHub.depositToNode{value: INITIAL_BALANCE}(address(0), INITIAL_BALANCE);
 
         // Register SessionKeyValidator for the node
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
@@ -139,7 +139,7 @@ contract ChannelHubTest_Base is Test {
         );
         assertEq(latestState.homeLedger.nodeNetFlow, netFlows[1], string.concat(description, ": Node net flow: "));
 
-        uint256 nodeBalance = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalance = cHub.getNodeBalance(address(token));
         uint256 expectedNodeBalance =
             netFlows[1] < 0 ? INITIAL_BALANCE + uint256(-netFlows[1]) : INITIAL_BALANCE - uint256(netFlows[1]);
         assertEq(nodeBalance, expectedNodeBalance, string.concat(description, ": Node balance: "));

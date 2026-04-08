@@ -15,12 +15,12 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         assertEq(cHub.escrowHead(), expected, message);
     }
 
-    function _assertNodeBalance(address node_, address token_, uint256 expected, string memory message) internal view {
-        assertEq(cHub.getAccountBalance(node_, token_), expected, message);
+    function _assertNodeBalance(address token_, uint256 expected, string memory message) internal view {
+        assertEq(cHub.getNodeBalance(token_), expected, message);
     }
 
     function _assertNodeBalance(uint256 expected, string memory message) internal view {
-        _assertNodeBalance(node, address(token), expected, message);
+        _assertNodeBalance(address(token), expected, message);
     }
 
     function _assertEscrowStatus(bytes32 escrowId, EscrowStatus expected, string memory message) internal view {
@@ -289,6 +289,6 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _purge(type(uint256).max);
 
         _assertNodeBalance(0, "Default token balance should be unchanged");
-        _assertNodeBalance(node, address(token2), LOCKED_AMOUNT, "NODE balance should be credited for token2");
+        _assertNodeBalance(address(token2), LOCKED_AMOUNT, "NODE balance should be credited for token2");
     }
 }

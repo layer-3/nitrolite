@@ -24,15 +24,6 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
-	if len(reqPayload.State.ApplicationIDs) > h.maxSessionKeyIDs {
-		c.Fail(rpc.Errorf("application_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
-		return
-	}
-	if len(reqPayload.State.AppSessionIDs) > h.maxSessionKeyIDs {
-		c.Fail(rpc.Errorf("app_session_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
-		return
-	}
-
 	logger.Debug("processing session key state submission",
 		"userAddress", reqPayload.State.UserAddress,
 		"sessionKey", reqPayload.State.SessionKey,
@@ -60,6 +51,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 	if coreState.ExpiresAt.Before(time.Now()) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
+		return
+	}
+	if len(coreState.AppSessionIDs) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
+		return
+	}
+	if len(coreState.ApplicationIDs) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: application_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
 	if coreState.UserSig == "" {

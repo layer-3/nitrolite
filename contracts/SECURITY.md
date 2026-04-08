@@ -282,7 +282,7 @@ Each ChannelHub is constructed with an immutable and trusted `NODE` address. `_r
 
 **Validator activation delay (`VALIDATOR_ACTIVATION_DELAY = 1 day`):**
 
-A newly registered validator cannot be used until `registeredAt + VALIDATOR_ACTIVATION_DELAY` has elapsed. This adds a partial, targeted defence against draininig user ERC20 approvals via fake `createChannel(DEPOSIT)`.
+A newly registered validator cannot be used until `registeredAt + VALIDATOR_ACTIVATION_DELAY` has elapsed. This adds a partial, targeted defence against draining user ERC20 approvals via fake `createChannel(DEPOSIT)`.
 
 The registration is an observable on-chain event, and with monitoring in place, the node operator can detect a compromise and alert users to revoke ERC20 approvals before the delay expires. Without the delay, registration and exploitation can occur in the same block with no response possible.
 

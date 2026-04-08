@@ -714,7 +714,7 @@ func (c *BlockchainClient) FinalizeEscrowWithdrawal(candidate core.State) (strin
 		return "", errors.New("candidate state must have an escrow channel ID")
 	}
 	if candidate.EscrowLedger == nil {
-		return "", errors.New("candidate state must have an escrow channel ID")
+		return "", errors.New("candidate state must have an escrow ledger")
 	}
 
 	escrowIDBytes, err := hexToBytes32(*candidate.EscrowChannelID)
@@ -727,8 +727,8 @@ func (c *BlockchainClient) FinalizeEscrowWithdrawal(candidate core.State) (strin
 		return "", errors.Wrap(err, "failed to convert candidate state")
 	}
 
-	if contractCandidate.Intent != core.INTENT_INITIATE_ESCROW_WITHDRAWAL {
-		return "", errors.New("unsupported intent for initiate escrow withdrawal: " + string(contractCandidate.Intent))
+	if contractCandidate.Intent != core.INTENT_FINALIZE_ESCROW_WITHDRAWAL {
+		return "", errors.New("unsupported intent for finalize escrow withdrawal: " + string(contractCandidate.Intent))
 	}
 
 	if err := c.checkFeeFn(context.Background(), c.transactOpts.From); err != nil {

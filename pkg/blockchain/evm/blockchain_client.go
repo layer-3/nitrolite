@@ -237,7 +237,7 @@ func (c *BlockchainClient) GetEscrowDepositData(escrowChannelID string) (core.Es
 
 	return core.EscrowDepositDataResponse{
 		EscrowChannelID: escrowChannelID,
-		Node:            c.channelHubContractAddress.Hex(),
+		Node:            c.nodeAddress.Hex(),
 		LastState:       *lastState,
 		UnlockExpiry:    data.UnlockAt,
 		ChallengeExpiry: data.ChallengeExpiry,
@@ -262,7 +262,7 @@ func (c *BlockchainClient) GetEscrowWithdrawalData(escrowChannelID string) (core
 
 	return core.EscrowWithdrawalDataResponse{
 		EscrowChannelID: escrowChannelID,
-		Node:            c.channelHubContractAddress.Hex(),
+		Node:            c.nodeAddress.Hex(),
 		LastState:       *lastState,
 	}, nil
 }

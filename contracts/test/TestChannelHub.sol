@@ -58,7 +58,7 @@ contract TestChannelHub is ChannelHub {
         bytes32 channelId,
         EscrowStatus status,
         address user_,
-        address node_,
+        address /* node_ */,
         uint64 unlockAt,
         uint64 challengeExpireAt,
         uint256 lockedAmount,
@@ -68,7 +68,6 @@ contract TestChannelHub is ChannelHub {
         meta.channelId = channelId;
         meta.status = status;
         meta.user = user_;
-        meta.node = node_;
         meta.unlockAt = unlockAt;
         meta.challengeExpireAt = challengeExpireAt;
         meta.lockedAmount = lockedAmount;
@@ -100,11 +99,11 @@ contract TestChannelHub is ChannelHub {
      * @notice Exposed version of _extractValidator for testing
      * @dev Returns only the resolved validator address; sigData slice is not useful to callers
      */
-    function exposed_extractValidator(bytes calldata signature, address node_, uint256 approvedSignatureValidators)
+    function exposed_extractValidator(bytes calldata signature, uint256 approvedSignatureValidators)
         external
         view
         returns (ISignatureValidator validator)
     {
-        (validator,) = _extractValidator(signature, node_, approvedSignatureValidators);
+        (validator,) = _extractValidator(signature, approvedSignatureValidators);
     }
 }

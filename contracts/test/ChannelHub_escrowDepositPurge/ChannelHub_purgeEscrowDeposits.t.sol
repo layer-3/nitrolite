@@ -266,30 +266,29 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
 
     // ========== Node balance accuracy ==========
 
-    function test_creditsCorrectNodeAndToken_whenMultipleNodesExist() public {
+    function test_creditsCorrectToken_whenMultipleTokensExist() public {
         MockERC20 token2 = new MockERC20("Token2", "TK2", 18);
-        address node2 = makeAddr("node2");
 
-        // node2/token2 escrow is unlockable; default node/token escrow is not yet unlockable
-        bytes32 node2EscrowId = _nextEscrowId();
+        // token2 escrow is unlockable; default token escrow is not yet unlockable
+        bytes32 token2EscrowId = _nextEscrowId();
         cHub.workaround_setEscrowDeposit(
-            node2EscrowId,
+            token2EscrowId,
             bytes32(0),
             EscrowStatus.INITIALIZED,
             user,
-            node2,
+            node,
             uint64(block.timestamp) - 1,
             0,
             LOCKED_AMOUNT,
             address(token2)
         );
-        cHub.workaround_addEscrowDepositId(node2EscrowId);
+        cHub.workaround_addEscrowDepositId(token2EscrowId);
 
         _addNotYetUnlockable(LOCKED_AMOUNT);
 
         _purge(type(uint256).max);
 
-        _assertNodeBalance(0, "Default node balance should be unchanged");
-        _assertNodeBalance(node2, address(token2), LOCKED_AMOUNT, "node2 balance should be credited for token2");
+        _assertNodeBalance(0, "Default token balance should be unchanged");
+        _assertNodeBalance(node, address(token2), LOCKED_AMOUNT, "NODE balance should be credited for token2");
     }
 }

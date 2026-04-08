@@ -104,7 +104,7 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
             vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
-        cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+        cHub.registerNodeValidator(SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 
         vm.prank(alice);
         token.approve(address(cHub), INITIAL_BALANCE);

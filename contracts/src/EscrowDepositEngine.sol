@@ -58,7 +58,6 @@ library EscrowDepositEngine {
         uint256 lockedAmount;
         uint64 unlockAt;
         uint64 challengeExpiry;
-        uint256 nodeAvailableFunds;
     }
 
     struct TransitionEffects {

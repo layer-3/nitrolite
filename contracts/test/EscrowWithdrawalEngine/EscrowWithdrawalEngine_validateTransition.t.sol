@@ -20,7 +20,7 @@ contract EscrowWithdrawalEngineTest_ValidateTransition is Test {
         EscrowWithdrawalEngine.TransitionContext memory ctx;
         ctx.status = EscrowStatus.INITIALIZED;
         ctx.lockedAmount = 750;
-        ctx.nodeAddress = address(0xBEEF);
+        ctx.nodeAvailableFunds = 0;
         ctx.initState = State({
             version: 1,
             intent: StateIntent.INITIATE_ESCROW_WITHDRAWAL,

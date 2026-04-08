@@ -65,7 +65,7 @@ contract ChannelHubTest_Base is Test {
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
             vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
-        cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+        cHub.registerNodeValidator(SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 
         // Advance past VALIDATOR_ACTIVATION_DELAY so the registered validator is usable
         vm.warp(block.timestamp + cHub.VALIDATOR_ACTIVATION_DELAY() + 1);

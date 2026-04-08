@@ -31,8 +31,9 @@ abstract contract ChannelHubTest_SigValidator_Base is Test {
     // -------- helpers --------
 
     function _registerValidator(uint8 validatorId, ISignatureValidator validator) internal {
-        bytes memory sig = TestUtils.buildAndSignValidatorRegistration(vm, validatorId, address(validator), NODE_PK);
-        cHub.registerNodeValidator(node, validatorId, validator, sig);
+        bytes memory sig =
+            TestUtils.buildAndSignValidatorRegistration(vm, validatorId, address(validator), NODE_PK, address(cHub));
+        cHub.registerNodeValidator(validatorId, validator, sig);
     }
 
     function _registerAndActivate(uint8 validatorId, ISignatureValidator validator) internal {
@@ -53,43 +54,46 @@ contract ChannelHubTest_RegisterNodeValidator is ChannelHubTest_SigValidator_Bas
 
         _registerValidator(VALIDATOR_ID, SK_VALIDATOR);
 
-        (ISignatureValidator stored, uint64 registeredAt) = cHub.getNodeValidator(node, VALIDATOR_ID);
+        (ISignatureValidator stored, uint64 registeredAt) = cHub.getNodeValidator(VALIDATOR_ID);
         assertEq(address(stored), address(SK_VALIDATOR));
         assertEq(registeredAt, ts);
     }
 
     function test_success_emitsValidatorRegistered() public {
-        bytes memory sig = TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK);
+        bytes memory sig =
+            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub));
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.ValidatorRegistered(node, VALIDATOR_ID, SK_VALIDATOR);
+        emit ChannelHub.ValidatorRegistered(VALIDATOR_ID, SK_VALIDATOR);
 
-        cHub.registerNodeValidator(node, VALIDATOR_ID, SK_VALIDATOR, sig);
+        cHub.registerNodeValidator(VALIDATOR_ID, SK_VALIDATOR, sig);
     }
 
     function test_revert_defaultValidatorId() public {
-        bytes memory sig =
-            TestUtils.buildAndSignValidatorRegistration(vm, DEFAULT_SIG_VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK);
+        bytes memory sig = TestUtils.buildAndSignValidatorRegistration(
+            vm, DEFAULT_SIG_VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub)
+        );
 
         vm.expectRevert(ChannelHub.InvalidValidatorId.selector);
-        cHub.registerNodeValidator(node, DEFAULT_SIG_VALIDATOR_ID, SK_VALIDATOR, sig);
+        cHub.registerNodeValidator(DEFAULT_SIG_VALIDATOR_ID, SK_VALIDATOR, sig);
     }
 
     function test_revert_zeroValidatorAddress() public {
-        bytes memory sig = TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(0), NODE_PK);
+        bytes memory sig =
+            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(0), NODE_PK, address(cHub));
 
         vm.expectRevert(ChannelHub.InvalidAddress.selector);
-        cHub.registerNodeValidator(node, VALIDATOR_ID, ISignatureValidator(address(0)), sig);
+        cHub.registerNodeValidator(VALIDATOR_ID, ISignatureValidator(address(0)), sig);
     }
 
     function test_revert_duplicateValidatorId() public {
         _registerValidator(VALIDATOR_ID, SK_VALIDATOR);
 
         bytes memory sig2 =
-            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK);
+            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub));
 
-        vm.expectRevert(abi.encodeWithSelector(ChannelHub.ValidatorAlreadyRegistered.selector, node, VALIDATOR_ID));
-        cHub.registerNodeValidator(node, VALIDATOR_ID, SK_VALIDATOR, sig2);
+        vm.expectRevert(abi.encodeWithSelector(ChannelHub.ValidatorAlreadyRegistered.selector, VALIDATOR_ID));
+        cHub.registerNodeValidator(VALIDATOR_ID, SK_VALIDATOR, sig2);
     }
 }
 
@@ -102,7 +106,7 @@ contract ChannelHubTest_ExtractValidator is ChannelHubTest_SigValidator_Base {
     function test_success_defaultValidator() public view {
         bytes memory sig = _sig(DEFAULT_SIG_VALIDATOR_ID);
 
-        ISignatureValidator result = cHub.exposed_extractValidator(sig, node, 0);
+        ISignatureValidator result = cHub.exposed_extractValidator(sig, 0);
 
         assertEq(address(result), address(cHub.DEFAULT_SIG_VALIDATOR()));
     }
@@ -112,7 +116,7 @@ contract ChannelHubTest_ExtractValidator is ChannelHubTest_SigValidator_Base {
 
         bytes memory sig = _sig(VALIDATOR_ID);
 
-        ISignatureValidator result = cHub.exposed_extractValidator(sig, node, _approved(VALIDATOR_ID));
+        ISignatureValidator result = cHub.exposed_extractValidator(sig, _approved(VALIDATOR_ID));
 
         assertEq(address(result), address(SK_VALIDATOR));
     }
@@ -120,8 +124,8 @@ contract ChannelHubTest_ExtractValidator is ChannelHubTest_SigValidator_Base {
     function test_revert_validatorNotRegistered() public {
         bytes memory sig = _sig(VALIDATOR_ID);
 
-        vm.expectRevert(abi.encodeWithSelector(ChannelHub.ValidatorNotRegistered.selector, node, VALIDATOR_ID));
-        cHub.exposed_extractValidator(sig, node, _approved(VALIDATOR_ID));
+        vm.expectRevert(abi.encodeWithSelector(ChannelHub.ValidatorNotRegistered.selector, VALIDATOR_ID));
+        cHub.exposed_extractValidator(sig, _approved(VALIDATOR_ID));
     }
 
     function test_revert_validatorNotYetActive() public {
@@ -134,8 +138,8 @@ contract ChannelHubTest_ExtractValidator is ChannelHubTest_SigValidator_Base {
 
         uint64 expectedActivatesAt = uint64(block.timestamp + 1);
         vm.expectRevert(
-            abi.encodeWithSelector(ChannelHub.ValidatorNotActive.selector, node, VALIDATOR_ID, expectedActivatesAt)
+            abi.encodeWithSelector(ChannelHub.ValidatorNotActive.selector, VALIDATOR_ID, expectedActivatesAt)
         );
-        cHub.exposed_extractValidator(sig, node, _approved(VALIDATOR_ID));
+        cHub.exposed_extractValidator(sig, _approved(VALIDATOR_ID));
     }
 }

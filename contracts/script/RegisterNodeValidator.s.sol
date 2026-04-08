@@ -67,7 +67,7 @@ contract RegisterNodeValidator is Script {
         console.log("Signature:", vm.toString(signature));
 
         vm.broadcast();
-        channelHub.registerNodeValidator(nodeAddress, validatorId, ISignatureValidator(validatorAddress), signature);
+        channelHub.registerNodeValidator(validatorId, ISignatureValidator(validatorAddress), signature);
 
         console.log("Validator registered successfully!");
     }

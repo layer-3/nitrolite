@@ -225,6 +225,14 @@ func NewMockSigner() sign.Signer {
 	return signer
 }
 
+// NewMockChannelSigner creates a mock channel signer for testing.
+// It wraps a raw signer with the channel signature prefix byte.
+func NewMockChannelSigner() *core.ChannelDefaultSigner {
+	s := NewMockSigner()
+	cs, _ := core.NewChannelDefaultSigner(s)
+	return cs
+}
+
 // TestAppSessionWallet is a test helper for creating properly signed app session signatures.
 // It generates a real ECDSA key pair and wraps it in an AppSessionSignerV1 (wallet type)
 // so that signatures include the required 0xA1 type prefix.
@@ -276,4 +284,15 @@ func (w *TestAppSessionWallet) SignCreateRequest(t *testing.T, def app.AppDefini
 	require.NoError(t, err)
 
 	return hexutil.Encode(sig)
+}
+
+// VerifyNodeSignature verifies that a hex-encoded channel signature was produced by the expected node address.
+func VerifyNodeSignature(t *testing.T, nodeAddr string, data []byte, sigHex string) {
+	t.Helper()
+	sigBytes, err := hexutil.Decode(sigHex)
+	require.NoError(t, err, "Failed to decode node signature")
+
+	sigValidator := core.NewChannelSigValidator(nil)
+	err = sigValidator.Verify(nodeAddr, data, sigBytes)
+	require.NoError(t, err, "Node signature verification failed: expected signer %s", nodeAddr)
 }

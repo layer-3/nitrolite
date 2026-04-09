@@ -161,6 +161,9 @@ func TestRequestCreation_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.Signature)
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mocks were called
 	mockMemoryStore.AssertExpectations(t)
 	mockAssetStore.AssertExpectations(t)
@@ -307,6 +310,9 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.Signature)
+
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
 
 	// Verify all mocks were called - notably RecordTransaction should NOT have been called
 	mockMemoryStore.AssertExpectations(t)

@@ -12,7 +12,6 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
-	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // Handler manages app session operations and provides RPC endpoints for app session management.
@@ -20,7 +19,7 @@ type Handler struct {
 	useStoreInTx     StoreTxProvider
 	assetStore       AssetStore
 	actionGateway    ActionGateway
-	signer           sign.Signer
+	signer           *core.ChannelDefaultSigner
 	stateAdvancer    core.StateAdvancer
 	statePacker      core.StatePacker
 	nodeAddress      string // Node's wallet address
@@ -36,7 +35,7 @@ func NewHandler(
 	useStoreInTx StoreTxProvider,
 	assetStore AssetStore,
 	actionGateway ActionGateway,
-	signer sign.Signer,
+	signer *core.ChannelDefaultSigner,
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,

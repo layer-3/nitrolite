@@ -185,6 +185,9 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedSenderState, response.Signature)
+
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
@@ -341,6 +344,9 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
@@ -496,6 +502,9 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
@@ -627,6 +636,9 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
+
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
 
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
@@ -760,6 +772,9 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
+
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
 
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
@@ -916,6 +931,9 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
+
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
 
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
@@ -1074,6 +1092,9 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
@@ -1209,6 +1230,9 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 
@@ -1334,6 +1358,9 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, ctx.Response.Error())
 	assert.NotEmpty(t, response.Signature, "Node signature should be present")
+
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
 
 	// Verify all mock expectations - notably RecordTransaction should NOT have been called
 	mockTxStore.AssertExpectations(t)

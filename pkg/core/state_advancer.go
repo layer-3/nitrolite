@@ -161,7 +161,7 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("new transition does not match expected: %w", err)
 	}
 
-	if err := proposedState.HomeLedger.Equal(expectedState.HomeLedger); err != nil {
+	if err := expectedState.HomeLedger.Equal(proposedState.HomeLedger); err != nil {
 		return fmt.Errorf("home ledger mismatch: %w", err)
 	}
 	if err := proposedState.HomeLedger.Validate(); err != nil {
@@ -183,7 +183,7 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 	}
 
 	if expectedState.EscrowLedger != nil && proposedState.EscrowLedger != nil {
-		if err := proposedState.EscrowLedger.Equal(*expectedState.EscrowLedger); err != nil {
+		if err := expectedState.EscrowLedger.Equal(*proposedState.EscrowLedger); err != nil {
 			return fmt.Errorf("escrow ledger mismatch: %w", err)
 		}
 		if err := proposedState.EscrowLedger.Validate(); err != nil {

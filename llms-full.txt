@@ -1,0 +1,325 @@
+# Nitrolite — Full AI Reference
+
+This document provides a comprehensive reference for AI agents and LLMs working with the Nitrolite state channel protocol and SDKs. It is designed to be loaded as context in Claude Projects, ChatGPT, or any AI tool.
+
+---
+
+## 1. What is Nitrolite?
+
+Nitrolite is a state channel protocol for Ethereum and EVM-compatible blockchains. It enables high-speed off-chain interactions (instant finality, near-zero gas) while preserving on-chain security guarantees.
+
+Users exchange signed state updates off-chain with Nodes that act as a hub. Any user can enforce the latest agreed state on the blockchain at any time.
+
+### System Roles
+
+- **User** — Opens channels, signs state updates, holds assets within the protocol
+- **Node (Clearnode)** — Facilitates off-chain state advancement, manages channels, syncs with blockchain
+- **Blockchain** — On-chain storage/execution layer that validates states, stores checkpoints, resolves disputes
+
+### Design Goals
+
+- Off-chain scalability — minimize on-chain transactions
+- Blockchain security — any user can fall back to on-chain enforcement
+- Cross-chain asset interaction — unified asset model across blockchains
+- Extensibility — app sessions, custom logic via extensions
+
+---
+
+## 2. Core Concepts
+
+### Channels
+
+A channel is a state container shared between a User and a Node. It holds asset allocations and supports off-chain state updates. Each channel is defined by immutable parameters: user, node, asset, nonce, challenge duration, and approved signature validators.
+
+### States
+
+A state represents the current agreed asset allocations. Contains two ledgers (home and non-home), a version number, and a transition describing the operation that produced it.
+
+### State Advancement
+
+User and node advance states off-chain by exchanging signed transitions. Each new state MUST have version = previous + 1. Transitions include: deposit, withdrawal, transfer, commit, release, escrow operations, migration.
+
+### State Enforcement
+
+Any party MAY submit the latest signed state to the blockchain. The blockchain validates signatures, version ordering, and ledger invariants before accepting.
+
+### App Sessions
+
+Multi-party extensions on top of channels with quorum-based governance. Support custom application logic (gaming, escrow, multi-party coordination). Use weight-based voting: each participant has a signature weight, operations require meeting a quorum threshold.
+
+---
+
+## 3. Wire Format
+
+Communication uses JSON-RPC over WebSocket.
+
+### Message Envelope
+
+Compact ordered array: `[Type, RequestId, Method, Payload, Timestamp]`
+
+| Field | Description |
+|-------|-------------|
+| Type | 1=Request, 2=Response, 3=Event, 4=Error |
+| RequestId | Numeric identifier unique per connection |
+| Method | Operation name (e.g., "transfer", "auth_request") |
+| Payload | Type-specific data |
+| Timestamp | Unix milliseconds |
+
+### Request Format
+```json
+{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }
+```
+
+### Response Format
+```json
+{ "res": [REQUEST_ID, METHOD, DATA, TIMESTAMP], "sig": ["SIGNATURE"] }
+```
+
+---
+
+## 4. Authentication Flow
+
+Challenge-response mechanism using Ethereum signatures:
+
+1. **auth_request** — Client sends wallet address + optional session key parameters
+2. **auth_challenge** — Server responds with a random challenge token (UUID)
+3. **auth_verify** — Client signs the challenge with their private key
+4. **JWT issued** — Server responds with a JWT token (valid 24h)
+
+Session keys: Specify a `session_key` address in auth_request to enable delegation with per-asset `allowances` and `expires_at` timestamp.
+
+---
+
+## 5. Channel Lifecycle
+
+### Definition Parameters
+
+| Field | Description |
+|-------|-------------|
+| User | User participant address |
+| Node | Node participant address |
+| Asset | Asset identifier |
+| Nonce | Unique nonce for the channel |
+| ChallengeDuration | Challenge period in seconds |
+| ApprovedSignatureValidators | Bitmask of approved validation modes |
+
+### Lifecycle
+
+1. **Create** — Off-chain: validate, construct initial state, sign
+2. **Advance** — Off-chain: exchange signed state transitions (deposit, withdraw, transfer)
+3. **Checkpoint** — Submit mutually signed state to blockchain
+4. **Challenge** — On-chain dispute: submit state, wait challenge duration
+5. **Close** — Off-chain mutual agreement OR on-chain post-challenge
+
+### Transition Types
+
+- **Local:** HomeDeposit, HomeWithdrawal, Finalize
+- **Transfer:** TransferSend, TransferReceive, Acknowledgement
+- **Extension:** Commit, Release (bridge to app sessions)
+- **Escrow:** EscrowDepositInitiate/Finalize, EscrowWithdrawalInitiate/Finalize
+
+---
+
+## 6. State Invariants
+
+- **Fund conservation:** UserAllocation + NodeAllocation == UserNetFlow + NodeNetFlow
+- **Non-negativity:** All allocation values MUST be >= 0
+- **Version ordering:** Off-chain: version = previous + 1. On-chain: submitted > current
+- **Signature requirements:** Mutually signed (user + node) = enforceable. Node-only = NOT enforceable.
+- **Locked funds:** UserAllocation + NodeAllocation == LockedFunds (unless closing)
+
+---
+
+## 7. Clearnode RPC Methods
+
+### Public (no auth required)
+
+| Method | Description |
+|--------|-------------|
+| `auth_request` | Initiate authentication |
+| `auth_challenge` | Server authentication challenge |
+| `auth_verify` | Complete authentication |
+| `ping` | Connectivity check |
+| `get_config` | Broker configuration and supported networks |
+| `get_assets` | Supported assets (optionally filtered by chain_id) |
+| `get_channels` | All channels for a participant |
+| `get_app_definition` | Application definition for a ledger account |
+| `get_app_sessions` | Virtual applications for a participant |
+| `get_ledger_entries` | Detailed ledger entries |
+| `get_ledger_transactions` | Transaction history with filtering |
+
+### Private (auth required)
+
+| Method | Description |
+|--------|-------------|
+| `transfer` | Transfer funds from user's unified balance |
+| `create_app_session` | Create a new virtual application |
+| `submit_app_state` | Submit intermediate state into a virtual application |
+| `close_app_session` | Close a virtual application |
+| `create_channel` | Get data + broker signature to open a channel |
+| `close_channel` | Get data + broker signature to close a channel |
+| `resize_channel` | Adjust channel capacity |
+| `get_user_tag` | Retrieve user's tag |
+| `get_session_keys` | All active session keys |
+| `revoke_session_key` | Revoke a session key |
+| `get_rpc_history` | RPC message history |
+| `get_ledger_balances` | Participant balances |
+
+### App Session v1 Methods
+
+| Method | Description |
+|--------|-------------|
+| `app_sessions.v1.submit_session_key_state` | Submit session key state |
+| `app_sessions.v1.get_last_key_states` | Get latest session key states |
+
+---
+
+## 8. TypeScript SDK (`@yellow-org/sdk`)
+
+Package: `@yellow-org/sdk` on npm. Uses viem, decimal.js, async/await.
+
+### Client Creation
+
+```typescript
+import { NitroliteClient } from '@yellow-org/sdk';
+
+const client = new NitroliteClient(
+  clearnodeUrl,
+  stateSigner,
+  transactionSigner,
+  { blockchainRpc: { [chainId]: rpcUrl } }
+);
+```
+
+### Key Methods
+
+| Method | Description |
+|--------|-------------|
+| `deposit(chainId, asset, amount)` | Deposit funds (creates channel if needed) |
+| `withdraw(chainId, asset, amount)` | Withdraw from channel to wallet |
+| `transfer(recipient, asset, amount)` | Off-chain instant transfer |
+| `checkpoint(asset)` | Submit state to blockchain |
+| `closeHomeChannel(asset)` | Close channel and withdraw |
+| `getChannels()` | List all channels |
+| `getBalances(address)` | Get account balances |
+| `getConfig()` | Get clearnode configuration |
+| `createAppSession(definition, asset, allocations)` | Create app session |
+| `submitAppState(update, signatures)` | Submit app state |
+| `closeAppSession(sessionId, allocations)` | Close app session |
+
+### Compat Layer (`@yellow-org/sdk-compat`)
+
+Migration bridge from v0.5.3 API. Re-exports key functions with the old API signatures, internally using the new SDK. Use for gradual migration.
+
+---
+
+## 9. Go SDK (`github.com/layer-3/nitrolite/sdk/go`)
+
+Uses context.Context, (T, error) tuples, github.com/shopspring/decimal.
+
+### Client Creation
+
+```go
+import (
+    "github.com/layer-3/nitrolite/pkg/sign"
+    sdk "github.com/layer-3/nitrolite/sdk/go"
+)
+
+stateSigner, _ := sign.NewEthereumMsgSigner(privateKey)
+txSigner, _ := sign.NewEthereumRawSigner(privateKey)
+
+client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+    sdk.WithBlockchainRPC(chainID, rpcURL),
+)
+defer client.Close()
+```
+
+### Key Methods
+
+| Method | Description |
+|--------|-------------|
+| `Deposit(ctx, chainID, asset, amount)` | Deposit funds |
+| `Withdraw(ctx, chainID, asset, amount)` | Withdraw from channel |
+| `Transfer(ctx, recipient, asset, amount)` | Off-chain transfer |
+| `Checkpoint(ctx, asset)` | Submit state to blockchain |
+| `CloseHomeChannel(ctx, asset)` | Close channel |
+| `GetChannels(ctx)` | List channels |
+| `GetBalances(ctx, address)` | Get balances |
+| `GetConfig(ctx)` | Get clearnode config |
+| `CreateAppSession(ctx, def, asset, allocs)` | Create app session |
+| `SubmitAppState(ctx, update, sigs)` | Submit app state |
+| `CloseAppSession(ctx, sessionID, allocs)` | Close app session |
+| `ApproveToken(ctx, chainID, asset, amount)` | Approve token spending |
+
+### Two-Step Pattern for Blockchain Operations
+
+1. Build and co-sign state off-chain (Deposit, Withdraw, etc.)
+2. Settle on-chain via Checkpoint
+
+---
+
+## 10. Smart Contracts
+
+Foundry project. Key contracts:
+
+| Contract | Purpose |
+|----------|---------|
+| `ChannelHub.sol` | Main entry point — creates channels, processes checkpoints |
+| `ChannelEngine.sol` | State validation, transition processing |
+| `EscrowDepositEngine.sol` | Cross-chain deposit escrow |
+| `EscrowWithdrawalEngine.sol` | Cross-chain withdrawal escrow |
+| `SessionKeyValidator.sol` | Validates session key signatures |
+| `ECDSAValidator.sol` | Validates standard ECDSA signatures |
+
+### Build and Test
+
+```bash
+cd contracts && forge build    # Compile
+cd contracts && forge test     # Run tests
+cd contracts && forge fmt      # Format
+```
+
+---
+
+## 11. Repository Structure
+
+| Directory | Description | Language |
+|-----------|-------------|----------|
+| `contracts/` | Solidity smart contracts (Foundry) | Solidity |
+| `clearnode/` | Off-chain broker: WebSocket JSON-RPC | Go |
+| `sdk/ts/` | TypeScript SDK (`@yellow-org/sdk`) | TypeScript |
+| `sdk/ts-compat/` | Compat layer for v0.5.3 migration | TypeScript |
+| `sdk/go/` | Go SDK | Go |
+| `sdk/ts-mcp/` | TypeScript MCP server for AI agents | TypeScript |
+| `sdk/mcp-go/` | Go MCP server for AI agents | Go |
+| `cerebro/` | Interactive CLI for channel management | Go |
+| `pkg/` | Shared Go packages (core, sign, rpc, app) | Go |
+| `docs/` | Protocol specifications | Markdown |
+
+---
+
+## 12. Common Patterns
+
+### TypeScript: Transfer with Compat Layer
+
+```typescript
+import { NitroliteClient } from '@yellow-org/sdk-compat';
+const client = new NitroliteClient(url, stateSigner, txSigner, options);
+await client.transfer(recipient, 'usdc', '5.0');
+```
+
+### Go: Full Transfer Flow
+
+```go
+ctx := context.Background()
+client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(10))
+client.Transfer(ctx, recipient, "usdc", decimal.NewFromInt(5))
+client.CloseHomeChannel(ctx, "usdc")
+```
+
+### App Session: 2-of-2 Quorum
+
+Both SDKs support app sessions with weight-based quorum:
+- Participants: [{addr1, weight: 50}, {addr2, weight: 50}], Quorum: 100
+- Both must sign to authorize state updates
+- Variations: 2-of-3 (weights [50,50,50], quorum 100), weighted operator (weights [70,30], quorum 70)

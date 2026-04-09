@@ -1,0 +1,68 @@
+# Nitrolite — Cursor Rules
+
+## What This Project Is
+
+Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain instant transactions with on-chain security. The repo contains: Solidity contracts (Foundry), a Go clearnode broker, TypeScript + Go SDKs, and MCP servers for AI tooling.
+
+## Architecture
+
+- **Channels**: State containers between a User and a Node. Hold asset allocations, support off-chain state updates.
+- **States**: Versioned allocations. Each new state = previous version + 1. Mutually signed states are enforceable on-chain.
+- **Clearnode**: Off-chain broker. WebSocket JSON-RPC. Wire format: `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`
+- **App Sessions**: Multi-party extensions on channels with quorum-based governance (weight + threshold voting).
+
+## TypeScript SDK Conventions
+
+- Package: `@yellow-org/sdk` (main), `@yellow-org/sdk-compat` (migration bridge from v0.5.3)
+- Use `const` by default, `let` only when reassignment is needed. No `var`.
+- Prefer `viem` over `ethers.js` for Ethereum interactions.
+- All public API functions exported through barrel `index.ts`.
+- Strict TypeScript — no `any` unless unavoidable (e.g., RPC wire types).
+- Async functions preferred over raw Promise chains.
+- Tests: `.test.ts` extension, Jest. Run: `cd sdk/ts && npm test`
+- sdk-compat: NEVER barrel re-export SDK classes (SSR risk). Only `export type` is safe.
+- Build order: `sdk/ts` must build before `sdk/ts-compat`.
+
+## Go SDK Conventions
+
+- Module: `github.com/layer-3/nitrolite` (root go.mod, Go 1.25)
+- Follow standard Go: `gofmt`, exported names have doc comments.
+- Error handling: always check and return errors, never ignore with `_`.
+- Functional options pattern for configuration (see `sdk/go/config.go`).
+- Shared packages in `pkg/` — check there before creating new utilities.
+- Tests: `_test.go` suffix, same package. Run from repo root: `go test ./sdk/go/...`
+- Use `context.Context` for all async operations, `github.com/shopspring/decimal` for amounts.
+
+## Solidity Conventions
+
+- Foundry project: `forge build`, `forge test`, `forge fmt`.
+- NatSpec comments on all public/external functions.
+- Security first: validate inputs, check reentrancy, use OpenZeppelin.
+- Tests in `contracts/test/` with `.t.sol` extension.
+- Gas optimization matters — avoid unnecessary storage writes.
+
+## Key SDK Methods (Both TS and Go)
+
+- `Deposit(chainId, asset, amount)` — deposit funds, creates channel if needed
+- `Transfer(recipient, asset, amount)` — off-chain instant transfer
+- `Checkpoint(asset)` — submit state to blockchain
+- `CloseHomeChannel(asset)` — close channel and withdraw
+- `CreateAppSession(definition, asset, allocations)` — create multi-party session
+- `SubmitAppState(update, signatures)` — submit app session state
+- `GetChannels()`, `GetBalances(address)`, `GetConfig()` — queries
+
+## Commit Convention
+
+```
+feat|fix|chore|test|docs(scope): description
+```
+Examples: `feat(sdk/ts): add transfer batching`, `fix(sdk-compat): export missing type`
+
+## Common Mistakes to Avoid
+
+- Don't use `ethers.js` — use `viem` for Ethereum interactions
+- Don't ignore Go errors with `_`
+- Don't barrel re-export classes in sdk-compat (causes SSR failures)
+- Don't run `npm test && npm run build` in sdk/ts (double-tests; build already runs tests)
+- Don't edit `.env` files or commit secrets
+- Don't create new utilities without checking `pkg/` first (Go)

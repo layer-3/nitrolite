@@ -11,7 +11,8 @@ Nitrolite is a state channel framework for Ethereum and EVM-compatible blockchai
 | `sdk/ts/` | TypeScript SDK (`@yellow-org/sdk`) | TypeScript |
 | `sdk/ts-compat/` | Compat layer (`@yellow-org/sdk-compat`) bridging v0.5.3 API to v1.0.0+ | TypeScript |
 | `sdk/go/` | Go SDK for backend integrations | Go |
-| `sdk/mcp/` | MCP server exposing SDK API surface to AI agents/IDEs | TypeScript |
+| `sdk/ts-mcp/` | TypeScript MCP server exposing SDK API surface to AI agents/IDEs | TypeScript |
+| `sdk/mcp-go/` | Go MCP server exposing Go SDK API surface to AI agents/IDEs | Go |
 | `cerebro/` | Interactive CLI for channel/asset management | Go |
 | `pkg/` | Shared Go packages (core, sign, rpc, app, blockchain, log) | Go |
 | `docs/` | Protocol specifications, architecture docs | Markdown |
@@ -62,7 +63,8 @@ cd test/integration && npm test          # Requires a running clearnode
 - **Build order**: `sdk/ts` must build before `sdk/ts-compat` (has `"@yellow-org/sdk": "file:../ts"` dependency)
 - **sdk/ts build runs tests first**: `npm run build` = `npm run test && tsc`. Avoid `npm test && npm run build` (double-tests).
 - **Foundry** uses git submodules for deps (`forge-std`, `openzeppelin-contracts`). Use `--recurse-submodules` on clone.
-- **MCP server** (`sdk/mcp/`): run `cd sdk/mcp && npm install` before first use.
+- **TS MCP server** (`sdk/ts-mcp/`): run `cd sdk/ts-mcp && npm install` before first use.
+- **Go MCP server** (`sdk/mcp-go/`): run `cd sdk/mcp-go && go build .` to verify.
 - **Never** edit `.env` files or commit secrets.
 
 ## Commit Convention

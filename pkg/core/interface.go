@@ -11,9 +11,6 @@ import (
 // Client defines the interface for interacting with the ChannelsHub smart contract
 // TODO: add context to all methods
 type BlockchainClient interface {
-	// Getters - IVault
-	GetAccountsBalances(accounts []string, tokens []string) ([][]decimal.Decimal, error)
-
 	// Getters - Token Balance & Approval
 	GetTokenBalance(asset string, walletAddress string) (decimal.Decimal, error)
 	Approve(asset string, amount decimal.Decimal) (string, error)
@@ -25,9 +22,9 @@ type BlockchainClient interface {
 	GetEscrowDepositData(escrowChannelID string) (EscrowDepositDataResponse, error)
 	GetEscrowWithdrawalData(escrowChannelID string) (EscrowWithdrawalDataResponse, error)
 
-	// IVault functions
-	Deposit(node, token string, amount decimal.Decimal) (string, error)
-	Withdraw(node, token string, amount decimal.Decimal) (string, error)
+	// Node vault functions
+	Deposit(token string, amount decimal.Decimal) (string, error)
+	Withdraw(to, token string, amount decimal.Decimal) (string, error)
 
 	// Node lifecycle
 	EnsureSigValidatorRegistered(validatorID uint8, validatorAddress string, checkOnly bool) error

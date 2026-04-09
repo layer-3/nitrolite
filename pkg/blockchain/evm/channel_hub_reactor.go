@@ -414,7 +414,6 @@ func (r *ChannelHubReactor) handleDeposited(ctx context.Context, l types.Log) er
 	}
 	logger := log.FromContext(ctx)
 	logger.Info("Deposited event",
-		"wallet", event.Wallet.Hex(),
 		"token", event.Token.Hex(),
 		"amount", event.Amount.String())
 
@@ -428,7 +427,6 @@ func (r *ChannelHubReactor) handleWithdrawn(ctx context.Context, l types.Log) er
 	}
 	logger := log.FromContext(ctx)
 	logger.Info("Withdrawn event",
-		"wallet", event.Wallet.Hex(),
 		"token", event.Token.Hex(),
 		"amount", event.Amount.String())
 

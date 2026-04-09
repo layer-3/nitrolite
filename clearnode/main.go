@@ -114,7 +114,7 @@ func main() {
 
 			reactor := evm.NewChannelHubReactor(b.ID, eventHandlerService, bb.DbStore.StoreContractEvent)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore.GetLatestEvent)
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)
@@ -143,7 +143,7 @@ func main() {
 			}
 
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.LockingContractAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore.GetLatestEvent)
+			l := evm.NewListener(common.HexToAddress(b.LockingContractAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

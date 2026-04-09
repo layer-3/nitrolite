@@ -237,6 +237,9 @@ type DatabaseStore interface {
 	// StoreContractEvent stores a blockchain event to prevent duplicate processing.
 	StoreContractEvent(ev core.BlockchainEvent) error
 
-	// GetLatestEvent returns the latest block number and log index for a given contract.
-	GetLatestEvent(contractAddress string, blockchainID uint64) (core.BlockchainEvent, error)
+	// GetLatestContractEventBlockNumber returns the highest block number for a given contract.
+	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
+
+	// IsContractEventPresent checks if a specific contract event has already been stored.
+	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
 }

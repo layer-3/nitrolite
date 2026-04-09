@@ -11,7 +11,14 @@ import (
 
 type HandleEvent func(ctx context.Context, eventLog types.Log) error
 type StoreContractEvent func(ev core.BlockchainEvent) error
-type LatestEventGetter func(contractAddress string, blockchainID uint64) (ev core.BlockchainEvent, err error)
+
+// ContractEventGetter is used by Listener for resumption and deduplication.
+type ContractEventGetter interface {
+	// GetLatestContractEventBlockNumber returns the block to resume from (0 = start fresh).
+	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
+	// IsContractEventPresent checks whether a specific event was already processed.
+	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+}
 
 type AssetStore interface {
 	// GetAssetDecimals checks if an asset exists and returns its decimals in YN

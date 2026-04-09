@@ -68,7 +68,11 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 	if incomingTransition.Type != core.TransitionTypeTransferSend {
 		return nil, rpc.Errorf("incoming state doesn't have 'transfer_send' transition")
 	}
-	receiverWallet := incomingTransition.AccountID
+	receiverWallet, err := core.NormalizeHexAddress(incomingTransition.AccountID)
+	if err != nil {
+		return nil, rpc.Errorf("invalid receiver wallet address: %v", err)
+	}
+
 	if senderState.UserWallet == receiverWallet {
 		return nil, rpc.Errorf("sender and receiver wallets are the same")
 	}
@@ -87,7 +91,7 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 
 	currentState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, false)
 	if err != nil {
-		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, incomingTransition.AccountID)
+		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, receiverWallet)
 	}
 	if currentState == nil {
 		currentState = core.NewVoidState(senderState.Asset, receiverWallet)
@@ -104,7 +108,7 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 
 	lastSignedState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, true)
 	if err != nil {
-		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, incomingTransition.AccountID)
+		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, receiverWallet)
 	}
 
 	// TODO: move to DB query

@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -24,8 +23,10 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		return
 	}
 
-	if !common.IsHexAddress(reqPayload.State.UserWallet) {
-		c.Fail(rpc.Errorf("invalid user_wallet address"), "")
+	var err error
+	reqPayload.State.UserWallet, err = core.NormalizeHexAddress(reqPayload.State.UserWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid user_wallet: %v", err), "")
 		return
 	}
 

@@ -71,6 +71,11 @@ func bitmaskToHex(mask [32]byte) string {
 }
 
 func IsChannelSignerSupported(approvedSigValidators string, signerType ChannelSignerType) bool {
+	// Default signer is always supported, matching the smart contract behavior.
+	if signerType == ChannelSignerType_Default {
+		return true
+	}
+
 	// Mirrors Solidity: (approvedSigValidators >> signerType) & 1 == 1
 	val, ok := hexToBitmask(approvedSigValidators)
 	if !ok {

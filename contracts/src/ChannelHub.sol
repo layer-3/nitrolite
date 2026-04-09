@@ -1114,9 +1114,7 @@ contract ChannelHub is ReentrancyGuard {
     ) internal {
         ChannelMeta storage meta = _channels[channelId];
 
-        if (effects.updateLastState) {
-            meta.lastState = candidate;
-        }
+        meta.lastState = candidate;
 
         address user = def.user;
         address token = candidate.homeLedger.token;

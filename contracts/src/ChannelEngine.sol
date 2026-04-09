@@ -522,6 +522,12 @@ library ChannelEngine {
         } else if (ctx.status == ChannelStatus.OPERATING || ctx.status == ChannelStatus.DISPUTED) {
             // OLD HOME CHAIN (OUT): Release funds and move to MIGRATED_OUT
             // homeLedger represents old home (current chain)
+            require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
+            if (ctx.prevState.intent == StateIntent.INITIATE_MIGRATION) {
+                require(candidate.version == ctx.prevState.version + 1, IncorrectStateVersion());
+            } else {
+                require(candidate.version > ctx.prevState.version + 1, IncorrectStateVersion());
+            }
 
             // Validate homeLedger
             require(candidate.homeLedger.userAllocation == 0, IncorrectUserAllocation());

@@ -60,8 +60,9 @@ contract ChannelHubTest_RegisterNodeValidator is ChannelHubTest_SigValidator_Bas
     }
 
     function test_success_emitsValidatorRegistered() public {
-        bytes memory sig =
-            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub));
+        bytes memory sig = TestUtils.buildAndSignValidatorRegistration(
+            vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub)
+        );
 
         vm.expectEmit(true, true, true, true);
         emit ChannelHub.ValidatorRegistered(VALIDATOR_ID, SK_VALIDATOR);
@@ -89,8 +90,9 @@ contract ChannelHubTest_RegisterNodeValidator is ChannelHubTest_SigValidator_Bas
     function test_revert_duplicateValidatorId() public {
         _registerValidator(VALIDATOR_ID, SK_VALIDATOR);
 
-        bytes memory sig2 =
-            TestUtils.buildAndSignValidatorRegistration(vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub));
+        bytes memory sig2 = TestUtils.buildAndSignValidatorRegistration(
+            vm, VALIDATOR_ID, address(SK_VALIDATOR), NODE_PK, address(cHub)
+        );
 
         vm.expectRevert(abi.encodeWithSelector(ChannelHub.ValidatorAlreadyRegistered.selector, VALIDATOR_ID));
         cHub.registerNodeValidator(VALIDATOR_ID, SK_VALIDATOR, sig2);

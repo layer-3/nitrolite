@@ -58,7 +58,8 @@ contract TestChannelHub is ChannelHub {
         bytes32 channelId,
         EscrowStatus status,
         address user_,
-        address /* node_ */,
+        address,
+        /* node_ */
         uint64 unlockAt,
         uint64 challengeExpireAt,
         uint256 lockedAmount,

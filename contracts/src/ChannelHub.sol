@@ -45,10 +45,7 @@ contract ChannelHub is ReentrancyGuard {
     event EscrowDepositsPurged(uint256 purgedCount);
 
     event ChannelCreated(
-        bytes32 indexed channelId,
-        address indexed user,
-        ChannelDefinition definition,
-        State initialState
+        bytes32 indexed channelId, address indexed user, ChannelDefinition definition, State initialState
     );
     event ChannelDeposited(bytes32 indexed channelId, State candidate);
     event ChannelWithdrawn(bytes32 indexed channelId, State candidate);
@@ -466,7 +463,9 @@ contract ChannelHub is ReentrancyGuard {
     {
         require(validatorId != DEFAULT_SIG_VALIDATOR_ID, InvalidValidatorId());
         require(address(validator) != address(0), InvalidAddress());
-        require(address(_validatorRegistry[validatorId].validator) == address(0), ValidatorAlreadyRegistered(validatorId));
+        require(
+            address(_validatorRegistry[validatorId].validator) == address(0), ValidatorAlreadyRegistered(validatorId)
+        );
 
         bytes memory message = Utils.getValidatorRegistrationMessage(address(this), validatorId, address(validator));
         require(EcdsaSignatureUtils.validateEcdsaSigner(message, signature, NODE), IncorrectSignature());
@@ -666,9 +665,7 @@ contract ChannelHub is ReentrancyGuard {
             EscrowDepositEngine.TransitionEffects memory effects =
                 EscrowDepositEngine.validateTransition(ctx, candidate);
 
-            _applyEscrowDepositEffects(
-                escrowId, channelId, candidate, effects, user, approvedSignatureValidators
-            );
+            _applyEscrowDepositEffects(escrowId, channelId, candidate, effects, user, approvedSignatureValidators);
             _escrowDepositIds.push(escrowId);
 
             emit EscrowDepositInitiated(escrowId, channelId, candidate);
@@ -740,9 +737,7 @@ contract ChannelHub is ReentrancyGuard {
         EscrowDepositEngine.TransitionContext memory ctx = _buildEscrowDepositContext(escrowId);
         EscrowDepositEngine.TransitionEffects memory effects = EscrowDepositEngine.validateTransition(ctx, candidate);
 
-        _applyEscrowDepositEffects(
-            escrowId, channelId, candidate, effects, user, approvedSignatureValidators
-        );
+        _applyEscrowDepositEffects(escrowId, channelId, candidate, effects, user, approvedSignatureValidators);
 
         emit EscrowDepositFinalized(escrowId, channelId, candidate);
     }
@@ -769,9 +764,7 @@ contract ChannelHub is ReentrancyGuard {
             EscrowWithdrawalEngine.TransitionEffects memory effects =
                 EscrowWithdrawalEngine.validateTransition(ctx, candidate);
 
-            _applyEscrowWithdrawalEffects(
-                escrowId, channelId, candidate, effects, user, approvedSignatureValidators
-            );
+            _applyEscrowWithdrawalEffects(escrowId, channelId, candidate, effects, user, approvedSignatureValidators);
 
             emit EscrowWithdrawalInitiated(escrowId, channelId, candidate);
         }
@@ -794,9 +787,7 @@ contract ChannelHub is ReentrancyGuard {
             _extractValidator(challengerSig, approvedSignatureValidators);
         _validateChallengerSignature(channelId, meta.initState, sigData, validator, user, challengerIdx);
 
-        _applyEscrowWithdrawalEffects(
-            escrowId, channelId, meta.initState, effects, user, approvedSignatureValidators
-        );
+        _applyEscrowWithdrawalEffects(escrowId, channelId, meta.initState, effects, user, approvedSignatureValidators);
 
         emit EscrowWithdrawalChallenged(escrowId, meta.initState, effects.newChallengeExpiry);
     }
@@ -848,9 +839,7 @@ contract ChannelHub is ReentrancyGuard {
         EscrowWithdrawalEngine.TransitionEffects memory effects =
             EscrowWithdrawalEngine.validateTransition(ctx, candidate);
 
-        _applyEscrowWithdrawalEffects(
-            escrowId, channelId, candidate, effects, user, approvedSignatureValidators
-        );
+        _applyEscrowWithdrawalEffects(escrowId, channelId, candidate, effects, user, approvedSignatureValidators);
 
         emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
     }
@@ -1031,9 +1020,7 @@ contract ChannelHub is ReentrancyGuard {
     }
 
     /// @dev Process HOME CHAIN path for escrow finalize operations
-    function _processHomeChainEscrowFinalize(bytes32 channelId, State calldata candidate, address user)
-        internal
-    {
+    function _processHomeChainEscrowFinalize(bytes32 channelId, State calldata candidate, address user) internal {
         ChannelDefinition memory channelDef = _channels[channelId].definition;
         _validateSignatures(channelId, candidate, user, channelDef.approvedSignatureValidators);
 

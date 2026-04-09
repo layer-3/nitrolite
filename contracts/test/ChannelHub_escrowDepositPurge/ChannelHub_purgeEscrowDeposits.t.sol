@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ChannelHubTest_EscrowDepositPurge_Base} from "./ChannelHub_EscrowDepositPurge_Base.t.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {ChannelHub} from "../../src/ChannelHub.sol";
-import {EscrowStatus, State} from "../../src/interfaces/Types.sol";
+import {EscrowStatus} from "../../src/interfaces/Types.sol";
 
 contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge_Base {
     function _purge(uint256 maxToPurge) internal {

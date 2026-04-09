@@ -9,7 +9,7 @@ import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 import {SessionKeyValidator, SessionKeyAuthorization} from "../src/sigValidators/SessionKeyValidator.sol";
-import {ChannelStatus, State, StateIntent, Ledger, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
+import {ChannelStatus, State, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
 import {Utils} from "../src/Utils.sol";
 

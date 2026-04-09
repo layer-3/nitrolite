@@ -8,7 +8,8 @@ import {ChannelHub} from "../src/ChannelHub.sol";
 
 contract ChannelHubTest_depositToNode is ChannelHubTest_Base {
     // TODO:
-}
+
+    }
 
 contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
     RevertingEthReceiver public revertingReceiver;
@@ -54,7 +55,9 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
         cHub.withdrawFromNode(recipient, address(token), DEPOSIT_AMOUNT);
 
         assertEq(token.balanceOf(recipient), DEPOSIT_AMOUNT, "Recipient should receive tokens");
-        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease");
+        assertEq(
+            cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease"
+        );
     }
 
     function test_emitsEvents_withERC20() public {
@@ -81,7 +84,9 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
         cHub.withdrawFromNode(node, address(token), DEPOSIT_AMOUNT);
 
         assertEq(token.balanceOf(node), DEPOSIT_AMOUNT, "Node should receive tokens");
-        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease");
+        assertEq(
+            cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease"
+        );
     }
 
     // ========== Successful Withdrawal — Native ETH ==========
@@ -91,7 +96,9 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
         cHub.withdrawFromNode(recipient, address(0), DEPOSIT_AMOUNT);
 
         assertEq(recipient.balance, DEPOSIT_AMOUNT, "Recipient should receive ETH");
-        assertEq(cHub.getNodeBalance(address(0)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease");
+        assertEq(
+            cHub.getNodeBalance(address(0)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease"
+        );
     }
 
     function test_emitsEvents_withNativeETH() public {
@@ -118,7 +125,9 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
         cHub.withdrawFromNode(node, address(0), DEPOSIT_AMOUNT);
 
         assertEq(node.balance, DEPOSIT_AMOUNT, "Node should receive ETH");
-        assertEq(cHub.getNodeBalance(address(0)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease");
+        assertEq(
+            cHub.getNodeBalance(address(0)), INITIAL_BALANCE - DEPOSIT_AMOUNT, "Node vault balance should decrease"
+        );
     }
 
     // ========== Atomicity: Revert on Transfer Failure ==========
@@ -140,7 +149,9 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
         uint256 balanceBefore = cHub.getNodeBalance(address(0));
 
         vm.prank(node);
-        vm.expectRevert(abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), DEPOSIT_AMOUNT));
+        vm.expectRevert(
+            abi.encodeWithSelector(ChannelHub.NativeTransferFailed.selector, address(revertingReceiver), DEPOSIT_AMOUNT)
+        );
         cHub.withdrawFromNode(address(revertingReceiver), address(0), DEPOSIT_AMOUNT);
 
         assertEq(cHub.getNodeBalance(address(0)), balanceBefore, "Vault balance must be unchanged on revert");

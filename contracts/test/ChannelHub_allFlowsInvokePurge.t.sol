@@ -4,10 +4,8 @@ pragma solidity 0.8.30;
 import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
 import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {TestChannelHub} from "./TestChannelHub.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
 
 import {Utils} from "../src/Utils.sol";
-import {ChannelHub} from "../src/ChannelHub.sol";
 import {
     ChannelDefinition,
     State,

@@ -296,6 +296,8 @@ contract ChannelHub is ReentrancyGuard {
 
     // ========= Node ==========
 
+    // NOTE: rebasing tokens (e.g. stETH, aTokens) are NOT supported. The node balance accounting
+    // uses a static ledger that does not reflect autonomous balance changes from rebases.
     function depositToNode(address token, uint256 amount) external payable {
         require(amount > 0, IncorrectAmount());
 

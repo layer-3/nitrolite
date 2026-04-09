@@ -50,6 +50,10 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
 		return
 	}
+	if len(coreState.Assets) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: assets array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
+		return
+	}
 	if coreState.UserSig == "" {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return

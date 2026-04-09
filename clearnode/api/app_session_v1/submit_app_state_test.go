@@ -22,7 +22,7 @@ func TestSubmitAppState_OperateIntent_NoRedistribution_Success(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -137,7 +137,7 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -253,7 +253,7 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -367,7 +367,7 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -500,7 +500,7 @@ func TestSubmitAppState_CloseIntent_AllocationMismatch_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -599,7 +599,7 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -707,7 +707,7 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -823,7 +823,7 @@ func TestSubmitAppState_DepositIntent_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -878,7 +878,7 @@ func TestSubmitAppState_ClosedSession_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -948,7 +948,7 @@ func TestSubmitAppState_InvalidVersion_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1023,7 +1023,7 @@ func TestSubmitAppState_SessionNotFound_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1083,7 +1083,7 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1186,7 +1186,7 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 func TestSubmitAppState_WithdrawIntent_InvalidDecimalPrecision_Rejected(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -1295,7 +1295,7 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 

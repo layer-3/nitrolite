@@ -19,7 +19,7 @@ import (
 func TestGetAppSessions_SuccessWithParticipant(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -143,7 +143,7 @@ func TestGetAppSessions_SuccessWithParticipant(t *testing.T) {
 func TestGetAppSessions_SuccessWithAppSessionID(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -229,7 +229,7 @@ func TestGetAppSessions_SuccessWithAppSessionID(t *testing.T) {
 func TestGetAppSessions_MissingRequiredParams(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -274,7 +274,7 @@ func TestGetAppSessions_MissingRequiredParams(t *testing.T) {
 func TestGetAppSessions_WithStatusFilter(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -361,7 +361,7 @@ func TestGetAppSessions_WithStatusFilter(t *testing.T) {
 func TestGetAppSessions_StoreError(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)

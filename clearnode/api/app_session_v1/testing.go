@@ -225,6 +225,14 @@ func NewMockSigner() sign.Signer {
 	return signer
 }
 
+// NewMockChannelSigner creates a mock channel signer for testing.
+// It wraps a raw signer with the channel signature prefix byte.
+func NewMockChannelSigner() *core.ChannelDefaultSigner {
+	s := NewMockSigner()
+	cs, _ := core.NewChannelDefaultSigner(s)
+	return cs
+}
+
 // TestAppSessionWallet is a test helper for creating properly signed app session signatures.
 // It generates a real ECDSA key pair and wraps it in an AppSessionSignerV1 (wallet type)
 // so that signatures include the required 0xA1 type prefix.

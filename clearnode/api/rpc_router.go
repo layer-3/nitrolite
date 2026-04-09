@@ -101,7 +101,7 @@ func NewRPCRouter(
 	}
 
 	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, cfg.MaxChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
-	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, signer, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
+	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
 		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates)
 	appsV1Handler := apps_v1.NewHandler(dbStore, useAppV1StoreInTx, actionGateway, cfg.MaxAppMetadataLen)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)

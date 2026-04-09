@@ -22,7 +22,7 @@ import (
 func TestSubmitDepositState_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -231,7 +231,7 @@ func TestSubmitDepositState_Success(t *testing.T) {
 func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -375,7 +375,7 @@ func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)

@@ -22,7 +22,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -126,7 +126,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -228,7 +228,7 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -292,7 +292,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -362,7 +362,7 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -426,7 +426,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -508,7 +508,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -604,7 +604,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -697,7 +697,7 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -766,7 +766,7 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -835,7 +835,7 @@ func TestCreateAppSession_AppNotRegistered(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -904,7 +904,7 @@ func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -980,7 +980,7 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 

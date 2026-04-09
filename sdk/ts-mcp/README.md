@@ -1,6 +1,6 @@
 # Nitrolite SDK MCP Server (TypeScript)
 
-An MCP (Model Context Protocol) server that exposes the Nitrolite SDK knowledge base to AI coding tools. It reads SDK source code, protocol documentation, and clearnode API specs at startup, making every method, type, enum, and protocol concept discoverable by AI agents.
+An MCP (Model Context Protocol) server that exposes the **Nitrolite TypeScript SDK** (`@yellow-org/sdk`) knowledge base to AI coding tools. It reads TS SDK source code, protocol documentation, and clearnode API specs at startup, making every method, type, enum, and protocol concept discoverable by AI agents. For the Go SDK equivalent, see `sdk/mcp-go/`.
 
 ## Quick Start
 
@@ -166,6 +166,26 @@ Get the RPC wire format for a clearnode method. Matches `clearnode/docs/API.md`.
 **Request format (v0.5.3 compat):**
 { req: [requestId, "resize_channel", { channel_id, resize_amount,
   allocate_amount, funds_destination }, timestamp], sig: [...] }
+```
+
+### `lookup_rpc_method`
+
+Look up a clearnode RPC method by name. Returns description and access level (from `clearnode/docs/API.md`). Distinct from `get_rpc_method` which returns the wire format.
+
+```
+> lookup_rpc_method({ method: "create_channel" })
+
+## RPC: `create_channel`
+**Description:** Returns data and Broker signature to open a channel
+**Access:** Private
+```
+
+```
+> lookup_rpc_method({ method: "transfer" })
+
+## RPC: `transfer`
+**Description:** Transfers funds from user's unified balance to another account
+**Access:** Private
 ```
 
 ### `validate_import`

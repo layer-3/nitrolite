@@ -57,7 +57,11 @@ func readFile(path string) string {
 
 func findRepoRoot() string {
 	// Walk up from executable location looking for go.mod with "layer-3/nitrolite"
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		// Fallback: assume we're in sdk/mcp-go/
+		return filepath.Join(".", "..", "..")
+	}
 	for {
 		content := readFile(filepath.Join(dir, "go.mod"))
 		if strings.Contains(content, "layer-3/nitrolite") && !strings.Contains(content, "sdk/mcp-go") {

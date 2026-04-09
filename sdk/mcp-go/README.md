@@ -287,7 +287,7 @@ Unknown template "nonexistent". Available: transfer-app, app-session, ai-agent
 |-----|---------|
 | `nitrolite://security/overview` | Security guarantees and trust assumptions |
 | `nitrolite://security/app-session-patterns` | Quorum design, challenge periods |
-| `nitrolite://security/state-invariants` | Fund conservation, version ordering, signature rules |
+| `nitrolite://security/state-invariants` | Fund conservation, version ordering, signature rules (sourced from `contracts/SECURITY.md` and `docs/protocol/security-and-limitations.md`) |
 
 ### Examples
 | URI | Content |

@@ -77,16 +77,23 @@ Compact ordered array: `[Type, RequestId, Method, Payload, Timestamp]`
 
 ---
 
-## 4. Authentication Flow
+## 4. Request Signing & Authentication
 
-Challenge-response mechanism using Ethereum signatures:
+Every RPC request includes a `sig` field — the client's signature over the entire `req` tuple. This is the primary authorization mechanism in v1.
 
-1. **auth_request** — Client sends wallet address + optional session key parameters
-2. **auth_challenge** — Server responds with a random challenge token (UUID)
-3. **auth_verify** — Client signs the challenge with their private key
-4. **JWT issued** — Server responds with a JWT token (valid 24h)
+### Authentication Flow (challenge-response)
 
-Session keys: Specify a `session_key` address in auth_request to enable delegation with per-asset `allowances` and `expires_at` timestamp.
+1. **auth_request** — Client sends wallet address + optional session key parameters (scope, allowances, expires_at). Request is signed.
+2. **auth_challenge** — Server responds with a random challenge token (UUID).
+3. **auth_verify** — Client EIP-712 signs the challenge message and sends it back.
+4. **JWT issued** — Server responds with a JWT token (valid 24h) for session management.
+
+### Session Keys
+
+Specify a `session_key` address in auth_request to enable delegation. Session keys have:
+- Per-asset `allowances` with spending caps
+- `expires_at` timestamp
+- `scope` for permission control (e.g., "app.create", "ledger.readonly")
 
 ---
 
@@ -116,7 +123,8 @@ Session keys: Specify a `session_key` address in auth_request to enable delegati
 - **Local:** HomeDeposit, HomeWithdrawal, Finalize
 - **Transfer:** TransferSend, TransferReceive, Acknowledgement
 - **Extension:** Commit, Release (bridge to app sessions)
-- **Escrow:** EscrowDepositInitiate/Finalize, EscrowWithdrawalInitiate/Finalize
+- **Escrow:** EscrowDepositInitiate/Finalize, EscrowWithdrawalInitiate/Finalize (cross-chain deposit/withdrawal)
+- **Migration:** InitiateMigration, FinalizeMigration (move channel's home chain to another blockchain)
 
 ---
 
@@ -125,52 +133,46 @@ Session keys: Specify a `session_key` address in auth_request to enable delegati
 - **Fund conservation:** UserAllocation + NodeAllocation == UserNetFlow + NodeNetFlow
 - **Non-negativity:** All allocation values MUST be >= 0
 - **Version ordering:** Off-chain: version = previous + 1. On-chain: submitted > current
+- **Version uniqueness:** No two different states with the same version can exist for the same channel
 - **Signature requirements:** Mutually signed (user + node) = enforceable. Node-only = NOT enforceable.
 - **Locked funds:** UserAllocation + NodeAllocation == LockedFunds (unless closing)
+- **Allocation backing:** Sum of allocations must equal locked collateral
+- **No retrogression:** State with version <= lastEnforcedVersion cannot be enforced on-chain
+- **Cross-deployment replay protection:** ChannelHub VERSION encoded as first byte of channelId
+
+For the full list of protocol and smart contract invariants, see `contracts/SECURITY.md`.
 
 ---
 
 ## 7. Clearnode RPC Methods
 
-### Public (no auth required)
-
-| Method | Description |
-|--------|-------------|
-| `auth_request` | Initiate authentication |
-| `auth_challenge` | Server authentication challenge |
-| `auth_verify` | Complete authentication |
-| `ping` | Connectivity check |
-| `get_config` | Broker configuration and supported networks |
-| `get_assets` | Supported assets (optionally filtered by chain_id) |
-| `get_channels` | All channels for a participant |
-| `get_app_definition` | Application definition for a ledger account |
-| `get_app_sessions` | Virtual applications for a participant |
-| `get_ledger_entries` | Detailed ledger entries |
-| `get_ledger_transactions` | Transaction history with filtering |
-
-### Private (auth required)
-
-| Method | Description |
-|--------|-------------|
-| `transfer` | Transfer funds from user's unified balance |
-| `create_app_session` | Create a new virtual application |
-| `submit_app_state` | Submit intermediate state into a virtual application |
-| `close_app_session` | Close a virtual application |
-| `create_channel` | Get data + broker signature to open a channel |
-| `close_channel` | Get data + broker signature to close a channel |
-| `resize_channel` | Adjust channel capacity |
-| `get_user_tag` | Retrieve user's tag |
-| `get_session_keys` | All active session keys |
-| `revoke_session_key` | Revoke a session key |
-| `get_rpc_history` | RPC message history |
-| `get_ledger_balances` | Participant balances |
-
-### App Session v1 Methods
-
-| Method | Description |
-|--------|-------------|
-| `app_sessions.v1.submit_session_key_state` | Submit session key state |
-| `app_sessions.v1.get_last_key_states` | Get latest session key states |
+| Method | Description | Access |
+|--------|-------------|--------|
+| `auth_request` | Initiates authentication with the server | Public |
+| `auth_challenge` | Server response with authentication challenge | Public |
+| `auth_verify` | Completes authentication with a challenge response | Public |
+| `ping` | Simple connectivity check | Public |
+| `get_config` | Retrieves broker configuration and supported networks | Public |
+| `get_assets` | Retrieves all supported assets (optionally filtered by chain_id) | Public |
+| `get_channels` | Lists all channels for a participant with status across all chains | Public |
+| `get_app_definition` | Retrieves application definition for a ledger account | Public |
+| `get_app_sessions` | Lists virtual applications for a participant | Public |
+| `get_ledger_entries` | Retrieves detailed ledger entries for a participant | Public |
+| `get_ledger_transactions` | Retrieves transaction history with optional filtering | Public |
+| `get_user_tag` | Retrieves user's tag | Private |
+| `get_session_keys` | Retrieves all active session keys for the authenticated user | Private |
+| `revoke_session_key` | Revokes a session key by setting its expiration to now | Private |
+| `get_rpc_history` | Retrieves all RPC message history for a participant | Private |
+| `get_ledger_balances` | Lists participants and their balances for a ledger account | Private |
+| `transfer` | Transfers funds from user's unified balance to another account | Private |
+| `create_app_session` | Creates a new virtual application on a ledger | Private |
+| `submit_app_state` | Submits an intermediate state into a virtual application | Private |
+| `close_app_session` | Closes a virtual application | Private |
+| `create_channel` | Returns data and broker signature to open a channel | Private |
+| `close_channel` | Returns data and broker signature to close a channel | Private |
+| `resize_channel` | Returns data and broker signature to adjust channel capacity | Private |
+| `app_sessions.v1.submit_session_key_state` | Submits a session key state via V1 API | Private |
+| `app_sessions.v1.get_last_key_states` | Gets latest session key states | Private |
 
 ---
 
@@ -181,13 +183,14 @@ Package: `@yellow-org/sdk` on npm. Uses viem, decimal.js, async/await.
 ### Client Creation
 
 ```typescript
-import { NitroliteClient } from '@yellow-org/sdk';
+import { Client, createSigners, withBlockchainRPC } from '@yellow-org/sdk';
 
-const client = new NitroliteClient(
+const { stateSigner, txSigner } = createSigners(privateKey);
+const client = await Client.create(
   clearnodeUrl,
   stateSigner,
-  transactionSigner,
-  { blockchainRpc: { [chainId]: rpcUrl } }
+  txSigner,
+  withBlockchainRPC(chainId, rpcUrl),
 );
 ```
 
@@ -195,21 +198,36 @@ const client = new NitroliteClient(
 
 | Method | Description |
 |--------|-------------|
-| `deposit(chainId, asset, amount)` | Deposit funds (creates channel if needed) |
-| `withdraw(chainId, asset, amount)` | Withdraw from channel to wallet |
-| `transfer(recipient, asset, amount)` | Off-chain instant transfer |
-| `checkpoint(asset)` | Submit state to blockchain |
-| `closeHomeChannel(asset)` | Close channel and withdraw |
-| `getChannels()` | List all channels |
-| `getBalances(address)` | Get account balances |
+| `deposit(chainId, asset, amount: Decimal)` | Deposit funds (creates channel if needed) |
+| `transfer(recipient, asset, amount: Decimal)` | Off-chain instant transfer |
+| `checkpoint(asset)` | Submit co-signed state to blockchain (required after deposit, withdraw, close) |
+| `closeHomeChannel(asset)` | Prepare finalize state (follow with checkpoint) |
+| `approveToken(chainId, asset, amount: Decimal)` | Approve token spending (ERC-20 only) |
+| `getChannels(wallet, options?)` | List channels for a wallet |
+| `getBalances(wallet)` | Get account balances |
 | `getConfig()` | Get clearnode configuration |
-| `createAppSession(definition, asset, allocations)` | Create app session |
-| `submitAppState(update, signatures)` | Submit app state |
-| `closeAppSession(sessionId, allocations)` | Close app session |
+| `createAppSession(definition, sessionData, quorumSigs)` | Create app session |
+| `submitAppState(appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
+| `submitAppSessionDeposit(appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
+| `rebalanceAppSessions(signedUpdates)` | Atomic rebalancing across multiple app sessions |
+
+### Security Token Locking (on-chain escrow)
+
+| Method | Description |
+|--------|-------------|
+| `escrowSecurityTokens(targetWallet, chainId, amount)` | Lock tokens in the Locking contract |
+| `initiateSecurityTokensWithdrawal(chainId)` | Initiate unlock of escrowed tokens |
+| `cancelSecurityTokensWithdrawal(chainId)` | Cancel pending unlock |
+| `withdrawSecurityTokens(chainId, destination)` | Withdraw unlocked tokens |
+| `approveSecurityToken(chainId, amount)` | Approve Locking contract to spend tokens |
+| `getLockedBalance(chainId, wallet)` | Get locked balance for a wallet |
+| `getEscrowChannel(escrowChannelId)` | Get escrow channel info |
+
+> Note: There is no `closeAppSession()` on the SDK Client. Close a session by calling `submitAppState` with Close intent.
 
 ### Compat Layer (`@yellow-org/sdk-compat`)
 
-Migration bridge from v0.5.3 API. Re-exports key functions with the old API signatures, internally using the new SDK. Use for gradual migration.
+Migration bridge from v0.5.3 API. Provides `NitroliteClient` wrapper with the old API shape, internally using the new SDK. Use for gradual migration.
 
 ---
 
@@ -238,18 +256,32 @@ defer client.Close()
 
 | Method | Description |
 |--------|-------------|
-| `Deposit(ctx, chainID, asset, amount)` | Deposit funds |
-| `Withdraw(ctx, chainID, asset, amount)` | Withdraw from channel |
+| `Deposit(ctx, chainID, asset, amount)` | Deposit funds (creates channel if needed) |
 | `Transfer(ctx, recipient, asset, amount)` | Off-chain transfer |
-| `Checkpoint(ctx, asset)` | Submit state to blockchain |
-| `CloseHomeChannel(ctx, asset)` | Close channel |
-| `GetChannels(ctx)` | List channels |
-| `GetBalances(ctx, address)` | Get balances |
+| `Checkpoint(ctx, asset)` | Submit co-signed state to blockchain (required after deposit, withdraw, close) |
+| `CloseHomeChannel(ctx, asset)` | Prepare finalize state (follow with Checkpoint) |
+| `ApproveToken(ctx, chainID, asset, amount)` | Approve token spending (ERC-20 only) |
+| `GetChannels(ctx, wallet, options)` | List channels for a wallet |
+| `GetBalances(ctx, wallet)` | Get balances |
 | `GetConfig(ctx)` | Get clearnode config |
-| `CreateAppSession(ctx, def, asset, allocs)` | Create app session |
-| `SubmitAppState(ctx, update, sigs)` | Submit app state |
-| `CloseAppSession(ctx, sessionID, allocs)` | Close app session |
-| `ApproveToken(ctx, chainID, asset, amount)` | Approve token spending |
+| `CreateAppSession(ctx, def, sessionData, quorumSigs)` | Create app session |
+| `SubmitAppState(ctx, appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
+| `SubmitAppSessionDeposit(ctx, appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
+| `RebalanceAppSessions(ctx, signedUpdates)` | Atomic rebalancing across multiple app sessions |
+
+### Security Token Locking (on-chain escrow)
+
+| Method | Description |
+|--------|-------------|
+| `EscrowSecurityTokens(ctx, targetWallet, chainID, amount)` | Lock tokens in the Locking contract |
+| `InitiateSecurityTokensWithdrawal(ctx, chainID)` | Initiate unlock |
+| `CancelSecurityTokensWithdrawal(ctx, chainID)` | Cancel pending unlock |
+| `WithdrawSecurityTokens(ctx, chainID, destination)` | Withdraw unlocked tokens |
+| `ApproveSecurityToken(ctx, chainID, amount)` | Approve Locking contract spend |
+| `GetLockedBalance(ctx, chainID, wallet)` | Get locked balance |
+| `GetEscrowChannel(ctx, escrowChannelID)` | Get escrow channel info |
+
+> Note: There is no `CloseAppSession()` on the Go Client. Close a session by calling `SubmitAppState` with Close intent.
 
 ### Two-Step Pattern for Blockchain Operations
 

@@ -1,4 +1,4 @@
-# Nitrolite — Cursor Rules
+# Nitrolite — Windsurf Rules
 
 ## What This Project Is
 
@@ -40,16 +40,28 @@ Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain in
 - Security first: validate inputs, check reentrancy, use OpenZeppelin.
 - Tests in `contracts/test/` with `.t.sol` extension.
 - Gas optimization matters — avoid unnecessary storage writes.
+- Style guide: https://github.com/layer-3/clearsync/blob/master/contracts/solidity-style-guide.md
+- Development practices: https://github.com/layer-3/clearsync/blob/master/contracts/solidity-development-practices.md
 
 ## Key SDK Methods (Both TS and Go)
 
 - `Deposit(chainId, asset, amount)` — deposit funds, creates channel if needed
 - `Transfer(recipient, asset, amount)` — off-chain instant transfer
-- `Checkpoint(asset)` — submit state to blockchain
-- `CloseHomeChannel(asset)` — close channel and withdraw
-- `CreateAppSession(definition, asset, allocations)` — create multi-party session
-- `SubmitAppState(update, signatures)` — submit app session state
-- `GetChannels()`, `GetBalances(address)`, `GetConfig()` — queries
+- `Checkpoint(asset)` — submit co-signed state to blockchain (required after deposit, withdraw, close)
+- `CloseHomeChannel(asset)` — prepare finalize state (follow with Checkpoint)
+- `CreateAppSession(definition, sessionData, quorumSigs)` — create multi-party session
+- `SubmitAppState(appStateUpdate, quorumSigs)` — submit app state (Operate, Withdraw, or Close intent)
+- `GetChannels(wallet)`, `GetBalances(wallet)`, `GetConfig()` — queries
+
+> No `CloseAppSession()` exists on the SDK Client. Close via `SubmitAppState` with Close intent.
+
+## Key Reference Files
+
+- Protocol description: `protocol-description.md`
+- Smart contract invariants: `contracts/SECURITY.md`
+- Main SC entrypoint: `contracts/src/ChannelHub.sol` (design: `contracts/suggested-contract-design.md`)
+- Clearnode logic: `clearnode/readme.md`, `clearnode/docs/`
+- Advanced protocol docs: `docs/protocol/`
 
 ## Commit Convention
 

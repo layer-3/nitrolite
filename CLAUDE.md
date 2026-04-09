@@ -24,6 +24,7 @@ See stack-specific `CLAUDE.md` files in `sdk/ts/`, `sdk/ts-compat/`, and `sdk/go
 
 ### TypeScript SDK
 ```bash
+cd sdk/ts && npm install                 # Install dependencies (first time)
 cd sdk/ts && npm test                    # Unit tests (Jest)
 cd sdk/ts && npm run build               # Tests + compile (runs tests first!)
 cd sdk/ts && npm run typecheck           # Type check only
@@ -32,6 +33,7 @@ cd sdk/ts && npm run lint                # ESLint
 
 ### TypeScript SDK Compat
 ```bash
+cd sdk/ts-compat && npm install          # Install dependencies (first time)
 cd sdk/ts-compat && npm test             # Unit tests (Jest)
 cd sdk/ts-compat && npm run build        # Compile
 cd sdk/ts-compat && npm run typecheck    # Type check only

@@ -30,10 +30,22 @@ Nitrolite is a state channel protocol for Ethereum/EVM blockchains — off-chain
 - Foundry: `forge build`, `forge test`, `forge fmt`
 - NatSpec on public/external functions, security-first, OpenZeppelin
 - Tests: `.t.sol` in `contracts/test/`
+- Style: https://github.com/layer-3/clearsync/blob/master/contracts/solidity-style-guide.md
+- Practices: https://github.com/layer-3/clearsync/blob/master/contracts/solidity-development-practices.md
 
 ## Key SDK Methods (both TS and Go)
 
-Deposit, Transfer, Checkpoint, CloseHomeChannel, CreateAppSession, SubmitAppState, CloseAppSession, GetChannels, GetBalances, GetConfig
+Deposit, Transfer, Checkpoint (required after deposit/withdraw/close), CloseHomeChannel (follow with Checkpoint), CreateAppSession (definition, sessionData, quorumSigs), SubmitAppState (appStateUpdate, quorumSigs — use Close intent to close sessions), GetChannels(wallet), GetBalances(wallet), GetConfig
+
+> No CloseAppSession() on SDK Client. Close via SubmitAppState with Close intent.
+
+## Key Reference Files
+
+- Protocol description: `protocol-description.md`
+- Smart contract invariants: `contracts/SECURITY.md`
+- Main SC entrypoint: `contracts/src/ChannelHub.sol` (design: `contracts/suggested-contract-design.md`)
+- Clearnode logic: `clearnode/readme.md`, `clearnode/docs/`
+- Advanced protocol docs: `docs/protocol/`
 
 ## Commits
 

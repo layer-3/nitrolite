@@ -22,7 +22,7 @@ Route to the correct test runner:
 
 If a specific test file is given (e.g., `sdk/ts/test/unit/utils.test.ts`), run only that file:
 - For Jest: `cd sdk/ts && npx jest test/unit/utils.test.ts`
-- For Go: `go test -run TestName ./sdk/go/...`
+- For Go: resolve the file's containing package, then run `go test ./sdk/go/<pkg> -run '^TestName$'`
 - For Forge: `cd contracts && forge test --match-path test/MyTest.t.sol`
 
 Report results: pass count, fail count, and any error details.

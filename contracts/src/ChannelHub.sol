@@ -486,6 +486,9 @@ contract ChannelHub is ReentrancyGuard {
                 || initState.intent == StateIntent.OPERATE,
             IncorrectStateIntent()
         );
+        if (initState.intent != StateIntent.DEPOSIT) {
+            require(msg.value == 0, IncorrectValue());
+        }
 
         bytes32 channelId = Utils.getChannelId(def, VERSION);
         address user = def.user;
@@ -527,7 +530,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelDeposited(channelId, candidate);
     }
 
-    function withdrawFromChannel(bytes32 channelId, State calldata candidate) public payable {
+    function withdrawFromChannel(bytes32 channelId, State calldata candidate) public {
         require(candidate.intent == StateIntent.WITHDRAW, IncorrectStateIntent());
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -542,7 +545,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelWithdrawn(channelId, candidate);
     }
 
-    function checkpointChannel(bytes32 channelId, State calldata candidate) external payable {
+    function checkpointChannel(bytes32 channelId, State calldata candidate) external {
         require(candidate.intent == StateIntent.OPERATE, IncorrectStateIntent()); // Can only checkpoint operate states
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -606,7 +609,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelChallenged(channelId, candidate, challengeExpiry);
     }
 
-    function closeChannel(bytes32 channelId, State calldata candidate) external payable {
+    function closeChannel(bytes32 channelId, State calldata candidate) external {
         ChannelMeta storage meta = _channels[channelId];
         ChannelDefinition memory def = meta.definition;
         ChannelStatus status = meta.status;

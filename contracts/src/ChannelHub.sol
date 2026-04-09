@@ -1116,9 +1116,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
     ) internal {
         ChannelMeta storage meta = _channels[channelId];
 
-        if (effects.updateLastState) {
-            meta.lastState = candidate;
-        }
+        meta.lastState = candidate;
 
         address token = candidate.homeLedger.token;
 

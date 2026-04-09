@@ -65,7 +65,6 @@ library ChannelEngine {
         // State updates
         ChannelStatus newStatus;
         uint64 newChallengeExpiry;
-        bool updateLastState;
         bool closeChannel;
     }
 
@@ -173,7 +172,6 @@ library ChannelEngine {
             revert IncorrectStateIntent();
         }
 
-        effects.updateLastState = true;
         return effects;
     }
 

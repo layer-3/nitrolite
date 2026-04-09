@@ -70,10 +70,14 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 		},
 	)
 
-	for _, sigHex := range signatures {
+	for i, sigHex := range signatures {
 		sigBytes, err := hexutil.Decode(sigHex)
 		if err != nil {
 			return rpc.Errorf("failed to decode signature: %v", err)
+		}
+
+		if len(sigBytes) == 0 {
+			return rpc.Errorf("empty signature after decode at index %d", i)
 		}
 
 		sigType := app.AppSessionSignerTypeV1(sigBytes[0])

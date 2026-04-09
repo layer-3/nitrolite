@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/core"
+	"gorm.io/gorm"
 )
 
 var ErrEventHasAlreadyBeenProcessed = errors.New("contract event has already been processed")
@@ -56,13 +57,15 @@ func (s *DBStore) GetLatestContractEventBlockNumber(contractAddress string, bloc
 
 // IsContractEventPresent checks whether a specific contract event has already been stored.
 func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
-	var count int64
-	err := s.db.Model(&ContractEvent{}).
-		Where("blockchain_id = ? AND block_number = ? AND transaction_hash = ? AND log_index = ?",
-			blockchainID, blockNumber, strings.ToLower(txHash), logIndex).
-		Count(&count).Error
+	var ev ContractEvent
+	err := s.db.Where("blockchain_id = ? AND block_number = ? AND transaction_hash = ? AND log_index = ?",
+		blockchainID, blockNumber, strings.ToLower(txHash), logIndex).
+		Take(&ev).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	return count > 0, nil
+	return true, nil
 }

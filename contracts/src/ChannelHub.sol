@@ -296,6 +296,11 @@ contract ChannelHub is ReentrancyGuard {
 
     // ========= Node ==========
 
+    // Intentionally CIE (Checks-Interactions-Effects): pull funds before updating accounting.
+    // Deposit state must only reflect tokens that have actually arrived — updating first would
+    // inflate _nodeBalances during ERC777/hook callbacks, enabling read-only reentrancy for
+    // external protocols querying getNodeBalance(). Contrast with withdrawFromNode, which uses
+    // CEI (decrement before push) to prevent re-entrancy drains.
     // NOTE: rebasing tokens (e.g. stETH, aTokens) are NOT supported. The node balance accounting
     // uses a static ledger that does not reflect autonomous balance changes from rebases.
     // There is no hard-coded guardrail that prevents depositing a rebasing token — the contract

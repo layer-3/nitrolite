@@ -224,6 +224,9 @@ func TestSubmitDepositState_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.StateNodeSig, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, []byte("packed"), response.StateNodeSig)
+
 	// Verify all mock expectations
 	mockStore.AssertExpectations(t)
 }

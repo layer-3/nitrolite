@@ -305,10 +305,10 @@ contract ChannelHub is ReentrancyGuard {
     function depositToNode(address token, uint256 amount) external payable {
         require(amount > 0, IncorrectAmount());
 
+        _pullFunds(msg.sender, token, amount);
+
         uint256 updatedBalance = _nodeBalances[token] + amount;
         _nodeBalances[token] = updatedBalance;
-
-        _pullFunds(msg.sender, token, amount);
 
         emit Deposited(token, amount);
         emit NodeBalanceUpdated(token, updatedBalance);

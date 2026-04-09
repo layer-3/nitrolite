@@ -18,6 +18,26 @@ func Run(args []string) int {
 		return 1
 	}
 
+	switch args[0] {
+	case "basic":
+		return runBasic(args[1:])
+	case "storm":
+		return runStorm(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "ERROR: Unknown strategy %q\n", args[0])
+		fmt.Fprintf(os.Stderr, "Available strategies: basic, storm\n\n")
+		printUsage()
+		return 1
+	}
+}
+
+// runBasic runs the original stress test strategy.
+func runBasic(args []string) int {
+	if len(args) == 0 {
+		printBasicUsage()
+		return 1
+	}
+
 	cfg, err := ReadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -110,7 +130,21 @@ func parseSpec(arg string, defaultConns int) (TestSpec, error) {
 }
 
 func printUsage() {
-	fmt.Println("Usage: clearnode stress-test <spec>")
+	fmt.Println("Usage: clearnode stress-test <strategy> [args...]")
+	fmt.Println()
+	fmt.Println("Available strategies:")
+	fmt.Println("  basic    Run individual method stress tests")
+	fmt.Println("  storm    Run storm stress tests")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  clearnode stress-test basic ping:1000:10")
+	fmt.Println("  clearnode stress-test storm ...")
+	fmt.Println()
+	fmt.Println("Run 'clearnode stress-test <strategy>' for strategy-specific help.")
+}
+
+func printBasicUsage() {
+	fmt.Println("Usage: clearnode stress-test basic <spec>")
 	fmt.Println()
 	fmt.Println("Spec format: method:total_requests[:connections[:extra_params...]]")
 	fmt.Println()
@@ -124,20 +158,20 @@ func printUsage() {
 	fmt.Println("Available methods:", strings.Join(sortedMethodNames(), ", "))
 	fmt.Println()
 	fmt.Println("Read-only methods (spec = method:requests:connections[:params]):")
-	fmt.Println("  clearnode stress-test ping:1000:10")
-	fmt.Println("  clearnode stress-test get-config:500:5")
-	fmt.Println("  clearnode stress-test get-balances:2000:20:0xWALLET")
-	fmt.Println("  clearnode stress-test get-home-channel:1000:10:usdc")
+	fmt.Println("  clearnode stress-test basic ping:1000:10")
+	fmt.Println("  clearnode stress-test basic get-config:500:5")
+	fmt.Println("  clearnode stress-test basic get-balances:2000:20:0xWALLET")
+	fmt.Println("  clearnode stress-test basic get-home-channel:1000:10:usdc")
 	fmt.Println()
 	fmt.Println("State-mutating methods (require STRESS_PRIVATE_KEY with funded wallet):")
 	fmt.Println()
 	fmt.Println("  transfer-roundtrip:rounds:wallets:asset[:amount]")
-	fmt.Println("    clearnode stress-test transfer-roundtrip:10:100:usdc")
-	fmt.Println("    clearnode stress-test transfer-roundtrip:10:100:usdc:0.0001")
+	fmt.Println("    clearnode stress-test basic transfer-roundtrip:10:100:usdc")
+	fmt.Println("    clearnode stress-test basic transfer-roundtrip:10:100:usdc:0.0001")
 	fmt.Println()
 	fmt.Println("  app-session-lifecycle:sessions:participants:operates:asset[:amount]")
-	fmt.Println("    clearnode stress-test app-session-lifecycle:10:5:3:usdc")
-	fmt.Println("    clearnode stress-test app-session-lifecycle:10:5:3:usdc:0.000005")
+	fmt.Println("    clearnode stress-test basic app-session-lifecycle:10:5:3:usdc")
+	fmt.Println("    clearnode stress-test basic app-session-lifecycle:10:5:3:usdc:0.000005")
 }
 
 func sortedMethodNames() []string {

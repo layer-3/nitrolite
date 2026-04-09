@@ -21,15 +21,15 @@ spec:
       annotations:
         {{- include "clearnode.component.metricsAnnotations" .Values.metrics | nindent 8 }}
         {{- if .Values.config.secretEnvs }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/env-secret.yaml") . | sha256sum }}
         {{- end }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "clearnode.common.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
     spec:
-      {{- with .Values.serviceAccount }}
-      serviceAccountName: {{ . }}
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "clearnode.common.fullname" . }}
       {{- end }}
       containers:
         - name: api

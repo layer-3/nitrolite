@@ -57,9 +57,14 @@ Create chart name and version as used by the chart label.
 Returns common image pull secrets
 */}}
 {{- define "clearnode.common.imagePullSecrets" -}}
-{{- with .Values.imagePullSecret }}
-imagePullSecrets:   
-- name: {{ . }}
+{{- if or .Values.imagePullSecret .Values.ghcrPullDockerConfigJson }}
+imagePullSecrets:
+{{- if .Values.imagePullSecret }}
+- name: {{ .Values.imagePullSecret }}
+{{- end }}
+{{- if .Values.ghcrPullDockerConfigJson }}
+- name: {{ include "clearnode.common.fullname" . }}-ghcr-pull
+{{- end }}
 {{- end }}
 {{- end }}
 

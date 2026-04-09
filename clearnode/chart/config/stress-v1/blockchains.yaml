@@ -1,0 +1,12 @@
+blockchains:
+- name: "ethereum_sepolia"
+  id: 11155111
+  channel_hub_address: "0xb7bE0E2007dDF320d680942cb9e008F986E74F83"
+  channel_hub_sig_validators:
+    1: "0x2aC63456d78Cf2E2FDAf45cbed45b5d29907f4ac"
+  locking_contract_address: "0x9B3D4dA5A37857F17648CC4d78Bbae0A681C02c6"
+- name: "polygon_amoy"
+  id: 80002
+  channel_hub_address: "0x55D6f0A0322606447fbc612Cf58014Faed65aF9D"
+  channel_hub_sig_validators:
+    1: "0x87825ACa5f4B9c3dc8B5aa3352724eDF5135D892"

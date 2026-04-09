@@ -23,7 +23,7 @@ func TestRequestCreation_Success(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600)  // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
 	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
@@ -175,7 +175,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600)  // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
 	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
@@ -323,7 +323,7 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600)  // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
 	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
@@ -463,8 +463,6 @@ func TestRequestCreation_ChallengeTooHigh(t *testing.T) {
 		"0x03",
 	)
 	require.NoError(t, err)
-
-	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, uint64(1)).Return(true, nil).Once()
 
 	// Create RPC request with challenge above maximum
 	reqPayload := rpc.ChannelsV1RequestCreationRequest{

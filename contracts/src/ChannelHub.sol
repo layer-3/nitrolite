@@ -718,7 +718,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             // Eagerly advance the queue head so FINALIZED entries don't accumulate
             _purgeEscrowDeposits();
 
-            emit EscrowDepositFinalized(escrowId, channelId, candidate);
+            emit EscrowDepositFinalized(escrowId, channelId, meta.initState);
             return;
         }
 
@@ -824,7 +824,7 @@ contract ChannelHub is IVault, ReentrancyGuard {
             // Eagerly advance the queue head so FINALIZED entries don't accumulate
             _purgeEscrowDeposits();
 
-            emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
+            emit EscrowWithdrawalFinalized(escrowId, channelId, meta.initState);
             return;
         }
 

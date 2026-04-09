@@ -9,7 +9,7 @@ import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 import {SessionKeyValidator, SessionKeyAuthorization} from "../src/sigValidators/SessionKeyValidator.sol";
-import {ChannelStatus, State, StateIntent, Ledger, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
+import {ChannelStatus, State, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
 import {Utils} from "../src/Utils.sol";
 
@@ -39,12 +39,12 @@ contract ChannelHubTest_Base is Test {
     uint256 constant INITIAL_BALANCE = 10000;
 
     function setUp() public virtual {
-        // Deploy contracts
-        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR);
-        token = new MockERC20("Test Token", "TST", 18);
-
         node = vm.addr(NODE_PK);
         alice = vm.addr(ALICE_PK);
+
+        // Deploy contracts
+        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR, node);
+        token = new MockERC20("Test Token", "TST", 18);
         aliceSk1 = vm.addr(ALICE_SK1_PK);
         bob = vm.addr(BOB_PK);
 
@@ -54,18 +54,21 @@ contract ChannelHubTest_Base is Test {
 
         vm.startPrank(node);
         token.approve(address(cHub), INITIAL_BALANCE);
-        cHub.depositToVault(node, address(token), INITIAL_BALANCE);
+        cHub.depositToNode(address(token), INITIAL_BALANCE);
         vm.stopPrank();
 
         vm.deal(node, INITIAL_BALANCE);
         vm.prank(node);
-        cHub.depositToVault{value: INITIAL_BALANCE}(node, address(0), INITIAL_BALANCE);
+        cHub.depositToNode{value: INITIAL_BALANCE}(address(0), INITIAL_BALANCE);
 
         // Register SessionKeyValidator for the node
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
             vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
-        cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+        cHub.registerNodeValidator(SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+
+        // Advance past VALIDATOR_ACTIVATION_DELAY so the registered validator is usable
+        vm.warp(block.timestamp + cHub.VALIDATOR_ACTIVATION_DELAY() + 1);
 
         vm.prank(alice);
         token.approve(address(cHub), INITIAL_BALANCE);
@@ -136,7 +139,7 @@ contract ChannelHubTest_Base is Test {
         );
         assertEq(latestState.homeLedger.nodeNetFlow, netFlows[1], string.concat(description, ": Node net flow: "));
 
-        uint256 nodeBalance = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalance = cHub.getNodeBalance(address(token));
         uint256 expectedNodeBalance =
             netFlows[1] < 0 ? INITIAL_BALANCE + uint256(-netFlows[1]) : INITIAL_BALANCE - uint256(netFlows[1]);
         assertEq(nodeBalance, expectedNodeBalance, string.concat(description, ": Node balance: "));

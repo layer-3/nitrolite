@@ -572,7 +572,7 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
 ## Signature validation
 
-The protocol supports flexible signature validation through two complementary systems: a per-node validator registry and a bitmask for agreed validators. This design prevents signature forgery attacks while enabling custom signature schemes and maintaining cross-chain compatibility.
+The protocol supports flexible signature validation through two complementary systems: a validator registry and a bitmask for agreed validators. This design prevents signature forgery attacks while enabling custom signature schemes and maintaining cross-chain compatibility.
 
 ### Validator selection via approved validators bitmask
 
@@ -590,12 +590,12 @@ Since `approvedSignatureValidators` is part of the `channelId` computation, agre
 
 ### Node validator registry
 
-The protocol uses a per-node validator registry where nodes register signature validators and assign them 1-byte identifiers (0x01-0xFF).
+The protocol uses a validator registry where NODE registers signature validators and assigns them 1-byte identifiers (0x01-0xFF).
 
-**Design rationale:** This allows nodes to use flexible signature schemes (SessionKey, multi-sig, etc.) for their own signatures while preventing them from controlling user signature validation. Benefits:
+**Design rationale:** This allows NODE to use flexible signature schemes (SessionKey, multi-sig, etc.) for its own signatures while preventing it from controlling user signature validation. Benefits:
 
-* Nodes can enforce their security requirements for node signatures
-* Nodes benefit from flexible validator implementations
+* NODE can enforce its security requirements for node signatures
+* NODE benefits from flexible validator implementations
 * Cross-chain compatibility (validator addresses don't affect channelId or signature verification)
 * User signatures remain protected via approved validators bitmask
 
@@ -644,6 +644,38 @@ The dual validator selection system solves critical cross-chain problems:
 **User validators (approved validators bitmask):** Since the allowed validator bitmask is in `ChannelDefinition.approvedSignatureValidators`, which is part of `channelId`, it travels with every signature across all chains. No cross-chain synchronization is needed.
 
 **Node validators (per-node registry):** Validator contracts may not be deployed to the same address on all chains. The registry uses 1-byte IDs instead of addresses, allowing the same validator ID to map to different addresses on different chains. Nodes register their validators independently on each chain.
+
+---
+
+### Bootstrap problem: validating the initial user signature
+
+> Full analysis with all considered options and trade-offs: [`contracts/initial-user-sig-validation.md`](contracts/initial-user-sig-validation.md).
+
+The `approvedSignatureValidators` bitmask protects user signatures on existing channels — the bitmask is part of `channelId`, so it is covered by every previously signed state. However, for `createChannel` there is no prior state: the bitmask comes from calldata supplied by the transaction sender, which may be the node itself.
+
+This creates a circular dependency: the validator used to confirm the user's consent to the `ChannelDefinition` is selected from data the node controls. A node (basically, any address could be a node) could register a permissive validator and craft a `ChannelDefinition` that points to it, opening a channel without any real user signature.
+
+The key distinction is between **bootstrap validation** (proving the user consented to the initial `ChannelDefinition`) and **ongoing validation** (proving the user authorized a specific state on an already-agreed channel). The `approvedSignatureValidators` bitmask is the right tool for ongoing validation but cannot self-validate at creation time.
+
+#### Current deployment model: per-node ChannelHub
+
+The current implementation binds each ChannelHub to a single node address at deploy time (`NODE` immutable). `_requireValidDefinition` rejects any `createChannel` call where `def.node != NODE`. This eliminates the any-address variant of the attack: a malicious actor cannot forge user signatures on a ChannelHub bound to a different node.
+
+Within the trust boundary of the bound node the original vulnerability remains. Users who interact with a given deployment must already trust that node — they sign off-chain states with it and grant it ERC20 allowances — so the residual risk sits inside an existing trust relationship rather than being exploitable by an arbitrary third party.
+
+A contract-enforced `VALIDATOR_ACTIVATION_DELAY` (1 day) provides a partial, targeted defence within this trust boundary: a newly registered validator cannot be used until the delay has elapsed, creating an observable window during which a key compromise can be detected and users can revoke ERC20 approvals before the attack on undeposited funds can execute.
+
+A consequence of this model is that each node requires its own ChannelHub deployment; a single contract instance cannot serve multiple independent nodes.
+
+#### Stronger alternatives
+
+Two designs fully close the bootstrap gap without per-node deployments:
+
+**Protocol-managed bootstrap registry (Option F).** A separate registry, controlled by a protocol multisig (`bootstrapAdmin`), lists the only validators that may be used for the `createChannel` user signature. Nodes have no influence over this registry. The initial set covers ECDSA and ERC-1271; additional schemes (e.g. an ERC-4337 freezer validator) can be added by governance without redeployment. The remaining trust assumption is that the multisig is not compromised.
+
+**Two-registry system with tiered trusted validators (Option G).** The trusted validator set is split into a hardcoded tier (validator IDs 0–2, in contract bytecode) and a governance tier (IDs 3+, extensible by a multisig with a contract-enforced activation delay). `createChannel` accepts only hardcoded-tier IDs for the user signature; no governance action can influence it.
+
+Subsequent operations accept both tiers, filtered by the bitmask stored at creation time. This makes `createChannel` fully admin-proof while preserving extensibility for later operations. ERC-4337 wallets with key-rotation needs are supported within the hardcoded tier via a FreezerProxy ERC-1271 wrapper, requiring no governance action.
 
 ---
 

@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ChannelHubTest_EscrowDepositPurge_Base} from "./ChannelHub_EscrowDepositPurge_Base.t.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {ChannelHub} from "../../src/ChannelHub.sol";
-import {EscrowStatus, State} from "../../src/interfaces/Types.sol";
+import {EscrowStatus} from "../../src/interfaces/Types.sol";
 
 contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge_Base {
     function _purge(uint256 maxToPurge) internal {
@@ -15,12 +15,12 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         assertEq(cHub.escrowHead(), expected, message);
     }
 
-    function _assertNodeBalance(address node_, address token_, uint256 expected, string memory message) internal view {
-        assertEq(cHub.getAccountBalance(node_, token_), expected, message);
+    function _assertNodeBalance(address token_, uint256 expected, string memory message) internal view {
+        assertEq(cHub.getNodeBalance(token_), expected, message);
     }
 
     function _assertNodeBalance(uint256 expected, string memory message) internal view {
-        _assertNodeBalance(node, address(token), expected, message);
+        _assertNodeBalance(address(token), expected, message);
     }
 
     function _assertEscrowStatus(bytes32 escrowId, EscrowStatus expected, string memory message) internal view {
@@ -57,7 +57,7 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.NodeBalanceUpdated(node, address(token), LOCKED_AMOUNT);
+        emit ChannelHub.NodeBalanceUpdated(address(token), LOCKED_AMOUNT);
         vm.expectEmit(true, true, true, true);
         emit ChannelHub.EscrowDepositsPurged(1);
 
@@ -266,30 +266,29 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
 
     // ========== Node balance accuracy ==========
 
-    function test_creditsCorrectNodeAndToken_whenMultipleNodesExist() public {
+    function test_creditsCorrectToken_whenMultipleTokensExist() public {
         MockERC20 token2 = new MockERC20("Token2", "TK2", 18);
-        address node2 = makeAddr("node2");
 
-        // node2/token2 escrow is unlockable; default node/token escrow is not yet unlockable
-        bytes32 node2EscrowId = _nextEscrowId();
+        // token2 escrow is unlockable; default token escrow is not yet unlockable
+        bytes32 token2EscrowId = _nextEscrowId();
         cHub.workaround_setEscrowDeposit(
-            node2EscrowId,
+            token2EscrowId,
             bytes32(0),
             EscrowStatus.INITIALIZED,
             user,
-            node2,
+            node,
             uint64(block.timestamp) - 1,
             0,
             LOCKED_AMOUNT,
             address(token2)
         );
-        cHub.workaround_addEscrowDepositId(node2EscrowId);
+        cHub.workaround_addEscrowDepositId(token2EscrowId);
 
         _addNotYetUnlockable(LOCKED_AMOUNT);
 
         _purge(type(uint256).max);
 
-        _assertNodeBalance(0, "Default node balance should be unchanged");
-        _assertNodeBalance(node2, address(token2), LOCKED_AMOUNT, "node2 balance should be credited for token2");
+        _assertNodeBalance(0, "Default token balance should be unchanged");
+        _assertNodeBalance(address(token2), LOCKED_AMOUNT, "NODE balance should be credited for token2");
     }
 }

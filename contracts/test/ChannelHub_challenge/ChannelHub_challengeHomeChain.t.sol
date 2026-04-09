@@ -139,7 +139,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         vm.warp(block.timestamp + CHALLENGE_DURATION + 1);
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token));
 
         // Finalize challenge by closing the channel (unilateral closure)
         // When doing unilateral closure after timeout, any state works
@@ -152,7 +152,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         );
 
         uint256 aliceBalanceAfter = token.balanceOf(alice);
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token));
 
         assertEq(aliceBalanceAfter, aliceBalanceBefore + 900, "Alice should receive her allocation");
         // Node balance should remain unchanged because:

@@ -21,11 +21,11 @@ abstract contract ChannelHubTest_EscrowDepositPurge_Base is Test {
     uint256 internal constant LOCKED_AMOUNT = 500;
 
     function setUp() public virtual {
-        cHub = new TestChannelHub(new ECDSAValidator());
-        token = new MockERC20("Test Token", "TST", 18);
-
         node = makeAddr("node");
         user = makeAddr("user");
+
+        cHub = new TestChannelHub(new ECDSAValidator(), node);
+        token = new MockERC20("Test Token", "TST", 18);
     }
 
     /// @dev Creates a unique escrow ID for each call, deterministic per test

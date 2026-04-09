@@ -20,12 +20,12 @@ For challenge signatures, ChannelHub appends `"challenge"` to the signing data b
 
 ### Node Validator Registry
 
-The protocol uses a **per-node validator registry** system. Each node can register signature validators and assign them 1-byte identifiers (0x01-0xFF).
+The protocol uses a **validator registry** system. NODE can register signature validators and assign them 1-byte identifiers (0x01-0xFF).
 
 **Design rationale:** In the Nitrolite off-chain protocol, the node acts as the orchestrator and decides which signature validators are supported for **node signatures**. This ensures:
 
-- Nodes can enforce their security requirements for their own signatures
-- Nodes benefit from flexible validator implementations (SessionKey, multi-sig, etc.)
+- NODE can enforce its security requirements for its own signatures
+- NODE benefits from flexible validator implementations (SessionKey, multi-sig, etc.)
 - Cross-chain compatibility (validator addresses don't affect channelId or signature verification)
 
 ### Security Consideration: Preventing Signature Forgery
@@ -58,7 +58,7 @@ This approach provides security (users control the agreed validators), cross-cha
 
 ### Validator Registration
 
-Nodes register validators by providing a signature over the validator configuration. This allows node operators to use cold storage or hardware wallets without exposing private keys to send transactions.
+NODE registers validators by providing a signature over the validator configuration. This allows node operators to use cold storage or hardware wallets without exposing private keys to send transactions.
 
 **Registration message:**
 
@@ -80,7 +80,7 @@ The signature is verified using ECDSA recovery:
 - Node's private key only signs, never sends transactions
 - Validator ID 0x00 is reserved for the default validator
 - Registration is immutable (cannot change once set)
-- 255 validators per node (0x01-0xFF)
+- 255 validators (0x01-0xFF)
 
 ### Signature Format
 

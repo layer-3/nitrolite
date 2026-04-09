@@ -69,8 +69,8 @@ e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock"
 1. **Channel uniqueness**: A channel identified by `channelId = hash(Definition)` can be created at most once.
 2. **Cross-deployment replay protection**: Each ChannelHub deployment has a `VERSION` constant (currently 1). The version is encoded as the first byte of `channelId = setFirstByte(hash(Definition), VERSION)`, ensuring that the same channel definition produces different `channelId` values across different ChannelHub versions. This prevents signature replay attacks across different ChannelHub deployments on the same chain. Only one ChannelHub deployment per version per chain is intended. The `escrowId = hash(channelId, stateVersion)` inherits this protection.
 3. **Signature authorization**: Every enforceable state must be signed by both User and Node (unless explicitly relaxed in future versions).
-4. **Pluggable signature validation**: Signature validation is performed by validator contracts implementing the `ISignatureValidator` interface. The ChannelHub has a `defaultSigValidator` (0x00), and nodes maintain a registry of validators (0x01-0xFF). The first byte of each signature determines which validator is used: `0x00` for default, `0x01-0xFF` for node-registered validators.
-5. **Validator security requirements**: Signature validators must be trustworthy, gas-efficient, and correctly implement validation logic. A compromised or buggy validator can break authorization for all channels using that validator. Validators should be immutable or have strict upgrade controls. Nodes are responsible for registering only trusted validators in their registry.
+4. **Pluggable signature validation**: Signature validation is performed by validator contracts implementing the `ISignatureValidator` interface. The ChannelHub has a `defaultSigValidator` (0x00), and NODE maintains a registry of validators (0x01-0xFF). The first byte of each signature determines which validator is used: `0x00` for default, `0x01-0xFF` for NODE-registered validators.
+5. **Validator security requirements**: Signature validators must be trustworthy, gas-efficient, and correctly implement validation logic. A compromised or buggy validator can break authorization for all channels using that validator. Validators should be immutable or have strict upgrade controls. NODE is responsible for registering only trusted validators in its registry.
 6. **Version monotonicity**: For a given channel, every valid state has a strictly increasing `version`.
 7. **Version uniqueness**: No two different states with the same `version` may exist for the same channel.
 
@@ -195,22 +195,22 @@ The protocol uses two mechanisms for validator selection to prevent signature fo
 - The default ECDSA validator (0x00) is **always** available, regardless of the bitmask value
 - The bitmask specifies additional validators from the node's registry that are agreed validators (e.g., if bit 42 is 1, validator ID 42 is approved)
 - Since `approvedSignatureValidators` is part of `channelId` computation, agreed validators cannot be changed during cross-chain operations without invalidating signatures
-- This prevents malicious nodes from forging user signatures by controlling validator selection
+- This prevents malicious nodes from forging user signatures on **already-created channels** (where `channelId` embeds the agreed bitmask); it does **not** protect `createChannel` or `closeChannel`, where the `ChannelDefinition` — including its bitmask — arrives in calldata and there is no prior signed state to bind it
 
 **Node validator registry:**
 
-- Nodes register signature validators and assign them 1-byte identifiers (0x01-0xFF)
-- Both users and nodes can only use agreed validators (from the bitmask) or the default validator
+- NODE registers signature validators and assigns them 1-byte identifiers (0x01-0xFF)
+- Both users and NODE can only use agreed validators (from the bitmask) or the default validator
 - The first byte of each signature determines which validator is used for verification
 
 **Validator selection:**
 
 - **Default validator** (0x00): The ChannelHub is initialized with a `defaultSigValidator` address that implements `ISignatureValidator`. This validator is used when the signature's first byte is `0x00`. **Always available**, regardless of `approvedSignatureValidators` bitmask.
-- **Node-registered validators** (0x01-0xFF): Nodes register validators on-chain with unique IDs. Only available if the corresponding bit is set in `ChannelDefinition.approvedSignatureValidators` (e.g., bit 42 set = validator ID 42 approved).
+- **NODE-registered validators** (0x01-0xFF): NODE registers validators on-chain with unique IDs. Only available if the corresponding bit is set in `ChannelDefinition.approvedSignatureValidators` (e.g., bit 42 set = validator ID 42 approved).
 
 **Registration security:**
 
-- Nodes register validators by signing `abi.encode(validatorId, validatorAddress, block.chainid)` off-chain
+- NODE registers validators by signing `abi.encode(validatorId, validatorAddress, block.chainid)` off-chain
 - The signature includes `block.chainid` for cross-chain replay protection (chain-specific registrations)
 - Anyone can relay the registration transaction (relayer-friendly)
 - Registration uses ECDSA recovery (EIP-191 with raw ECDSA fallback)
@@ -247,6 +247,59 @@ See `signature-validators.md` for detailed documentation on each validator.
 - **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator). This ensures that validators are mutually agreed upon and prevents unilateral changes to signature validation schemes.
 - **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. This ensures that signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
 - **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+
+---
+
+### Bootstrap vulnerability: initial user signature at `createChannel`
+
+> Full analysis with all considered options and trade-offs: [`initial-user-sig-validation.md`](initial-user-sig-validation.md).
+
+#### Root cause
+
+The `approvedSignatureValidators` bitmask protects user signatures on existing channels because the bitmask is embedded in `channelId`, which every prior state already covers. At `createChannel` time there is no prior state — the `ChannelDefinition` (and therefore the bitmask) arrives in calldata from the transaction sender.
+
+This creates a circular dependency:
+
+```txt
+approvedSignatureValidators  (attacker-controlled calldata)
+    → selects which validator verifies user's consent
+        → verifies user's "approval" of approvedSignatureValidators
+```
+
+**Attack**: A node (basically, any address can be a node) registers a malicious `ISignatureValidator` that always returns `VALIDATION_SUCCESS`, then calls `createChannel` with a `ChannelDefinition` that sets the bitmask to include that validator. The channel is created without the user's knowledge. The same bypass applies to `closeChannel`, allowing the node to push locked funds to itself.
+
+The `approvedSignatureValidators`-in-`channelId` protection prevents retroactive validator swapping on *existing* channels but does nothing to prevent a node from crafting a fresh `ChannelDefinition` for a brand-new channel, because there is no pre-existing signed state to protect.
+
+#### Current mitigation: per-node ChannelHub deployment
+
+Each ChannelHub is constructed with an immutable and trusted `NODE` address. `_requireValidDefinition` enforces `def.node == NODE`, rejecting any channel creation attempt that references a different (non-trusted) node.
+
+**Security properties of this mitigation:**
+
+- Attacks by any address are structurally impossible: a hacker cannot open channels on a ChannelHub bound to a different node, so users of deployment A are fully isolated from the node operating deployment B.
+- The attack surface is reduced to the single bound node. Users who interact with a deployment already trust that node (they sign off-chain states with it and grant it ERC20 allowances); the forgery capability sits within that existing trust boundary.
+- No governance, no admin key, no multisig required.
+
+**Validator activation delay (`VALIDATOR_ACTIVATION_DELAY = 1 day`):**
+
+A newly registered validator cannot be used until `registeredAt + VALIDATOR_ACTIVATION_DELAY` has elapsed. This adds a partial, targeted defence against draining user ERC20 approvals via fake `createChannel(DEPOSIT)`.
+
+The registration is an observable on-chain event, and with monitoring in place, the node operator can detect a compromise and alert users to revoke ERC20 approvals before the delay expires. Without the delay, registration and exploitation can occur in the same block with no response possible.
+
+**Residual risk:** After the activation delay, the bound node can still exploit the vulnerability. This risk is accepted under the per-node deployment trust model.
+
+**Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes. Validators must be registered 1 day before first use (one-time cost per validator).
+
+#### Stronger alternatives
+
+**Option F — Protocol-managed bootstrap registry.** A separate registry controlled by a `bootstrapAdmin` multisig lists the validators permitted for `createChannel` user-sig validation. Nodes have no influence over this registry. New schemes (e.g. an ERC-4337 freezer validator) can be added without redeployment. The remaining attack requires compromising the multisig; using a timelock gives users a guaranteed observation window. Supports multiple nodes in one deployment.
+
+**Option G — Two-registry system with tiered trusted validators.** The trusted validator set is split into a hardcoded tier (IDs 0–2, immutable in bytecode) and a governance tier (IDs 3+, multisig-extensible with a contract-enforced activation delay). `createChannel` accepts **only hardcoded-tier IDs** for user-sig validation; no governance action can influence it. Subsequent operations accept both tiers, gated by the bitmask stored at creation time. Properties:
+
+- `createChannel` is fully admin-proof: no governance compromise can affect bootstrap validation.
+- Existing channels are bitmask-isolated: a newly added (even malicious) governance-tier validator cannot be used on channels that did not opt in at creation time.
+- Future wallet formats (ERC-4337, etc.) are supported incrementally via governance without redeployment.
+- Supports multiple nodes in one deployment.
 
 ---
 

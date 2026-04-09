@@ -4,10 +4,8 @@ pragma solidity 0.8.30;
 import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
 import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {TestChannelHub} from "./TestChannelHub.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
 
 import {Utils} from "../src/Utils.sol";
-import {ChannelHub} from "../src/ChannelHub.sol";
 import {
     ChannelDefinition,
     State,
@@ -63,8 +61,8 @@ import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
  *   - purgeEscrowDeposits (public)
  *
  * Does NOT invoke purge:
- *   - depositToVault
- *   - withdrawFromVault
+ *   - depositToNode
+ *   - withdrawFromNode
  */
 contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
     TestChannelHub internal tHub;
@@ -90,7 +88,7 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
 
         // Deploy TestChannelHub (a ChannelHub subtype) and assign it to the base's
         // cHub field so all inherited helpers keep working.
-        tHub = new TestChannelHub(ECDSA_SIG_VALIDATOR);
+        tHub = new TestChannelHub(ECDSA_SIG_VALIDATOR, node);
         cHub = tHub;
 
         // super.setUp() already spent node's INITIAL_BALANCE on the old cHub vault.
@@ -98,13 +96,13 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
         token.mint(node, INITIAL_BALANCE);
         vm.startPrank(node);
         token.approve(address(cHub), INITIAL_BALANCE);
-        cHub.depositToVault(node, address(token), INITIAL_BALANCE);
+        cHub.depositToNode(address(token), INITIAL_BALANCE);
         vm.stopPrank();
 
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
             vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
-        cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+        cHub.registerNodeValidator(SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
 
         vm.prank(alice);
         token.approve(address(cHub), INITIAL_BALANCE);
@@ -679,23 +677,23 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
 
     // ======== Tests: does NOT invoke purge ========
 
-    function test_purgeNotInvoked_onDepositToVault() public {
+    function test_purgeNotInvoked_onDepositToNode() public {
         _snapshotAndInjectSentinel();
 
         token.mint(node, DEPOSIT_AMOUNT);
         vm.startPrank(node);
         token.approve(address(cHub), DEPOSIT_AMOUNT);
-        cHub.depositToVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.depositToNode(address(token), DEPOSIT_AMOUNT);
         vm.stopPrank();
 
         _assertPurgeNotInvoked();
     }
 
-    function test_purgeNotInvoked_onWithdrawFromVault() public {
+    function test_purgeNotInvoked_onWithdrawFromNode() public {
         _snapshotAndInjectSentinel();
 
         vm.prank(node);
-        cHub.withdrawFromVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.withdrawFromNode(node, address(token), DEPOSIT_AMOUNT);
 
         _assertPurgeNotInvoked();
     }

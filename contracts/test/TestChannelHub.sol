@@ -10,7 +10,7 @@ import {EscrowStatus} from "../src/interfaces/Types.sol";
  * @notice Test harness contract that exposes internal ChannelHub functions for testing
  */
 contract TestChannelHub is ChannelHub {
-    constructor(ISignatureValidator _defaultSigValidator) ChannelHub(_defaultSigValidator) {}
+    constructor(ISignatureValidator _defaultSigValidator, address _node) ChannelHub(_defaultSigValidator, _node) {}
 
     /**
      * @notice Marks this contract as a test contract for Forge
@@ -33,12 +33,12 @@ contract TestChannelHub is ChannelHub {
     }
 
     /**
-     * @notice Workaround to set a node's vault balance directly for testing
-     * @dev Allows tests to set up vault state without going through depositToVault (useful for tokens
+     * @notice Workaround to set the node balance directly for testing
+     * @dev Allows tests to set up node state without going through depositToNode (useful for tokens
      *      that revert on transferFrom, making a normal deposit impossible)
      */
-    function workaround_setNodeBalance(address node, address token, uint256 amount) external {
-        _nodeBalances[node][token] = amount;
+    function workaround_setNodeBalance(address token, uint256 amount) external {
+        _nodeBalances[token] = amount;
     }
 
     /**
@@ -58,7 +58,8 @@ contract TestChannelHub is ChannelHub {
         bytes32 channelId,
         EscrowStatus status,
         address user_,
-        address node_,
+        address,
+        /* node_ */
         uint64 unlockAt,
         uint64 challengeExpireAt,
         uint256 lockedAmount,
@@ -68,7 +69,6 @@ contract TestChannelHub is ChannelHub {
         meta.channelId = channelId;
         meta.status = status;
         meta.user = user_;
-        meta.node = node_;
         meta.unlockAt = unlockAt;
         meta.challengeExpireAt = challengeExpireAt;
         meta.lockedAmount = lockedAmount;
@@ -94,5 +94,17 @@ contract TestChannelHub is ChannelHub {
      */
     function harness_purgeEscrowDeposits(uint256 maxSteps) external {
         _purgeEscrowDeposits(maxSteps);
+    }
+
+    /**
+     * @notice Exposed version of _extractValidator for testing
+     * @dev Returns only the resolved validator address; sigData slice is not useful to callers
+     */
+    function exposed_extractValidator(bytes calldata signature, uint256 approvedSignatureValidators)
+        external
+        view
+        returns (ISignatureValidator validator)
+    {
+        (validator,) = _extractValidator(signature, approvedSignatureValidators);
     }
 }

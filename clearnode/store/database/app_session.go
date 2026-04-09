@@ -133,6 +133,30 @@ func (s *DBStore) GetAppSessions(appSessionID *string, participant *string, stat
 	return sessions, metadata, nil
 }
 
+// AppSessionCount holds the result of a COUNT() GROUP BY query on app sessions.
+type AppSessionCount struct {
+	Application string               `gorm:"column:application_id"`
+	Status      app.AppSessionStatus `gorm:"column:status"`
+	Count       uint64               `gorm:"column:count"`
+}
+
+// GetAppSessionsCountByLabels returns current app session counts grouped by application and status.
+func (s *DBStore) GetAppSessionsCountByLabels() ([]AppSessionCount, error) {
+	var results []AppSessionCount
+	err := s.db.Raw(`
+		SELECT application_id,
+		       status,
+		       COUNT(id) AS count
+		FROM app_sessions_v1
+		GROUP BY application_id, status
+	`).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get app session counts: %w", err)
+	}
+
+	return results, nil
+}
+
 // UpdateAppSession updates existing session data with optimistic locking.
 func (s *DBStore) UpdateAppSession(session app.AppSessionV1) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {

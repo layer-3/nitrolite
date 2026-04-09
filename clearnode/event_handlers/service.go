@@ -24,7 +24,13 @@ func NewEventHandlerService() *EventHandlerService {
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when a node's balance is updated on-chain.
 // It updates the user's staked balance for the specified blockchain in the database.
 func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.NodeBalanceUpdatedEvent) error {
-	// logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+
+	if err := tx.SetNodeBalance(event.BlockchainID, event.Asset, event.Balance); err != nil {
+		return err
+	}
+
+	logger.Info("handled NodeBalanceUpdated event", "blockchainID", event.BlockchainID, "asset", event.Asset, "balance", event.Balance)
 	return nil
 }
 
@@ -51,6 +57,10 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 
 	err = tx.UpdateChannel(*channel)
 	if err != nil {
+		return err
+	}
+
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
 		return err
 	}
 
@@ -93,6 +103,10 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	err = tx.UpdateChannel(*channel)
 	if err != nil {
+		return err
+	}
+
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
 		return err
 	}
 
@@ -149,6 +163,10 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		}
 	}
 
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	logger.Info("handled HomeChannelChallenged event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
@@ -176,6 +194,10 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	channel.Status = core.ChannelStatusClosed
 
 	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
 		return err
 	}
 

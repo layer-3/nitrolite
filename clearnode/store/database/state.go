@@ -21,11 +21,13 @@ const stateSelectColumns = `s.id, s.asset, s.user_wallet, s.epoch, s.version,
 
 // UserBalance represents aggregated user balance for an asset
 type UserBalance struct {
-	UserWallet string          `gorm:"column:user_wallet;primaryKey;size:42"`
-	Asset      string          `gorm:"column:asset;primaryKey;size:20"`
-	Balance    decimal.Decimal `gorm:"column:balance;type:varchar(78);not null"`
-	CreatedAt  time.Time       `gorm:"column:created_at"`
-	UpdatedAt  time.Time       `gorm:"column:updated_at"`
+	UserWallet       string          `gorm:"column:user_wallet;primaryKey;size:42"`
+	Asset            string          `gorm:"column:asset;primaryKey;size:20"`
+	Balance          decimal.Decimal `gorm:"column:balance;type:varchar(78);not null"`
+	Enforced         decimal.Decimal `gorm:"column:enforced;type:varchar(78);not null;default:0"`
+	HomeBlockchainID uint64          `gorm:"column:home_blockchain_id;not null;default:0"`
+	CreatedAt        time.Time       `gorm:"column:created_at"`
+	UpdatedAt        time.Time       `gorm:"column:updated_at"`
 }
 
 // TableName specifies the table name for the UserBalance model
@@ -145,8 +147,9 @@ func (s *DBStore) StoreUserState(state core.State) error {
 	err = s.db.Model(&UserBalance{}).
 		Where("user_wallet = ? AND asset = ?", wallet, state.Asset).
 		Updates(map[string]interface{}{
-			"balance":    balance,
-			"updated_at": time.Now(),
+			"balance":             balance,
+			"home_blockchain_id":  state.HomeLedger.BlockchainID,
+			"updated_at":          time.Now(),
 		}).Error
 
 	if err != nil {

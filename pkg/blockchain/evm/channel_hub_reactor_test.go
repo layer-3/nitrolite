@@ -70,6 +70,16 @@ func (m *mockChannelHubStore) ScheduleFinalizeEscrowWithdrawal(stateID string, c
 	return args.Error(0)
 }
 
+func (m *mockChannelHubStore) SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error {
+	args := m.Called(blockchainID, asset, value)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) RefreshUserEnforcedBalance(wallet, asset string) error {
+	args := m.Called(wallet, asset)
+	return args.Error(0)
+}
+
 func (m *mockChannelHubStore) StoreContractEvent(ev core.BlockchainEvent) error {
 	args := m.Called(ev)
 	return args.Error(0)

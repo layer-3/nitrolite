@@ -87,6 +87,7 @@ export function transformBalances(balances: BalanceEntryV1[]): core.BalanceEntry
   return balances.map((balance) => ({
     asset: balance.asset,
     balance: new Decimal(balance.amount),
+    enforced: new Decimal(balance.enforced),
   }));
 }
 

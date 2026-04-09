@@ -84,8 +84,9 @@ func TestTransformAssets(t *testing.T) {
 func TestTransformBalances(t *testing.T) {
 	rpcBalances := []rpc.BalanceEntryV1{
 		{
-			Asset:  "USDC",
-			Amount: "100.50",
+			Asset:    "USDC",
+			Amount:   "100.50",
+			Enforced: "80.25",
 		},
 	}
 

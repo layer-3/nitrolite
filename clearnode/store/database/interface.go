@@ -212,6 +212,18 @@ type DatabaseStore interface {
 	// GetTotalValueLocked computes TVL deltas by domain (channels, app_sessions) and asset, upserts as lifespan metrics, and returns updated totals.
 	GetTotalValueLocked() ([]TotalValueLocked, error)
 
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
+
+	// GetNodeBalance returns the on-chain liquidity per blockchain and asset.
+	GetNodeBalance() ([]NodeBalance, error)
+
+	// GetUserBalanceSummary returns the off-chain liquidity requirement per blockchain and asset.
+	GetUserBalanceSummary() ([]UserBalanceSummary, error)
+
 	// --- User Staked Operations ---
 
 	// UpdateUserStaked upserts the staked amount for a user on a specific blockchain.

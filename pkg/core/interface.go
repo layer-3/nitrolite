@@ -133,6 +133,12 @@ type ChannelHubEventHandlerStore interface {
 	// ScheduleFinalizeEscrowWithdrawal schedules a checkpoint for an escrow withdrawal operation.
 	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
 	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
+
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
 }
 
 type LockingContractEventHandler interface {

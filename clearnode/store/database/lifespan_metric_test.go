@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -239,5 +240,149 @@ func TestCountActiveAppSessions(t *testing.T) {
 		// CountActiveAppSessions counts all sessions regardless of status
 		assert.Equal(t, uint64(2), countByLabel["app1"])
 		assert.Equal(t, uint64(3), countByLabel["app2"])
+	})
+}
+
+func TestGetUserBalanceSummary(t *testing.T) {
+	t.Run("no balances returns empty", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		results, err := store.GetUserBalanceSummary()
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+
+	t.Run("computes total, underfunded, and releasable", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		now := time.Now()
+		// User1: balance=100, enforced=60 → underfunded by 40
+		db.Create(&UserBalance{UserWallet: "0xuser1", Asset: "usdc", Balance: decimal.NewFromInt(100), Enforced: decimal.NewFromInt(60), HomeBlockchainID: 1, UpdatedAt: now})
+		// User2: balance=50, enforced=80 → releasable by 30
+		db.Create(&UserBalance{UserWallet: "0xuser2", Asset: "usdc", Balance: decimal.NewFromInt(50), Enforced: decimal.NewFromInt(80), HomeBlockchainID: 1, UpdatedAt: now})
+		// User3: balance=200, enforced=200 → balanced
+		db.Create(&UserBalance{UserWallet: "0xuser3", Asset: "usdc", Balance: decimal.NewFromInt(200), Enforced: decimal.NewFromInt(200), HomeBlockchainID: 1, UpdatedAt: now})
+
+		results, err := store.GetUserBalanceSummary()
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		r := results[0]
+		assert.Equal(t, uint64(1), r.BlockchainID)
+		assert.Equal(t, "usdc", r.Asset)
+		assert.True(t, decimal.NewFromInt(350).Equal(r.Total))        // 100+50+200
+		assert.True(t, decimal.NewFromInt(40).Equal(r.Underfunded))   // only user1: 100-60
+		assert.True(t, decimal.NewFromInt(30).Equal(r.Releasable))    // only user2: 80-50
+	})
+
+	t.Run("groups by blockchain and asset", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		now := time.Now()
+		db.Create(&UserBalance{UserWallet: "0xuser1", Asset: "usdc", Balance: decimal.NewFromInt(100), Enforced: decimal.NewFromInt(0), HomeBlockchainID: 1, UpdatedAt: now})
+		db.Create(&UserBalance{UserWallet: "0xuser2", Asset: "usdc", Balance: decimal.NewFromInt(50), Enforced: decimal.NewFromInt(0), HomeBlockchainID: 42, UpdatedAt: now})
+		db.Create(&UserBalance{UserWallet: "0xuser3", Asset: "eth", Balance: decimal.NewFromInt(10), Enforced: decimal.NewFromInt(5), HomeBlockchainID: 1, UpdatedAt: now})
+
+		results, err := store.GetUserBalanceSummary()
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+
+		totalMap := make(map[string]decimal.Decimal)
+		for _, r := range results {
+			key := fmt.Sprintf("%d/%s", r.BlockchainID, r.Asset)
+			totalMap[key] = r.Total
+		}
+
+		assert.True(t, decimal.NewFromInt(100).Equal(totalMap["1/usdc"]))
+		assert.True(t, decimal.NewFromInt(50).Equal(totalMap["42/usdc"]))
+		assert.True(t, decimal.NewFromInt(10).Equal(totalMap["1/eth"]))
+	})
+
+	t.Run("includes unassigned blockchain_id 0", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		now := time.Now()
+		db.Create(&UserBalance{UserWallet: "0xuser1", Asset: "usdc", Balance: decimal.NewFromInt(100), Enforced: decimal.NewFromInt(0), HomeBlockchainID: 1, UpdatedAt: now})
+		db.Create(&UserBalance{UserWallet: "0xuser2", Asset: "usdc", Balance: decimal.NewFromInt(75), Enforced: decimal.NewFromInt(0), HomeBlockchainID: 0, UpdatedAt: now})
+
+		results, err := store.GetUserBalanceSummary()
+		require.NoError(t, err)
+
+		totalMap := make(map[uint64]decimal.Decimal)
+		for _, r := range results {
+			totalMap[r.BlockchainID] = r.Total
+		}
+
+		assert.True(t, decimal.NewFromInt(100).Equal(totalMap[1]))
+		assert.True(t, decimal.NewFromInt(75).Equal(totalMap[0]))
+	})
+}
+
+func TestSetNodeBalance(t *testing.T) {
+	t.Run("creates new metric", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		err := store.SetNodeBalance(1, "usdc", decimal.NewFromInt(5000))
+		require.NoError(t, err)
+
+		var metric LifespanMetric
+		err = db.Where("name = ?", "node_balance").First(&metric).Error
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(5000).Equal(metric.Value))
+	})
+
+	t.Run("overwrites previous value", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		require.NoError(t, store.SetNodeBalance(1, "usdc", decimal.NewFromInt(100)))
+		require.NoError(t, store.SetNodeBalance(1, "usdc", decimal.NewFromInt(200)))
+
+		var metric LifespanMetric
+		err := db.Where("name = ?", "node_balance").First(&metric).Error
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(200).Equal(metric.Value))
+	})
+
+	t.Run("different chains are separate", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		require.NoError(t, store.SetNodeBalance(1, "usdc", decimal.NewFromInt(100)))
+		require.NoError(t, store.SetNodeBalance(42, "usdc", decimal.NewFromInt(200)))
+
+		var count int64
+		db.Model(&LifespanMetric{}).Where("name = ?", "node_balance").Count(&count)
+		assert.Equal(t, int64(2), count)
+	})
+}
+
+func TestRefreshUserEnforcedBalance(t *testing.T) {
+	t.Run("sets zero when no open channel", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := &DBStore{db: db}
+
+		now := time.Now()
+		db.Create(&UserBalance{UserWallet: "0xuser1", Asset: "usdc", Balance: decimal.NewFromInt(100), Enforced: decimal.NewFromInt(50), HomeBlockchainID: 1, UpdatedAt: now})
+
+		err := store.RefreshUserEnforcedBalance("0xuser1", "usdc")
+		require.NoError(t, err)
+
+		var ub UserBalance
+		db.Where("user_wallet = ? AND asset = ?", "0xuser1", "usdc").First(&ub)
+		assert.True(t, decimal.Zero.Equal(ub.Enforced))
 	})
 }

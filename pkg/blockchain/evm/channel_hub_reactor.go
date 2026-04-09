@@ -61,6 +61,12 @@ type ChannelHubReactorStore interface {
 	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
 	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
 
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
+
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
 }

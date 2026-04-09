@@ -93,9 +93,14 @@ func transformBalances(balances []rpc.BalanceEntryV1) ([]core.BalanceEntry, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse balance amount: %w", err)
 		}
+		enforced, err := decimal.NewFromString(balance.Enforced)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse enforced amount: %w", err)
+		}
 		result = append(result, core.BalanceEntry{
-			Asset:   balance.Asset,
-			Balance: amount,
+			Asset:    balance.Asset,
+			Balance:  amount,
+			Enforced: enforced,
 		})
 	}
 	return result, nil

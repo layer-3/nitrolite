@@ -63,4 +63,8 @@ type StoreMetricExporter interface {
 	SetActiveUsers(asset, timeSpanLabel string, count uint64)
 	SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64)
 	SetTotalValueLocked(domain, asset string, value float64)
+	SetNodeBalance(blockchainID, asset string, value float64)
+	SetUserBalanceTotal(blockchainID, asset string, value float64)
+	SetUserBalanceUnderfunded(blockchainID, asset string, value float64)
+	SetUserBalanceReleasable(blockchainID, asset string, value float64)
 }

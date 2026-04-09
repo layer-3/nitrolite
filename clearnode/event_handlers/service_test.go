@@ -46,6 +46,7 @@ func TestHandleHomeChannelCreated_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusOpen &&
 			ch.StateVersion == 1
 	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelCreated(ctx, mockStore, event)
@@ -89,6 +90,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusOpen &&
 			ch.StateVersion == 5
 	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
@@ -143,6 +145,7 @@ func TestHandleHomeChannelChallenged_Success(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("GetLastStateByChannelID", channelID, true).Return(state, nil)
 	mockStore.On("ScheduleCheckpoint", "state123", uint64(0)).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
@@ -184,6 +187,7 @@ func TestHandleHomeChannelClosed_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == 10
 	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelClosed(ctx, mockStore, event)

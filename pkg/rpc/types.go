@@ -297,6 +297,8 @@ type BalanceEntryV1 struct {
 	Asset string `json:"asset"`
 	// Amount is the balance amount
 	Amount string `json:"amount"`
+	// Enforced is the on-chain enforced balance
+	Enforced string `json:"enforced"`
 }
 
 // TransactionV1 represents a transaction record.

@@ -24,11 +24,15 @@ var (
 )
 
 type storeMetricExporter struct {
-	appSessionsTotal  *prometheus.GaugeVec
-	channelsTotal     *prometheus.GaugeVec
-	usersActive       *prometheus.GaugeVec
-	appSessionsActive *prometheus.GaugeVec
-	totalValueLocked  *prometheus.GaugeVec
+	appSessionsTotal       *prometheus.GaugeVec
+	channelsTotal          *prometheus.GaugeVec
+	usersActive            *prometheus.GaugeVec
+	appSessionsActive      *prometheus.GaugeVec
+	totalValueLocked       *prometheus.GaugeVec
+	nodeBalance            *prometheus.GaugeVec
+	userBalanceTotal       *prometheus.GaugeVec
+	userBalanceUnderfunded *prometheus.GaugeVec
+	userBalanceReleasable  *prometheus.GaugeVec
 }
 
 func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, error) {
@@ -58,6 +62,26 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 			Name:      "total_value_locked",
 			Help:      "Total value locked by domain and asset",
 		}, []string{"domain", "asset"}),
+		nodeBalance: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "node_balance",
+			Help:      "Node's available on-chain balance by blockchain and asset",
+		}, []string{"blockchain_id", "asset"}),
+		userBalanceTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "user_balance_total",
+			Help:      "Total user balance obligations by blockchain and asset",
+		}, []string{"blockchain_id", "asset"}),
+		userBalanceUnderfunded: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "user_balance_underfunded",
+			Help:      "User balance exceeding on-chain locked amount by blockchain and asset",
+		}, []string{"blockchain_id", "asset"}),
+		userBalanceReleasable: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "user_balance_releasable",
+			Help:      "On-chain locked amount exceeding user balance by blockchain and asset",
+		}, []string{"blockchain_id", "asset"}),
 	}
 
 	if reg != nil {
@@ -67,6 +91,10 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 			m.usersActive,
 			m.appSessionsActive,
 			m.totalValueLocked,
+			m.nodeBalance,
+			m.userBalanceTotal,
+			m.userBalanceUnderfunded,
+			m.userBalanceReleasable,
 		)
 	} else {
 		return nil, fmt.Errorf("prometheus registerer not provided")
@@ -93,6 +121,22 @@ func (m *storeMetricExporter) SetActiveAppSessions(applicationID, timeSpanLabel 
 
 func (m *storeMetricExporter) SetTotalValueLocked(domain, asset string, value float64) {
 	m.totalValueLocked.WithLabelValues(domain, asset).Set(value)
+}
+
+func (m *storeMetricExporter) SetNodeBalance(blockchainID, asset string, value float64) {
+	m.nodeBalance.WithLabelValues(blockchainID, asset).Set(value)
+}
+
+func (m *storeMetricExporter) SetUserBalanceTotal(blockchainID, asset string, value float64) {
+	m.userBalanceTotal.WithLabelValues(blockchainID, asset).Set(value)
+}
+
+func (m *storeMetricExporter) SetUserBalanceUnderfunded(blockchainID, asset string, value float64) {
+	m.userBalanceUnderfunded.WithLabelValues(blockchainID, asset).Set(value)
+}
+
+func (m *storeMetricExporter) SetUserBalanceReleasable(blockchainID, asset string, value float64) {
+	m.userBalanceReleasable.WithLabelValues(blockchainID, asset).Set(value)
 }
 
 // runtimeMetricExporter is the concrete implementation of the Metrics interface.

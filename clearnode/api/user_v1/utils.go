@@ -23,6 +23,7 @@ func mapBalanceEntryV1(entry core.BalanceEntry) rpc.BalanceEntryV1 {
 	return rpc.BalanceEntryV1{
 		Asset:  entry.Asset,
 		Amount: entry.Balance.String(),
+		Enforced: entry.Enforced.String(),
 	}
 }
 

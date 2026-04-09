@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -345,6 +346,8 @@ func runStoreMetricsExporter(
 		GetChannelsCountByLabels() ([]database.ChannelCount, error)
 		GetAppSessionsCountByLabels() ([]database.AppSessionCount, error)
 		GetTotalValueLocked() ([]database.TotalValueLocked, error)
+		GetNodeBalance() ([]database.NodeBalance, error)
+		GetUserBalanceSummary() ([]database.UserBalanceSummary, error)
 		CountActiveUsers(window time.Duration) ([]database.ActiveCountByLabel, error)
 		CountActiveAppSessions(window time.Duration) ([]database.ActiveCountByLabel, error)
 	},
@@ -389,6 +392,27 @@ func runStoreMetricsExporter(
 			} else {
 				for _, c := range tvlCounts {
 					metricExported.SetTotalValueLocked(c.Domain, c.Asset, c.Value.InexactFloat64())
+				}
+			}
+
+			nodeBalances, err := store.GetNodeBalance()
+			if err != nil {
+				logger.Error("failed to get node balances", "error", err)
+			} else {
+				for _, nb := range nodeBalances {
+					metricExported.SetNodeBalance(nb.BlockchainID, nb.Asset, nb.Value.InexactFloat64())
+				}
+			}
+
+			offChain, err := store.GetUserBalanceSummary()
+			if err != nil {
+				logger.Error("failed to get off-chain liquidity", "error", err)
+			} else {
+				for _, l := range offChain {
+					bid := strconv.FormatUint(l.BlockchainID, 10)
+					metricExported.SetUserBalanceTotal(bid, l.Asset, l.Total.InexactFloat64())
+					metricExported.SetUserBalanceUnderfunded(bid, l.Asset, l.Underfunded.InexactFloat64())
+					metricExported.SetUserBalanceReleasable(bid, l.Asset, l.Releasable.InexactFloat64())
 				}
 			}
 

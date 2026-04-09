@@ -239,6 +239,8 @@ export interface BalanceEntryV1 {
   asset: string;
   /** Balance amount */
   amount: string;
+  /** On-chain enforced balance */
+  enforced: string;
 }
 
 /**

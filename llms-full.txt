@@ -55,14 +55,15 @@ Communication uses JSON-RPC over WebSocket.
 
 ### Message Envelope
 
-Compact ordered array: `[Type, RequestId, Method, Payload, Timestamp]`
+The outer key (`req`, `res`) indicates message type. The inner tuple is a 4-element ordered array:
+
+`[RequestId, Method, Payload, Timestamp]`
 
 | Field | Description |
 |-------|-------------|
-| Type | 1=Request, 2=Response, 3=Event, 4=Error |
 | RequestId | Numeric identifier unique per connection |
 | Method | Operation name (e.g., "transfer", "auth_request") |
-| Payload | Type-specific data |
+| Payload | Method-specific params (object or array) |
 | Timestamp | Unix milliseconds |
 
 ### Request Format
@@ -74,6 +75,8 @@ Compact ordered array: `[Type, RequestId, Method, Payload, Timestamp]`
 ```json
 { "res": [REQUEST_ID, METHOD, DATA, TIMESTAMP], "sig": ["SIGNATURE"] }
 ```
+
+The `sig` field contains the sender's signature over the entire `req` or `res` tuple.
 
 ---
 

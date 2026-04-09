@@ -41,6 +41,19 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		return
 	}
 
+	if channelDef.Nonce == 0 {
+		c.Fail(nil, "nonce must be non-zero")
+		return
+	}
+	if channelDef.Challenge < h.minChallenge {
+		c.Fail(rpc.Errorf("challenge period must be at least %d seconds, but got %d", h.minChallenge, channelDef.Challenge), "")
+		return
+	}
+	if channelDef.Challenge > h.maxChallenge {
+		c.Fail(rpc.Errorf("challenge period must be at most %d seconds, but got %d", h.maxChallenge, channelDef.Challenge), "")
+		return
+	}
+
 	logger = logger.
 		WithKV("userWallet", incomingState.UserWallet).
 		WithKV("asset", incomingState.Asset)
@@ -111,12 +124,6 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 			}
 		}
 
-		if channelDef.Nonce == 0 {
-			return rpc.Errorf("nonce must be non-zero")
-		}
-		if channelDef.Challenge < h.minChallenge {
-			return rpc.Errorf("challenge period must be at least %d seconds, but got %d", h.minChallenge, channelDef.Challenge)
-		}
 		logger.Debug("processing channel creation request", "incomingVersion", incomingState.Version)
 
 		if err := h.stateAdvancer.ValidateAdvancement(*currentState, incomingState); err != nil {

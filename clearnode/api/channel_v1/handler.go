@@ -19,6 +19,7 @@ type Handler struct {
 	statePacker      core.StatePacker
 	nodeAddress      string // Node's wallet address for channel ID calculation
 	minChallenge     uint32
+	maxChallenge     uint32
 	metrics          metrics.RuntimeMetricExporter
 	maxSessionKeyIDs int
 }
@@ -32,7 +33,7 @@ func NewHandler(
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,
-	minChallenge uint32,
+	minChallenge, maxChallenge uint32,
 	m metrics.RuntimeMetricExporter,
 	maxSessionKeyIDs int,
 ) *Handler {
@@ -45,6 +46,7 @@ func NewHandler(
 		nodeSigner:       nodeSigner,
 		nodeAddress:      nodeAddress,
 		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
 		metrics:          m,
 		maxSessionKeyIDs: maxSessionKeyIDs,
 	}

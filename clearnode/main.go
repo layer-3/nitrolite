@@ -43,6 +43,7 @@ func main() {
 	rpcRouterCfg := api.RPCRouterConfig{
 		NodeVersion:               bb.NodeVersion,
 		MinChallenge:              bb.ChannelMinChallengeDuration,
+		MaxChallenge:              bb.ChannelMaxChallengeDuration,
 		MaxParticipants:           vl.MaxParticipants,
 		MaxSessionDataLen:         vl.MaxSessionDataLen,
 		MaxAppMetadataLen:         vl.MaxAppMetadataLen,

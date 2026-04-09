@@ -129,6 +129,11 @@ func verifyAssetsConfig(cfg *AssetsConfig) error {
 			} else if !contractAddressRegex.MatchString(token.Address) {
 				return fmt.Errorf("invalid %s token address '%s' for blockchain with id %d", token.Name, token.Address, token.BlockchainID)
 			}
+
+			if asset.Decimals > token.Decimals {
+				return fmt.Errorf("asset %s decimals (%d) must not exceed token %s decimals (%d) on blockchain %d",
+					asset.Symbol, asset.Decimals, token.Symbol, token.Decimals, token.BlockchainID)
+			}
 		}
 	}
 

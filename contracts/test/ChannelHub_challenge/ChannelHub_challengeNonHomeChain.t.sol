@@ -36,6 +36,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
     - challenged escrow deposit can be resolved until `challengeExpireAt` time has passed with a newer finalization state, which removes challenge and unlock funds
     - challenged escrow deposit can NOT be resolved if `challengeExpireAt` has passed, but
         can be withdrawn after `challengeExpireAt` time passes
+    - challenged escrow deposit unilateral finalization emits event with INITIATE state as candidate, ignoring arbitrary candidate input
     - reverts on challenging already challenged escrow deposit
     */
 
@@ -182,6 +183,21 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         assertEq(token.balanceOf(alice), aliceBalanceBefore + ESCROW_AMOUNT, "User should receive locked amount");
     }
 
+    function test_challengedEscrowDeposit_unilateralFinalize_emitsInitState_ignoringArbitraryCandidate() public {
+        _challengeEscrowDeposit();
+
+        vm.warp(block.timestamp + EscrowDepositEngine.CHALLENGE_DURATION + 1);
+
+        State memory poisonedCandidate = initiateEscrowDepositState;
+        poisonedCandidate.version = 999999;
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.EscrowDepositFinalized(escrowId, channelId, initiateEscrowDepositState);
+
+        vm.prank(node);
+        cHub.finalizeEscrowDeposit(channelId, escrowId, poisonedCandidate);
+    }
+
     function test_revert_challengeEscrowDeposit_alreadyChallenged() public {
         _challengeEscrowDeposit();
 
@@ -201,6 +217,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
     - challenged escrow withdrawal can be resolved until `challengeExpireAt` time has passed with a newer finalization state, which removes challenge and unlock funds
     - challenged escrow withdrawal can NOT be resolved if `challengeExpireAt` has passed, but
         can be withdrawn after `challengeExpireAt` time passes
+    - challenged escrow withdrawal unilateral finalization emits event with INITIATE state as candidate, ignoring arbitrary candidate input
     - reverts on challenging already challenged escrow withdrawal
     */
 
@@ -343,6 +360,21 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
             "Node vault should reclaim locked amount (cooperative resolution bypassed)"
         );
         assertEq(token.balanceOf(alice), aliceBalanceBefore, "User wallet unchanged: withdrawal was not completed");
+    }
+
+    function test_challengedEscrowWithdrawal_unilateralFinalize_emitsInitState_ignoringArbitraryCandidate() public {
+        _challengeEscrowWithdrawal();
+
+        vm.warp(block.timestamp + EscrowWithdrawalEngine.CHALLENGE_DURATION + 1);
+
+        State memory poisonedCandidate = initiateEscrowWithdrawalState;
+        poisonedCandidate.version = 999999;
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.EscrowWithdrawalFinalized(escrowId, channelId, initiateEscrowWithdrawalState);
+
+        vm.prank(node);
+        cHub.finalizeEscrowWithdrawal(channelId, escrowId, poisonedCandidate);
     }
 
     function test_revert_challengeEscrowWithdrawal_alreadyChallenged() public {

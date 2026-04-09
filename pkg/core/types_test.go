@@ -281,17 +281,39 @@ func TestState_ApplyEscrowDepositTransition(t *testing.T) {
 
 func TestState_ApplyEscrowLockTransition(t *testing.T) {
 	t.Parallel()
-	state := NewVoidState("USDC", "0xUser")
-	chanID := "0xChan"
-	state.HomeChannelID = &chanID
-	state.ID = "0xStateID"
 
-	amount := decimal.NewFromInt(10)
-	transition, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
-	require.NoError(t, err)
-	assert.Equal(t, TransitionTypeEscrowLock, transition.Type)
-	assert.NotNil(t, state.EscrowLedger)
-	assert.Equal(t, "10", state.EscrowLedger.NodeBalance.String())
+	t.Run("success_creates_escrow_ledger_and_clears_node_balance", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		chanID := "0xChan"
+		state.HomeChannelID = &chanID
+		state.ID = "0xStateID"
+		state.HomeLedger.UserBalance = decimal.NewFromInt(50)
+		state.HomeLedger.NodeBalance = decimal.NewFromInt(5)
+
+		amount := decimal.NewFromInt(10)
+		transition, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
+		require.NoError(t, err)
+		assert.Equal(t, TransitionTypeEscrowLock, transition.Type)
+		assert.NotNil(t, state.EscrowLedger)
+		assert.Equal(t, "10", state.EscrowLedger.NodeBalance.String())
+		assert.True(t, state.HomeLedger.NodeBalance.IsZero(),
+			"home NodeBalance must be cleared to zero, got %s", state.HomeLedger.NodeBalance.String())
+	})
+
+	t.Run("reject_insufficient_user_balance", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		chanID := "0xChan"
+		state.HomeChannelID = &chanID
+		state.ID = "0xStateID"
+		state.HomeLedger.UserBalance = decimal.NewFromInt(5)
+
+		amount := decimal.NewFromInt(10)
+		_, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "insufficient user balance for escrow lock")
+	})
 }
 
 func TestState_ApplyEscrowWithdrawTransition(t *testing.T) {

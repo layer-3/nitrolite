@@ -468,6 +468,9 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 	if tokenAddress == "" {
 		return Transition{}, fmt.Errorf("invalid token address")
 	}
+	if state.HomeLedger.UserBalance.LessThan(amount) {
+		return Transition{}, fmt.Errorf("insufficient user balance for escrow lock")
+	}
 
 	escrowChannelID, err := GetEscrowChannelID(*state.HomeChannelID, state.Version)
 	if err != nil {
@@ -483,6 +486,8 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 
 	newTransition := NewTransition(TransitionTypeEscrowLock, txID, accountID, amount)
 	state.Transition = *newTransition
+
+	state.HomeLedger.NodeBalance = decimal.Zero
 
 	state.EscrowLedger = &Ledger{
 		BlockchainID: blockchainID,

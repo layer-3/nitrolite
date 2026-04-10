@@ -19,7 +19,7 @@ const SDK_ROOT = resolve(__dirname, '../../ts');
 const COMPAT_ROOT = resolve(__dirname, '../../ts-compat');
 const REPO_ROOT = resolve(__dirname, '../../..');
 const PROTOCOL_DOCS = resolve(REPO_ROOT, 'docs/protocol');
-const CLEARNODE_DOCS = resolve(REPO_ROOT, 'clearnode/docs');
+const API_YAML = resolve(REPO_ROOT, 'docs/api.yaml');
 
 // ---------------------------------------------------------------------------
 // Helpers — read SDK sources at startup
@@ -75,13 +75,15 @@ const protocolDocs: Record<string, string> = {};
 // Terminology concept → definition map
 const concepts: Map<string, string> = new Map();
 
-// Clearnode RPC method → { description, request, response } map
+// V1 RPC method → { description, request fields, response fields } map (from docs/api.yaml)
 interface RPCMethodDoc {
+    /** Fully qualified v1 method name, e.g. "channels.v1.get_home_channel" */
     method: string;
+    /** API group, e.g. "channels" */
+    group: string;
     description: string;
-    access: string;
-    requestExample: string;
-    responseExample: string;
+    requestFields: string;
+    responseFields: string;
 }
 const rpcMethodDocs: Map<string, RPCMethodDoc> = new Map();
 
@@ -183,54 +185,91 @@ function loadTerminology(): void {
     }
 }
 
-function loadClearnodeAPI(): void {
-    const content = readFile(resolve(CLEARNODE_DOCS, 'API.md'));
+function loadV1API(): void {
+    const content = readFile(API_YAML);
     if (!content) return;
 
-    // Parse the API endpoint table at the top
-    const tableMatch = content.match(/\| Method\s+\| Description\s+\| Access\s+\|\n\|[- |]+\|\n([\s\S]*?)(?:\n\n|\n\*\*V1)/);
-    if (tableMatch) {
-        for (const line of tableMatch[1].split('\n')) {
-            const cols = line.split('|').map(c => c.trim()).filter(Boolean);
-            if (cols.length >= 3) {
-                const method = cols[0].replace(/`/g, '');
-                const description = cols[1];
-                const access = cols[2];
-                rpcMethodDocs.set(method, { method, description, access, requestExample: '', responseExample: '' });
-            }
-        }
-    }
+    // Simple line-based parser for the well-structured api.yaml
+    // Extracts: group name, method name, description, request fields, response fields
+    let currentGroup = '';
+    let currentMethod = '';
+    let currentDesc = '';
+    let currentSection: 'none' | 'request' | 'response' = 'none';
+    let requestFields: string[] = [];
+    let responseFields: string[] = [];
 
-    // Parse V1 endpoints table
-    const v1Match = content.match(/\*\*V1 App Session Key Endpoints\*\*[^|]*(\|[\s\S]*?)(?:\n\n|### Legenda)/);
-    if (v1Match) {
-        for (const line of v1Match[1].split('\n')) {
-            const cols = line.split('|').map(c => c.trim()).filter(Boolean);
-            if (cols.length >= 3 && !cols[0].startsWith('-') && !cols[0].startsWith('Method')) {
-                const method = cols[0].replace(/`/g, '');
-                const description = cols[1];
-                const access = cols[2];
-                rpcMethodDocs.set(method, { method, description, access, requestExample: '', responseExample: '' });
-            }
+    const flushMethod = () => {
+        if (currentGroup && currentMethod) {
+            const fqn = `${currentGroup}.v1.${currentMethod}`;
+            rpcMethodDocs.set(fqn, {
+                method: fqn,
+                group: currentGroup,
+                description: currentDesc,
+                requestFields: requestFields.length > 0 ? requestFields.join(', ') : '(none)',
+                responseFields: responseFields.length > 0 ? responseFields.join(', ') : '(none)',
+            });
         }
-    }
+        currentMethod = '';
+        currentDesc = '';
+        currentSection = 'none';
+        requestFields = [];
+        responseFields = [];
+    };
 
-    // Extract request/response examples for each method section
-    const sections = content.split(/^### /m).slice(1);
-    for (const section of sections) {
-        const titleLine = section.split('\n')[0].trim();
-        // Find matching method by checking if the section content references it
-        for (const [method, doc] of rpcMethodDocs) {
-            const methodLower = method.replace(/_/g, ' ');
-            const titleLower = titleLine.toLowerCase().replace(/[^a-z ]/g, '');
-            if (titleLower.includes(methodLower) || section.includes(`"${method}"`)) {
-                const reqMatch = section.match(/\*\*Request:\*\*\s*```json\n([\s\S]*?)```/);
-                const resMatch = section.match(/\*\*Response:\*\*\s*```json\n([\s\S]*?)```/);
-                if (reqMatch) doc.requestExample = reqMatch[1].trim();
-                if (resMatch) doc.responseExample = resMatch[1].trim();
+    // Only parse the api: section
+    const apiStart = content.indexOf('\napi:\n');
+    if (apiStart === -1) return;
+    const lines = content.slice(apiStart).split('\n');
+
+    for (const line of lines) {
+        // Group: "    - name: channels"
+        const groupMatch = line.match(/^ {4}- name:\s+(.+)/);
+        if (groupMatch) {
+            flushMethod();
+            currentGroup = groupMatch[1].trim();
+            continue;
+        }
+
+        // Method: "            - name: get_home_channel"
+        const methodMatch = line.match(/^ {12}- name:\s+(.+)/);
+        if (methodMatch) {
+            flushMethod();
+            currentMethod = methodMatch[1].trim();
+            continue;
+        }
+
+        // Method description: "              description: ..."
+        if (currentMethod && !currentDesc) {
+            const descMatch = line.match(/^ {14}description:\s+(.+)/);
+            if (descMatch) {
+                currentDesc = descMatch[1].trim();
+                continue;
+            }
+        }
+
+        // Request/response section markers
+        if (currentMethod) {
+            const sectionMatch = line.match(/^ {14}(request|response):/);
+            if (sectionMatch) {
+                currentSection = sectionMatch[1] as 'request' | 'response';
+                continue;
+            }
+
+            // Field name within request/response: "                - field_name: wallet"
+            const fieldMatch = line.match(/^ {16}- field_name:\s+(.+)/);
+            if (fieldMatch) {
+                if (currentSection === 'request') requestFields.push(fieldMatch[1].trim());
+                else if (currentSection === 'response') responseFields.push(fieldMatch[1].trim());
+                continue;
+            }
+
+            // errors: or events: sections end request/response
+            if (/^ {14}(errors|events):/.test(line)) {
+                currentSection = 'none';
             }
         }
     }
+    flushMethod(); // flush last method
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +281,7 @@ loadTypes();
 loadCompatExports();
 loadProtocolDocs();
 loadTerminology();
-loadClearnodeAPI();
+loadV1API();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -492,12 +531,23 @@ server.resource('protocol-wire-format', 'nitrolite://protocol/wire-format', asyn
 });
 
 server.resource('protocol-rpc-methods', 'nitrolite://protocol/rpc-methods', async () => {
-    let text = '# Clearnode RPC Methods\n\nAll available RPC methods exposed by a clearnode.\n\n';
-    text += '| Method | Description | Access |\n|---|---|---|\n';
+    let text = '# V1 RPC Methods\n\nAll v1 RPC methods defined in `docs/api.yaml`. Methods use grouped naming: `{group}.v1.{method}`.\n\n';
+
+    // Group methods by their API group
+    const grouped: Record<string, RPCMethodDoc[]> = {};
     for (const doc of rpcMethodDocs.values()) {
-        text += `| \`${doc.method}\` | ${doc.description} | ${doc.access} |\n`;
+        (grouped[doc.group] ??= []).push(doc);
     }
-    text += '\n## Message Format\n\n';
+    for (const [group, docs] of Object.entries(grouped)) {
+        text += `## ${group}\n\n`;
+        text += '| Method | Description | Request Fields | Response Fields |\n|---|---|---|---|\n';
+        for (const doc of docs) {
+            text += `| \`${doc.method}\` | ${doc.description} | ${doc.requestFields} | ${doc.responseFields} |\n`;
+        }
+        text += '\n';
+    }
+
+    text += '## Message Format\n\n';
     text += 'All messages use compact ordered arrays:\n\n';
     text += '**Request:** `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`\n\n';
     text += '**Response:** `{ "res": [REQUEST_ID, METHOD, DATA, TIMESTAMP], "sig": ["SIGNATURE"] }`\n\n';
@@ -505,48 +555,9 @@ server.resource('protocol-rpc-methods', 'nitrolite://protocol/rpc-methods', asyn
     return { contents: [{ uri: 'nitrolite://protocol/rpc-methods', text, mimeType: 'text/markdown' }] };
 });
 
-server.resource('protocol-auth-flow', 'nitrolite://protocol/auth-flow', async () => {
-    const text = `# Authentication Flow
-
-The clearnode uses a challenge-response mechanism based on Ethereum signatures, with optional JWT session management.
-
-## Flow
-
-1. **auth_request** — Client sends address + optional session key parameters
-2. **auth_challenge** — Server responds with a random challenge token (UUID)
-3. **auth_verify** — Client signs the challenge with their private key and sends it back
-4. **JWT issued** — Server responds with a JWT token (valid 24h by default)
-
-## Session Keys
-
-Authentication supports delegated session keys with spending caps:
-- Specify a \`session_key\` address in auth_request to enable delegation
-- Set per-asset \`allowances\` to limit spending (e.g., 100 USDC max)
-- Session keys expire at the specified \`expires_at\` timestamp
-- The server tracks spending per session key
-
-## Message Signing
-
-All RPC messages include a \`sig\` field with ECDSA signatures over the message data.
-The signature proves ownership of the sending address.
-
-## Example
-
-\`\`\`json
-// 1. Request
-{ "req": [1, "auth_request", { "address": "0x...", "session_key": "0x..." }, 1619123456789], "sig": ["0x..."] }
-
-// 2. Challenge
-{ "res": [1, "auth_challenge", { "challenge_message": "550e8400-..." }, 1619123456789], "sig": ["0x..."] }
-
-// 3. Verify
-{ "req": [2, "auth_verify", { "challenge": "550e8400-..." }, 1619123456789], "sig": ["0x..."] }
-
-// 4. Success + JWT
-{ "res": [2, "auth_verify", { "address": "0x...", "success": true, "jwt_token": "eyJ..." }, 1619123456789], "sig": ["0x..."] }
-\`\`\`
-`;
-    return { contents: [{ uri: 'nitrolite://protocol/auth-flow', text, mimeType: 'text/markdown' }] };
+server.resource('protocol-cryptography', 'nitrolite://protocol/cryptography', async () => {
+    const text = protocolDocs['cryptography'] || '# Cryptography\n\nCryptography docs not found.';
+    return { contents: [{ uri: 'nitrolite://protocol/cryptography', text, mimeType: 'text/markdown' }] };
 });
 
 server.resource('protocol-channel-lifecycle', 'nitrolite://protocol/channel-lifecycle', async () => {
@@ -975,19 +986,19 @@ main().catch(console.error);
     return { contents: [{ uri: 'nitrolite://examples/full-app-session-script', text, mimeType: 'text/markdown' }] };
 });
 
-server.resource('clearnode-entities', 'nitrolite://clearnode/entities', async (uri) => {
-    const text = readFile(resolve(CLEARNODE_DOCS, 'Entities.md'));
-    return { contents: [{ uri: uri.href, text: text || '# Entities\n\nFile not found.', mimeType: 'text/markdown' }] };
+server.resource('protocol-enforcement', 'nitrolite://protocol/enforcement', async () => {
+    const text = protocolDocs['enforcement'] || '# Enforcement\n\nEnforcement docs not found.';
+    return { contents: [{ uri: 'nitrolite://protocol/enforcement', text, mimeType: 'text/markdown' }] };
 });
 
-server.resource('clearnode-session-keys', 'nitrolite://clearnode/session-keys', async (uri) => {
-    const text = readFile(resolve(CLEARNODE_DOCS, 'SessionKeys.md'));
-    return { contents: [{ uri: uri.href, text: text || '# Session Keys\n\nFile not found.', mimeType: 'text/markdown' }] };
+server.resource('protocol-cross-chain', 'nitrolite://protocol/cross-chain', async () => {
+    const text = protocolDocs['cross-chain-and-assets'] || '# Cross-Chain & Assets\n\nCross-chain docs not found.';
+    return { contents: [{ uri: 'nitrolite://protocol/cross-chain', text, mimeType: 'text/markdown' }] };
 });
 
-server.resource('clearnode-protocol', 'nitrolite://clearnode/protocol', async (uri) => {
-    const text = readFile(resolve(CLEARNODE_DOCS, 'Clearnode.protocol.md'));
-    return { contents: [{ uri: uri.href, text: text || '# Clearnode Protocol\n\nFile not found.', mimeType: 'text/markdown' }] };
+server.resource('protocol-interactions', 'nitrolite://protocol/interactions', async () => {
+    const text = protocolDocs['interactions'] || '# Interactions\n\nInteractions docs not found.';
+    return { contents: [{ uri: 'nitrolite://protocol/interactions', text, mimeType: 'text/markdown' }] };
 });
 
 // ========================== TOOLS ==========================================
@@ -1157,36 +1168,37 @@ server.tool(
 
 server.tool(
     'lookup_rpc_method',
-    'Look up a clearnode RPC method — returns description, access level, and request/response examples',
-    { method: z.string().describe('RPC method name (e.g. "get_channels", "transfer", "create_app_session", "auth_request")') },
+    'Look up a v1 RPC method from docs/api.yaml — returns description, request/response fields. Methods use grouped naming: {group}.v1.{method}',
+    { method: z.string().describe('V1 RPC method name or search term (e.g. "channels.v1.get_home_channel", "submit_state", "get_balances")') },
     async ({ method }) => {
         const query = method.toLowerCase().trim();
 
         // Direct match
         const doc = rpcMethodDocs.get(query);
         if (doc) {
-            let text = `## RPC Method: \`${doc.method}\`\n\n`;
-            text += `**Description:** ${doc.description}\n**Access:** ${doc.access}\n\n`;
-            if (doc.requestExample) text += `### Request Example\n\`\`\`json\n${doc.requestExample}\n\`\`\`\n\n`;
-            if (doc.responseExample) text += `### Response Example\n\`\`\`json\n${doc.responseExample}\n\`\`\`\n`;
+            let text = `## V1 RPC Method: \`${doc.method}\`\n\n`;
+            text += `**Group:** ${doc.group}\n**Description:** ${doc.description}\n\n`;
+            text += `**Request fields:** ${doc.requestFields}\n`;
+            text += `**Response fields:** ${doc.responseFields}\n`;
             return { content: [{ type: 'text' as const, text }] };
         }
 
-        // Fuzzy match
+        // Fuzzy match — search in full method name and short name
         const matches: RPCMethodDoc[] = [];
         for (const [key, val] of rpcMethodDocs) {
-            if (key.includes(query) || query.includes(key)) {
+            const shortName = key.split('.').pop() || '';
+            if (key.includes(query) || query.includes(shortName) || shortName.includes(query)) {
                 matches.push(val);
             }
         }
         if (matches.length > 0) {
             const text = matches.map(d =>
-                `- \`${d.method}\` — ${d.description} (${d.access})`
+                `- \`${d.method}\` — ${d.description}`
             ).join('\n');
-            return { content: [{ type: 'text' as const, text: `Matching RPC methods:\n\n${text}` }] };
+            return { content: [{ type: 'text' as const, text: `Matching v1 RPC methods:\n\n${text}` }] };
         }
 
-        return { content: [{ type: 'text' as const, text: `Unknown RPC method "${method}". Available methods:\n${[...rpcMethodDocs.keys()].join(', ')}` }] };
+        return { content: [{ type: 'text' as const, text: `No v1 RPC method matching "${method}". Available methods:\n${[...rpcMethodDocs.keys()].join(', ')}` }] };
     },
 );
 

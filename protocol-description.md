@@ -84,7 +84,21 @@ The off-chain protocol is responsible for:
      * withdraw,
      * or migrate the channel.
 
-4. **Flow control**
+4. **Node liquidity monitoring**
+
+   * The Node continuously monitors its on-chain vault balance (`_nodeBalances`) across all supported chains.
+   * When the available vault balance on a given chain approaches or falls below the amount required to back pending off-chain allocations, the Node takes corrective action:
+
+     * enforce states that release locked Node funds back to the vault (e.g. checkpoint or close idle channels),
+     * rebalance liquidity across chains via cross-chain operations,
+     * or fire alerts for operator intervention.
+   * The Node must not co-sign states that would require locking more vault funds than are currently available, as such states would fail on-chain enforcement.
+
+   > **NOTE:** Node liquidity monitoring is not yet enforced in the Clearnode implementation but will be introduced in the near future.
+
+   If Node liquidity monitoring is absent or fails, **no user funds are at risk**. On-chain enforcement always relies on the latest mutually signed state, and the previous on-chain state remains valid and enforceable at all times. The practical consequence is operational: a co-signed state that requires Node vault funds may fail when submitted on-chain if the vault has been depleted in the interim. In such cases, the Node simply replenishes its vault and resubmits. Users retain full access to their funds through challenge and closure paths based on the last successfully enforced state.
+
+5. **Flow control**
 
    * When a cross-chain escrow or migration is in progress:
 
@@ -98,7 +112,7 @@ The off-chain protocol is responsible for:
    concurrent code paths should never be reached under correct Node behavior, but the on-chain
    contract handles them safely to guarantee fund recovery in all cases.
 
-5. **Optimistic bridging**
+6. **Optimistic bridging**
 
    * Cross-chain actions are **not atomically verifiable** on-chain.
    * Correctness is ensured by:

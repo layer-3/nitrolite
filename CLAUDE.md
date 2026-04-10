@@ -69,6 +69,22 @@ cd test/integration && npm test          # Requires a running clearnode
 - **Go MCP server** (`sdk/mcp-go/`): run `cd sdk/mcp-go && go build .` to verify.
 - **Never** edit `.env` files or commit secrets.
 
+## V1 Protocol Source of Truth
+
+- **API definition**: `docs/api.yaml` — canonical list of all v1 RPC methods, types, and request/response schemas
+- **Protocol spec**: `docs/protocol/` — state channels, transitions, enforcement, security
+- **Contract invariants**: `contracts/SECURITY.md`
+- **Contract design**: `contracts/suggested-contract-design.md`, entrypoint `contracts/src/ChannelHub.sol`
+- **Clearnode docs**: `clearnode/readme.md`, `clearnode/docs/`
+
+**Do NOT use `clearnode/docs/API.md` as v1 reference** — it documents the 0.5.x compat-layer method names (e.g., `transfer`, `create_channel`, `auth_request`). The v1 methods use grouped names (e.g., `channels.v1.submit_state`, `app_sessions.v1.create_app_session`).
+
+### SDK vs Compat
+
+- **`@yellow-org/sdk`** (`sdk/ts/`) — v1 protocol SDK. Use for all new code.
+- **`@yellow-org/sdk-compat`** (`sdk/ts-compat/`) — bridges 0.5.x API surface to v1 runtime. Wraps `Client` with `NitroliteClient`, exposes legacy types and method names. For migration only.
+- **`sdk/go/`** — Go v1 SDK. No compat layer exists for Go.
+
 ## Commit Convention
 
 ```text

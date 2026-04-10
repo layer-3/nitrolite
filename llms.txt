@@ -42,5 +42,5 @@
 - **State Channels**: Off-chain state containers between a user and a node. Signed state updates exchanged off-chain; any party can enforce on-chain.
 - **Clearnode**: Off-chain broker that manages channels, processes RPC requests, and syncs with blockchain.
 - **Wire Format**: JSON-RPC over WebSocket. Request: `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`
-- **Auth Flow**: Challenge-response with Ethereum signatures: auth_request -> auth_challenge -> auth_verify -> JWT
+- **Authorization**: Every RPC request is signed via the `sig` field. Session keys enable delegated signing with spending caps.
 - **App Sessions**: Multi-party extensions on top of channels with quorum-based governance and custom application logic.

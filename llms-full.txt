@@ -62,7 +62,7 @@ The outer key (`req`, `res`) indicates message type. The inner tuple is a 4-elem
 | Field | Description |
 |-------|-------------|
 | RequestId | Numeric identifier unique per connection |
-| Method | Operation name (e.g., "transfer", "auth_request") |
+| Method | Operation name (e.g., "channels.v1.submit_state", "node.v1.ping") |
 | Payload | Method-specific params (object or array) |
 | Timestamp | Unix milliseconds |
 
@@ -80,23 +80,16 @@ The `sig` field contains the sender's signature over the entire `req` or `res` t
 
 ---
 
-## 4. Request Signing & Authentication
+## 4. Request Signing
 
-Every RPC request includes a `sig` field — the client's signature over the entire `req` tuple. This is the primary authorization mechanism in v1.
-
-### Authentication Flow (challenge-response)
-
-1. **auth_request** — Client sends wallet address + optional session key parameters (scope, allowances, expires_at). Request is signed.
-2. **auth_challenge** — Server responds with a random challenge token (UUID).
-3. **auth_verify** — Client EIP-712 signs the challenge message and sends it back.
-4. **JWT issued** — Server responds with a JWT token (valid 24h) for session management.
+Every v1 RPC request includes a `sig` field — the client's signature over the entire `req` tuple. This is the authorization mechanism. There is no separate authentication handshake in v1; request signatures are the identity proof.
 
 ### Session Keys
 
-Specify a `session_key` address in auth_request to enable delegation. Session keys have:
-- Per-asset `allowances` with spending caps
-- `expires_at` timestamp
-- `scope` for permission control (e.g., "app.create", "ledger.readonly")
+Session keys enable delegated signing with scoped permissions. They are registered and managed via `channels.v1.submit_session_key_state` and `app_sessions.v1.submit_session_key_state`. Session keys have:
+- Per-asset allowances with spending caps
+- Expiration timestamps
+- Scoping to specific applications and app sessions
 
 ---
 
@@ -147,35 +140,62 @@ For the full list of protocol and smart contract invariants, see `contracts/SECU
 
 ---
 
-## 7. Clearnode RPC Methods
+## 7. Clearnode V1 RPC Methods
 
-| Method | Description | Access |
-|--------|-------------|--------|
-| `auth_request` | Initiates authentication with the server | Public |
-| `auth_challenge` | Server response with authentication challenge | Public |
-| `auth_verify` | Completes authentication with a challenge response | Public |
-| `ping` | Simple connectivity check | Public |
-| `get_config` | Retrieves broker configuration and supported networks | Public |
-| `get_assets` | Retrieves all supported assets (optionally filtered by chain_id) | Public |
-| `get_channels` | Lists all channels for a participant with status across all chains | Public |
-| `get_app_definition` | Retrieves application definition for a ledger account | Public |
-| `get_app_sessions` | Lists virtual applications for a participant | Public |
-| `get_ledger_entries` | Retrieves detailed ledger entries for a participant | Public |
-| `get_ledger_transactions` | Retrieves transaction history with optional filtering | Public |
-| `get_user_tag` | Retrieves user's tag | Private |
-| `get_session_keys` | Retrieves all active session keys for the authenticated user | Private |
-| `revoke_session_key` | Revokes a session key by setting its expiration to now | Private |
-| `get_rpc_history` | Retrieves all RPC message history for a participant | Private |
-| `get_ledger_balances` | Lists participants and their balances for a ledger account | Private |
-| `transfer` | Transfers funds from user's unified balance to another account | Private |
-| `create_app_session` | Creates a new virtual application on a ledger | Private |
-| `submit_app_state` | Submits an intermediate state into a virtual application | Private |
-| `close_app_session` | Closes a virtual application | Private |
-| `create_channel` | Returns data and broker signature to open a channel | Private |
-| `close_channel` | Returns data and broker signature to close a channel | Private |
-| `resize_channel` | Returns data and broker signature to adjust channel capacity | Private |
-| `app_sessions.v1.submit_session_key_state` | Submits a session key state via V1 API | Private |
-| `app_sessions.v1.get_last_key_states` | Gets latest session key states | Private |
+Canonical reference: `docs/api.yaml`. Methods are grouped by domain with `v1` versioning.
+
+### channels.v1
+
+| Method | Description |
+|--------|-------------|
+| `get_home_channel` | Retrieve home channel for a wallet + asset |
+| `get_escrow_channel` | Retrieve escrow channel by ID |
+| `get_channels` | List all channels for a user with optional filtering |
+| `get_latest_state` | Retrieve latest state for a wallet + asset |
+| `get_states` | Retrieve multiple states with filtering |
+| `request_creation` | Request channel creation (returns signed initial state) |
+| `submit_state` | Submit a signed state transition (deposit, withdraw, transfer, close, resize) |
+| `submit_session_key_state` | Register/update a channel session key |
+| `get_last_key_states` | Get latest channel session key states |
+
+### app_sessions.v1
+
+| Method | Description |
+|--------|-------------|
+| `create_app_session` | Create a new app session between participants |
+| `submit_app_state` | Submit app state update (Operate, Withdraw, or Close intent) |
+| `submit_deposit_state` | Submit a deposit into an app session |
+| `rebalance_app_sessions` | Atomic rebalancing across multiple app sessions |
+| `get_app_definition` | Retrieve app definition for a session |
+| `get_app_sessions` | List app sessions with optional filtering |
+| `submit_session_key_state` | Register/update an app session key |
+| `get_last_key_states` | Get latest app session key states |
+
+### apps.v1
+
+| Method | Description |
+|--------|-------------|
+| `get_apps` | List registered applications |
+| `submit_app_version` | Register a new application (owner must sign packed app data) |
+
+### user.v1
+
+| Method | Description |
+|--------|-------------|
+| `get_balances` | Retrieve user balances |
+| `get_transactions` | Retrieve transaction history with filtering |
+| `get_action_allowances` | Retrieve action allowances based on staking level |
+
+### node.v1
+
+| Method | Description |
+|--------|-------------|
+| `ping` | Connectivity check |
+| `get_config` | Node configuration and supported blockchains |
+| `get_assets` | Supported assets (optionally filtered by blockchain) |
+
+> There is no `close_app_session` method. App sessions are closed via `submit_app_state` with Close intent.
+> Channel operations (transfer, close, resize) are all handled via `submit_state` with different transition types.
 
 ---
 
@@ -230,7 +250,11 @@ const client = await Client.create(
 
 ### Compat Layer (`@yellow-org/sdk-compat`)
 
-Migration bridge from v0.5.3 API. Provides `NitroliteClient` wrapper with the old API shape, internally using the new SDK. Use for gradual migration.
+The compat layer (`@yellow-org/sdk-compat`) bridges the gap between the 0.5.x API surface and the v1 protocol SDK. It exists because dApps built on the old `@layer-3/nitrolite` v0.5.3 package used a different API shape: `NitroliteClient` instead of `Client.create`, legacy method names like `transfer`/`create_channel`/`close_app_session` instead of v1 grouped methods, and different type structures.
+
+The compat layer wraps the v1 `Client` internally but exposes the old 0.5.x API surface, so existing dApps can upgrade the underlying SDK without rewriting all their code at once. It re-exports legacy types (`RPCMethod`, `RPCChannelStatus`, `NitroliteRPCMessage`) and provides helper functions (`createTransferMessage`, `createAuthRequestMessage`) that map to v1 calls internally.
+
+**For new projects, always use `@yellow-org/sdk` directly.** The compat layer is for migration only.
 
 ---
 

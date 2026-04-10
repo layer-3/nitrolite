@@ -1063,9 +1063,12 @@ server.tool(
 
 server.tool(
     'get_rpc_method',
-    'Get the RPC wire format for a given compat-layer method (useful for integration test authors)',
-    { method: z.string().describe('RPC method name (e.g. "get_channels", "transfer", "create_app_session")') },
+    'Get the RPC wire format for a 0.5.x compat-layer method and its v1 equivalent. For v1 method reference, see docs/api.yaml.',
+    { method: z.string().describe('0.5.x compat method name (e.g. "get_channels", "transfer", "create_app_session")') },
     async ({ method }) => {
+        // NOTE: These are 0.5.x compat-layer method names mapped to their v1 wire equivalents.
+        // The v1 API uses grouped methods (e.g. channels.v1.submit_state). The canonical v1
+        // reference is docs/api.yaml. This tool exists for sdk-compat integration test authors.
         const rpcMethods: Record<string, { wireMethod: string; reqFormat: string; resFormat: string }> = {
             ping: { wireMethod: 'node.v1.ping', reqFormat: '{ req: [requestId, "ping", {}, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "ping", { pong: true }] }' },
             get_channels: { wireMethod: 'channels.v1.get_channels', reqFormat: '{ req: [requestId, "get_channels", { wallet?, status?, asset?, channel_type?, pagination? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "get_channels", { channels: [...], metadata: {...} }] }' },
@@ -1074,12 +1077,9 @@ server.tool(
             create_channel: { wireMethod: 'channels.v1.request_creation', reqFormat: '{ req: [requestId, "create_channel", [{ chain_id, token }], timestamp], sig: [...] }', resFormat: '{ res: [requestId, "create_channel", [{ channel_id, channel, state, server_signature }], timestamp], sig: [...] }' },
             close_channel: { wireMethod: 'channels.v1.submit_state', reqFormat: '{ req: [requestId, "close_channel", { channel_id, funds_destination }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "close_channel", { channel_id, state, server_signature }] }' },
             create_app_session: { wireMethod: 'app_sessions.v1.create_app_session', reqFormat: '{ req: [requestId, "create_app_session", { definition, session_data, quorum_sigs, owner_sig? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "create_app_session", { app_session_id, version, status }] }' },
-            close_app_session: { wireMethod: 'app_sessions.v1.close_app_session', reqFormat: '{ req: [requestId, "close_app_session", { app_session_id }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "close_app_session", { app_session_id, status }] }' },
             submit_app_state: { wireMethod: 'app_sessions.v1.submit_app_state', reqFormat: '{ req: [requestId, "submit_app_state", { app_state_update, quorum_sigs }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "submit_app_state", { accepted: boolean }] }' },
             get_app_sessions: { wireMethod: 'app_sessions.v1.get_app_sessions', reqFormat: '{ req: [requestId, "get_app_sessions", { filters? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "get_app_sessions", { sessions: AppSession[] }] }' },
             get_app_definition: { wireMethod: 'app_sessions.v1.get_app_definition', reqFormat: '{ req: [requestId, "get_app_definition", { app_session_id }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "get_app_definition", { definition }] }' },
-            auth_request: { wireMethod: 'auth_request', reqFormat: '{ req: [requestId, "auth_request", { address, session_key?, application?, allowances?, scope?, expires_at? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "auth_challenge", { challenge_message }] }' },
-            auth_verify: { wireMethod: 'auth_verify', reqFormat: '{ req: [requestId, "auth_verify", { challenge?, jwt? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "auth_verify", { success, session_key?, address }] }' },
             get_ledger_transactions: { wireMethod: 'user.v1.get_transactions', reqFormat: '{ req: [requestId, "get_ledger_transactions", { wallet, filters? }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "get_ledger_transactions", { transactions: RPCTransaction[] }] }' },
             resize_channel: { wireMethod: 'channels.v1.submit_state', reqFormat: '{ req: [requestId, "resize_channel", { channel_id, resize_amount, allocate_amount, funds_destination }, timestamp], sig: [...] }', resFormat: '{ res: [requestId, "resize_channel", { channel_id, state, server_signature }] }' },
         };

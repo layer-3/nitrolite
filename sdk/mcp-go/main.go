@@ -432,7 +432,7 @@ func main() {
 	// lookup_rpc_method
 	s.AddTool(mcp.NewTool("lookup_rpc_method",
 		mcp.WithDescription("Look up a clearnode RPC method — returns description and access level"),
-		mcp.WithString("method", mcp.Required(), mcp.Description("RPC method name (e.g. \"get_channels\", \"transfer\", \"auth_request\")")),
+		mcp.WithString("method", mcp.Required(), mcp.Description("RPC method name from clearnode/docs/API.md (0.5.x compat names). For v1 methods see docs/api.yaml.")),
 	), handleLookupRPCMethod)
 
 	// scaffold_project
@@ -693,39 +693,34 @@ Use context.Context for timeouts. Use decimal.Decimal for amounts. Follow standa
 // Static content
 // ---------------------------------------------------------------------------
 
-const authFlowContent = `# Authentication Flow
+const authFlowContent = `# Request Signing & Authorization
 
-The clearnode uses a challenge-response mechanism based on Ethereum signatures, with optional JWT session management.
-
-## Flow
-
-1. **auth_request** — Client sends address + optional session key parameters
-2. **auth_challenge** — Server responds with a random challenge token (UUID)
-3. **auth_verify** — Client signs the challenge with their private key and sends it back
-4. **JWT issued** — Server responds with a JWT token (valid 24h by default)
+In v1, every RPC request includes a ` + "`sig`" + ` field — the client's signature over the entire ` + "`req`" + ` tuple. This is the authorization mechanism. There is no separate authentication handshake; request signatures are the identity proof.
 
 ## Session Keys
 
-Authentication supports delegated session keys with spending caps:
-- Specify a ` + "`session_key`" + ` address in auth_request to enable delegation
-- Set per-asset ` + "`allowances`" + ` to limit spending (e.g., 100 USDC max)
-- Session keys expire at the specified ` + "`expires_at`" + ` timestamp
+Session keys enable delegated signing with scoped permissions. They are managed via:
+- ` + "`channels.v1.submit_session_key_state`" + ` — register/update channel session keys
+- ` + "`app_sessions.v1.submit_session_key_state`" + ` — register/update app session keys
 
-## Example (JSON-RPC)
+Session keys have:
+- Per-asset allowances with spending caps
+- Expiration timestamps
+- Scoping to specific applications and app sessions
+
+## Wire Format
 
 ` + "```json" + `
-// 1. Request
-{ "req": [1, "auth_request", { "address": "0x...", "session_key": "0x..." }, 1619123456789], "sig": ["0x..."] }
+// Every request is signed
+{ "req": [REQUEST_ID, "channels.v1.submit_state", { ... }, TIMESTAMP], "sig": ["0xClientSignature..."] }
 
-// 2. Challenge
-{ "res": [1, "auth_challenge", { "challenge_message": "550e8400-..." }, 1619123456789], "sig": ["0x..."] }
-
-// 3. Verify
-{ "req": [2, "auth_verify", { "challenge": "550e8400-..." }, 1619123456789], "sig": ["0x..."] }
-
-// 4. Success + JWT
-{ "res": [2, "auth_verify", { "address": "0x...", "success": true, "jwt_token": "eyJ..." }, 1619123456789], "sig": ["0x..."] }
+// Server responds with its own signature
+{ "res": [REQUEST_ID, "channels.v1.submit_state", { ... }, TIMESTAMP], "sig": ["0xServerSignature..."] }
 ` + "```" + `
+
+## Note on 0.5.x Compat
+
+The ` + "`@yellow-org/sdk-compat`" + ` layer exposes legacy auth helpers (` + "`createAuthRequestMessage`" + `, ` + "`createAuthVerifyMessage`" + `) that implement a challenge-response flow with JWT. This is the 0.5.x auth surface bridged to v1. New applications using ` + "`@yellow-org/sdk`" + ` directly do not use this flow.
 `
 
 const appSessionPatternsContent = `# App Session Security Patterns

@@ -13,7 +13,9 @@ Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain in
 
 ## TypeScript SDK Conventions
 
-- Package: `@yellow-org/sdk` (main), `@yellow-org/sdk-compat` (migration bridge from v0.5.3)
+- `@yellow-org/sdk` = v1 protocol SDK (use for all new code)
+- `@yellow-org/sdk-compat` = bridges 0.5.x API surface to v1 runtime (migration only, wraps Client with NitroliteClient)
+- V1 API source of truth: `docs/api.yaml`. Do NOT reference `clearnode/docs/API.md` for v1 methods (it has 0.5.x names)
 - Use `const` by default, `let` only when reassignment is needed. No `var`.
 - Prefer `viem` over `ethers.js` for Ethereum interactions.
 - All public API functions exported through barrel `index.ts`.

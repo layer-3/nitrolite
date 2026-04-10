@@ -387,6 +387,136 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testing.T) {
+	// Setup
+	mockStore := new(MockStore)
+	mockSigner := NewMockChannelSigner()
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xNode",
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+
+	existingSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 10},
+		},
+		Quorum:      10,
+		Status:      app.AppSessionStatusOpen,
+		Version:     1,
+		SessionData: "",
+	}
+
+	currentAllocations := map[string]map[string]decimal.Decimal{
+		participant1: {
+			"USDC": decimal.NewFromInt(100),
+		},
+	}
+
+	// Build the core app state update for signing
+	appStateUpdateCore := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentWithdraw,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(60)},
+		},
+		SessionData: "",
+	}
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdateCore)
+
+	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: appSessionID,
+			Intent:       app.AppStateUpdateIntentWithdraw,
+			Version:      "2",
+			Allocations: []rpc.AppAllocationV1{
+				{Participant: participant1, Asset: "USDC", Amount: "60"},
+			},
+			SessionData: "",
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	// Mock expectations
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
+	}, nil).Maybe()
+	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
+	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
+	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-40)).Return(nil)
+
+	// Mock expectations for channel state issuance (issueReleaseReceiverState)
+	homeChannelID := "0xHomeChannel"
+	existingUserState := core.State{
+		Asset:         "USDC",
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			UserBalance: decimal.NewFromInt(200),
+			UserNetFlow: decimal.NewFromInt(200),
+		},
+	}
+
+	// Last signed state has an active escrow channel
+	escrowChannelID := "0xEscrowChannel456"
+	lastSignedState := core.State{
+		Asset:           "USDC",
+		UserWallet:      participant1,
+		Epoch:           1,
+		Version:         1,
+		HomeChannelID:   &homeChannelID,
+		EscrowChannelID: &escrowChannelID,
+	}
+
+	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(lastSignedState, nil)
+
+	// Create RPC context
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
+	}
+
+	// Execute
+	handler.SubmitAppState(ctx)
+
+	// Assert - should fail because participant has an active escrow lock
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when participant has active escrow lock")
+	assert.Contains(t, respErr.Error(), "last signed state is a lock with escrow channel")
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

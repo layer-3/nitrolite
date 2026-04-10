@@ -151,18 +151,11 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 	}
 
 	// TODO: move to DB query
-	shouldSign := true
-	if lastSignedState != nil {
-		lastStateTransition := lastSignedState.Transition
-
-		if lastStateTransition.Type == core.TransitionTypeMutualLock ||
-			lastStateTransition.Type == core.TransitionTypeEscrowLock {
-			shouldSign = false
-		}
-
+	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
+		return rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
 	}
 
-	if newState.HomeChannelID != nil && shouldSign {
+	if newState.HomeChannelID != nil {
 		// Pack and sign the state
 		packedState, err := h.statePacker.PackState(*newState)
 		if err != nil {

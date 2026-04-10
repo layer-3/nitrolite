@@ -30,6 +30,20 @@ import {EcdsaSignatureUtils} from "./sigValidators/EcdsaSignatureUtils.sol";
  * @title ChannelHub
  * @notice Main contract implementing the Nitrolite state channel protocol (single-chain operations)
  * @dev Uses unified transition pattern with ChannelEngine library for validation
+ *
+ * TOKEN COMPATIBILITY:
+ *
+ * Only standard ERC20 tokens and native ETH are supported. The following token types are
+ * incompatible with the static ledger model and must not be used:
+ *
+ * - Rebasing tokens (e.g. stETH, aTokens): their autonomous balance changes are invisible to the
+ *   ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers (e.g. wstETH).
+ * - Fee-on-transfer tokens: the amount received by the contract is less than the amount recorded,
+ *   causing the ledger to overstate holdings from the very first deposit.
+ *
+ * There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept
+ * them, but any discrepancy will produce undefined accounting behavior for all users of that token.
+ * Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
  */
 contract ChannelHub is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -301,12 +315,6 @@ contract ChannelHub is ReentrancyGuard {
     // inflate _nodeBalances during ERC777/hook callbacks, enabling read-only reentrancy for
     // external protocols querying getNodeBalance(). Contrast with withdrawFromNode, which uses
     // CEI (decrement before push) to prevent re-entrancy drains.
-    // NOTE: rebasing tokens (e.g. stETH, aTokens) are NOT supported. The node balance accounting
-    // uses a static ledger that does not reflect autonomous balance changes from rebases.
-    // There is no hard-coded guardrail that prevents depositing a rebasing token — the contract
-    // will accept it, but any autonomous balance change will diverge from the recorded ledger,
-    // producing undefined accounting behavior for all users of that token. Use non-rebasing
-    // wrappers instead (e.g. wstETH instead of stETH).
     function depositToNode(address token, uint256 amount) external payable {
         require(amount > 0, IncorrectAmount());
 

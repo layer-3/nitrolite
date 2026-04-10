@@ -599,22 +599,22 @@ interface AppDefinitionV1 {
 
 **Equal 2-of-2 (peer-to-peer):** Both participants must agree.
 \`\`\`json
-{ "participants": [{ "weight": 50 }, { "weight": 50 }], "quorum": 100 }
+{ "participants": [{ "signatureWeight": 50 }, { "signatureWeight": 50 }], "quorum": 100 }
 \`\`\`
 
 **3-of-3 (multi-party unanimous):** All three must agree.
 \`\`\`json
-{ "participants": [{ "weight": 34 }, { "weight": 33 }, { "weight": 33 }], "quorum": 100 }
+{ "participants": [{ "signatureWeight": 34 }, { "signatureWeight": 33 }, { "signatureWeight": 33 }], "quorum": 100 }
 \`\`\`
 
 **2-of-3 with arbitrator:** Any two can authorize (third party can break ties).
 \`\`\`json
-{ "participants": [{ "weight": 50 }, { "weight": 50 }, { "weight": 50 }], "quorum": 100 }
+{ "participants": [{ "signatureWeight": 50 }, { "signatureWeight": 50 }, { "signatureWeight": 50 }], "quorum": 100 }
 \`\`\`
 
 **Weighted (operator-controlled):** One party has majority weight.
 \`\`\`json
-{ "participants": [{ "weight": 70 }, { "weight": 30 }], "quorum": 70 }
+{ "participants": [{ "signatureWeight": 70 }, { "signatureWeight": 30 }], "quorum": 70 }
 \`\`\`
 
 ## Challenge Periods
@@ -919,6 +919,7 @@ async function main() {
 
     // Ensure funds are available
     await client.deposit(CHAIN_ID, 'usdc', new Decimal(10));
+    await client.checkpoint('usdc');
 
     // 1. Define app session
     const definition: app.AppDefinitionV1 = {
@@ -1355,10 +1356,10 @@ main().catch(console.error);
 `,
         };
 
-        const envExample = `PRIVATE_KEY=0x...
+        const envExample = `${template === 'ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY'}=0x...
 CLEARNODE_URL=wss://clearnode.example.com/ws
 RPC_URL=https://rpc.sepolia.org
-${template === 'transfer-app' ? 'RECIPIENT=0x...' : ''}${template === 'app-session' ? 'PEER_ADDRESS=0x...' : ''}${template === 'ai-agent' ? 'AGENT_PRIVATE_KEY=0x...' : ''}`;
+${template === 'transfer-app' ? 'RECIPIENT=0x...' : ''}${template === 'app-session' ? 'PEER_ADDRESS=0x...' : ''}`;
 
         const text = `# Scaffold: ${template}
 

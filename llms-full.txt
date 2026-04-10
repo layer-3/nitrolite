@@ -372,8 +372,10 @@ await client.transfer(recipient, 'usdc', '5.0');
 ```go
 ctx := context.Background()
 client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(10))
+client.Checkpoint(ctx, "usdc")   // settle deposit on-chain
 client.Transfer(ctx, recipient, "usdc", decimal.NewFromInt(5))
 client.CloseHomeChannel(ctx, "usdc")
+client.Checkpoint(ctx, "usdc")   // settle close on-chain
 ```
 
 ### App Session: 2-of-2 Quorum

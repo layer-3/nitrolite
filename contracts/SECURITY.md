@@ -367,6 +367,8 @@ When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
 Rebasing tokens (e.g. stETH, aTokens, rebase stablecoins) are **not supported**. The protocol uses a static ledger (`_nodeBalances`, `lockedFunds`) that only updates on explicit deposit and withdrawal events.
 When a rebasing token adjusts balances autonomously, the ledger permanently diverges from the actual contract balance. A negative rebase creates an insolvency condition: the ledger overstates holdings, so late withdrawers may receive less than recorded or nothing at all, and any deferred reclaim obligations become unfulfillable.
 
+There is no hard-coded guardrail that prevents depositing a rebasing token — the contract will accept it, but any autonomous balance change will diverge from the recorded ledger, producing undefined accounting behavior for all users of that token.
+
 Use non-rebasing equivalents where available (e.g. wstETH instead of stETH).
 
 ---

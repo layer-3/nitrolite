@@ -558,7 +558,11 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
   * challenges always resolve by enforcing the newest valid state,
   * stalled cross-chain operations can always be completed or reverted.
 
-* **Token compatibility**: only standard (non-rebasing) ERC20 tokens and native ETH are supported. Rebasing tokens (e.g. stETH, aTokens) must not be used — their autonomous balance changes are invisible to the static ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
+* **Token compatibility**:
+
+only standard (non-rebasing) ERC20 tokens and native ETH are supported. Rebasing tokens (e.g. stETH, aTokens) must not be used — their autonomous balance changes are invisible to the static ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
+
+There is no hard-coded guardrail that prevents depositing a rebasing token — the contract will accept it, but any autonomous balance change will diverge from the recorded ledger, producing undefined accounting behavior for all users of that token.
 
 * **Transfer failure resilience**: Outbound transfers (to users) never revert on failure:
 

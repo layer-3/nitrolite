@@ -491,6 +491,8 @@ contract ChannelHub is ReentrancyGuard {
         }
 
         bytes32 channelId = Utils.getChannelId(def, VERSION);
+        require(_channels[channelId].status == ChannelStatus.VOID, IncorrectChannelStatus());
+
         address user = def.user;
 
         _requireValidDefinition(def);

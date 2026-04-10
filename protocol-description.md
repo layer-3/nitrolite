@@ -560,9 +560,12 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
 * **Token compatibility**:
 
-only standard (non-rebasing) ERC20 tokens and native ETH are supported. Rebasing tokens (e.g. stETH, aTokens) must not be used — their autonomous balance changes are invisible to the static ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
+  Only standard ERC20 tokens and native ETH are supported. The following token types are incompatible with the static ledger model:
 
-There is no hard-coded guardrail that prevents depositing a rebasing token — the contract will accept it, but any autonomous balance change will diverge from the recorded ledger, producing undefined accounting behavior for all users of that token.
+  * **Rebasing tokens** (e.g. stETH, aTokens): their autonomous balance changes are invisible to the ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
+  * **Fee-on-transfer tokens**: the amount received by the contract is less than the amount recorded, causing the ledger to overstate holdings from the very first deposit.
+
+  There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
 
 * **Transfer failure resilience**: Outbound transfers (to users) never revert on failure:
 

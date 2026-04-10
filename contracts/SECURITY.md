@@ -362,14 +362,17 @@ When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
 
 ## Unsupported Token Types
 
+Only standard ERC20 tokens and native ETH are supported. The following token types are incompatible with the static ledger model (`_nodeBalances`, `lockedFunds`) that only updates on explicit deposit and withdrawal events. There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
+
 ### Rebasing tokens
 
-Rebasing tokens (e.g. stETH, aTokens, rebase stablecoins) are **not supported**. The protocol uses a static ledger (`_nodeBalances`, `lockedFunds`) that only updates on explicit deposit and withdrawal events.
-When a rebasing token adjusts balances autonomously, the ledger permanently diverges from the actual contract balance. A negative rebase creates an insolvency condition: the ledger overstates holdings, so late withdrawers may receive less than recorded or nothing at all, and any deferred reclaim obligations become unfulfillable.
-
-There is no hard-coded guardrail that prevents depositing a rebasing token — the contract will accept it, but any autonomous balance change will diverge from the recorded ledger, producing undefined accounting behavior for all users of that token.
+Rebasing tokens (e.g. stETH, aTokens, rebase stablecoins) are **not supported**. When a rebasing token adjusts balances autonomously, the ledger permanently diverges from the actual contract balance. A negative rebase creates an insolvency condition: the ledger overstates holdings, so late withdrawers may receive less than recorded or nothing at all, and any deferred reclaim obligations become unfulfillable.
 
 Use non-rebasing equivalents where available (e.g. wstETH instead of stETH).
+
+### Fee-on-transfer tokens
+
+Fee-on-transfer tokens are **not supported**. The amount received by the contract is less than the amount recorded in the ledger, causing it to overstate holdings from the very first deposit. This produces the same class of insolvency as a negative rebase: late withdrawers may receive less than recorded or nothing at all.
 
 ---
 

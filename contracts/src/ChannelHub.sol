@@ -112,6 +112,7 @@ contract ChannelHub is ReentrancyGuard {
     error NoChannelIdFoundForEscrow();
     error IncorrectChannelId();
     error IncorrectNode();
+    error IncorrectMsgSender();
 
     struct ChannelMeta {
         ChannelStatus status;
@@ -608,6 +609,11 @@ contract ChannelHub is ReentrancyGuard {
                 !(status == ChannelStatus.OPERATING && candidate.intent == StateIntent.FINALIZE_MIGRATION),
                 IncorrectStateIntent()
             );
+            // INITIATE_ESCROW_DEPOSIT on the home chain may only be submitted by the node
+            require(
+                !(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT && msg.sender != NODE),
+                IncorrectMsgSender()
+            );
 
             _validateSignatures(channelId, candidate, user, approvedSignatureValidators);
 
@@ -681,6 +687,7 @@ contract ChannelHub is ReentrancyGuard {
         bytes32 escrowId = Utils.getEscrowId(channelId, candidate.version);
 
         if (_isChannelHomeChain(channelId)) {
+            require(msg.sender == NODE, IncorrectMsgSender());
             _processHomeChainEscrowInitiate(channelId, candidate);
             emit EscrowDepositInitiatedOnHome(escrowId, channelId, candidate);
         } else {

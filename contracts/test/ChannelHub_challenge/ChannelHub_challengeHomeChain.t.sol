@@ -415,7 +415,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
     }
 
     function test_challenge_initiateEscrowDeposit_asExisting() public {
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with already enforced initiateEscrowDepositState state
@@ -445,7 +445,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
         cHub.challengeChannel(channelId, initState, challengerSig, ParticipantIndex.NODE);
 
         // Resolve challenge with newer initiateEscrowDepositState state (before timeout)
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Verify challenge was resolved
@@ -462,7 +462,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_asNew() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain (required for FINALIZE to be valid)
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Now challenge with FINALIZE_ESCROW_DEPOSIT
@@ -490,7 +490,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_asExisting() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Then enforce FINALIZE_ESCROW_DEPOSIT on-chain
@@ -519,7 +519,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_resolve() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with older initiate state
@@ -571,7 +571,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_revert_onChallengeEscrowDeposit() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with INITIATE_ESCROW_DEPOSIT state

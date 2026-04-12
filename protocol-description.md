@@ -183,7 +183,7 @@ It does not reconstruct intent — it **verifies and enforces signed states** by
 
 While operating:
 
-* Any **newer signed state** may be enforced on-chain.
+* Any **newer signed state** may be enforced on-chain by any party, with one exception: `INITIATE_ESCROW_DEPOSIT` on the home chain may only be submitted by the Node (see [Challenge rules](#challenge-rules)).
 * Enforcement may:
 
   * pull funds from User,
@@ -258,6 +258,7 @@ Challenges protect against:
 
   * `CLOSE` — channel closure is a terminal operation; enforcing it leaves no live channel to dispute. Parties holding a valid CLOSE state should call `closeChannel` directly instead.
   * `FINALIZE_MIGRATION` on the **old home chain** (channel status `OPERATING`/`DISPUTED`) — this would release the node's funds and move the channel to `MIGRATED_OUT`, which is incompatible with entering `DISPUTED` state.
+  * `INITIATE_ESCROW_DEPOSIT` on the **home chain** by a non-Node caller — only the Node may submit this intent on the home chain, whether via `initiateEscrowDeposit` or `challengeChannel`. This prevents a DDoS attack in which an attacker can lock Node liquidity without committing any funds. The user retains full fund-recovery ability: `INITIATE_ESCROW_DEPOSIT` leaves the user's home-chain allocation unchanged, so challenging the home-chain channel with the immediate predecessor state produces an identical fund distribution.
 
 Invariant:
 

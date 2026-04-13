@@ -15,17 +15,27 @@ func main() {
 	const defaultWSURL = "wss://clearnode-sandbox.yellow.org/v1/ws"
 
 	log.SetFlags(0)
-	log.SetPrefix("clearnode-cli: ")
+	log.SetPrefix("cerebro: ")
 	log.SetOutput(os.Stderr)
 
-	// Get config directory
+	// Resolve config directory: explicit env > legacy "clearnode-cli" > "cerebro"
 	configDir := os.Getenv("CLEARNODE_CLI_CONFIG_DIR")
 	if configDir == "" {
 		userConfDir, err := os.UserConfigDir()
 		if err != nil {
 			log.Fatalf("failed to get user config directory: %v", err)
 		}
-		configDir = filepath.Join(userConfDir, "clearnode-cli")
+
+		legacyDir := filepath.Join(userConfDir, "clearnode-cli")
+		newDir := filepath.Join(userConfDir, "cerebro")
+
+		if info, err := os.Stat(legacyDir); err == nil && info.IsDir() {
+			configDir = legacyDir
+			fmt.Printf("WARNING: Using legacy config directory %s\n", legacyDir)
+			fmt.Printf("         Please rename it to %s\n", newDir)
+		} else {
+			configDir = newDir
+		}
 	}
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -55,7 +65,7 @@ func main() {
 		log.Fatalf("failed to create operator: %v", err)
 	}
 
-	fmt.Println("Clearnode CLI - SDK Development Tool")
+	fmt.Println("Cerebro - Nitrolite SDK Development Tool")
 	fmt.Printf("Connected to: %s\n", wsURL)
 	fmt.Printf("Config directory: %s\n", configDir)
 	fmt.Println("\nType 'help' for available commands or 'exit' to quit")
@@ -68,11 +78,11 @@ func main() {
 	}
 
 	options := append(getStyleOptions(),
-		prompt.OptionPrefix("clearnode> "),
+		prompt.OptionPrefix("cerebro> "),
 		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlC,
 			Fn: func(_ *prompt.Buffer) {
-				log.Println("exiting Clearnode CLI")
+				log.Println("exiting Cerebro")
 				handleExit()
 				os.Exit(0)
 			},
@@ -108,7 +118,7 @@ func main() {
 
 func getStyleOptions() []prompt.Option {
 	return []prompt.Option{
-		prompt.OptionTitle("Clearnode CLI"),
+		prompt.OptionTitle("Cerebro"),
 		prompt.OptionPrefixTextColor(prompt.Green),
 		prompt.OptionPreviewSuggestionTextColor(prompt.Blue),
 

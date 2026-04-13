@@ -108,6 +108,7 @@ e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock"
 17. **Latest-state challenge rule**: A challenge must reference a state with `version ≥ lastEnforcedVersion`; if higher, that state is enforced first.
 18. **Challenge resolution**: Any strictly newer valid state supersedes an active challenge and returns the channel to `OPERATING`.
 19. **Challenge finality**: If no newer state is enforced before challenge expiry, the channel may be unilaterally closed using the last enforced state.
+20. **INITIATE_ESCROW_DEPOSIT home-chain caller restriction**: `INITIATE_ESCROW_DEPOSIT` on the home chain may only be submitted by the Node, via either `initiateEscrowDeposit` or `challengeChannel`. This invariant holds despite the general principle that any party may enforce any valid signed state: the home-chain path of `INITIATE_ESCROW_DEPOSIT` exclusively adjusts Node allocations (`userNfDelta == 0`, `userFundsDelta == 0`), so it removes no user right. The restriction closes a DDoS vector where an attacker with zero capital could lock arbitrary Node liquidity by submitting signed initiation states directly on the home chain without first locking funds on the non-home chain. A user who needs to dispute a channel whose latest on-chain state is `INITIATE_ESCROW_DEPOSIT` can challenge with the immediate predecessor: because the user's allocation is unchanged across that transition, the fund distribution is identical.
 
 ---
 

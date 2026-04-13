@@ -193,7 +193,7 @@ contract ChannelHubTest_allFlowsInvokePurge is ChannelHubTest_Base {
         );
         initState = mutualSignStateBothWithEcdsaValidator(initState, channelId, ALICE_PK);
         escrowId = Utils.getEscrowId(channelId, initState.version);
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initState);
     }
 

@@ -611,8 +611,7 @@ contract ChannelHub is ReentrancyGuard {
             );
             // INITIATE_ESCROW_DEPOSIT on the home chain may only be submitted by the node
             require(
-                !(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT && msg.sender != NODE),
-                IncorrectMsgSender()
+                !(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT && msg.sender != NODE), IncorrectMsgSender()
             );
 
             _validateSignatures(channelId, candidate, user, approvedSignatureValidators);

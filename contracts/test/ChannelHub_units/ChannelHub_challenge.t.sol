@@ -5,7 +5,14 @@ import {ChannelHubTest_Base} from "../ChannelHub_Base.t.sol";
 import {TestUtils} from "../TestUtils.sol";
 import {Utils} from "../../src/Utils.sol";
 import {ChannelHub} from "../../src/ChannelHub.sol";
-import {State, ChannelDefinition, StateIntent, Ledger, ChannelStatus, ParticipantIndex} from "../../src/interfaces/Types.sol";
+import {
+    State,
+    ChannelDefinition,
+    StateIntent,
+    Ledger,
+    ChannelStatus,
+    ParticipantIndex
+} from "../../src/interfaces/Types.sol";
 
 contract ChannelHubTest_challenge is ChannelHubTest_Base {
     ChannelDefinition internal def;

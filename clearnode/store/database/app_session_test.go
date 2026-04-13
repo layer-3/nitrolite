@@ -619,10 +619,10 @@ func TestDBStore_GetAppSessionsCountByLabels(t *testing.T) {
 		store := NewDBStore(db)
 
 		now := time.Now()
-		db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now})
-		db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, UpdatedAt: now})
-		db.Create(&AppSessionV1{ID: "s3", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusClosed, Nonce: 3, UpdatedAt: now})
-		db.Create(&AppSessionV1{ID: "s4", ApplicationID: "app2", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now})
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s3", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusClosed, Nonce: 3, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s4", ApplicationID: "app2", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now}).Error)
 
 		results, err := store.GetAppSessionsCountByLabels()
 		require.NoError(t, err)
@@ -643,8 +643,8 @@ func TestDBStore_GetAppSessionsCountByLabels(t *testing.T) {
 		store := NewDBStore(db)
 
 		now := time.Now()
-		db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, Version: 1, UpdatedAt: now})
-		db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, Version: 1, UpdatedAt: now})
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, Version: 1, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, Version: 1, UpdatedAt: now}).Error)
 
 		// Transition one session to closed
 		require.NoError(t, store.UpdateAppSession(app.AppSessionV1{

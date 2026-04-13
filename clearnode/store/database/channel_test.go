@@ -889,9 +889,10 @@ func TestDBStore_GetChannelsCountByLabels(t *testing.T) {
 		}))
 
 		// Transition one channel to closed
-		require.NoError(t, store.UpdateChannel(core.Channel{
-			ChannelID: "0xchannel1", Status: core.ChannelStatusClosed, Nonce: 1,
-		}))
+		ch1, err := store.GetChannelByID("0xchannel1")
+		require.NoError(t, err)
+		ch1.Status = core.ChannelStatusClosed
+		require.NoError(t, store.UpdateChannel(*ch1))
 
 		results, err := store.GetChannelsCountByLabels()
 		require.NoError(t, err)

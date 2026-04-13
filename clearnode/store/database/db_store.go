@@ -69,7 +69,7 @@ func (s *DBStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 			JOIN channel_states s ON s.home_channel_id = c.channel_id AND s.version = c.state_version
 			WHERE c.user_wallet = user_balances.user_wallet
 			  AND c.asset = user_balances.asset
-			  AND c.type = 0
+			  AND c.type = 1
 			  AND c.status <= 1
 			  AND c.state_version > 0
 			LIMIT 1

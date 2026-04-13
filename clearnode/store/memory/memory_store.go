@@ -14,6 +14,7 @@ type MemoryStoreV1 struct {
 	channelSigValidators map[uint64]map[uint8]string      // map[blockchain_id]map[validator_id]validator_address
 	supportedAssets      map[string]map[uint64]string     // map[asset_symbol]map[blockchain_id]string
 	tokenAssets          map[uint64]map[string]core.Asset // map[blockchain_id]map[token_address]asset
+	tokenDecimals        map[uint64]map[string]uint8      // map[blockchain_id]map[token_address]decimals
 	assetDecimals        map[string]uint8                 // map[asset_symbol]decimals
 }
 
@@ -50,6 +51,7 @@ func NewMemoryStoreV1(assetsConfig AssetsConfig, blockchainsConfig map[uint64]Bl
 
 	supportedAssets := make(map[string]map[uint64]string)
 	tokenAssets := make(map[uint64]map[string]core.Asset)
+	tokenDecimals := make(map[uint64]map[string]uint8)
 	assetDecimals := make(map[string]uint8)
 	assets := make([]core.Asset, 0, len(assetsConfig.Assets))
 	for _, asset := range assetsConfig.Assets {
@@ -80,6 +82,11 @@ func NewMemoryStoreV1(assetsConfig AssetsConfig, blockchainsConfig map[uint64]Bl
 				supportedAssets[asset.Symbol] = make(map[uint64]string)
 			}
 			supportedAssets[asset.Symbol][token.BlockchainID] = tokenAddress
+
+			if _, ok := tokenDecimals[token.BlockchainID]; !ok {
+				tokenDecimals[token.BlockchainID] = make(map[string]uint8)
+			}
+			tokenDecimals[token.BlockchainID][tokenAddress] = token.Decimals
 
 			if _, ok := tokenAssets[token.BlockchainID]; !ok {
 				tokenAssets[token.BlockchainID] = make(map[string]core.Asset)
@@ -229,15 +236,15 @@ func (ms *MemoryStoreV1) GetAssetDecimals(asset string) (uint8, error) {
 func (ms *MemoryStoreV1) GetTokenDecimals(blockchainID uint64, tokenAddress string) (uint8, error) {
 	tokenAddress = strings.ToLower(tokenAddress)
 
-	assetsOnChain, ok := ms.tokenAssets[blockchainID]
+	decimalsOnChain, ok := ms.tokenDecimals[blockchainID]
 	if !ok {
 		return 0, fmt.Errorf("blockchain with ID '%d' is not supported", blockchainID)
 	}
-	asset, ok := assetsOnChain[tokenAddress]
+	decimals, ok := decimalsOnChain[tokenAddress]
 	if !ok {
 		return 0, fmt.Errorf("token %s is not supported on blockchain with ID '%d'", tokenAddress, blockchainID)
 	}
-	return asset.Decimals, nil
+	return decimals, nil
 }
 
 // GetTokenAsset returns the asset for a token on a specific blockchain

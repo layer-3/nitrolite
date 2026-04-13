@@ -127,7 +127,7 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	return r.useStoreInTx(func(store ChannelHubReactorStore) error {
+	err := r.useStoreInTx(func(store ChannelHubReactorStore) error {
 		var err error
 		switch eventID {
 		case channelHubAbi.Events["NodeBalanceUpdated"].ID:
@@ -182,9 +182,6 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 		default:
 			logger.Warn("unknown event: " + eventID.Hex())
 		}
-		if r.onEventProcessed != nil {
-			r.onEventProcessed(r.blockchainID, err == nil)
-		}
 		if err != nil {
 			logger.Warn("error processing event", "error", err)
 			return errors.Wrap(err, "error processing event")
@@ -205,6 +202,10 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 		return nil
 	})
+	if r.onEventProcessed != nil {
+		r.onEventProcessed(r.blockchainID, err == nil)
+	}
+	return err
 }
 
 func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {

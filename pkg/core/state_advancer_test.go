@@ -31,6 +31,66 @@ func newMutualLockState(t *testing.T, amount decimal.Decimal) *State {
 	return state
 }
 
+func newEscrowLockState(t *testing.T, amount decimal.Decimal) *State {
+	t.Helper()
+	userWallet := "0xUser"
+	asset := "USDC"
+	chanID := "0xHomeChannelId"
+
+	state := NewVoidState(asset, userWallet)
+	state.Version = 5
+	state.HomeChannelID = &chanID
+	state.ID = GetStateID(userWallet, asset, 0, 5)
+	state.HomeLedger.TokenAddress = "0xToken"
+	state.HomeLedger.BlockchainID = 1
+	state.HomeLedger.UserBalance = amount
+
+	_, err := state.ApplyEscrowLockTransition(2, "0xForeignToken", amount)
+	require.NoError(t, err)
+
+	sig := "0xSig"
+	state.UserSig = &sig
+	state.NodeSig = &sig
+
+	return state
+}
+
+func TestValidateAdvancement_StrictTransitionOrdering(t *testing.T) {
+	t.Parallel()
+
+	advancer := NewStateAdvancerV1(newMockAssetStore())
+	amount := decimal.NewFromInt(10)
+	sig := "0xSig"
+
+	t.Run("reject_non_escrow_deposit_after_mutual_lock", func(t *testing.T) {
+		t.Parallel()
+		mutualLockState := newMutualLockState(t, amount)
+
+		proposed := mutualLockState.NextState()
+		_, err := proposed.ApplyHomeDepositTransition(amount)
+		require.NoError(t, err)
+		proposed.UserSig = &sig
+
+		err = advancer.ValidateAdvancement(*mutualLockState, *proposed)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "after mutual lock, only escrow deposit is allowed")
+	})
+
+	t.Run("reject_non_escrow_withdraw_after_escrow_lock", func(t *testing.T) {
+		t.Parallel()
+		escrowLockState := newEscrowLockState(t, amount)
+
+		proposed := escrowLockState.NextState()
+		_, err := proposed.ApplyHomeDepositTransition(amount)
+		require.NoError(t, err)
+		proposed.UserSig = &sig
+
+		err = advancer.ValidateAdvancement(*escrowLockState, *proposed)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "after escrow lock, only escrow withdraw is allowed")
+	})
+}
+
 func TestValidateAdvancement_EscrowDeposit(t *testing.T) {
 	t.Parallel()
 

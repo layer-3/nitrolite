@@ -264,7 +264,7 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 				Decimals:              6,
 				SuggestedBlockchainID: "137",
 				Tokens: []rpc.TokenV1{
-					{BlockchainID: "137", Address: "0xToken"},
+					{BlockchainID: "137", Address: "0xToken", Decimals: 6},
 				},
 			},
 		},

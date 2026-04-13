@@ -94,6 +94,17 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 
 	lastTransition := currentState.Transition
 
+	switch lastTransition.Type {
+	case TransitionTypeMutualLock:
+		if newTransition.Type != TransitionTypeEscrowDeposit {
+			return fmt.Errorf("after mutual lock, only escrow deposit is allowed, got: %d", newTransition.Type)
+		}
+	case TransitionTypeEscrowLock:
+		if newTransition.Type != TransitionTypeEscrowWithdraw {
+			return fmt.Errorf("after escrow lock, only escrow withdraw is allowed, got: %d", newTransition.Type)
+		}
+	}
+
 	switch newTransition.Type {
 	case TransitionTypeVoid:
 		return fmt.Errorf("cannot apply void transition as new transition")

@@ -12,7 +12,6 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
-	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // Handler manages app session operations and provides RPC endpoints for app session management.
@@ -20,7 +19,7 @@ type Handler struct {
 	useStoreInTx       StoreTxProvider
 	assetStore         AssetStore
 	actionGateway      ActionGateway
-	signer             sign.Signer
+	signer             *core.ChannelDefaultSigner
 	stateAdvancer      core.StateAdvancer
 	statePacker        core.StatePacker
 	nodeAddress        string // Node's wallet address
@@ -37,7 +36,7 @@ func NewHandler(
 	useStoreInTx StoreTxProvider,
 	assetStore AssetStore,
 	actionGateway ActionGateway,
-	signer sign.Signer,
+	signer *core.ChannelDefaultSigner,
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,
@@ -73,10 +72,14 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 		},
 	)
 
-	for _, sigHex := range signatures {
+	for i, sigHex := range signatures {
 		sigBytes, err := hexutil.Decode(sigHex)
 		if err != nil {
 			return rpc.Errorf("failed to decode signature: %v", err)
+		}
+
+		if len(sigBytes) == 0 {
+			return rpc.Errorf("empty signature after decode at index %d", i)
 		}
 
 		sigType := app.AppSessionSignerTypeV1(sigBytes[0])
@@ -151,18 +154,11 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 	}
 
 	// TODO: move to DB query
-	shouldSign := true
-	if lastSignedState != nil {
-		lastStateTransition := lastSignedState.Transition
-
-		if lastStateTransition.Type == core.TransitionTypeMutualLock ||
-			lastStateTransition.Type == core.TransitionTypeEscrowLock {
-			shouldSign = false
-		}
-
+	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
+		return rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
 	}
 
-	if newState.HomeChannelID != nil && shouldSign {
+	if newState.HomeChannelID != nil {
 		// Pack and sign the state
 		packedState, err := h.statePacker.PackState(*newState)
 		if err != nil {

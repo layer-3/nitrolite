@@ -13,6 +13,7 @@ import {
     ChannelStatus,
     EscrowStatus
 } from "../../src/interfaces/Types.sol";
+import {TestUtils} from "../TestUtils.sol";
 
 // forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
@@ -90,11 +91,11 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - 1000, "User balance after channel creation");
 
         // transfer 42 (allocation decreases by 42, node net flow decreases by 42)
-        state = nextState(state, StateIntent.OPERATE, [uint256(958), uint256(0)], [int256(1000), int256(-42)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(958), uint256(0)], [int256(1000), int256(-42)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // deposit from another chain
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.INITIATE_ESCROW_DEPOSIT,
             // user amounts stay the same, node amounts increase by 500
@@ -114,14 +115,14 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
         // initiate escrow deposit on home chain
         // Expected: user allocation = 958, user net flow = 1000, node allocation = 0, node net flow = -42
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, state);
         verifyChannelState(
             channelId, [uint256(958), uint256(500)], [int256(1000), int256(458)], "after cross chain deposit"
         );
 
         // finalize escrow deposit
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             // user allocation amount increases by cross-chain deposit, node allocation goes to 0
@@ -136,16 +137,19 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // receive 24 (allocation increases by 24, node net flow increases by 24)
-        state = nextState(state, StateIntent.OPERATE, [uint256(1482), uint256(0)], [int256(1000), int256(482)]);
+        state =
+            TestUtils.nextState(state, StateIntent.OPERATE, [uint256(1482), uint256(0)], [int256(1000), int256(482)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // send 12 (allocation decreases by 12, node net flow decreases by 12)
-        state = nextState(state, StateIntent.OPERATE, [uint256(1470), uint256(0)], [int256(1000), int256(470)]);
+        state =
+            TestUtils.nextState(state, StateIntent.OPERATE, [uint256(1470), uint256(0)], [int256(1000), int256(470)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // withdraw 250 on home chain
         // Expected: user allocation = 1220, user net flow = 750, node allocation = 0, node net flow = 470
-        state = nextState(state, StateIntent.WITHDRAW, [uint256(1220), uint256(0)], [int256(750), int256(470)]);
+        state =
+            TestUtils.nextState(state, StateIntent.WITHDRAW, [uint256(1220), uint256(0)], [int256(750), int256(470)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         vm.prank(alice);
@@ -156,19 +160,19 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - 750, "User balance after withdrawal");
 
         // send 2 (allocation decreases by 2, node net flow decreases by 2)
-        state = nextState(state, StateIntent.OPERATE, [uint256(1218), uint256(0)], [int256(750), int256(468)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(1218), uint256(0)], [int256(750), int256(468)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // receive 3 (allocation increases by 3, node net flow increases by 3)
-        state = nextState(state, StateIntent.OPERATE, [uint256(1221), uint256(0)], [int256(750), int256(471)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(1221), uint256(0)], [int256(750), int256(471)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // send 4 (allocation decreases by 4, node net flow decreases by 4)
-        state = nextState(state, StateIntent.OPERATE, [uint256(1217), uint256(0)], [int256(750), int256(467)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(1217), uint256(0)], [int256(750), int256(467)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // withdrawal to another chain
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.INITIATE_ESCROW_WITHDRAWAL,
             // home chain stays the same
@@ -187,7 +191,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // NOTE: see a `test_withdrawalEscrow_nonHomeChain` test for that
 
         // finalize escrow withdrawal on another chain
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             // user allocation decreases by withdrawal amount, node allocation stays 0, node net flow decreases by withdrawal amount
@@ -202,7 +206,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // receive 10 (allocation increases by 10, node net flow increases by 10)
-        state = nextState(state, StateIntent.OPERATE, [uint256(477), uint256(0)], [int256(750), int256(-273)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(477), uint256(0)], [int256(750), int256(-273)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // checkpoint on home chain
@@ -214,19 +218,19 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token.balanceOf(alice), INITIAL_BALANCE - 750, "User balance after checkpoint");
 
         // send 9 (allocation decreases by 9, node net flow decreases by 9)
-        state = nextState(state, StateIntent.OPERATE, [uint256(468), uint256(0)], [int256(750), int256(-282)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(468), uint256(0)], [int256(750), int256(-282)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // receive 8 (allocation increases by 8, node net flow increases by 8)
-        state = nextState(state, StateIntent.OPERATE, [uint256(476), uint256(0)], [int256(750), int256(-274)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(476), uint256(0)], [int256(750), int256(-274)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // send 7 (allocation decreases by 7, node net flow decreases by 7)
-        state = nextState(state, StateIntent.OPERATE, [uint256(469), uint256(0)], [int256(750), int256(-281)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(469), uint256(0)], [int256(750), int256(-281)]);
         state = mutualSignStateBothWithEcdsaValidator(state, channelId, ALICE_PK);
 
         // migrate channel
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.INITIATE_MIGRATION,
             // home chain stays the same
@@ -245,7 +249,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // NOTE: see a `test_migration_nonHomeChain` test for that
 
         // finalize migration on old home chain
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_MIGRATION,
             // channel closes on old home chain, allocations go to 0, net flows balance out
@@ -348,10 +352,10 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // escrow deposit locked funds should also be unlocked after `unlockAt` time passes alongside any other on-chain call
         vm.warp(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY() + 1);
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token));
 
         // state from the "happyPath" test, but with home and nonHome states swapped
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(1458), uint256(0)],
@@ -370,7 +374,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // Verify user balance after deposit finalized has NOT changed
         assertEq(token.balanceOf(bob), INITIAL_BALANCE - 500, "User balance after escrow deposit finalized");
 
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token));
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 500, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
@@ -461,10 +465,10 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         // ====== Finalize escrow deposit ======
         vm.warp(block.timestamp + cHub.ESCROW_DEPOSIT_UNLOCK_DELAY() + 1);
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token14dec));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token14dec));
 
         // After finalization, home chain user allocation increases, non-home releases funds to node
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(60 * 1e6), uint256(0)], // Home: user allocation increases by 10 USDC
@@ -484,7 +488,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         assertEq(token14dec.balanceOf(bob), 990 * 1e14, "User balance after escrow deposit finalized");
 
         // Verify node received the deposited tokens
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token14dec));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token14dec));
         assertEq(nodeBalanceAfter, nodeBalanceBefore + 10 * 1e14, "Node balance after escrow deposit finalized");
 
         // Verify escrow struct is updated on ChannelsHub
@@ -502,7 +506,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token));
 
         // state from the "happyPath" test, but with home and nonHome states swapped
         State memory state = State({
@@ -542,7 +546,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateEscrowWithdrawal(bobDef, state);
 
         // Verify user node's after deposit (deposited 500)
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token));
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 750, "Node balance after escrow withdrawal");
 
         // Verify escrow struct is updated on ChannelsHub: escrow data exists, `locked` equals to withdrawalAmount
@@ -556,7 +560,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         uint256 bobBalanceBefore = token.balanceOf(bob);
 
         // finalize escrow withdrawal on another chain
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(467), uint256(0)],
@@ -596,10 +600,10 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token8dec.mint(node, 100 * 1e8);
         token8dec.approve(address(cHub), 100 * 1e8);
-        cHub.depositToVault(node, address(token8dec), 100 * 1e8);
+        cHub.depositToNode(address(token8dec), 100 * 1e8);
         vm.stopPrank();
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token8dec));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token8dec));
 
         // Bob wants to withdraw 5 tokens on non-home chain (5e8 with 8 decimals = 5e2 with 2 decimals)
         State memory state = State({
@@ -640,7 +644,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateEscrowWithdrawal(bobDef, state);
 
         // Verify node locked the withdrawal amount
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token8dec));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token8dec));
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 5 * 1e8, "Node balance after escrow withdrawal initiation");
 
         // Verify escrow struct is created
@@ -655,7 +659,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
         // Finalize escrow withdrawal on non-home chain
         // After withdrawal, user allocation on home decreases by 5 tokens (5e2 with 2 decimals)
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(5 * 1e2), uint256(0)], // Home: user allocation decreased by 5 tokens
@@ -688,7 +692,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         (ChannelStatus status,,,,) = cHub.getChannelData(bobChannelId);
         assertEq(uint8(status), uint8(ChannelStatus.VOID), "Channel should be VOID on non-home chain");
 
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token));
         uint256 userBalanceBefore = token.balanceOf(bob);
 
         // state from the "happyPath" test
@@ -723,7 +727,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         cHub.initiateMigration(bobDef, state);
 
         // Verify node's balance after migration (should have locked 469)
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token));
         assertEq(nodeBalanceAfter, nodeBalanceBefore - 469, "Node balance after migration initiation");
 
         // user balance should not have changed
@@ -764,20 +768,20 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
         // perform some operations to verify channel is operating as normal
         // send 9 (allocation decreases by 9, node net flow decreases by 9)
-        state = nextState(state, StateIntent.OPERATE, [uint256(460), uint256(0)], [int256(0), int256(460)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(460), uint256(0)], [int256(0), int256(460)]);
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
 
         // receive 8 (allocation increases by 8, node net flow increases by 8)
-        state = nextState(state, StateIntent.OPERATE, [uint256(468), uint256(0)], [int256(0), int256(468)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(468), uint256(0)], [int256(0), int256(468)]);
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
 
         // send 7 (allocation decreases by 7, node net flow decreases by 7)
-        state = nextState(state, StateIntent.OPERATE, [uint256(461), uint256(0)], [int256(0), int256(461)]);
+        state = TestUtils.nextState(state, StateIntent.OPERATE, [uint256(461), uint256(0)], [int256(0), int256(461)]);
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
 
         // withdraw 400 on home chain
         // Expected: user allocation = 61, user net flow = -400, node allocation = 0, node net flow = 461
-        state = nextState(state, StateIntent.WITHDRAW, [uint256(61), uint256(0)], [int256(-400), int256(461)]);
+        state = TestUtils.nextState(state, StateIntent.WITHDRAW, [uint256(61), uint256(0)], [int256(-400), int256(461)]);
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
 
         vm.prank(bob);
@@ -803,7 +807,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token10dec.mint(node, 100 * 1e10);
         token10dec.approve(address(cHub), 100 * 1e10);
-        cHub.depositToVault(node, address(token10dec), 100 * 1e10);
+        cHub.depositToNode(address(token10dec), 100 * 1e10);
         vm.stopPrank();
 
         // 1. Create Channel with 10-decimal token on Old Home Chain
@@ -844,7 +848,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
         // 2. Perform some operations to build up channel state
         // Transfer 5 tokens (allocation decreases, node net flow decreases)
-        state = nextState(
+        state = TestUtils.nextState(
             state, StateIntent.OPERATE, [uint256(45 * 1e10), uint256(0)], [int256(50 * 1e10), int256(-5 * 1e10)]
         );
         state = mutualSignStateBothWithEcdsaValidator(state, bobChannelId, BOB_PK);
@@ -857,13 +861,13 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
         vm.startPrank(node);
         token14dec.mint(node, 100 * 1e14);
         token14dec.approve(address(cHub), 100 * 1e14);
-        cHub.depositToVault(node, address(token14dec), 100 * 1e14);
+        cHub.depositToNode(address(token14dec), 100 * 1e14);
         vm.stopPrank();
 
         // Initiate migration: Old home has 45 tokens (45e10 with 10 decimals)
         // New home will have 45 tokens (45e14 with 14 decimals)
         // Node must lock equivalent value: 45e10 in WAD = 45e18, 45e14 in WAD = 45e18 ✓
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.INITIATE_MIGRATION,
             [uint256(45 * 1e10), uint256(0)], // Old home stays the same
@@ -888,7 +892,7 @@ contract ChannelHubTest_CrossChain_Lifecycle is ChannelHubTest_Base {
 
         // 4. Finalize Migration on Old Home Chain
         // After migration completes, allocations zero out on old home
-        state = nextState(
+        state = TestUtils.nextState(
             state,
             StateIntent.FINALIZE_MIGRATION,
             [uint256(0), uint256(0)], // Old home: allocations zero out

@@ -23,7 +23,7 @@ import (
 func TestSubmitDepositState_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -226,6 +226,9 @@ func TestSubmitDepositState_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.StateNodeSig, "Node signature should be present")
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, []byte("packed"), response.StateNodeSig)
+
 	// Verify all mock expectations
 	mockStore.AssertExpectations(t)
 }
@@ -233,7 +236,7 @@ func TestSubmitDepositState_Success(t *testing.T) {
 func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -378,7 +381,7 @@ func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -541,8 +544,8 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 // app lookup and AllowAction are skipped but deposit still succeeds.
 func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
-	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockSigner := NewMockChannelSigner()
+	nodeAddress := strings.ToLower(mockSigner.PublicKey().Address().String())
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 

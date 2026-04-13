@@ -22,3 +22,6 @@ export * from './state.js';
 
 // Export state packer
 export * from './state_packer.js';
+
+// Export state advancer
+export * from './state_advancer.js';

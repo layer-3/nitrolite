@@ -9,7 +9,7 @@ import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "./TestUtils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
 import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
 import {SessionKeyValidator, SessionKeyAuthorization} from "../src/sigValidators/SessionKeyValidator.sol";
-import {ChannelStatus, State, StateIntent, Ledger, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
+import {ChannelStatus, State, DEFAULT_SIG_VALIDATOR_ID} from "../src/interfaces/Types.sol";
 import {ISignatureValidator} from "../src/interfaces/ISignatureValidator.sol";
 import {Utils} from "../src/Utils.sol";
 
@@ -39,12 +39,12 @@ contract ChannelHubTest_Base is Test {
     uint256 constant INITIAL_BALANCE = 10000;
 
     function setUp() public virtual {
-        // Deploy contracts
-        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR);
-        token = new MockERC20("Test Token", "TST", 18);
-
         node = vm.addr(NODE_PK);
         alice = vm.addr(ALICE_PK);
+
+        // Deploy contracts
+        cHub = new ChannelHub(ECDSA_SIG_VALIDATOR, node);
+        token = new MockERC20("Test Token", "TST", 18);
         aliceSk1 = vm.addr(ALICE_SK1_PK);
         bob = vm.addr(BOB_PK);
 
@@ -54,127 +54,27 @@ contract ChannelHubTest_Base is Test {
 
         vm.startPrank(node);
         token.approve(address(cHub), INITIAL_BALANCE);
-        cHub.depositToVault(node, address(token), INITIAL_BALANCE);
+        cHub.depositToNode(address(token), INITIAL_BALANCE);
         vm.stopPrank();
+
+        vm.deal(node, INITIAL_BALANCE);
+        vm.prank(node);
+        cHub.depositToNode{value: INITIAL_BALANCE}(address(0), INITIAL_BALANCE);
 
         // Register SessionKeyValidator for the node
         bytes memory skValidatorSig = TestUtils.buildAndSignValidatorRegistration(
-            vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK
+            vm, SESSION_KEY_VALIDATOR_ID, address(SK_SIG_VALIDATOR), NODE_PK, address(cHub)
         );
-        cHub.registerNodeValidator(node, SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+        cHub.registerNodeValidator(SESSION_KEY_VALIDATOR_ID, SK_SIG_VALIDATOR, skValidatorSig);
+
+        // Advance past VALIDATOR_ACTIVATION_DELAY so the registered validator is usable
+        vm.warp(block.timestamp + cHub.VALIDATOR_ACTIVATION_DELAY() + 1);
 
         vm.prank(alice);
         token.approve(address(cHub), INITIAL_BALANCE);
 
         vm.prank(bob);
         token.approve(address(cHub), INITIAL_BALANCE);
-    }
-
-    function nextState(State memory state, StateIntent intent, uint256[2] memory allocations, int256[2] memory netFlows)
-        internal
-        pure
-        returns (State memory)
-    {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: 0,
-                token: address(0),
-                decimals: 0,
-                userAllocation: 0,
-                userNetFlow: 0,
-                nodeAllocation: 0,
-                nodeNetFlow: 0
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
-    }
-
-    function nextState(
-        State memory state,
-        StateIntent intent,
-        uint256[2] memory allocations,
-        int256[2] memory netFlows,
-        uint64 nonHomeChainId,
-        address nonHomeChainToken,
-        uint256[2] memory nonHomeAllocations,
-        int256[2] memory nonHomeNetFlows
-    ) internal pure returns (State memory) {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: nonHomeChainId,
-                token: nonHomeChainToken,
-                decimals: 18,
-                userAllocation: nonHomeAllocations[0],
-                userNetFlow: nonHomeNetFlows[0],
-                nodeAllocation: nonHomeAllocations[1],
-                nodeNetFlow: nonHomeNetFlows[1]
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
-    }
-
-    function nextState(
-        State memory state,
-        StateIntent intent,
-        uint256[2] memory allocations,
-        int256[2] memory netFlows,
-        uint64 nonHomeChainId,
-        address nonHomeChainToken,
-        uint8 nonHomeDecimals,
-        uint256[2] memory nonHomeAllocations,
-        int256[2] memory nonHomeNetFlows
-    ) internal pure returns (State memory) {
-        return State({
-            version: state.version + 1,
-            intent: intent,
-            metadata: state.metadata,
-            homeLedger: Ledger({
-                chainId: state.homeLedger.chainId,
-                token: state.homeLedger.token,
-                decimals: state.homeLedger.decimals,
-                userAllocation: allocations[0],
-                userNetFlow: netFlows[0],
-                nodeAllocation: allocations[1],
-                nodeNetFlow: netFlows[1]
-            }),
-            nonHomeLedger: Ledger({
-                chainId: nonHomeChainId,
-                token: nonHomeChainToken,
-                decimals: nonHomeDecimals,
-                userAllocation: nonHomeAllocations[0],
-                userNetFlow: nonHomeNetFlows[0],
-                nodeAllocation: nonHomeAllocations[1],
-                nodeNetFlow: nonHomeNetFlows[1]
-            }),
-            userSig: "",
-            nodeSig: ""
-        });
     }
 
     function mutualSignStateBothWithEcdsaValidator(State memory state, bytes32 channelId, uint256 userPk)
@@ -239,7 +139,7 @@ contract ChannelHubTest_Base is Test {
         );
         assertEq(latestState.homeLedger.nodeNetFlow, netFlows[1], string.concat(description, ": Node net flow: "));
 
-        uint256 nodeBalance = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalance = cHub.getNodeBalance(address(token));
         uint256 expectedNodeBalance =
             netFlows[1] < 0 ? INITIAL_BALANCE + uint256(-netFlows[1]) : INITIAL_BALANCE - uint256(netFlows[1]);
         assertEq(nodeBalance, expectedNodeBalance, string.concat(description, ": Node balance: "));

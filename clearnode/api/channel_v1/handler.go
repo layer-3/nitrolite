@@ -19,6 +19,7 @@ type Handler struct {
 	statePacker      core.StatePacker
 	nodeAddress      string // Node's wallet address for channel ID calculation
 	minChallenge     uint32
+	maxChallenge     uint32
 	metrics          metrics.RuntimeMetricExporter
 	maxSessionKeyIDs int
 }
@@ -32,7 +33,7 @@ func NewHandler(
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,
-	minChallenge uint32,
+	minChallenge, maxChallenge uint32,
 	m metrics.RuntimeMetricExporter,
 	maxSessionKeyIDs int,
 ) *Handler {
@@ -45,6 +46,7 @@ func NewHandler(
 		nodeSigner:       nodeSigner,
 		nodeAddress:      nodeAddress,
 		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
 		metrics:          m,
 		maxSessionKeyIDs: maxSessionKeyIDs,
 	}
@@ -66,7 +68,11 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 	if incomingTransition.Type != core.TransitionTypeTransferSend {
 		return nil, rpc.Errorf("incoming state doesn't have 'transfer_send' transition")
 	}
-	receiverWallet := incomingTransition.AccountID
+	receiverWallet, err := core.NormalizeHexAddress(incomingTransition.AccountID)
+	if err != nil {
+		return nil, rpc.Errorf("invalid receiver wallet address: %v", err)
+	}
+
 	if senderState.UserWallet == receiverWallet {
 		return nil, rpc.Errorf("sender and receiver wallets are the same")
 	}
@@ -85,7 +91,7 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 
 	currentState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, false)
 	if err != nil {
-		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, incomingTransition.AccountID)
+		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, receiverWallet)
 	}
 	if currentState == nil {
 		currentState = core.NewVoidState(senderState.Asset, receiverWallet)
@@ -102,20 +108,15 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 
 	lastSignedState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, true)
 	if err != nil {
-		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, incomingTransition.AccountID)
+		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, receiverWallet)
 	}
 
 	// TODO: move to DB query
-	shouldSign := true
-	if lastSignedState != nil {
-		lastStateTransition := lastSignedState.Transition
-		if lastStateTransition.Type == core.TransitionTypeMutualLock ||
-			lastStateTransition.Type == core.TransitionTypeEscrowLock {
-			shouldSign = false
-		}
+	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
+		return nil, rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
 	}
 
-	if newState.HomeChannelID != nil && shouldSign {
+	if newState.HomeChannelID != nil {
 		packedState, err := h.statePacker.PackState(*newState)
 		if err != nil {
 			return nil, rpc.Errorf("failed to pack receiver state: %v", err)

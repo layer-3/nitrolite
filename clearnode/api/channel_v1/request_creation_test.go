@@ -23,7 +23,8 @@ func TestRequestCreation_Success(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600) // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
+	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
 	handler := &Handler{
@@ -40,6 +41,7 @@ func TestRequestCreation_Success(t *testing.T) {
 		nodeSigner:       nodeSigner,
 		nodeAddress:      nodeAddress,
 		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
 		actionGateway:    &MockActionGateway{},
@@ -159,6 +161,9 @@ func TestRequestCreation_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.Signature)
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mocks were called
 	mockMemoryStore.AssertExpectations(t)
 	mockAssetStore.AssertExpectations(t)
@@ -173,7 +178,8 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600) // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
+	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
 	handler := &Handler{
@@ -190,6 +196,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 		nodeSigner:       nodeSigner,
 		nodeAddress:      nodeAddress,
 		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
 		actionGateway:    &MockActionGateway{},
@@ -304,6 +311,9 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, response.Signature)
 
+	// Verify the node signature is valid and recoverable to the node address
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
 	// Verify all mocks were called - notably RecordTransaction should NOT have been called
 	mockMemoryStore.AssertExpectations(t)
 	mockAssetStore.AssertExpectations(t)
@@ -319,7 +329,8 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 	mockSigner := NewMockSigner()
 	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
 	nodeAddress := mockSigner.PublicKey().Address().String()
-	minChallenge := uint32(3600) // 1 hour
+	minChallenge := uint32(3600)   // 1 hour
+	maxChallenge := uint32(604800) // 7 days
 	mockStatePacker := new(MockStatePacker)
 
 	handler := &Handler{
@@ -332,6 +343,7 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 		nodeSigner:       nodeSigner,
 		nodeAddress:      nodeAddress,
 		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
 		actionGateway:    &MockActionGateway{},
@@ -356,8 +368,6 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 	require.NoError(t, err)
 
 	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, uint64(1)).Return(true, nil).Once()
-	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
-	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil).Once()
 
 	// Create RPC request with challenge below minimum
 	reqPayload := rpc.ChannelsV1RequestCreationRequest{
@@ -412,4 +422,103 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 
 	// Verify all mocks were called
 	mockTxStore.AssertExpectations(t)
+}
+
+func TestRequestCreation_ChallengeTooHigh(t *testing.T) {
+	// Setup
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	minChallenge := uint32(3600)   // 1 hour
+	maxChallenge := uint32(604800) // 7 days
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     minChallenge,
+		maxChallenge:     maxChallenge,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	// Test data
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	tokenAddress := "0xToken"
+	nonce := uint64(12345)
+	highChallenge := uint32(1209600) // 14 days - above maximum
+
+	// Calculate home channel ID
+	homeChannelID, err := core.GetHomeChannelID(
+		nodeAddress,
+		userWallet,
+		asset,
+		nonce,
+		highChallenge,
+		"0x03",
+	)
+	require.NoError(t, err)
+
+	// Create RPC request with challenge above maximum
+	reqPayload := rpc.ChannelsV1RequestCreationRequest{
+		State: rpc.StateV1{
+			ID:            core.GetStateID(userWallet, asset, 1, 1),
+			UserWallet:    userWallet,
+			Asset:         asset,
+			Epoch:         "1",
+			Version:       "1",
+			HomeChannelID: &homeChannelID,
+			Transition: rpc.TransitionV1{
+				Amount: "0",
+			},
+			HomeLedger: rpc.LedgerV1{
+				TokenAddress: tokenAddress,
+				BlockchainID: "1",
+				UserBalance:  "0",
+				UserNetFlow:  "0",
+				NodeBalance:  "0",
+				NodeNetFlow:  "0",
+			},
+		},
+		ChannelDefinition: rpc.ChannelDefinitionV1{
+			Nonce:                 strconv.FormatUint(nonce, 10),
+			Challenge:             highChallenge,
+			ApprovedSigValidators: "0x03",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{
+			RequestID: 1,
+			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
+			Payload:   payload,
+		},
+	}
+
+	// Execute
+	handler.RequestCreation(ctx)
+
+	// Assert
+	assert.NotNil(t, ctx.Response)
+
+	// Verify response contains error about challenge being too high
+	err = ctx.Response.Error()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "challenge")
+	assert.Contains(t, err.Error(), "at most")
 }

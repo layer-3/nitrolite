@@ -17,7 +17,7 @@ import (
 func TestGetAppDefinition_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
@@ -101,7 +101,7 @@ func TestGetAppDefinition_Success(t *testing.T) {
 func TestGetAppDefinition_NotFound(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)

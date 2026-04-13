@@ -120,6 +120,21 @@ func (m *MockEVMClient) SubscribeFilterLogs(ctx context.Context, query ethereum.
 	return args.Get(0).(ethereum.Subscription), args.Error(1)
 }
 
+// MockContractEventGetter implements ContractEventGetter interface
+type MockContractEventGetter struct {
+	mock.Mock
+}
+
+func (m *MockContractEventGetter) GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (uint64, error) {
+	args := m.Called(contractAddress, blockchainID)
+	return args.Get(0).(uint64), args.Error(1)
+}
+
+func (m *MockContractEventGetter) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
+	args := m.Called(blockchainID, blockNumber, txHash, logIndex)
+	return args.Bool(0), args.Error(1)
+}
+
 // MockAssetStore implements AssetStore interface
 type MockAssetStore struct {
 	mock.Mock

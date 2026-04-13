@@ -72,31 +72,6 @@ func NewBlockchainClient(
 	return client, nil
 }
 
-// ========= Getters - IVault =========
-
-func (c *BlockchainClient) GetAccountsBalances(accounts []string, tokens []string) ([][]decimal.Decimal, error) {
-	if len(accounts) == 0 || len(tokens) == 0 {
-		return [][]decimal.Decimal{}, nil
-	}
-
-	result := make([][]decimal.Decimal, len(accounts))
-	for i, account := range accounts {
-		result[i] = make([]decimal.Decimal, len(tokens))
-		accountAddr := common.HexToAddress(account)
-
-		for j, token := range tokens {
-			tokenAddr := common.HexToAddress(token)
-			balance, err := c.contract.GetAccountBalance(nil, accountAddr, tokenAddr)
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to get balance for account %s and token %s", account, token)
-			}
-			result[i][j] = decimal.NewFromBigInt(balance, 0)
-		}
-	}
-
-	return result, nil
-}
-
 func (c *BlockchainClient) getAllowance(asset string, owner string) (decimal.Decimal, error) {
 	tokenAddrHex, err := c.assetStore.GetTokenAddress(asset, c.blockchainID)
 	if err != nil {
@@ -167,7 +142,7 @@ func (c *BlockchainClient) GetTokenBalance(asset string, walletAddress string) (
 
 func (c *BlockchainClient) GetNodeBalance(token string) (decimal.Decimal, error) {
 	tokenAddr := common.HexToAddress(token)
-	balance, err := c.contract.GetAccountBalance(nil, c.nodeAddress, tokenAddr)
+	balance, err := c.contract.GetNodeBalance(nil, tokenAddr)
 	if err != nil {
 		return decimal.Zero, errors.Wrapf(err, "failed to get node balance for token %s", token)
 	}
@@ -237,7 +212,7 @@ func (c *BlockchainClient) GetEscrowDepositData(escrowChannelID string) (core.Es
 
 	return core.EscrowDepositDataResponse{
 		EscrowChannelID: escrowChannelID,
-		Node:            c.channelHubContractAddress.Hex(),
+		Node:            c.nodeAddress.Hex(),
 		LastState:       *lastState,
 		UnlockExpiry:    data.UnlockAt,
 		ChallengeExpiry: data.ChallengeExpiry,
@@ -262,15 +237,14 @@ func (c *BlockchainClient) GetEscrowWithdrawalData(escrowChannelID string) (core
 
 	return core.EscrowWithdrawalDataResponse{
 		EscrowChannelID: escrowChannelID,
-		Node:            c.channelHubContractAddress.Hex(),
+		Node:            c.nodeAddress.Hex(),
 		LastState:       *lastState,
 	}, nil
 }
 
 // ========= IVault Functions =========
 
-func (c *BlockchainClient) Deposit(node, token string, amount decimal.Decimal) (string, error) {
-	nodeAddr := common.HexToAddress(node)
+func (c *BlockchainClient) Deposit(token string, amount decimal.Decimal) (string, error) {
 	tokenAddr := common.HexToAddress(token)
 
 	decimals, err := c.assetStore.GetTokenDecimals(c.blockchainID, token)
@@ -291,16 +265,15 @@ func (c *BlockchainClient) Deposit(node, token string, amount decimal.Decimal) (
 		return "", err
 	}
 
-	tx, err := c.contract.DepositToVault(c.transactOpts, nodeAddr, tokenAddr, amountBig)
+	tx, err := c.contract.DepositToNode(c.transactOpts, tokenAddr, amountBig)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to deposit to vault")
+		return "", errors.Wrap(err, "failed to deposit to node")
 	}
 
 	return tx.Hash().Hex(), nil
 }
 
-func (c *BlockchainClient) Withdraw(node, token string, amount decimal.Decimal) (string, error) {
-	nodeAddr := common.HexToAddress(node)
+func (c *BlockchainClient) Withdraw(to, token string, amount decimal.Decimal) (string, error) {
 	tokenAddr := common.HexToAddress(token)
 
 	decimals, err := c.assetStore.GetTokenDecimals(c.blockchainID, token)
@@ -316,9 +289,9 @@ func (c *BlockchainClient) Withdraw(node, token string, amount decimal.Decimal) 
 		return "", err
 	}
 
-	tx, err := c.contract.WithdrawFromVault(c.transactOpts, nodeAddr, tokenAddr, amountBig)
+	tx, err := c.contract.WithdrawFromNode(c.transactOpts, common.HexToAddress(to), tokenAddr, amountBig)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to withdraw from vault")
+		return "", errors.Wrap(err, "failed to withdraw from node")
 	}
 
 	return tx.Hash().Hex(), nil
@@ -628,8 +601,16 @@ func (c *BlockchainClient) ChallengeEscrowDeposit(candidate core.State, challeng
 }
 
 func (c *BlockchainClient) FinalizeEscrowDeposit(candidate core.State) (string, error) {
+	if candidate.HomeChannelID == nil {
+		return "", errors.New("candidate state must have a home channel ID")
+	}
 	if candidate.EscrowChannelID == nil {
 		return "", errors.New("candidate state must have an escrow channel ID")
+	}
+
+	channelIDBytes, err := hexToBytes32(*candidate.HomeChannelID)
+	if err != nil {
+		return "", errors.Wrap(err, "invalid channel ID")
 	}
 
 	escrowIDBytes, err := hexToBytes32(*candidate.EscrowChannelID)
@@ -650,7 +631,7 @@ func (c *BlockchainClient) FinalizeEscrowDeposit(candidate core.State) (string, 
 		return "", err
 	}
 
-	tx, err := c.contract.FinalizeEscrowDeposit(c.transactOpts, escrowIDBytes, contractCandidate)
+	tx, err := c.contract.FinalizeEscrowDeposit(c.transactOpts, channelIDBytes, escrowIDBytes, contractCandidate)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to finalize escrow deposit")
 	}
@@ -710,11 +691,19 @@ func (c *BlockchainClient) ChallengeEscrowWithdrawal(candidate core.State, chall
 }
 
 func (c *BlockchainClient) FinalizeEscrowWithdrawal(candidate core.State) (string, error) {
+	if candidate.HomeChannelID == nil {
+		return "", errors.New("candidate state must have a home channel ID")
+	}
 	if candidate.EscrowChannelID == nil {
 		return "", errors.New("candidate state must have an escrow channel ID")
 	}
 	if candidate.EscrowLedger == nil {
-		return "", errors.New("candidate state must have an escrow channel ID")
+		return "", errors.New("candidate state must have an escrow ledger")
+	}
+
+	channelIDBytes, err := hexToBytes32(*candidate.HomeChannelID)
+	if err != nil {
+		return "", errors.Wrap(err, "invalid channel ID")
 	}
 
 	escrowIDBytes, err := hexToBytes32(*candidate.EscrowChannelID)
@@ -727,15 +716,15 @@ func (c *BlockchainClient) FinalizeEscrowWithdrawal(candidate core.State) (strin
 		return "", errors.Wrap(err, "failed to convert candidate state")
 	}
 
-	if contractCandidate.Intent != core.INTENT_INITIATE_ESCROW_WITHDRAWAL {
-		return "", errors.New("unsupported intent for initiate escrow withdrawal: " + string(contractCandidate.Intent))
+	if contractCandidate.Intent != core.INTENT_FINALIZE_ESCROW_WITHDRAWAL {
+		return "", errors.New("unsupported intent for finalize escrow withdrawal: " + string(contractCandidate.Intent))
 	}
 
 	if err := c.checkFeeFn(context.Background(), c.transactOpts.From); err != nil {
 		return "", err
 	}
 
-	tx, err := c.contract.FinalizeEscrowWithdrawal(c.transactOpts, escrowIDBytes, contractCandidate)
+	tx, err := c.contract.FinalizeEscrowWithdrawal(c.transactOpts, channelIDBytes, escrowIDBytes, contractCandidate)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to finalize escrow withdrawal")
 	}
@@ -746,14 +735,14 @@ func (c *BlockchainClient) FinalizeEscrowWithdrawal(candidate core.State) (strin
 func (c *BlockchainClient) EnsureSigValidatorRegistered(validatorID uint8, validatorAddress string, checkOnly bool) error {
 	validatorAddr := common.HexToAddress(validatorAddress)
 
-	_validatorAddr, err := c.contract.GetNodeValidator(nil, c.nodeAddress, validatorID)
+	validatorInfo, err := c.contract.GetNodeValidator(nil, validatorID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to check if validator %d is registered", validatorID)
 	}
-	if _validatorAddr.Hex() == validatorAddr.Hex() {
+	if validatorInfo.Validator.Hex() == validatorAddr.Hex() {
 		return nil
-	} else if _validatorAddr != (common.Address{}) {
-		return errors.Errorf("validator ID %d is already registered with a different address %s", validatorID, _validatorAddr.Hex())
+	} else if validatorInfo.Validator != (common.Address{}) {
+		return errors.Errorf("validator ID %d is already registered with a different address %s", validatorID, validatorInfo.Validator.Hex())
 	}
 
 	if checkOnly {
@@ -768,11 +757,12 @@ func (c *BlockchainClient) EnsureSigValidatorRegistered(validatorID uint8, valid
 	addressType, _ := abi.NewType("address", "", nil)
 	uint256Type, _ := abi.NewType("uint256", "", nil)
 	args := abi.Arguments{
+		{Type: uint256Type},
+		{Type: addressType},
 		{Type: uint8Type},
 		{Type: addressType},
-		{Type: uint256Type},
 	}
-	message, err := args.Pack(validatorID, validatorAddr, new(big.Int).SetUint64(c.blockchainID))
+	message, err := args.Pack(new(big.Int).SetUint64(c.blockchainID), c.channelHubContractAddress, validatorID, validatorAddr)
 	if err != nil {
 		return errors.Wrap(err, "failed to encode validator registration message")
 	}
@@ -782,7 +772,7 @@ func (c *BlockchainClient) EnsureSigValidatorRegistered(validatorID uint8, valid
 		return errors.Wrap(err, "failed to sign validator registration message")
 	}
 
-	_, err = c.contract.RegisterNodeValidator(c.transactOpts, c.nodeAddress, validatorID, validatorAddr, sig)
+	_, err = c.contract.RegisterNodeValidator(c.transactOpts, validatorID, validatorAddr, sig)
 	if err != nil {
 		return errors.Wrapf(err, "failed to register validator %d with address %s", validatorID, validatorAddress)
 	}

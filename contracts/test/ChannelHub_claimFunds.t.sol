@@ -24,7 +24,7 @@ contract ChannelHubTest_claimFunds is Test {
     uint256 constant BALANCE_AMOUNT = RECLAIM_AMOUNT * 10;
 
     function setUp() public {
-        cHub = new TestChannelHub(new ECDSAValidator());
+        cHub = new TestChannelHub(new ECDSAValidator(), makeAddr("node"));
         token = new MockERC20("Test Token", "TST", 18);
         revertingReceiver = new RevertingEthReceiver();
 

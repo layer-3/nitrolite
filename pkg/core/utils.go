@@ -25,6 +25,23 @@ var (
 	uint256Type, _ = abi.NewType("uint256", "", nil)
 )
 
+func NormalizeHexAddress(s string) (string, error) {
+	s = strings.ToLower(s)
+
+	if !strings.HasPrefix(s, "0x") || len(s) != 42 {
+		return "", fmt.Errorf("invalid hex address: incorrect length, expected 42 characters including 0x prefix")
+	}
+
+	for i := 2; i < len(s); i++ {
+		c := s[i]
+		if !(('0' <= c && c <= '9') || ('a' <= c && c <= 'f')) {
+			return "", fmt.Errorf("invalid hex address: character '%c' at position %d is not a valid hexadecimal character", c, i)
+		}
+	}
+
+	return s, nil
+}
+
 func TransitionToIntent(transition Transition) uint8 {
 	switch transition.Type {
 	case TransitionTypeTransferSend,

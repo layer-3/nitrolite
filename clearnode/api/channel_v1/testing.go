@@ -1,12 +1,15 @@
 package channel_v1
 
 import (
+	"strings"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/clearnode/action_gateway"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -209,4 +212,15 @@ type MockActionGateway struct {
 
 func (m *MockActionGateway) AllowAction(_ action_gateway.Store, _ string, _ core.GatedAction) error {
 	return m.Err
+}
+
+// VerifyNodeSignature verifies that a hex-encoded channel signature was produced by the expected node address.
+func VerifyNodeSignature(t *testing.T, nodeAddr string, data []byte, sigHex string) {
+	t.Helper()
+	sigBytes, err := hexutil.Decode(sigHex)
+	require.NoError(t, err, "Failed to decode node signature")
+
+	sigValidator := core.NewChannelSigValidator(nil)
+	err = sigValidator.Verify(strings.ToLower(nodeAddr), data, sigBytes)
+	require.NoError(t, err, "Node signature verification failed: expected signer %s", nodeAddr)
 }

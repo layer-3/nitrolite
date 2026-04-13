@@ -6,6 +6,7 @@ import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
 // forge-lint: disable-start(unsafe-typecast)
 
 import {Utils} from "../../src/Utils.sol";
+import {TestUtils} from "../TestUtils.sol";
 import {
     ChannelDefinition,
     ChannelStatus,
@@ -35,6 +36,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
     - challenged escrow deposit can be resolved until `challengeExpireAt` time has passed with a newer finalization state, which removes challenge and unlock funds
     - challenged escrow deposit can NOT be resolved if `challengeExpireAt` has passed, but
         can be withdrawn after `challengeExpireAt` time passes
+    - challenged escrow deposit unilateral finalization emits event with INITIATE state as candidate, ignoring arbitrary candidate input
     - reverts on challenging already challenged escrow deposit
     */
 
@@ -86,7 +88,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         // Finalize state (version = ESCROW_VERSION + 1):
         // home: userAllocation += ESCROW_AMOUNT, nodeAllocation = 0, userNetFlow unchanged
         // non-home: allocations = 0; userNetFlow = +ESCROW_AMOUNT, nodeNetFlow = -ESCROW_AMOUNT
-        finalizeEscrowDepositState = nextState(
+        finalizeEscrowDepositState = TestUtils.nextState(
             initiateEscrowDepositState,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(500 + ESCROW_AMOUNT), uint256(0)],
@@ -141,7 +143,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         (, EscrowStatus statusAfterChallenge,,,,) = cHub.getEscrowDepositData(escrowId);
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getNodeBalance(address(token));
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
@@ -153,7 +155,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
 
         // Cooperative path: locked funds released to node vault (node earned them for providing cross-chain liquidity)
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBefore + ESCROW_AMOUNT,
             "Node vault should receive locked amount"
         );
@@ -181,6 +183,21 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowDeposit is ChannelHubTest_C
         assertEq(token.balanceOf(alice), aliceBalanceBefore + ESCROW_AMOUNT, "User should receive locked amount");
     }
 
+    function test_challengedEscrowDeposit_unilateralFinalize_emitsInitState_ignoringArbitraryCandidate() public {
+        _challengeEscrowDeposit();
+
+        vm.warp(block.timestamp + EscrowDepositEngine.CHALLENGE_DURATION + 1);
+
+        State memory poisonedCandidate = initiateEscrowDepositState;
+        poisonedCandidate.version = 999999;
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.EscrowDepositFinalized(escrowId, channelId, initiateEscrowDepositState);
+
+        vm.prank(node);
+        cHub.finalizeEscrowDeposit(channelId, escrowId, poisonedCandidate);
+    }
+
     function test_revert_challengeEscrowDeposit_alreadyChallenged() public {
         _challengeEscrowDeposit();
 
@@ -200,6 +217,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
     - challenged escrow withdrawal can be resolved until `challengeExpireAt` time has passed with a newer finalization state, which removes challenge and unlock funds
     - challenged escrow withdrawal can NOT be resolved if `challengeExpireAt` has passed, but
         can be withdrawn after `challengeExpireAt` time passes
+    - challenged escrow withdrawal unilateral finalization emits event with INITIATE state as candidate, ignoring arbitrary candidate input
     - reverts on challenging already challenged escrow withdrawal
     */
 
@@ -251,7 +269,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         // Finalize state (version = WITHDRAWAL_VERSION + 1):
         // home: userAllocation decreases by WITHDRAWAL_AMOUNT, nodeNetFlow decreases by WITHDRAWAL_AMOUNT
         // non-home: allocations = 0; userNetFlow = -WITHDRAWAL_AMOUNT, nodeNetFlow = +WITHDRAWAL_AMOUNT
-        finalizeEscrowWithdrawalState = nextState(
+        finalizeEscrowWithdrawalState = TestUtils.nextState(
             initiateEscrowWithdrawalState,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(500 - WITHDRAWAL_AMOUNT), uint256(0)],
@@ -300,7 +318,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         assertEq(uint8(statusAfterChallenge), uint8(EscrowStatus.DISPUTED), "Should be DISPUTED after challenge");
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getNodeBalance(address(token));
 
         // Cooperative finalization with FINALIZE state (before challengeExpireAt)
         vm.prank(node);
@@ -315,7 +333,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
             token.balanceOf(alice), aliceBalanceBefore + WITHDRAWAL_AMOUNT, "User should receive withdrawal amount"
         );
         // Node vault should be unchanged (locked amount was already deducted at initiation)
-        assertEq(cHub.getAccountBalance(node, address(token)), nodeVaultBefore, "Node vault should be unchanged");
+        assertEq(cHub.getNodeBalance(address(token)), nodeVaultBefore, "Node vault should be unchanged");
     }
 
     function test_challengedEscrowWithdrawal_canNotBeResolved_nodeReclaimsAfterChallengeExpiry() public {
@@ -324,7 +342,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
         vm.warp(block.timestamp + EscrowWithdrawalEngine.CHALLENGE_DURATION + 1);
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeVaultBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeVaultBefore = cHub.getNodeBalance(address(token));
 
         // Attempt cooperative resolution with a valid FINALIZE state after challengeExpireAt
         // The unilateral path intercepts and ignores the candidate state
@@ -337,11 +355,26 @@ contract ChannelHubTest_Challenge_NonHomeChain_EscrowWithdrawal is ChannelHubTes
 
         // Unilateral path (not cooperative): locked funds returned to node vault (withdrawal failed)
         assertEq(
-            cHub.getAccountBalance(node, address(token)),
+            cHub.getNodeBalance(address(token)),
             nodeVaultBefore + WITHDRAWAL_AMOUNT,
             "Node vault should reclaim locked amount (cooperative resolution bypassed)"
         );
         assertEq(token.balanceOf(alice), aliceBalanceBefore, "User wallet unchanged: withdrawal was not completed");
+    }
+
+    function test_challengedEscrowWithdrawal_unilateralFinalize_emitsInitState_ignoringArbitraryCandidate() public {
+        _challengeEscrowWithdrawal();
+
+        vm.warp(block.timestamp + EscrowWithdrawalEngine.CHALLENGE_DURATION + 1);
+
+        State memory poisonedCandidate = initiateEscrowWithdrawalState;
+        poisonedCandidate.version = 999999;
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.EscrowWithdrawalFinalized(escrowId, channelId, initiateEscrowWithdrawalState);
+
+        vm.prank(node);
+        cHub.finalizeEscrowWithdrawal(channelId, escrowId, poisonedCandidate);
     }
 
     function test_revert_challengeEscrowWithdrawal_alreadyChallenged() public {
@@ -361,19 +394,17 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     Test cases:
     - a channel in Migrating_in status (empty channel after being called with `initiateMigration`) can be challenged with it
     - a channel in Migrating_in status (empty channel after being called with `initiateMigration`) can be challenged with a newer Operation state
+    - a channel in Migrating_in status can be challenged with FINALIZE_MIGRATION intent (with version+1)
     */
+
+    // New channel for testing NEW home chain behavior
+    ChannelDefinition newHomeDef;
+    bytes32 newHomeChannelId;
 
     uint64 initiateMigrationVersion = 1;
     State initiateMigrationState;
     uint64 finalizeMigrationVersion = 2;
     State finalizeMigrationState;
-    uint64 operateAfterMigrationInitVersion = 2;
-    State operateAfterMigrationInitState;
-
-    // New channel for testing NEW home chain behavior
-    ChannelDefinition newHomeDef;
-    bytes32 newHomeChannelId;
-    State newHomeInitiateMigrationState;
     uint64 newHomeOperateVersion = 3;
     State newHomeOperateState;
 
@@ -394,7 +425,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
         // INITIATE_MIGRATION state for NEW home chain (migration IN)
         // homeLedger = OLD home chain (NON_HOME_CHAIN_ID)
         // nonHomeLedger = NEW home chain (current chain)
-        newHomeInitiateMigrationState = State({
+        initiateMigrationState = State({
             version: initiateMigrationVersion,
             intent: StateIntent.INITIATE_MIGRATION,
             metadata: bytes32(0),
@@ -419,8 +450,36 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             userSig: "",
             nodeSig: ""
         });
-        newHomeInitiateMigrationState =
-            mutualSignStateBothWithEcdsaValidator(newHomeInitiateMigrationState, newHomeChannelId, ALICE_PK);
+        initiateMigrationState =
+            mutualSignStateBothWithEcdsaValidator(initiateMigrationState, newHomeChannelId, ALICE_PK);
+
+        finalizeMigrationState = State({
+            version: finalizeMigrationVersion,
+            intent: StateIntent.FINALIZE_MIGRATION,
+            metadata: bytes32(0),
+            nonHomeLedger: Ledger({
+                chainId: NON_HOME_CHAIN_ID,
+                token: NON_HOME_TOKEN,
+                decimals: 18,
+                userAllocation: 0,
+                userNetFlow: 500,
+                nodeAllocation: 0,
+                nodeNetFlow: -500
+            }),
+            homeLedger: Ledger({
+                chainId: uint64(block.chainid),
+                token: address(token),
+                decimals: 18,
+                userAllocation: 500,
+                userNetFlow: 0,
+                nodeAllocation: 0,
+                nodeNetFlow: 500
+            }),
+            userSig: "",
+            nodeSig: ""
+        });
+        finalizeMigrationState =
+            mutualSignStateBothWithEcdsaValidator(finalizeMigrationState, newHomeChannelId, ALICE_PK);
 
         // OPERATE state on NEW home chain after migration
         // After initiateMigration on NEW home, ledgers are swapped, so homeLedger becomes current chain
@@ -456,7 +515,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     function test_challenge_newHomeChain_withInitiateMigration_asExisting() public {
         // Initiate migration IN on NEW home chain
         vm.prank(alice);
-        cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
         verifyChannelData(
@@ -469,10 +528,10 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
 
         // Challenge with the same INITIATE_MIGRATION state (already enforced)
         bytes memory challengerSig =
-            signChallengeEip191WithEcdsaValidator(newHomeChannelId, newHomeInitiateMigrationState, NODE_PK);
+            signChallengeEip191WithEcdsaValidator(newHomeChannelId, initiateMigrationState, NODE_PK);
 
         vm.prank(node);
-        cHub.challengeChannel(newHomeChannelId, newHomeInitiateMigrationState, challengerSig, ParticipantIndex.NODE);
+        cHub.challengeChannel(newHomeChannelId, initiateMigrationState, challengerSig, ParticipantIndex.NODE);
 
         // Verify channel is DISPUTED and state is still version 0
         verifyChannelData(
@@ -487,7 +546,7 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
     function test_challenge_newHomeChain_withOperate_inMigratingIn() public {
         // Initiate migration IN on NEW home chain
         vm.prank(alice);
-        cHub.initiateMigration(newHomeDef, newHomeInitiateMigrationState);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
 
         // Verify channel is in MIGRATING_IN status
         verifyChannelData(
@@ -518,6 +577,43 @@ contract ChannelHubTest_Challenge_NonHomeChain_HomeMigration is ChannelHubTest_C
             [uint256(450), uint256(0)],
             [int256(0), int256(450)],
             "newHomeOperateState should be enforced"
+        );
+    }
+
+    function test_challenge_newHomeChain_withFinalizeMigration() public {
+        // Initiate migration IN on NEW home chain
+        vm.prank(alice);
+        cHub.initiateMigration(newHomeDef, initiateMigrationState);
+
+        // Verify channel is in MIGRATING_IN status
+        verifyChannelData(
+            newHomeChannelId,
+            ChannelStatus.MIGRATING_IN,
+            initiateMigrationVersion,
+            0,
+            "newHomeInitiateMigrationState should be enforced"
+        );
+
+        // Challenge with newer FINALIZE_MIGRATION state
+        bytes memory challengerSig =
+            signChallengeEip191WithEcdsaValidator(newHomeChannelId, finalizeMigrationState, NODE_PK);
+
+        vm.prank(node);
+        cHub.challengeChannel(newHomeChannelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
+
+        // Verify channel is DISPUTED and finalizeMigrationState was enforced
+        verifyChannelData(
+            newHomeChannelId,
+            ChannelStatus.DISPUTED,
+            finalizeMigrationVersion,
+            block.timestamp + CHALLENGE_DURATION,
+            "finalizeMigrationState should start a challenge"
+        );
+        verifyChannelState(
+            newHomeChannelId,
+            [uint256(500), uint256(0)],
+            [int256(0), int256(500)],
+            "finalizeMigrationState should be enforced"
         );
     }
 }

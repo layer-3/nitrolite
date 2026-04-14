@@ -1,7 +1,7 @@
 {
   "name": "@yellow-org/sdk-mcp",
   "version": "0.1.0",
-  "description": "MCP server exposing the Nitrolite SDK API surface to AI agents and IDEs",
+  "description": "Unified MCP server for Nitrolite — TypeScript and Go SDK context for AI agents and IDEs",
   "type": "module",
   "main": "src/index.ts",
   "bin": {

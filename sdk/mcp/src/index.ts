@@ -20,6 +20,8 @@ const COMPAT_ROOT = resolve(__dirname, '../../ts-compat');
 const REPO_ROOT = resolve(__dirname, '../../..');
 const PROTOCOL_DOCS = resolve(REPO_ROOT, 'docs/protocol');
 const API_YAML = resolve(REPO_ROOT, 'docs/api.yaml');
+const GO_SDK_ROOT = resolve(REPO_ROOT, 'sdk/go');
+const PKG_ROOT = resolve(REPO_ROOT, 'pkg');
 
 // ---------------------------------------------------------------------------
 // Helpers — read SDK sources at startup
@@ -68,6 +70,24 @@ interface TypeInfo {
 const methods: MethodInfo[] = [];
 const types: TypeInfo[] = [];
 const compatExports: string[] = [];
+
+// Go SDK data — populated at startup
+interface GoTypeInfo {
+    name: string;
+    kind: 'struct' | 'enum' | 'type';
+    fields: string;
+    source: string;
+}
+
+interface GoMethodInfo {
+    name: string;
+    signature: string;
+    comment: string;
+    category: string;
+}
+
+const goTypes: GoTypeInfo[] = [];
+const goMethods: GoMethodInfo[] = [];
 
 // Protocol docs loaded at startup
 const protocolDocs: Record<string, string> = {};
@@ -121,6 +141,201 @@ function categorizeMethod(name: string): string {
     if (/sign|signer|key/i.test(name)) return 'Signing';
     if (/ping|config|asset|balance|blockchain/i.test(name)) return 'Node & Queries';
     return 'Other';
+}
+
+function categorizeGoMethod(name: string): string {
+    const lower = name.toLowerCase();
+    if (/channel|deposit|withdraw|transfer|checkpoint|challenge|acknowledge|close/.test(lower)) return 'Channels & Transactions';
+    if (/appsession|appstate|appdef|rebalance/.test(lower)) return 'App Sessions';
+    if (/sessionkey|keystate/.test(lower)) return 'Session Keys';
+    if (/escrow|security|locked/.test(lower)) return 'Security Tokens';
+    if (/app/.test(lower) && /register/.test(lower)) return 'App Registry';
+    if (/balance|transaction|allowance|user/.test(lower)) return 'User Queries';
+    if (/config|blockchain|asset|ping/.test(lower)) return 'Node & Config';
+    return 'Other';
+}
+
+function loadGoTypes(): void {
+    const fileSets = [
+        { path: resolve(PKG_ROOT, 'core/types.go'), source: 'pkg/core' },
+        { path: resolve(PKG_ROOT, 'app/app_session_v1.go'), source: 'pkg/app' },
+        { path: resolve(PKG_ROOT, 'rpc/types.go'), source: 'pkg/rpc' },
+        { path: resolve(GO_SDK_ROOT, 'config.go'), source: 'sdk/go' },
+        { path: resolve(GO_SDK_ROOT, 'app_session.go'), source: 'sdk/go' },
+        { path: resolve(GO_SDK_ROOT, 'app_registry.go'), source: 'sdk/go' },
+        { path: resolve(GO_SDK_ROOT, 'user.go'), source: 'sdk/go' },
+        { path: resolve(GO_SDK_ROOT, 'channel.go'), source: 'sdk/go' },
+    ];
+
+    for (const { path, source } of fileSets) {
+        const content = readFile(path);
+        if (!content) continue;
+
+        // Pass 1: collect enum-like type declarations (name → kind)
+        const enumTypeMap = new Map<string, GoTypeInfo>();
+        for (const m of content.matchAll(/type\s+([A-Z]\w+)\s+(uint\d+|int\d+|string)\s*\n/g)) {
+            const info: GoTypeInfo = { name: m[1], kind: 'enum', fields: '', source };
+            enumTypeMap.set(m[1], info);
+        }
+
+        // Pass 2: parse const(...) and var(...) blocks to collect enum values
+        for (const blockMatch of content.matchAll(/(?:const|var)\s*\(([^)]+)\)/gs)) {
+            const block = blockMatch[1];
+            let currentType: string | undefined;
+
+            for (const rawLine of block.split('\n')) {
+                const line = rawLine.replace(/\/\/.*$/, '').trim();
+                if (!line) continue; // blank lines don't reset currentType
+
+                // Fully-annotated: ExportedName TypeName = ...  or  ExportedName TypeName
+                const fullAnnotated = line.match(/^([A-Z]\w+)\s+([A-Z]\w+)\s*(?:=.*)?$/);
+                if (fullAnnotated) {
+                    const [, valueName, typeName] = fullAnnotated;
+                    if (enumTypeMap.has(typeName)) {
+                        currentType = typeName;
+                        const info = enumTypeMap.get(typeName)!;
+                        info.fields += (info.fields ? '\n' : '') + valueName;
+                        continue;
+                    }
+                }
+
+                // Untyped-assignment: ExportedName = value (no type annotation)
+                const untypedAssign = line.match(/^([A-Z]\w+)\s*=\s*(.+)$/);
+                if (untypedAssign) {
+                    const [, valueName] = untypedAssign;
+                    let resolvedType = currentType;
+                    if (!resolvedType) {
+                        // Prefix inference: find enum type whose name is a prefix of valueName
+                        for (const typeName of enumTypeMap.keys()) {
+                            if (valueName.startsWith(typeName) && valueName[typeName.length]?.match(/[A-Z_]/)) {
+                                resolvedType = typeName;
+                                break;
+                            }
+                        }
+                    }
+                    if (resolvedType && enumTypeMap.has(resolvedType)) {
+                        currentType = resolvedType;
+                        const info = enumTypeMap.get(resolvedType)!;
+                        info.fields += (info.fields ? '\n' : '') + valueName;
+                    }
+                    continue;
+                }
+
+                // Bare identifier: ExportedName (iota follow-on)
+                const bareIdent = line.match(/^([A-Z]\w+)\s*$/);
+                if (bareIdent && currentType && enumTypeMap.has(currentType)) {
+                    const info = enumTypeMap.get(currentType)!;
+                    info.fields += (info.fields ? '\n' : '') + bareIdent[1];
+                    continue;
+                }
+
+                // Non-exported or unrecognised → reset
+                if (!line.match(/^[A-Z]/)) currentType = undefined;
+            }
+        }
+        for (const info of enumTypeMap.values()) {
+            if (info.fields) goTypes.push(info);
+        }
+
+        // Structs
+        for (const m of content.matchAll(/(?:\/\/[^\n]*\n)*type\s+([A-Z]\w+)\s+struct\s*\{([^}]*)\}/gs)) {
+            goTypes.push({ name: m[1], kind: 'struct', fields: m[2].trim(), source });
+        }
+
+        // Functional option types (e.g. type Option func(*Config))
+        for (const m of content.matchAll(/type\s+([A-Z]\w+)\s+(func\([^)]*\)[^\n]*)/g)) {
+            goTypes.push({ name: m[1], kind: 'type', fields: m[2].trim(), source });
+        }
+    }
+}
+
+function loadGoSdkMethods(): void {
+    // Prepend NewClient constructor (no receiver)
+    goMethods.push({
+        name: 'NewClient',
+        signature: 'func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Signer, opts ...Option) (*Client, error)',
+        comment: 'Creates a new Nitrolite SDK client connected to a clearnode',
+        category: 'Connection',
+    });
+
+    const files = [
+        { path: resolve(GO_SDK_ROOT, 'channel.go'), category: '' },
+        { path: resolve(GO_SDK_ROOT, 'node.go'), category: 'Node & Config' },
+        { path: resolve(GO_SDK_ROOT, 'user.go'), category: 'User Queries' },
+        { path: resolve(GO_SDK_ROOT, 'app_session.go'), category: 'App Sessions' },
+        { path: resolve(GO_SDK_ROOT, 'app_registry.go'), category: 'App Registry' },
+        { path: resolve(GO_SDK_ROOT, 'client.go'), category: '' },
+    ];
+
+    const methodRe = /((?:\/\/[^\n]*\n)+)func \(c \*Client\) (\w+)\(([^)]*)\)\s*(.*)/g;
+
+    for (const { path, category } of files) {
+        const content = readFile(path);
+        if (!content) continue;
+        methodRe.lastIndex = 0;
+        let match;
+        while ((match = methodRe.exec(content)) !== null) {
+            const rawComment = match[1].trim();
+            const comment = rawComment.split('\n')
+                .map(l => l.replace(/^\/\/ ?/, '').trim())
+                .filter(Boolean)
+                .join(' ');
+            const name = match[2];
+            const params = match[3];
+            const returns = match[4].trim();
+            if (name[0] >= 'a' && name[0] <= 'z') continue; // skip unexported
+            const cat = category || categorizeGoMethod(name);
+            goMethods.push({
+                name,
+                signature: `func (c *Client) ${name}(${params}) ${returns}`,
+                comment,
+                category: cat,
+            });
+        }
+    }
+}
+
+function buildGoApiMethodsContent(): string {
+    const ORDER = ['Connection', 'Channels & Transactions', 'App Sessions', 'Session Keys', 'Security Tokens', 'App Registry', 'User Queries', 'Node & Config', 'Other'];
+    const grouped = new Map<string, GoMethodInfo[]>();
+    for (const m of goMethods) {
+        const arr = grouped.get(m.category) ?? [];
+        arr.push(m);
+        grouped.set(m.category, arr);
+    }
+    let text = '# Nitrolite Go SDK — Client Methods\n\nPackage: `github.com/layer-3/nitrolite/sdk/go`\n\n';
+    for (const cat of ORDER) {
+        const ms = grouped.get(cat);
+        if (!ms?.length) continue;
+        text += `## ${cat}\n\n`;
+        for (const m of ms) {
+            text += `### \`${m.name}\`\n\`\`\`go\n${m.signature}\n\`\`\`\n${m.comment}\n\n`;
+        }
+    }
+    return text;
+}
+
+function buildGoTypesContent(): string {
+    const bySource = new Map<string, GoTypeInfo[]>();
+    for (const t of goTypes) {
+        const arr = bySource.get(t.source) ?? [];
+        arr.push(t);
+        bySource.set(t.source, arr);
+    }
+    let text = '# Nitrolite Go SDK — Types\n\n';
+    for (const [src, ts] of [...bySource.entries()].sort()) {
+        text += `## ${src}\n\n`;
+        for (const t of ts) {
+            if (t.kind === 'struct') {
+                text += `### \`${t.name}\` (struct)\n\`\`\`go\ntype ${t.name} struct {\n${t.fields}\n}\n\`\`\`\n\n`;
+            } else if (t.kind === 'enum') {
+                text += `### \`${t.name}\` (enum)\n**Values:**\n${t.fields.split('\n').map(v => `- \`${v}\``).join('\n')}\n\n`;
+            } else {
+                text += `### \`${t.name}\` (${t.kind})\n\`\`\`go\ntype ${t.name} ${t.fields}\n\`\`\`\n\n`;
+            }
+        }
+    }
+    return text;
 }
 
 function loadTypes(): void {
@@ -273,6 +488,356 @@ function loadV1API(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Go SDK static content constants (ported from sdk/mcp-go)
+// ---------------------------------------------------------------------------
+
+const AUTH_FLOW_CONTENT = `# Request Signing & Authorization
+
+In v1, every RPC request includes a \`sig\` field — the client's signature over the entire \`req\` tuple. This is the authorization mechanism. There is no separate authentication handshake; request signatures are the identity proof.
+
+## Session Keys
+
+Session keys enable delegated signing with scoped permissions. They are managed via:
+- \`channels.v1.submit_session_key_state\` — register/update channel session keys
+- \`app_sessions.v1.submit_session_key_state\` — register/update app session keys
+
+Session keys have:
+- Per-asset allowances with spending caps
+- Expiration timestamps
+- Scoping to specific applications and app sessions
+
+## Wire Format
+
+\`\`\`json
+// Every request is signed
+{ "req": [REQUEST_ID, "channels.v1.submit_state", { ... }, TIMESTAMP], "sig": ["0xClientSignature..."] }
+
+// Server responds with its own signature
+{ "res": [REQUEST_ID, "channels.v1.submit_state", { ... }, TIMESTAMP], "sig": ["0xServerSignature..."] }
+\`\`\`
+
+## Note on 0.5.x Compat
+
+The \`@yellow-org/sdk-compat\` layer exposes legacy auth helpers (\`createAuthRequestMessage\`, \`createAuthVerifyMessage\`) that implement a challenge-response flow with JWT. This is the 0.5.x auth surface bridged to v1. New applications using \`@yellow-org/sdk\` directly do not use this flow.
+`;
+
+const GO_TRANSFER_EXAMPLE = `# Complete Go Transfer Script
+
+\`\`\`go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    "time"
+
+    "github.com/layer-3/nitrolite/pkg/sign"
+    sdk "github.com/layer-3/nitrolite/sdk/go"
+    "github.com/shopspring/decimal"
+)
+
+func main() {
+    privateKey := os.Getenv("PRIVATE_KEY")
+    clearnodeURL := os.Getenv("CLEARNODE_URL")
+    rpcURL := os.Getenv("RPC_URL")
+    recipient := os.Getenv("RECIPIENT")
+    var chainID uint64 = 11155111 // Sepolia
+
+    stateSigner, err := sign.NewEthereumMsgSigner(privateKey)
+    if err != nil { log.Fatal(err) }
+    txSigner, err := sign.NewEthereumRawSigner(privateKey)
+    if err != nil { log.Fatal(err) }
+
+    client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+        sdk.WithBlockchainRPC(chainID, rpcURL),
+    )
+    if err != nil { log.Fatal(err) }
+    defer client.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+
+    // Approve token spending (one-time)
+    _, err = client.ApproveToken(ctx, chainID, "usdc", decimal.NewFromInt(1000))
+    if err != nil { log.Fatal(err) }
+
+    // Deposit — creates channel if needed
+    state, err := client.Deposit(ctx, chainID, "usdc", decimal.NewFromInt(10))
+    if err != nil { log.Fatal(err) }
+    log.Printf("Deposited 10 USDC, state version: %d", state.Version)
+
+    // Checkpoint on-chain
+    txHash, err := client.Checkpoint(ctx, "usdc")
+    if err != nil { log.Fatal(err) }
+    log.Printf("On-chain tx: %s", txHash)
+
+    // Transfer
+    _, err = client.Transfer(ctx, recipient, "usdc", decimal.NewFromInt(5))
+    if err != nil { log.Fatal(err) }
+    log.Println("Transferred 5 USDC")
+
+    // Close channel — prepare finalize state, then checkpoint
+    _, err = client.CloseHomeChannel(ctx, "usdc")
+    if err != nil { log.Fatal(err) }
+    closeTx, err := client.Checkpoint(ctx, "usdc")
+    if err != nil { log.Fatal(err) }
+    log.Printf("Channel closed, tx: %s", closeTx)
+}
+\`\`\`
+
+## Environment Variables
+
+- \`PRIVATE_KEY\` — Hex private key (without 0x prefix)
+- \`CLEARNODE_URL\` — WebSocket URL
+- \`RPC_URL\` — Ethereum RPC endpoint
+- \`RECIPIENT\` — Recipient address
+`;
+
+const GO_APP_SESSION_EXAMPLE = `# Complete Go App Session Script
+
+\`\`\`go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    "strconv"
+    "time"
+
+    "github.com/layer-3/nitrolite/pkg/app"
+    "github.com/layer-3/nitrolite/pkg/sign"
+    sdk "github.com/layer-3/nitrolite/sdk/go"
+    "github.com/shopspring/decimal"
+)
+
+func main() {
+    privateKey := os.Getenv("PRIVATE_KEY")
+    clearnodeURL := os.Getenv("CLEARNODE_URL")
+    rpcURL := os.Getenv("RPC_URL")
+    peerAddr := os.Getenv("PEER_ADDRESS")
+    var chainID uint64 = 11155111
+
+    stateSigner, _ := sign.NewEthereumMsgSigner(privateKey)
+    txSigner, _ := sign.NewEthereumRawSigner(privateKey)
+
+    client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+        sdk.WithBlockchainRPC(chainID, rpcURL),
+    )
+    if err != nil { log.Fatal(err) }
+    defer client.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+
+    myAddr := client.GetUserAddress()
+
+    // 1. Create app session
+    definition := app.AppDefinitionV1{
+        ApplicationID: "my-game",
+        Participants: []app.AppParticipantV1{
+            {WalletAddress: myAddr, SignatureWeight: 50},
+            {WalletAddress: peerAddr, SignatureWeight: 50},
+        },
+        Quorum: 100,
+        Nonce:  1,
+    }
+
+    quorumSigs := []string{"0xMySignature...", "0xPeerSignature..."}
+    sessionID, versionStr, status, err := client.CreateAppSession(ctx, definition, "{}", quorumSigs)
+    if err != nil { log.Fatal(err) }
+    log.Printf("Session %s created (version: %s, status: %s)", sessionID, versionStr, status)
+
+    initVersion, _ := strconv.ParseUint(versionStr, 10, 64)
+
+    // 2. Submit state update (version = initial + 1)
+    update := app.AppStateUpdateV1{
+        AppSessionID: sessionID,
+        Intent:       app.AppStateUpdateIntentOperate,
+        Version:      initVersion + 1,
+        Allocations: []app.AppAllocationV1{
+            {Participant: myAddr, Asset: "usdc", Amount: decimal.NewFromInt(15)},
+            {Participant: peerAddr, Asset: "usdc", Amount: decimal.NewFromInt(5)},
+        },
+    }
+    operateSigs := []string{"0xMySig...", "0xPeerSig..."}
+    if err = client.SubmitAppState(ctx, update, operateSigs); err != nil { log.Fatal(err) }
+    log.Println("State updated")
+
+    // 3. Close session — submit with Close intent (version = initial + 2)
+    closeUpdate := update
+    closeUpdate.Intent = app.AppStateUpdateIntentClose
+    closeUpdate.Version = initVersion + 2
+    closeSigs := []string{"0xMyCloseSig...", "0xPeerCloseSig..."}
+    if err = client.SubmitAppState(ctx, closeUpdate, closeSigs); err != nil { log.Fatal(err) }
+    log.Println("Session closed")
+}
+\`\`\`
+`;
+
+const GO_SCAFFOLD_TRANSFER = `package main
+
+import (
+\t"context"
+\t"log"
+\t"os"
+\t"time"
+
+\t"github.com/layer-3/nitrolite/pkg/sign"
+\tsdk "github.com/layer-3/nitrolite/sdk/go"
+\t"github.com/shopspring/decimal"
+)
+
+func main() {
+\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
+\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+
+\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
+\t)
+\tif err != nil { log.Fatal(err) }
+\tdefer client.Close()
+
+\tctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+\tdefer cancel()
+
+\t_, err = client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(10))
+\tif err != nil { log.Fatal(err) }
+\ttxHash, err := client.Checkpoint(ctx, "usdc")
+\tif err != nil { log.Fatal(err) }
+\tlog.Printf("Deposited 10 USDC, tx: %s", txHash)
+
+\t_, err = client.Transfer(ctx, os.Getenv("RECIPIENT"), "usdc", decimal.NewFromInt(5))
+\tif err != nil { log.Fatal(err) }
+\tlog.Println("Transferred 5 USDC")
+}
+`;
+
+const GO_SCAFFOLD_APP_SESSION = `package main
+
+import (
+\t"context"
+\t"log"
+\t"os"
+\t"strconv"
+\t"time"
+
+\t"github.com/layer-3/nitrolite/pkg/app"
+\t"github.com/layer-3/nitrolite/pkg/sign"
+\tsdk "github.com/layer-3/nitrolite/sdk/go"
+\t"github.com/shopspring/decimal"
+)
+
+func main() {
+\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
+\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+
+\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
+\t)
+\tif err != nil { log.Fatal(err) }
+\tdefer client.Close()
+
+\tctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+\tdefer cancel()
+
+\tmyAddr := client.GetUserAddress()
+\tpeer := os.Getenv("PEER_ADDRESS")
+
+\tdef := app.AppDefinitionV1{
+\t\tApplicationID: "my-app",
+\t\tParticipants: []app.AppParticipantV1{
+\t\t\t{WalletAddress: myAddr, SignatureWeight: 50},
+\t\t\t{WalletAddress: peer, SignatureWeight: 50},
+\t\t},
+\t\tQuorum: 100,
+\t\tNonce:  1,
+\t}
+
+\tquorumSigs := []string{"0xMySig...", "0xPeerSig..."}
+\tsessionID, versionStr, _, err := client.CreateAppSession(ctx, def, "{}", quorumSigs)
+\tif err != nil { log.Fatal(err) }
+\tlog.Printf("Session created: %s", sessionID)
+
+\tinitVersion, _ := strconv.ParseUint(versionStr, 10, 64)
+
+\tupdate := app.AppStateUpdateV1{
+\t\tAppSessionID: sessionID,
+\t\tIntent:       app.AppStateUpdateIntentOperate,
+\t\tVersion:      initVersion + 1,
+\t\tAllocations: []app.AppAllocationV1{
+\t\t\t{Participant: myAddr, Asset: "usdc", Amount: decimal.NewFromInt(12)},
+\t\t\t{Participant: peer, Asset: "usdc", Amount: decimal.NewFromInt(8)},
+\t\t},
+\t}
+\toperateSigs := []string{"0xMySig...", "0xPeerSig..."}
+\tif err := client.SubmitAppState(ctx, update, operateSigs); err != nil { log.Fatal(err) }
+\tlog.Println("State updated")
+
+\tupdate.Intent = app.AppStateUpdateIntentClose
+\tupdate.Version = initVersion + 2
+\tcloseSigs := []string{"0xMyCloseSig...", "0xPeerCloseSig..."}
+\tif err := client.SubmitAppState(ctx, update, closeSigs); err != nil { log.Fatal(err) }
+\tlog.Println("Session closed")
+}
+`;
+
+const GO_SCAFFOLD_AI_AGENT = `package main
+
+import (
+\t"context"
+\t"log"
+\t"os"
+\t"os/signal"
+\t"syscall"
+\t"time"
+
+\t"github.com/layer-3/nitrolite/pkg/sign"
+\tsdk "github.com/layer-3/nitrolite/sdk/go"
+\t"github.com/shopspring/decimal"
+)
+
+func main() {
+\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("AGENT_PRIVATE_KEY"))
+\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("AGENT_PRIVATE_KEY"))
+
+\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
+\t)
+\tif err != nil { log.Fatal(err) }
+
+\tsigCh := make(chan os.Signal, 1)
+\tsignal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+\tgo func() {
+\t\t<-sigCh
+\t\tlog.Println("Shutting down agent...")
+\t\tclient.Close()
+\t}()
+
+\tctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+\tdefer cancel()
+
+\t_, err = client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(50))
+\tif err != nil { log.Fatal(err) }
+\tlog.Println("Agent funded with 50 USDC")
+
+\trecipients := []string{"0x1111...", "0x2222..."}
+\tfor _, r := range recipients {
+\t\t_, err := client.Transfer(ctx, r, "usdc", decimal.NewFromFloat(0.10))
+\t\tif err != nil {
+\t\t\tlog.Printf("Payment to %s failed: %v", r, err)
+\t\t\tcontinue
+\t\t}
+\t\tlog.Printf("Paid 0.10 USDC to %s", r)
+\t}
+
+\tlog.Println("Agent payments complete")
+\t<-client.WaitCh()
+}
+`;
+
+// ---------------------------------------------------------------------------
 // Initialize
 // ---------------------------------------------------------------------------
 
@@ -282,6 +847,8 @@ loadCompatExports();
 loadProtocolDocs();
 loadTerminology();
 loadV1API();
+loadGoTypes();
+loadGoSdkMethods();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -1002,73 +1569,169 @@ server.resource('protocol-interactions', 'nitrolite://protocol/interactions', as
     return { contents: [{ uri: 'nitrolite://protocol/interactions', text, mimeType: 'text/markdown' }] };
 });
 
+// ========================== GO SDK RESOURCES ================================
+
+server.resource('go-api-methods', 'nitrolite://go-api/methods', async () => ({
+    contents: [{ uri: 'nitrolite://go-api/methods', text: buildGoApiMethodsContent(), mimeType: 'text/markdown' }],
+}));
+
+server.resource('go-api-types', 'nitrolite://go-api/types', async () => ({
+    contents: [{ uri: 'nitrolite://go-api/types', text: buildGoTypesContent(), mimeType: 'text/markdown' }],
+}));
+
+server.resource('go-examples-full-transfer', 'nitrolite://go-examples/full-transfer-script', async () => ({
+    contents: [{ uri: 'nitrolite://go-examples/full-transfer-script', text: GO_TRANSFER_EXAMPLE, mimeType: 'text/markdown' }],
+}));
+
+server.resource('go-examples-full-app-session', 'nitrolite://go-examples/full-app-session-script', async () => ({
+    contents: [{ uri: 'nitrolite://go-examples/full-app-session-script', text: GO_APP_SESSION_EXAMPLE, mimeType: 'text/markdown' }],
+}));
+
+server.resource('protocol-auth-flow', 'nitrolite://protocol/auth-flow', async () => ({
+    contents: [{ uri: 'nitrolite://protocol/auth-flow', text: AUTH_FLOW_CONTENT, mimeType: 'text/markdown' }],
+}));
+
+
 // ========================== TOOLS ==========================================
 
 server.tool(
     'lookup_method',
     'Look up a specific SDK Client method by name — returns signature, params, return type, usage context',
-    { name: z.string().describe('Method name (e.g. "transfer", "deposit", "getChannels")') },
-    async ({ name }) => {
+    {
+        name: z.string().describe('Method name (e.g. "transfer", "deposit", "getChannels", "Transfer", "Deposit")'),
+        language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
+    },
+    async ({ name, language }) => {
         const query = name.toLowerCase();
-        const matches = methods.filter(m => m.name.toLowerCase().includes(query));
-        if (matches.length === 0) {
+        const parts: string[] = [];
+
+        if (language === 'typescript' || language === 'both') {
+            const tsMatches = methods.filter(m => m.name.toLowerCase().includes(query));
+            if (tsMatches.length > 0) {
+                const header = language === 'both' ? '## TypeScript SDK\n\n' : '';
+                parts.push(header + tsMatches.map(m =>
+                    `### ${m.name}\n**Signature:** \`${m.signature}\`\n**Category:** ${m.category}\n**Description:** ${m.description}`
+                ).join('\n\n---\n\n'));
+            }
+        }
+
+        if (language === 'go' || language === 'both') {
+            const goMatches = goMethods.filter(m => m.name.toLowerCase().includes(query));
+            if (goMatches.length > 0) {
+                const header = language === 'both' ? '## Go SDK\n\n' : '';
+                parts.push(header + goMatches.map(m =>
+                    `### ${m.name}\n**Signature:**\n\`\`\`go\n${m.signature}\n\`\`\`\n**Category:** ${m.category}\n**Description:** ${m.comment}`
+                ).join('\n\n---\n\n'));
+            }
+        }
+
+        if (parts.length === 0) {
             return { content: [{ type: 'text' as const, text: `No method matching "${name}" found. Available categories: ${[...new Set(methods.map(m => m.category))].join(', ')}` }] };
         }
-        const text = matches.map(m =>
-            `## ${m.name}\n**Signature:** \`${m.signature}\`\n**Category:** ${m.category}\n**Description:** ${m.description}`
-        ).join('\n\n---\n\n');
-        return { content: [{ type: 'text' as const, text }] };
+        return { content: [{ type: 'text' as const, text: parts.join('\n\n') }] };
     },
 );
 
 server.tool(
     'lookup_type',
     'Look up a type, interface, or enum by name — returns fields and source location',
-    { name: z.string().describe('Type name (e.g. "Channel", "State", "RPCMethod")') },
-    async ({ name }) => {
+    {
+        name: z.string().describe('Type name (e.g. "Channel", "State", "RPCMethod", "AppSessionV1", "ChannelStatus")'),
+        language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
+    },
+    async ({ name, language }) => {
         const query = name.toLowerCase();
-        const matches = types.filter(t => t.name.toLowerCase().includes(query));
-        if (matches.length === 0) {
-            return { content: [{ type: 'text' as const, text: `No type matching "${name}" found. ${types.length} types indexed.` }] };
+        const parts: string[] = [];
+
+        if (language === 'typescript' || language === 'both') {
+            const tsMatches = types.filter(t => t.name.toLowerCase().includes(query));
+            if (tsMatches.length > 0) {
+                const header = language === 'both' ? '## TypeScript SDK\n\n' : '';
+                parts.push(header + tsMatches.map(t =>
+                    `### ${t.name} (${t.kind})\n**Source:** ${t.source}\n\`\`\`typescript\n${t.fields}\n\`\`\``
+                ).join('\n\n---\n\n'));
+            }
         }
-        const text = matches.map(t =>
-            `## ${t.name} (${t.kind})\n**Source:** ${t.source}\n\`\`\`typescript\n${t.fields}\n\`\`\``
-        ).join('\n\n---\n\n');
-        return { content: [{ type: 'text' as const, text }] };
+
+        if (language === 'go' || language === 'both') {
+            const goMatches = goTypes.filter(t => t.name.toLowerCase().includes(query));
+            if (goMatches.length > 0) {
+                const header = language === 'both' ? '## Go SDK\n\n' : '';
+                parts.push(header + goMatches.map(t => {
+                    if (t.kind === 'struct') {
+                        return `### ${t.name} (struct)\n**Source:** ${t.source}\n\`\`\`go\ntype ${t.name} struct {\n${t.fields}\n}\n\`\`\``;
+                    } else if (t.kind === 'enum') {
+                        return `### ${t.name} (enum)\n**Source:** ${t.source}\n**Values:**\n${t.fields.split('\n').map(v => `- \`${v}\``).join('\n')}`;
+                    }
+                    return `### ${t.name} (${t.kind})\n**Source:** ${t.source}\n\`\`\`go\ntype ${t.name} ${t.fields}\n\`\`\``;
+                }).join('\n\n---\n\n'));
+            }
+        }
+
+        if (parts.length === 0) {
+            return { content: [{ type: 'text' as const, text: `No type matching "${name}" found. ${types.length} TS types and ${goTypes.length} Go types indexed.` }] };
+        }
+        return { content: [{ type: 'text' as const, text: parts.join('\n\n') }] };
     },
 );
 
 server.tool(
     'search_api',
     'Fuzzy search across all SDK methods and types',
-    { query: z.string().describe('Search query (e.g. "session key", "balance", "transfer")') },
-    async ({ query }) => {
+    {
+        query: z.string().describe('Search query (e.g. "session key", "balance", "transfer", "AppSession")'),
+        language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
+    },
+    async ({ query, language }) => {
         const q = query.toLowerCase();
-        const methodHits = methods.filter(m =>
-            m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)
-        );
-        const typeHits = types.filter(t =>
-            t.name.toLowerCase().includes(q) || t.fields.toLowerCase().includes(q)
-        );
-
         let text = `# Search results for "${query}"\n\n`;
-        if (methodHits.length > 0) {
-            text += `## Methods (${methodHits.length} matches)\n`;
-            for (const m of methodHits.slice(0, 10)) {
-                text += `- \`${m.signature}\` — ${m.category}\n`;
+        let totalHits = 0;
+
+        if (language === 'typescript' || language === 'both') {
+            const methodHits = methods.filter(m =>
+                m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)
+            );
+            const typeHits = types.filter(t =>
+                t.name.toLowerCase().includes(q) || t.fields.toLowerCase().includes(q)
+            );
+            const prefix = language === 'both' ? 'TypeScript SDK ' : '';
+            if (methodHits.length > 0) {
+                text += `## ${prefix}Methods (${methodHits.length} matches)\n`;
+                for (const m of methodHits.slice(0, 10)) text += `- \`${m.signature}\` — ${m.category}\n`;
+                text += '\n';
+                totalHits += methodHits.length;
             }
-            text += '\n';
-        }
-        if (typeHits.length > 0) {
-            text += `## Types (${typeHits.length} matches)\n`;
-            for (const t of typeHits.slice(0, 10)) {
-                text += `- \`${t.name}\` (${t.kind}) — ${t.source}\n`;
+            if (typeHits.length > 0) {
+                text += `## ${prefix}Types (${typeHits.length} matches)\n`;
+                for (const t of typeHits.slice(0, 10)) text += `- \`${t.name}\` (${t.kind}) — ${t.source}\n`;
+                text += '\n';
+                totalHits += typeHits.length;
             }
-            text += '\n';
         }
-        if (methodHits.length === 0 && typeHits.length === 0) {
-            text += 'No matches found. Try a broader term.\n';
+
+        if (language === 'go' || language === 'both') {
+            const goMethodHits = goMethods.filter(m =>
+                m.name.toLowerCase().includes(q) || m.comment.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)
+            );
+            const goTypeHits = goTypes.filter(t =>
+                t.name.toLowerCase().includes(q) || t.fields.toLowerCase().includes(q)
+            );
+            const prefix = language === 'both' ? 'Go SDK ' : '';
+            if (goMethodHits.length > 0) {
+                text += `## ${prefix}Methods (${goMethodHits.length} matches)\n`;
+                for (const m of goMethodHits.slice(0, 10)) text += `- \`${m.name}\` — ${m.category}\n`;
+                text += '\n';
+                totalHits += goMethodHits.length;
+            }
+            if (goTypeHits.length > 0) {
+                text += `## ${prefix}Types (${goTypeHits.length} matches)\n`;
+                for (const t of goTypeHits.slice(0, 10)) text += `- \`${t.name}\` (${t.kind}) — ${t.source}\n`;
+                text += '\n';
+                totalHits += goTypeHits.length;
+            }
         }
+
+        if (totalHits === 0) text += 'No matches found. Try a broader term.\n';
         return { content: [{ type: 'text' as const, text }] };
     },
 );
@@ -1205,9 +1868,23 @@ server.tool(
 
 server.tool(
     'scaffold_project',
-    'Generate a starter project structure for a new Nitrolite app — returns package.json, tsconfig.json, and index.ts',
-    { template: z.enum(['transfer-app', 'app-session', 'ai-agent']).describe('Project template type') },
+    'Generate a starter project structure for a new Nitrolite app — TypeScript or Go templates',
+    { template: z.enum(['transfer-app', 'app-session', 'ai-agent', 'go-transfer-app', 'go-app-session', 'go-ai-agent']).describe('Project template: TypeScript (transfer-app, app-session, ai-agent) or Go (go-transfer-app, go-app-session, go-ai-agent)') },
     async ({ template }) => {
+        // Go templates — different output shape
+        if (template === 'go-transfer-app' || template === 'go-app-session' || template === 'go-ai-agent') {
+            const goTemplateMap: Record<string, string> = {
+                'go-transfer-app': GO_SCAFFOLD_TRANSFER,
+                'go-app-session': GO_SCAFFOLD_APP_SESSION,
+                'go-ai-agent': GO_SCAFFOLD_AI_AGENT,
+            };
+            const baseName = template.replace('go-', '');
+            const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/layer-3/nitrolite v0.0.0\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
+            const envKey = template === 'go-ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY';
+            const envExtra = template === 'go-transfer-app' ? '\nRECIPIENT=your_recipient_address' : template === 'go-app-session' ? '\nPEER_ADDRESS=peer_wallet_address' : '';
+            const text = `# Scaffold: ${template}\n\n## go.mod\n\`\`\`\n${goMod}\n\`\`\`\n\n## main.go\n\`\`\`go\n${goTemplateMap[template]}\`\`\`\n\n## .env.example\n\`\`\`\n${envKey}=your_hex_key\nCLEARNODE_URL=wss://clearnode.example.com/ws\nRPC_URL=https://rpc.sepolia.org${envExtra}\n\`\`\`\n\n## Setup\n\`\`\`bash\ngo mod tidy\ngo run .\n\`\`\``;
+            return { content: [{ type: 'text' as const, text }] };
+        }
         const packageJson = {
             name: `nitrolite-${template}`,
             version: '0.1.0',
@@ -1415,7 +2092,21 @@ server.prompt(
 7. **Testing** — How to write tests against the SDK
 
 For each step, show complete TypeScript code examples using the latest SDK API.
-Use \`@yellow-org/sdk\` for new projects. Only use \`@yellow-org/sdk-compat\` if migrating from v0.5.3.`,
+Use \`@yellow-org/sdk\` for new projects. Only use \`@yellow-org/sdk-compat\` if migrating from v0.5.3.
+
+## Go SDK
+
+Guide me through building a Nitrolite state channel application in Go. Cover:
+
+1. **Setup** — Install dependencies, create signers with sign.NewEthereumMsgSigner and sign.NewEthereumRawSigner
+2. **Client Creation** — sdk.NewClient with functional options (WithBlockchainRPC, WithHandshakeTimeout)
+3. **Channel Lifecycle** — Deposit (creates channel), Transfer, Checkpoint (on-chain), CloseHomeChannel + Checkpoint
+4. **App Sessions** — CreateAppSession, SubmitAppState (Operate/Withdraw/Close intents), SubmitAppSessionDeposit
+5. **Error Handling** — Go error patterns, context.WithTimeout, defer client.Close()
+6. **Testing** — Standard Go test patterns with *_test.go files
+
+For each step, show complete Go code examples using the latest SDK from github.com/layer-3/nitrolite/sdk/go.
+Use github.com/shopspring/decimal for amounts. Use context.Context for all async operations.`,
             },
         }],
     }),
@@ -1470,7 +2161,22 @@ server.prompt(
 7. **Error Handling** — Handle reconnection, insufficient funds, expired sessions
 
 For each step, show complete TypeScript code examples using the latest SDK API (\`@yellow-org/sdk\`).
-Use \`viem\` for Ethereum interactions. Include proper error handling and logging.`,
+Use \`viem\` for Ethereum interactions. Include proper error handling and logging.
+
+## Go SDK
+
+I want to build an AI agent in Go that uses Nitrolite state channels for payments. Guide me through:
+
+1. **Agent Wallet Setup** — Create signers from a private key, configure the SDK client
+2. **Channel Management** — Open a channel, deposit funds for the agent
+3. **Automated Payments** — A goroutine-safe payment function using context and mutexes
+4. **Session Key Delegation** — Set up session keys with spending caps
+5. **Agent-to-Agent Payments** — Transfer between two autonomous Go agents
+6. **Graceful Shutdown** — Handle OS signals, defer client.Close(), WaitCh()
+7. **Error Handling** — Wrapped errors, retry patterns, connection recovery
+
+For each step, show complete Go code using github.com/layer-3/nitrolite/sdk/go.
+Use context.Context for timeouts. Use decimal.Decimal for amounts. Follow standard Go patterns.`,
             },
         }],
     }),

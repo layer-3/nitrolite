@@ -4,13 +4,9 @@
             "command": "gh",
             "args": ["copilot", "mcp"]
         },
-        "nitrolite-ts": {
+        "nitrolite": {
             "command": "npm",
-            "args": ["--prefix", "sdk/ts-mcp", "exec", "--", "tsx", "sdk/ts-mcp/src/index.ts"]
-        },
-        "nitrolite-go": {
-            "command": "go",
-            "args": ["run", "./sdk/mcp-go"]
+            "args": ["--prefix", "sdk/mcp", "exec", "--", "tsx", "sdk/mcp/src/index.ts"]
         }
     }
 }

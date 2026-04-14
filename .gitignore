@@ -4,3 +4,6 @@
 
 # OS
 .DS_Store
+
+# Local MCP vetting harness
+sdk/mcp-test-results/

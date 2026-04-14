@@ -109,20 +109,20 @@ const rpcMethodDocs: Map<string, RPCMethodDoc> = new Map();
 
 function loadClientMethods(): void {
     const content = readFile(resolve(SDK_ROOT, 'src/client.ts'));
-    const re = /\/\*\*\s*([\s\S]*?)\*\/\s*(?:static\s+)?(?:async\s+)?(\w+)\s*\(([^)]*)\)(?:\s*:\s*Promise<([^>]+)>|\s*:\s*(\S+))?/g;
+    const re = /\/\*\*\s*([\s\S]*?)\*\/\s*(?:(public|protected|private)\s+)?(?:static\s+)?(?:async\s+)?(\w+)\s*\(([^)]*)\)(?:\s*:\s*Promise<([^>]+)>|\s*:\s*(\S+))?/g;
     let match;
     while ((match = re.exec(content)) !== null) {
         const doc = match[1].replace(/\s*\*\s*/g, ' ').trim();
-        const name = match[2];
-        const params = match[3].trim();
-        const returnType = match[4] || match[5] || 'void';
+        const visibility = match[2] ?? 'public';
+        const name = match[3];
+        const params = match[4].trim();
+        const returnType = match[5] || match[6] || 'void';
 
-        // Skip private/internal
-        if (name.startsWith('_') || content.substring(Math.max(0, match.index - 20), match.index).includes('private')) continue;
+        // Index only public client methods.
+        if (visibility !== 'public' || name.startsWith('_')) continue;
 
         const category = categorizeMethod(name);
-        const isAsync = content.substring(Math.max(0, match.index - 10), match.index).includes('async') ||
-            content.substring(match.index, match.index + match[0].length).includes('async');
+        const isAsync = /\basync\b/.test(match[0]);
         const returnStr = isAsync ? `Promise<${returnType}>` : returnType;
 
         methods.push({
@@ -488,7 +488,7 @@ function loadV1API(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Go SDK static content constants (ported from sdk/mcp-go)
+// Go SDK static content constants ported from the former Go MCP server.
 // ---------------------------------------------------------------------------
 
 const AUTH_FLOW_CONTENT = `# Request Signing & Authorization
@@ -619,8 +619,10 @@ func main() {
     peerAddr := os.Getenv("PEER_ADDRESS")
     var chainID uint64 = 11155111
 
-    stateSigner, _ := sign.NewEthereumMsgSigner(privateKey)
-    txSigner, _ := sign.NewEthereumRawSigner(privateKey)
+    stateSigner, err := sign.NewEthereumMsgSigner(privateKey)
+    if err != nil { log.Fatal(err) }
+    txSigner, err := sign.NewEthereumRawSigner(privateKey)
+    if err != nil { log.Fatal(err) }
 
     client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
         sdk.WithBlockchainRPC(chainID, rpcURL),
@@ -649,26 +651,39 @@ func main() {
     if err != nil { log.Fatal(err) }
     log.Printf("Session %s created (version: %s, status: %s)", sessionID, versionStr, status)
 
-    initVersion, _ := strconv.ParseUint(versionStr, 10, 64)
+    initVersion, err := strconv.ParseUint(versionStr, 10, 64)
+    if err != nil { log.Fatal(err) }
 
-    // 2. Submit state update (version = initial + 1)
-    update := app.AppStateUpdateV1{
+    // 2. Fund the app session before submitting non-zero allocations
+    depositUpdate := app.AppStateUpdateV1{
         AppSessionID: sessionID,
-        Intent:       app.AppStateUpdateIntentOperate,
+        Intent:       app.AppStateUpdateIntentDeposit,
         Version:      initVersion + 1,
         Allocations: []app.AppAllocationV1{
             {Participant: myAddr, Asset: "usdc", Amount: decimal.NewFromInt(15)},
             {Participant: peerAddr, Asset: "usdc", Amount: decimal.NewFromInt(5)},
         },
+        SessionData:  "{}",
+    }
+    if _, err = client.SubmitAppSessionDeposit(ctx, depositUpdate, quorumSigs, "usdc", decimal.NewFromInt(20)); err != nil { log.Fatal(err) }
+    log.Println("Session funded with 20 USDC")
+
+    // 3. Submit state update (version = initial + 2)
+    update := app.AppStateUpdateV1{
+        AppSessionID: sessionID,
+        Intent:       app.AppStateUpdateIntentOperate,
+        Version:      initVersion + 2,
+        Allocations:  depositUpdate.Allocations,
+        SessionData:  "{\"round\":1,\"winner\":\"me\"}",
     }
     operateSigs := []string{"0xMySig...", "0xPeerSig..."}
     if err = client.SubmitAppState(ctx, update, operateSigs); err != nil { log.Fatal(err) }
     log.Println("State updated")
 
-    // 3. Close session — submit with Close intent (version = initial + 2)
+    // 4. Close session — submit with Close intent (version = initial + 3)
     closeUpdate := update
     closeUpdate.Intent = app.AppStateUpdateIntentClose
-    closeUpdate.Version = initVersion + 2
+    closeUpdate.Version = initVersion + 3
     closeSigs := []string{"0xMyCloseSig...", "0xPeerCloseSig..."}
     if err = client.SubmitAppState(ctx, closeUpdate, closeSigs); err != nil { log.Fatal(err) }
     log.Println("Session closed")
@@ -690,8 +705,10 @@ import (
 )
 
 func main() {
-\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
-\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+\tstateSigner, err := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
+\ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
 
 \tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
@@ -730,8 +747,10 @@ import (
 )
 
 func main() {
-\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
-\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+\tstateSigner, err := sign.NewEthereumMsgSigner(os.Getenv("PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
+\ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
 
 \tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
@@ -760,23 +779,35 @@ func main() {
 \tif err != nil { log.Fatal(err) }
 \tlog.Printf("Session created: %s", sessionID)
 
-\tinitVersion, _ := strconv.ParseUint(versionStr, 10, 64)
+\tinitVersion, err := strconv.ParseUint(versionStr, 10, 64)
+\tif err != nil { log.Fatal(err) }
 
-\tupdate := app.AppStateUpdateV1{
+\tdepositUpdate := app.AppStateUpdateV1{
 \t\tAppSessionID: sessionID,
-\t\tIntent:       app.AppStateUpdateIntentOperate,
+\t\tIntent:       app.AppStateUpdateIntentDeposit,
 \t\tVersion:      initVersion + 1,
 \t\tAllocations: []app.AppAllocationV1{
 \t\t\t{Participant: myAddr, Asset: "usdc", Amount: decimal.NewFromInt(12)},
 \t\t\t{Participant: peer, Asset: "usdc", Amount: decimal.NewFromInt(8)},
 \t\t},
+\t\tSessionData: "{}",
 \t}
 \toperateSigs := []string{"0xMySig...", "0xPeerSig..."}
+\tif _, err := client.SubmitAppSessionDeposit(ctx, depositUpdate, operateSigs, "usdc", decimal.NewFromInt(20)); err != nil { log.Fatal(err) }
+\tlog.Println("Session funded with 20 USDC")
+
+\tupdate := app.AppStateUpdateV1{
+\t\tAppSessionID: sessionID,
+\t\tIntent:       app.AppStateUpdateIntentOperate,
+\t\tVersion:      initVersion + 2,
+\t\tAllocations:  depositUpdate.Allocations,
+\t\tSessionData:  "{\"round\":1,\"winner\":\"me\"}",
+\t}
 \tif err := client.SubmitAppState(ctx, update, operateSigs); err != nil { log.Fatal(err) }
 \tlog.Println("State updated")
 
 \tupdate.Intent = app.AppStateUpdateIntentClose
-\tupdate.Version = initVersion + 2
+\tupdate.Version = initVersion + 3
 \tcloseSigs := []string{"0xMyCloseSig...", "0xPeerCloseSig..."}
 \tif err := client.SubmitAppState(ctx, update, closeSigs); err != nil { log.Fatal(err) }
 \tlog.Println("Session closed")
@@ -799,8 +830,10 @@ import (
 )
 
 func main() {
-\tstateSigner, _ := sign.NewEthereumMsgSigner(os.Getenv("AGENT_PRIVATE_KEY"))
-\ttxSigner, _ := sign.NewEthereumRawSigner(os.Getenv("AGENT_PRIVATE_KEY"))
+\tstateSigner, err := sign.NewEthereumMsgSigner(os.Getenv("AGENT_PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
+\ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("AGENT_PRIVATE_KEY"))
+\tif err != nil { log.Fatal(err) }
 
 \tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
@@ -820,7 +853,9 @@ func main() {
 
 \t_, err = client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(50))
 \tif err != nil { log.Fatal(err) }
-\tlog.Println("Agent funded with 50 USDC")
+\ttxHash, err := client.Checkpoint(ctx, "usdc")
+\tif err != nil { log.Fatal(err) }
+\tlog.Printf("Agent funded with 50 USDC, tx: %s", txHash)
 
 \trecipients := []string{"0x1111...", "0x2222..."}
 \tfor _, r := range recipients {
@@ -1000,6 +1035,19 @@ const quorumSigs: string[] = ['0xAliceSig...', '0xBobSig...'];
 // 3. Create the session
 const result = await client.createAppSession(definition, '{}', quorumSigs);
 console.log('Created session:', result.appSessionId);
+
+// 4. Fund the session before submitting non-zero allocations
+const depositUpdate: app.AppStateUpdateV1 = {
+    appSessionId: result.appSessionId,
+    intent: app.AppStateUpdateIntent.Deposit,
+    version: 2n,
+    allocations: [
+        { participant: '0xAlice...', asset: 'usdc', amount: new Decimal(15) },
+        { participant: '0xBob...', asset: 'usdc', amount: new Decimal(5) },
+    ],
+    sessionData: '{}',
+};
+await client.submitAppSessionDeposit(depositUpdate, ['0xAliceSig...', '0xBobSig...'], 'usdc', new Decimal(20));
 \`\`\`
 
 ## Submitting App State
@@ -1010,7 +1058,7 @@ import Decimal from 'decimal.js';
 const appUpdate: app.AppStateUpdateV1 = {
     appSessionId: result.appSessionId,
     intent: app.AppStateUpdateIntent.Operate,
-    version: 2n,
+    version: 3n,
     allocations: [
         { participant: '0xAlice...', asset: 'usdc', amount: new Decimal(15) },
         { participant: '0xBob...', asset: 'usdc', amount: new Decimal(5) },
@@ -1281,12 +1329,12 @@ Instant, gas-free token transfers between users. Open a channel, transfer any am
 
 ## Gaming (Real-Time Wagering)
 Turn-based or real-time games where players wager tokens. App sessions track game state; winners receive payouts automatically.
-**SDK methods:** \`client.createAppSession()\`, \`client.submitAppState()\` (close via \`submitAppState\` with Close intent)
+**SDK methods:** \`client.createAppSession()\`, \`client.submitAppSessionDeposit()\`, \`client.submitAppState()\` (close via \`submitAppState\` with Close intent)
 **Example:** Yetris — a Tetris-style game with token wagering built on app sessions.
 
 ## Multi-Party Checkout / Escrow
 Multiple parties contribute to a shared pool (e.g., group payment, crowdfunding). Funds release when quorum conditions are met.
-**SDK methods:** \`client.createAppSession()\` with custom quorum weights, close via \`client.submitAppState()\` with Close intent
+**SDK methods:** \`client.createAppSession()\`, \`client.submitAppSessionDeposit()\`, custom quorum weights, close via \`client.submitAppState()\` with Close intent
 **Example:** Cosign Demo — a multi-party co-signing checkout flow.
 
 ## AI Agent Payments
@@ -1506,25 +1554,36 @@ async function main() {
     const session = await client.createAppSession(definition, '{}', quorumSigs);
     console.log('App session created:', session.appSessionId);
 
-    // 4. Submit state update — e.g., after a game round
-    const appUpdate: app.AppStateUpdateV1 = {
+    // 4. Fund the app session before submitting non-zero allocations
+    const depositUpdate: app.AppStateUpdateV1 = {
         appSessionId: session.appSessionId,
-        intent: app.AppStateUpdateIntent.Operate,
+        intent: app.AppStateUpdateIntent.Deposit,
         version: 2n,
         allocations: [
             { participant: myAddress, asset: 'usdc', amount: new Decimal(15) },
             { participant: PEER_ADDRESS, asset: 'usdc', amount: new Decimal(5) },
         ],
+        sessionData: '{}',
+    };
+    await client.submitAppSessionDeposit(depositUpdate, ['0xMySig...', '0xPeerSig...'], 'usdc', new Decimal(20));
+    console.log('Session funded with 20 USDC');
+
+    // 5. Submit state update — e.g., after a game round
+    const appUpdate: app.AppStateUpdateV1 = {
+        appSessionId: session.appSessionId,
+        intent: app.AppStateUpdateIntent.Operate,
+        version: 3n,
+        allocations: depositUpdate.allocations,
         sessionData: '{"round": 1, "winner": "me"}',
     };
     await client.submitAppState(appUpdate, ['0xMySig...', '0xPeerSig...']);
     console.log('State updated: I won 5 USDC');
 
-    // 5. Close app session — submit final state with Close intent
+    // 6. Close app session — submit final state with Close intent
     const closeUpdate: app.AppStateUpdateV1 = {
         ...appUpdate,
         intent: app.AppStateUpdateIntent.Close,
-        version: 3n,
+        version: 4n,
     };
     await client.submitAppState(closeUpdate, ['0xMyCloseSig...', '0xPeerCloseSig...']);
     console.log('Session closed, funds returned to channels');
@@ -1968,10 +2027,10 @@ async function main() {
     const session = await client.createAppSession(definition, '{}', quorumSigs);
     console.log('Session created:', session.appSessionId);
 
-    // Submit state update
-    const update: app.AppStateUpdateV1 = {
+    // Fund the app session before non-zero allocations
+    const depositUpdate: app.AppStateUpdateV1 = {
         appSessionId: session.appSessionId,
-        intent: app.AppStateUpdateIntent.Operate,
+        intent: app.AppStateUpdateIntent.Deposit,
         version: 2n,
         allocations: [
             { participant: myAddress, asset: 'usdc', amount: new Decimal(12) },
@@ -1979,10 +2038,21 @@ async function main() {
         ],
         sessionData: '{}',
     };
+    await client.submitAppSessionDeposit(depositUpdate, ['0xMySig...', '0xPeerSig...'], 'usdc', new Decimal(20));
+    console.log('Session funded with 20 USDC');
+
+    // Submit state update
+    const update: app.AppStateUpdateV1 = {
+        appSessionId: session.appSessionId,
+        intent: app.AppStateUpdateIntent.Operate,
+        version: 3n,
+        allocations: depositUpdate.allocations,
+        sessionData: '{}',
+    };
     await client.submitAppState(update, ['0xMySig...', '0xPeerSig...']);
 
     // Close session — submit with Close intent
-    const closeUpdate: app.AppStateUpdateV1 = { ...update, intent: app.AppStateUpdateIntent.Close, version: 3n };
+    const closeUpdate: app.AppStateUpdateV1 = { ...update, intent: app.AppStateUpdateIntent.Close, version: 4n };
     await client.submitAppState(closeUpdate, ['0xMyCloseSig...', '0xPeerCloseSig...']);
     console.log('Session closed');
 }
@@ -2087,7 +2157,7 @@ server.prompt(
 2. **Authentication** — Connect wallet, establish WebSocket, authenticate with clearnode
 3. **Channel Lifecycle** — Deposit (auto-creates channel), query channels, close channel
 4. **Transfers** — Send tokens to another participant via state channels
-5. **App Sessions** — Create sessions for multi-party apps, submit state, close
+    5. **App Sessions** — Create sessions for multi-party apps, fund them with submitAppSessionDeposit, submit state, close
 6. **Error Handling** — Common errors and how to handle them
 7. **Testing** — How to write tests against the SDK
 

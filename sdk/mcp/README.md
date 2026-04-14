@@ -38,7 +38,7 @@ Any MCP-compatible tool (Claude Code, Cursor, Windsurf, VS Code Copilot) auto-di
 
 Look up a Client method by name. Supports an optional `language` parameter.
 
-```
+```text
 > lookup_method({ name: "transfer" })                    # TypeScript (default)
 > lookup_method({ name: "Transfer", language: "go" })    # Go SDK
 > lookup_method({ name: "transfer", language: "both" })  # Both SDKs
@@ -48,7 +48,7 @@ Look up a Client method by name. Supports an optional `language` parameter.
 
 Look up a type, interface, struct, or enum by name.
 
-```
+```text
 > lookup_type({ name: "AppDefinitionV1" })                          # TypeScript (default)
 > lookup_type({ name: "AppSessionV1", language: "go" })             # Go (from pkg/app)
 > lookup_type({ name: "ChannelStatus", language: "go" })            # Go enum with values
@@ -58,7 +58,7 @@ Look up a type, interface, struct, or enum by name.
 
 Fuzzy search across methods and types.
 
-```
+```text
 > search_api({ query: "transfer" })                        # TypeScript (default)
 > search_api({ query: "session", language: "go" })         # Go methods + types
 > search_api({ query: "channel", language: "both" })       # Both SDKs

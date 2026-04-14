@@ -349,8 +349,7 @@ cd contracts && forge fmt      # Format
 | `sdk/ts/` | TypeScript SDK (`@yellow-org/sdk`) | TypeScript |
 | `sdk/ts-compat/` | Compat layer for v0.5.3 migration | TypeScript |
 | `sdk/go/` | Go SDK | Go |
-| `sdk/ts-mcp/` | TypeScript MCP server for AI agents | TypeScript |
-| `sdk/mcp-go/` | Go MCP server for AI agents | Go |
+| `sdk/mcp/` | Unified MCP server for AI agents | TypeScript |
 | `cerebro/` | Interactive CLI for channel management | Go |
 | `pkg/` | Shared Go packages (core, sign, rpc, app) | Go |
 | `docs/` | Protocol specifications | Markdown |

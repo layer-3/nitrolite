@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Vm} from "forge-std/Vm.sol";
 
 import {ChannelHubTest_Base} from "./ChannelHub_Base.t.sol";
+import {TestUtils} from "./TestUtils.sol";
 
 import {Utils} from "../src/Utils.sol";
 import {ChannelHub} from "../src/ChannelHub.sol";
@@ -18,7 +19,7 @@ import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
  * # Scope
  *
  * "Node balance" here means the internal vault balance tracked by _nodeBalances,
- * i.e. the value returned by getAccountBalance(). It does NOT include funds pushed
+ * i.e. the value returned by getNodeBalance(). It does NOT include funds pushed
  * directly to the node's address (e.g. nodeAllocation paid out on channel close),
  * because those bypass the vault and require no event.
  *
@@ -34,8 +35,8 @@ import {EscrowWithdrawalEngine} from "../src/EscrowWithdrawalEngine.sol";
 contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
     /**
      * Emits NodeBalanceUpdated:
-     *   - depositToVault                            — direct vault deposit by node
-     *   - withdrawFromVault                         — direct vault withdrawal by node
+     *   - depositToNode                             — direct node deposit by node
+     *   - withdrawFromNode                          — direct node withdrawal by node
      *   - createChannel (DEPOSIT intent, both lock) — node locks funds into channel
      *   - createChannel (WITHDRAW intent)           — node locks funds into channel
      *   - depositToChannel (both lock)              — node locks funds into channel
@@ -65,7 +66,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
     ChannelDefinition internal bobDef;
     bytes32 internal bobChannelId;
 
-    bytes32 constant NODE_BALANCE_UPDATED_SIG = keccak256("NodeBalanceUpdated(address,address,uint256)");
+    bytes32 constant NODE_BALANCE_UPDATED_SIG = keccak256("NodeBalanceUpdated(address,uint256)");
 
     // Non-home chain constants (fake foreign chain)
     uint64 constant FOREIGN_CHAIN_ID = 42;
@@ -103,10 +104,10 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
     // ======== Helpers ========
 
-    /// @dev Expects the next NodeBalanceUpdated(node, token, expectedBalance) emission.
+    /// @dev Expects the next NodeBalanceUpdated(token, expectedBalance) emission.
     function _expectEmitNodeBalanceUpdated(uint256 expectedBalance) internal {
         vm.expectEmit(true, true, true, true, address(cHub));
-        emit ChannelHub.NodeBalanceUpdated(node, address(token), expectedBalance);
+        emit ChannelHub.NodeBalanceUpdated(address(token), expectedBalance);
     }
 
     /// @dev Asserts NodeBalanceUpdated was NOT emitted in the logs recorded since the last vm.recordLogs().
@@ -237,23 +238,23 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
     // ======== Tests: emits NodeBalanceUpdated ========
 
-    function test_success_onDepositToVault() public {
+    function test_success_onDepositToNode() public {
         token.mint(node, DEPOSIT_AMOUNT);
         vm.startPrank(node);
         token.approve(address(cHub), DEPOSIT_AMOUNT);
         _expectEmitNodeBalanceUpdated(INITIAL_BALANCE + DEPOSIT_AMOUNT);
-        cHub.depositToVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.depositToNode(address(token), DEPOSIT_AMOUNT);
         vm.stopPrank();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
     }
 
-    function test_success_onWithdrawFromVault() public {
+    function test_success_onWithdrawFromNode() public {
         _expectEmitNodeBalanceUpdated(INITIAL_BALANCE - DEPOSIT_AMOUNT);
         vm.prank(node);
-        cHub.withdrawFromVault(node, address(token), DEPOSIT_AMOUNT);
+        cHub.withdrawFromNode(node, address(token), DEPOSIT_AMOUNT);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 
     function test_success_onCreateChannel_depositIntent_bothDeposit() public {
@@ -281,7 +282,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.createChannel(def, state);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 
     function test_success_onCreateChannel_withdrawIntent() public {
@@ -309,7 +310,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.createChannel(def, state);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 
     function test_success_onDepositToChannel_bothDeposit() public {
@@ -317,7 +318,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Deposit: both User and Node specify amounts
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState,
             StateIntent.DEPOSIT,
             [DEPOSIT_AMOUNT * 2, DEPOSIT_AMOUNT],
@@ -329,7 +330,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.depositToChannel(channelId, candidate);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 
     function test_success_onWithdrawFromChannel() public {
@@ -361,15 +362,16 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.withdrawFromChannel(channelId, candidate);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), expectedBalance);
+        assertEq(cHub.getNodeBalance(address(token)), expectedBalance);
     }
 
     function test_success_onCheckpointChannel_withNodeFundChange() public {
         State memory prevState = _createSimpleChannel();
 
         // Off-chain: user transferred 500 to node.
-        State memory candidate =
-            nextState(prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, 0], [int256(DEPOSIT_AMOUNT), -500]);
+        State memory candidate = TestUtils.nextState(
+            prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, 0], [int256(DEPOSIT_AMOUNT), -500]
+        );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);
 
         uint256 expectedBalance = INITIAL_BALANCE + 500;
@@ -377,7 +379,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.checkpointChannel(channelId, candidate);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), expectedBalance);
+        assertEq(cHub.getNodeBalance(address(token)), expectedBalance);
     }
 
     function test_success_onCloseChannel() public {
@@ -408,7 +410,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(alice);
         cHub.closeChannel(channelId, candidate);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_success_onChallengeChannel_newerStateChangesNodeFunds() public {
@@ -417,7 +419,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
         // Off-chain: user transferred 500 to node (nodeNF goes from 0 to -500)
         // Enforce via challenge: nodeFundsDelta = -500 - 0 = -500 → vault += 500
-        State memory stateV1 = nextState(
+        State memory stateV1 = TestUtils.nextState(
             initState, StateIntent.OPERATE, [DEPOSIT_AMOUNT - 500, uint256(0)], [int256(DEPOSIT_AMOUNT), -500]
         );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
@@ -428,7 +430,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(node);
         cHub.challengeChannel(channelId, stateV1, sig, ParticipantIndex.NODE);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE + 500);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE + 500);
     }
 
     function test_success_onInitiateEscrowWithdrawal_nonHome() public {
@@ -436,7 +438,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         _expectEmitNodeBalanceUpdated(INITIAL_BALANCE - DEPOSIT_AMOUNT);
         _initiateEscrowWithdrawal();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 
     function test_success_onFinalizeEscrowDeposit_nonHome() public {
@@ -475,7 +477,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(node);
         cHub.finalizeEscrowDeposit(bobChannelId, escrowId, finalizeState);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
     }
 
     function test_success_onFinalizeEscrowWithdrawal_nonHome_afterChallengeTimeout() public {
@@ -495,7 +497,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         vm.prank(node);
         cHub.finalizeEscrowWithdrawal(bobChannelId, escrowId, initState);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_success_onPurgeEscrowDeposits() public {
@@ -509,7 +511,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         _expectEmitNodeBalanceUpdated(INITIAL_BALANCE + DEPOSIT_AMOUNT);
         cHub.purgeEscrowDeposits(1);
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE + DEPOSIT_AMOUNT);
     }
 
     // ======== Tests: does NOT emit NodeBalanceUpdated ========
@@ -522,7 +524,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
 
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_noEmit_onDepositToChannel_noNodeChange() public {
@@ -530,7 +532,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Deposit: only user adds funds, nodeNetFlow stays at 0
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState, StateIntent.DEPOSIT, [DEPOSIT_AMOUNT * 2, uint256(0)], [int256(DEPOSIT_AMOUNT) * 2, int256(0)]
         );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);
@@ -540,7 +542,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         cHub.depositToChannel(channelId, candidate);
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_noEmit_onCheckpointChannel_noNodeChange() public {
@@ -548,7 +550,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         State memory prevState = _createSimpleChannel();
 
         // Checkpoint: nodeNetFlow stays at 0, userNetFlow unchanged (OPERATE requires userNfDelta == 0)
-        State memory candidate = nextState(
+        State memory candidate = TestUtils.nextState(
             prevState, StateIntent.OPERATE, [DEPOSIT_AMOUNT, uint256(0)], [int256(DEPOSIT_AMOUNT), int256(0)]
         );
         candidate = mutualSignStateBothWithEcdsaValidator(candidate, channelId, ALICE_PK);
@@ -558,7 +560,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         cHub.checkpointChannel(channelId, candidate);
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_noEmit_onInitiateEscrowDeposit_nonHome() public {
@@ -567,7 +569,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         _initiateEscrowDeposit();
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_noEmit_onChallengeEscrowDeposit() public {
@@ -581,7 +583,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         cHub.challengeEscrowDeposit(escrowId, sig, ParticipantIndex.USER);
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE);
     }
 
     function test_noEmit_onChallengeEscrowWithdrawal() public {
@@ -595,7 +597,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
         cHub.challengeEscrowWithdrawal(escrowId, sig, ParticipantIndex.USER);
         _assertNoEmitNodeBalanceUpdated();
 
-        assertEq(cHub.getAccountBalance(node, address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
+        assertEq(cHub.getNodeBalance(address(token)), INITIAL_BALANCE - DEPOSIT_AMOUNT);
     }
 }
 // forge-lint: disable-end(unsafe-typecast)

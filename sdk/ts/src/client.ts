@@ -108,6 +108,7 @@ export class Client {
   private stateSigner: StateSigner;
   private txSigner: TransactionSigner;
   private assetStore: ClientAssetStore;
+  private stateAdvancer: core.StateAdvancerV1;
 
   private constructor(
     rpcClient: RPCClient,
@@ -124,6 +125,7 @@ export class Client {
     this.blockchainClients = new Map();
     this.blockchainLockingClients = new Map();
     this.homeBlockchains = new Map();
+    this.stateAdvancer = new core.StateAdvancerV1(assetStore);
 
     // Create exit promise
     this.exitPromise = new Promise((resolve) => {
@@ -300,19 +302,32 @@ export class Client {
   }
 
   /**
-   * SignAndSubmitState is a helper that signs a state and submits it to the node.
+   * ValidateAndSignState validates that the proposed state is a valid advancement of the
+   * current state, then signs it. Returns the signature as a hex-encoded string (with 0x prefix).
+   *
+   * This is a low-level method exposed for advanced users who want to manually
+   * construct and sign states. Most users should use the high-level methods like
+   * transfer, deposit, and withdraw instead.
+   */
+  async validateAndSignState(currentState: core.State, proposedState: core.State): Promise<Hex> {
+    await this.stateAdvancer.validateAdvancement(currentState, proposedState);
+    return this.signState(proposedState);
+  }
+
+  /**
+   * SignAndSubmitState is a helper that validates, signs a state and submits it to the node.
    * Returns the node's signature.
    */
-  private async signAndSubmitState(state: core.State): Promise<Hex> {
-    // Sign state
-    const sig = await this.signState(state);
-    state.userSig = sig;
+  private async signAndSubmitState(currentState: core.State, proposedState: core.State): Promise<Hex> {
+    // Validate and sign state
+    const sig = await this.validateAndSignState(currentState, proposedState);
+    proposedState.userSig = sig;
 
     // Submit to node
-    const nodeSig = await this.submitState(state);
+    const nodeSig = await this.submitState(proposedState);
 
     // Update state with node signature
-    state.nodeSig = nodeSig as Hex;
+    proposedState.nodeSig = nodeSig as Hex;
 
     return nodeSig as Hex;
   }
@@ -375,7 +390,7 @@ export class Client {
     }
 
     // Scenario A: Channel doesn't exist or is closed - create it
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -386,6 +401,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -410,7 +429,7 @@ export class Client {
     applyHomeDepositTransition(newState, amount);
 
     // Sign and submit state to node
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -469,7 +488,7 @@ export class Client {
     }
 
     // Channel doesn't exist or is closed - create it and withdraw
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -480,6 +499,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -504,7 +527,7 @@ export class Client {
     applyHomeWithdrawalTransition(newState, amount);
 
     // Sign and submit state to node
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -541,7 +564,11 @@ export class Client {
       // Channel doesn't exist
     }
 
-    if (!state || !state.homeChannelId) {
+    // homeChannelId is intentionally not checked here: a non-null state with
+    // an undefined homeChannelId is valid — it represents a user who received
+    // funds but has not yet opened a channel. Only enter the creation path when
+    // there is truly no prior state at all.
+    if (!state) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -596,7 +623,7 @@ export class Client {
     applyTransferSendTransition(newState, recipientWallet, amount);
 
     // Sign and submit state
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -631,8 +658,12 @@ export class Client {
       // No state exists
     }
 
+    // homeChannelId is intentionally not checked here: a non-null state with
+    // an undefined homeChannelId is valid — it represents a user who received
+    // funds but has not yet opened a channel. Only enter the creation path when
+    // there is truly no prior state at all.
     // No channel path - create channel with acknowledgement
-    if (!state || !state.homeChannelId) {
+    if (!state) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -686,7 +717,7 @@ export class Client {
     const newState = nextState(state);
     applyAcknowledgementTransition(newState);
 
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -722,7 +753,7 @@ export class Client {
     applyFinalizeTransition(newState);
 
     // Sign and submit state
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -779,7 +810,7 @@ export class Client {
       case core.TransitionType.TransferSend:
       case core.TransitionType.TransferReceive:
       case core.TransitionType.Commit:
-      case core.TransitionType.Release:  
+      case core.TransitionType.Release:
       {
         if (channel.status === core.ChannelStatus.Void) {
           // Channel not yet created on-chain, reconstruct definition and call Create

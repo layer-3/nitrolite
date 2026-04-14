@@ -69,31 +69,6 @@ export class Client {
       .join('')}` as `0x${string}`;
   }
 
-  // ========= Getters - IVault =========
-
-  async getAccountsBalances(accounts: Address[], tokens: Address[]): Promise<Decimal[][]> {
-    if (accounts.length === 0 || tokens.length === 0) {
-      return [];
-    }
-
-    const result: Decimal[][] = [];
-    for (const account of accounts) {
-      const accountBalances: Decimal[] = [];
-      for (const token of tokens) {
-        const balance = (await this.evmClient.readContract({
-          address: this.contractAddress,
-          abi: ChannelHubAbi,
-          functionName: 'getAccountBalance',
-          args: [account, token],
-        })) as bigint;
-        accountBalances.push(new Decimal(balance.toString()));
-      }
-      result.push(accountBalances);
-    }
-
-    return result;
-  }
-
   private async getAllowance(asset: string, owner: Address): Promise<Decimal> {
     const tokenAddress = await this.assetStore.getTokenAddress(asset, this.blockchainId);
 
@@ -175,8 +150,8 @@ export class Client {
     const balance = (await this.evmClient.readContract({
       address: this.contractAddress,
       abi: ChannelHubAbi,
-      functionName: 'getAccountBalance',
-      args: [this.nodeAddress, token],
+      functionName: 'getNodeBalance',
+      args: [token],
     })) as bigint;
 
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
@@ -232,16 +207,15 @@ export class Client {
     throw new Error('getEscrowWithdrawalData not implemented - needs contract ABI update');
   }
 
-  // ========= IVault Functions =========
+  // ========= Node Functions =========
 
-  async deposit(node: Address, token: Address, amount: Decimal): Promise<string> {
+  async deposit(token: Address, amount: Decimal): Promise<string> {
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
     const amountBig = decimalToBigInt(amount, decimals);
 
     console.log('💳 EVM Client - Deposit transaction:', {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
-      node,
       token,
       amount: amount.toString(),
       amountBig: amountBig.toString(),
@@ -255,8 +229,8 @@ export class Client {
       const { request } = await this.evmClient.simulateContract({
         address: this.contractAddress,
         abi: ChannelHubAbi,
-        functionName: 'depositToVault',
-        args: [node, token, amountBig],
+        functionName: 'depositToNode',
+        args: [token, amountBig],
         account: this.walletSigner.account!.address,
         ...(token === zeroAddress ? { value: amountBig } : {}),
       });
@@ -292,14 +266,14 @@ export class Client {
     }
   }
 
-  async withdraw(node: Address, token: Address, amount: Decimal): Promise<string> {
+  async withdraw(to: Address, token: Address, amount: Decimal): Promise<string> {
     const decimals = await this.assetStore.getTokenDecimals(this.blockchainId, token);
     const amountBig = decimalToBigInt(amount, decimals);
 
     console.log('💳 EVM Client - Withdraw transaction:', {
       contractAddress: this.contractAddress,
       blockchainId: this.blockchainId.toString(),
-      node,
+      to,
       token,
       amount: amount.toString(),
       amountBig: amountBig.toString(),
@@ -313,8 +287,8 @@ export class Client {
       const { request } = await this.evmClient.simulateContract({
         address: this.contractAddress,
         abi: ChannelHubAbi,
-        functionName: 'withdrawFromVault',
-        args: [node, token, amountBig],
+        functionName: 'withdrawFromNode',
+        args: [to, token, amountBig],
         account: this.walletSigner.account!.address,
       });
 

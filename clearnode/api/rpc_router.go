@@ -30,6 +30,7 @@ type RPCRouter struct {
 type RPCRouterConfig struct {
 	NodeVersion  string
 	MinChallenge uint32
+	MaxChallenge uint32
 
 	AppRegistryEnabled        bool
 	MaxParticipants           int
@@ -100,8 +101,8 @@ func NewRPCRouter(
 		panic("failed to create channel wallet signer: " + err.Error())
 	}
 
-	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
-	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, signer, stateAdvancer, statePacker, nodeAddress, cfg.AppRegistryEnabled, runtimeMetrics,
+	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, cfg.MaxChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs)
+	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.AppRegistryEnabled, runtimeMetrics,
 		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates)
 	appsV1Handler := apps_v1.NewHandler(dbStore, useAppV1StoreInTx, actionGateway, cfg.MaxAppMetadataLen)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)

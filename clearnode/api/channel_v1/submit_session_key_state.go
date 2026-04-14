@@ -3,8 +3,6 @@ package channel_v1
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
@@ -34,20 +32,28 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	// Validate required fields
-	if !common.IsHexAddress(coreState.UserAddress) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: invalid user_address"), "")
+	coreState.UserAddress, err = core.NormalizeHexAddress(coreState.UserAddress)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: invalid user_address: %v", err), "")
 		return
 	}
-	if !common.IsHexAddress(coreState.SessionKey) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: invalid session_key"), "")
+
+	coreState.SessionKey, err = core.NormalizeHexAddress(coreState.SessionKey)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: invalid session_key: %v", err), "")
 		return
 	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
 	}
 	if coreState.ExpiresAt.Before(time.Now()) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
+		return
+	}
+	if len(coreState.Assets) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: assets array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
 	if coreState.UserSig == "" {

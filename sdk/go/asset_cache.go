@@ -8,6 +8,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 )
 
+// TODO: refactor by not using client as a dependency as this creates a circular usage.
 // clientAssetStore implements core.AssetStore by fetching data from the Clearnode API.
 type clientAssetStore struct {
 	client *Client
@@ -28,6 +29,12 @@ func (s *clientAssetStore) populateCache() error {
 		return fmt.Errorf("failed to fetch assets: %w", err)
 	}
 	for _, a := range assets {
+		for _, token := range a.Tokens {
+			if a.Decimals > token.Decimals {
+				return fmt.Errorf("asset %s decimals (%d) must not exceed token %s decimals (%d) on blockchain %d",
+					a.Symbol, a.Decimals, token.Symbol, token.Decimals, token.BlockchainID)
+			}
+		}
 		s.cache[strings.ToLower(a.Symbol)] = a
 	}
 	return nil

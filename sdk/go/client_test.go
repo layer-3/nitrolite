@@ -264,7 +264,7 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 				Decimals:              6,
 				SuggestedBlockchainID: "137",
 				Tokens: []rpc.TokenV1{
-					{BlockchainID: "137", Address: "0xToken"},
+					{BlockchainID: "137", Address: "0xToken", Decimals: 6},
 				},
 			},
 		},
@@ -288,8 +288,8 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 			HomeLedger: rpc.LedgerV1{
 				BlockchainID: "137",
 				TokenAddress: "0xToken",
-				UserBalance:  "100.0",
-				UserNetFlow:  "0",
+				UserBalance:  "100",
+				UserNetFlow:  "100",
 				NodeBalance:  "0",
 				NodeNetFlow:  "0",
 			},
@@ -323,6 +323,7 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 		rawSigner:   rawSigner,
 	}
 	client.assetStore = newClientAssetStore(client)
+	client.stateAdvancer = core.NewStateAdvancerV1(client.assetStore)
 
 	appUpdate := app.AppStateUpdateV1{
 		AppSessionID: "0xSessionID",

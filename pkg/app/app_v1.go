@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 var AppIDV1Regex = regexp.MustCompile(`^[a-z0-9][-a-z0-9]{0,65}$`)
@@ -30,8 +31,10 @@ type AppInfoV1 struct {
 
 // PackAppV1 packs the AppV1 for signing using ABI encoding.
 func PackAppV1(app AppV1) ([]byte, error) {
-	if !common.IsHexAddress(app.OwnerWallet) {
-		return nil, fmt.Errorf("invalid owner wallet address: %s", app.OwnerWallet)
+	var err error
+	app.OwnerWallet, err = core.NormalizeHexAddress(app.OwnerWallet)
+	if err != nil {
+		return nil, fmt.Errorf("invalid owner wallet address: %v", err)
 	}
 
 	args := abi.Arguments{

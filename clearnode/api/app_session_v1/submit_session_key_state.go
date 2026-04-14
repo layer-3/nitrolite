@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 	"github.com/layer-3/nitrolite/pkg/sign"
@@ -24,15 +24,6 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
-	if len(reqPayload.State.ApplicationIDs) > h.maxSessionKeyIDs {
-		c.Fail(rpc.Errorf("application_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
-		return
-	}
-	if len(reqPayload.State.AppSessionIDs) > h.maxSessionKeyIDs {
-		c.Fail(rpc.Errorf("app_session_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
-		return
-	}
-
 	logger.Debug("processing session key state submission",
 		"userAddress", reqPayload.State.UserAddress,
 		"sessionKey", reqPayload.State.SessionKey,
@@ -46,20 +37,32 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	// Validate required fields
-	if !common.IsHexAddress(coreState.UserAddress) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: invalid user_address"), "")
+	coreState.UserAddress, err = core.NormalizeHexAddress(coreState.UserAddress)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: invalid user_address: %v", err), "")
 		return
 	}
-	if !common.IsHexAddress(coreState.SessionKey) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: invalid session_key"), "")
+
+	coreState.SessionKey, err = core.NormalizeHexAddress(coreState.SessionKey)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: invalid session_key: %v", err), "")
 		return
 	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
 	}
 	if coreState.ExpiresAt.Before(time.Now()) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
+		return
+	}
+	if len(coreState.AppSessionIDs) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
+		return
+	}
+	if len(coreState.ApplicationIDs) > h.maxSessionKeyIDs {
+		c.Fail(rpc.Errorf("invalid_session_key_state: application_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
 	if coreState.UserSig == "" {

@@ -3,6 +3,7 @@ package app_session_v1
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/layer-3/nitrolite/clearnode/metrics"
@@ -22,7 +23,7 @@ func TestSubmitAppState_OperateIntent_NoRedistribution_Success(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -138,7 +139,7 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -255,7 +256,8 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
+	nodeAddress := strings.ToLower(mockSigner.PublicKey().Address().String())
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -271,7 +273,7 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
-		"0xNode",
+		nodeAddress,
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
@@ -334,12 +336,29 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-40)).Return(nil)
 
 	// Mock expectations for channel state issuance (issueReleaseReceiverState)
+	homeChannelID := "0xHomeChannel"
+	existingUserState := core.State{
+		Asset:         "USDC",
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			UserBalance: decimal.NewFromInt(200),
+			UserNetFlow: decimal.NewFromInt(200),
+		},
+	}
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
-	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(nil, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything).Return(nil)
-	mockStore.On("StoreUserState", mock.Anything).Return(nil)
+
+	var capturedState core.State
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		capturedState = state
+		return true
+	})).Return(nil)
 
 	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
 		return session.Version == 2 && session.Status == app.AppSessionStatusOpen
@@ -364,13 +383,17 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	}
 	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
 
+	// Verify node signature on stored channel state
+	require.NotNil(t, capturedState.NodeSig, "Node signature should be present on stored state")
+	VerifyNodeSignature(t, nodeAddress, []byte("packed"), *capturedState.NodeSig)
+
 	mockStore.AssertExpectations(t)
 }
 
-func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
+func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -387,6 +410,138 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+
+	existingSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 10},
+		},
+		Quorum:      10,
+		Status:      app.AppSessionStatusOpen,
+		Version:     1,
+		SessionData: "",
+	}
+
+	currentAllocations := map[string]map[string]decimal.Decimal{
+		participant1: {
+			"USDC": decimal.NewFromInt(100),
+		},
+	}
+
+	// Build the core app state update for signing
+	appStateUpdateCore := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentWithdraw,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(60)},
+		},
+		SessionData: "",
+	}
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdateCore)
+
+	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: appSessionID,
+			Intent:       app.AppStateUpdateIntentWithdraw,
+			Version:      "2",
+			Allocations: []rpc.AppAllocationV1{
+				{Participant: participant1, Asset: "USDC", Amount: "60"},
+			},
+			SessionData: "",
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	// Mock expectations
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
+	}, nil).Maybe()
+	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
+	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
+	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-40)).Return(nil)
+
+	// Mock expectations for channel state issuance (issueReleaseReceiverState)
+	homeChannelID := "0xHomeChannel"
+	existingUserState := core.State{
+		Asset:         "USDC",
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			UserBalance: decimal.NewFromInt(200),
+			UserNetFlow: decimal.NewFromInt(200),
+		},
+	}
+
+	// Last signed state has an active escrow channel
+	escrowChannelID := "0xEscrowChannel456"
+	lastSignedState := core.State{
+		Asset:           "USDC",
+		UserWallet:      participant1,
+		Epoch:           1,
+		Version:         1,
+		HomeChannelID:   &homeChannelID,
+		EscrowChannelID: &escrowChannelID,
+	}
+
+	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(lastSignedState, nil)
+
+	// Create RPC context
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
+	}
+
+	// Execute
+	handler.SubmitAppState(ctx)
+
+	// Assert - should fail because participant has an active escrow lock
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when participant has active escrow lock")
+	assert.Contains(t, respErr.Error(), "last signed state is a lock with escrow channel")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
+	// Setup
+	mockStore := new(MockStore)
+	mockSigner := NewMockChannelSigner()
+	nodeAddress := strings.ToLower(mockSigner.PublicKey().Address().String())
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		nodeAddress,
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
@@ -454,22 +609,51 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
 
+	homeChannelID := "0xHomeChannel"
+	existingUserState1 := core.State{
+		Asset:         "USDC",
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			UserBalance: decimal.NewFromInt(200),
+			UserNetFlow: decimal.NewFromInt(200),
+		},
+	}
+	existingUserState2 := core.State{
+		Asset:         "USDC",
+		UserWallet:    participant2,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			UserBalance: decimal.NewFromInt(100),
+			UserNetFlow: decimal.NewFromInt(100),
+		},
+	}
+
 	// Mock expectations for fund release and channel state issuance on close
 	// Participant 1: 100 USDC
 	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-100)).Return(nil)
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
-	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(nil, nil)
+	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState1, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything).Return(nil)
-	mockStore.On("StoreUserState", mock.Anything).Return(nil).Once()
 
 	// Participant 2: 50 USDC
 	mockStore.On("RecordLedgerEntry", participant2, appSessionID, "USDC", decimal.NewFromInt(-50)).Return(nil)
 	mockStore.On("LockUserState", participant2, "USDC").Return(decimal.Zero, nil)
-	mockStore.On("GetLastUserState", participant2, "USDC", false).Return(nil, nil)
+	mockStore.On("GetLastUserState", participant2, "USDC", false).Return(existingUserState2, nil)
 	mockStore.On("GetLastUserState", participant2, "USDC", true).Return(nil, nil)
-	mockStore.On("StoreUserState", mock.Anything).Return(nil).Once()
+
+	// Capture stored states to verify node signatures
+	var capturedStates []core.State
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		capturedStates = append(capturedStates, state)
+		return true
+	})).Return(nil)
 
 	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
 		return session.Version == 2 && session.Status == app.AppSessionStatusClosed
@@ -494,6 +678,13 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	}
 	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
 
+	// Verify node signatures on all stored channel states
+	require.Len(t, capturedStates, 2, "Expected 2 stored states for 2 participants")
+	for _, state := range capturedStates {
+		require.NotNil(t, state.NodeSig, "Node signature should be present on stored state for %s", state.UserWallet)
+		VerifyNodeSignature(t, nodeAddress, []byte("packed"), *state.NodeSig)
+	}
+
 	mockStore.AssertExpectations(t)
 }
 
@@ -504,7 +695,7 @@ func TestSubmitAppState_CloseIntent_AllocationMismatch_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -604,7 +795,7 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -713,7 +904,7 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -830,7 +1021,7 @@ func TestSubmitAppState_DepositIntent_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -886,7 +1077,7 @@ func TestSubmitAppState_ClosedSession_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -957,7 +1148,7 @@ func TestSubmitAppState_InvalidVersion_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1033,7 +1224,7 @@ func TestSubmitAppState_SessionNotFound_Rejected(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1094,7 +1285,7 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1198,7 +1389,7 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 func TestSubmitAppState_WithdrawIntent_InvalidDecimalPrecision_Rejected(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)
@@ -1308,7 +1499,7 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 
@@ -1430,7 +1621,7 @@ func TestSubmitAppState_AppRegistryDisabled(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 

@@ -43,16 +43,6 @@ export interface Listener {
  * Client defines the interface for interacting with the ChannelsHub smart contract
  */
 export interface Client {
-  // ========= Getters - IVault =========
-
-  /**
-   * Get balances for multiple accounts and tokens
-   * @param accounts - Array of account addresses
-   * @param tokens - Array of token addresses
-   * @returns 2D array of balances [account][token]
-   */
-  getAccountsBalances(accounts: Address[], tokens: Address[]): Promise<Decimal[][]>;
-
   // ========= Getters - Token Balance & Approval =========
 
   /**
@@ -102,25 +92,24 @@ export interface Client {
    */
   getEscrowWithdrawalData(escrowChannelId: string): Promise<EscrowWithdrawalDataResponse>;
 
-  // ========= IVault functions =========
+  // ========= Node functions =========
 
   /**
-   * Deposit tokens into custody
-   * @param node - Node address
+   * Deposit tokens into the node's balance
    * @param token - Token address
    * @param amount - Amount to deposit
    * @returns Transaction hash
    */
-  deposit(node: Address, token: Address, amount: Decimal): Promise<Hex>;
+  deposit(token: Address, amount: Decimal): Promise<Hex>;
 
   /**
-   * Withdraw tokens from custody
-   * @param node - Node address
+   * Withdraw tokens from the node's balance
+   * @param to - Destination address
    * @param token - Token address
    * @param amount - Amount to withdraw
    * @returns Transaction hash
    */
-  withdraw(node: Address, token: Address, amount: Decimal): Promise<Hex>;
+  withdraw(to: Address, token: Address, amount: Decimal): Promise<Hex>;
 
   // ========= Channel lifecycle =========
 

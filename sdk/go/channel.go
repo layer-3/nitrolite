@@ -89,7 +89,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 		}
 
 		// Sign state
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -116,7 +116,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 	}
 
 	// Sign and submit state to node
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nextState, err
 	}
@@ -199,7 +199,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 		}
 
 		// Sign state
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -225,7 +225,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 	}
 
 	// Sign and submit state to node
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +314,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 			return nil, fmt.Errorf("failed to apply transfer transition: %w", err)
 		}
 
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -340,7 +340,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 	}
 
 	// Sign and submit state
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +394,7 @@ func (c *Client) CloseHomeChannel(ctx context.Context, asset string) (*core.Stat
 	}
 
 	// Sign and submit state
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +483,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 			return nil, fmt.Errorf("failed to apply acknowledgement transition: %w", err)
 		}
 
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -510,7 +510,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 		return nil, fmt.Errorf("failed to apply acknowledgement transition: %w", err)
 	}
 
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}

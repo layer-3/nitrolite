@@ -175,6 +175,10 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to get latest state: %w", err)
 	}
 
+	if currentState == nil {
+		return "", fmt.Errorf("no channel state to advance for AppSession")
+	}
+
 	nextState := currentState.NextState()
 
 	_, err = nextState.ApplyCommitTransition(appUpdate.AppSessionID, depositAmount)
@@ -182,7 +186,7 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to apply commit transition: %w", err)
 	}
 
-	stateSig, err := c.SignState(nextState)
+	stateSig, err := c.ValidateAndSignState(currentState, nextState)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state: %w", err)
 	}

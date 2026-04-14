@@ -11,6 +11,7 @@
     ],
     "scripts": {
         "build": "npm run test && tsc",
+        "codegen-abi": "npx tsx scripts/codegen-abi.ts",
         "build:prod": "npm run test && tsc -p tsconfig.prod.json",
         "build:full": "npm run build",
         "docs": "ts-node scripts/generate-docs.ts",

@@ -30,10 +30,11 @@ contract DeployChannelHub is Script {
     function run() external {
         // Optional: reuse an existing validator or deploy a fresh ECDSAValidator
         address defaultValidatorAddr = vm.envOr("DEFAULT_VALIDATOR_ADDR", address(0));
-        run(defaultValidatorAddr);
+        address nodeAddr = vm.envAddress("NODE_ADDR");
+        run(defaultValidatorAddr, nodeAddr);
     }
 
-    function run(address defaultValidatorAddr) public {
+    function run(address defaultValidatorAddr, address nodeAddr) public {
         // msg.sender is set by Foundry to the address derived from --private-key
         address deployer = msg.sender;
 
@@ -83,7 +84,8 @@ contract DeployChannelHub is Script {
             defaultValidatorAddr.code.length > 0,
             "DeployChannelHub: DEFAULT_VALIDATOR_ADDR has no code - must be a deployed contract"
         );
-        ChannelHub hub = new ChannelHub(ISignatureValidator(defaultValidatorAddr));
+        require(nodeAddr != address(0), "DeployChannelHub: NODE_ADDR must be set");
+        ChannelHub hub = new ChannelHub(ISignatureValidator(defaultValidatorAddr), nodeAddr);
 
         vm.stopBroadcast();
 
@@ -93,6 +95,7 @@ contract DeployChannelHub is Script {
         console.log("");
         console.log("=== Deployment complete ===");
         console.log("DefaultSigValidator:", defaultValidatorAddr);
+        console.log("Node:               ", nodeAddr);
         console.log("ChannelHub:         ", address(hub));
         console.log("(Library addresses are logged in the broadcast JSON)");
     }

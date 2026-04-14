@@ -35,6 +35,7 @@ var Version = "v1.0.0" // set at build time with -ldflags "-X main.Version=x.y.z
 type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
+	ChannelMaxChallengeDuration uint32
 	AppRegistryEnabled          bool
 	BlockchainRPCs              map[uint64]string
 	ValidationLimits            ValidationLimits
@@ -66,7 +67,8 @@ func (b *Backbone) Close() error {
 
 type FullConfig struct {
 	Database                    database.DatabaseConfig
-	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"` // 24 hours
+	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
+	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"CLEARNODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
 	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"CLEARNODE_ACTION_LIMITS_ENABLED"`
 	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"CLEARNODE_APP_REGISTRY_ENABLED"`
 	Signer                      SignerConfig     `yaml:"signer"`
@@ -88,7 +90,7 @@ type ValidationLimits struct {
 	MaxParticipants   int `yaml:"max_participants" env:"CLEARNODE_MAX_PARTICIPANTS" env-default:"32"`
 	MaxSessionDataLen int `yaml:"max_session_data_len" env:"CLEARNODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
 	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"CLEARNODE_MAX_APP_METADATA_LEN" env-default:"1024"`
-	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"CLEARNODE_MAX_SESSION_KEY_IDS" env-default:"256"`
+	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"CLEARNODE_MAX_SESSION_KEY_IDS" env-default:"10"`
 	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"CLEARNODE_MAX_SIGNED_UPDATES" env-default:"0"`
 }
 
@@ -199,6 +201,7 @@ func InitBackbone() *Backbone {
 	return &Backbone{
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
+		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
 		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
 		ValidationLimits:            conf.ValidationLimits,

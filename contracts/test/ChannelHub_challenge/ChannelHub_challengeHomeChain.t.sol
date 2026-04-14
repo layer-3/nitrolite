@@ -6,6 +6,7 @@ import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
 // forge-lint: disable-start(unsafe-typecast)
 
 import {Utils} from "../../src/Utils.sol";
+import {TestUtils} from "../TestUtils.sol";
 import {
     State,
     ChannelDefinition,
@@ -29,6 +30,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
     Test cases:
     - a channel can be challenged with a newer state, which is enforced during challenge
     - a channel can be challenged with existing state, which is NOT enforced the second time during challenge
+    - a channel can NOT be challenged with CLOSE intent (must use closeChannel function for that)
     - challenge is finalized (funds can be withdrawn) after `challengeExpireAt` time expires
     - challenged "operating" state can be resolved with a newer state until `challengeExpireAt` time has NOT passed
     - challenged state can NOT be resolved after `challengeExpireAt` time has passed
@@ -44,13 +46,14 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_challengeWithNewerState_enforcesState() public {
         // Off-chain: user transfers 100 to node
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // Off-chain: user transfers another 50 to node
         State memory stateV2 =
-            nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
+            TestUtils.nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
         stateV2 = mutualSignStateBothWithEcdsaValidator(stateV2, channelId, ALICE_PK);
 
         // Node challenges with newer state V2, which should be enforced during challenge
@@ -76,8 +79,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_challengeWithExistingState_notEnforcedAgain() public {
         // Checkpoint a new state
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         vm.prank(alice);
@@ -108,9 +112,22 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         );
     }
 
+    function test_revert_challengeWithCloseIntent() public {
+        State memory closeState =
+            TestUtils.nextState(initState, StateIntent.CLOSE, [uint256(0), uint256(0)], [int256(0), int256(0)]);
+        closeState = mutualSignStateBothWithEcdsaValidator(closeState, channelId, ALICE_PK);
+
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, closeState, NODE_PK);
+
+        vm.prank(node);
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        cHub.challengeChannel(channelId, closeState, challengerSig, ParticipantIndex.NODE);
+    }
+
     function test_challengeFinalization_afterTimeout() public {
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // Challenge with current state
@@ -122,7 +139,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         vm.warp(block.timestamp + CHALLENGE_DURATION + 1);
 
         uint256 aliceBalanceBefore = token.balanceOf(alice);
-        uint256 nodeBalanceBefore = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceBefore = cHub.getNodeBalance(address(token));
 
         // Finalize challenge by closing the channel (unilateral closure)
         // When doing unilateral closure after timeout, any state works
@@ -135,7 +152,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         );
 
         uint256 aliceBalanceAfter = token.balanceOf(alice);
-        uint256 nodeBalanceAfter = cHub.getAccountBalance(node, address(token));
+        uint256 nodeBalanceAfter = cHub.getNodeBalance(address(token));
 
         assertEq(aliceBalanceAfter, aliceBalanceBefore + 900, "Alice should receive her allocation");
         // Node balance should remain unchanged because:
@@ -150,8 +167,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_resolveChallenge_withNewerState_beforeTimeout() public {
         // State V1: user transfers 100
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // Challenge with stateV1
@@ -170,7 +188,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
         // State V2: user transfers another 50 (newer state to resolve challenge)
         State memory stateV2 =
-            nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
+            TestUtils.nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
         stateV2 = mutualSignStateBothWithEcdsaValidator(stateV2, channelId, ALICE_PK);
 
         // Resolve challenge by checkpointing newer state (before timeout)
@@ -194,13 +212,14 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_revert_resolveChallenge_withOlderState_beforeTimeout() public {
         // State V1: user transfers 100
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // State V2: user receives 50 back
         State memory stateV2 =
-            nextState(stateV1, StateIntent.OPERATE, [uint256(950), uint256(0)], [int256(1000), int256(-50)]);
+            TestUtils.nextState(stateV1, StateIntent.OPERATE, [uint256(950), uint256(0)], [int256(1000), int256(-50)]);
         stateV2 = mutualSignStateBothWithEcdsaValidator(stateV2, channelId, ALICE_PK);
 
         // Challenge with stateV2
@@ -225,8 +244,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_revert_resolveChallenge_withNewerState_afterTimeout() public {
         // State V1
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // Challenge
@@ -239,7 +259,7 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
         // State V2: user transfers another 50 (newer state to resolve challenge)
         State memory stateV2 =
-            nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
+            TestUtils.nextState(stateV1, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
         stateV2 = mutualSignStateBothWithEcdsaValidator(stateV2, channelId, ALICE_PK);
 
         // Cannot resolve challenge after timeout - must close channel instead
@@ -265,8 +285,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         );
 
         // Try to challenge again (should fail)
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(850), uint256(0)], [int256(1000), int256(-150)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         bytes memory challengerSig2 = signChallengeEip191WithEcdsaValidator(channelId, stateV1, NODE_PK);
@@ -278,8 +299,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
 
     function test_revert_challengeWithOlderState() public {
         // State V1
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, channelId, ALICE_PK);
 
         // Checkpoint V1
@@ -306,8 +328,9 @@ contract ChannelHubTest_Challenge_HomeChain_NormalOperation is ChannelHubTest_Ch
         bytes32 newChannelId = Utils.getChannelId(newDef, CHANNEL_HUB_VERSION);
 
         // Off-chain: user transfers 100 to node
-        State memory stateV1 =
-            nextState(initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]);
+        State memory stateV1 = TestUtils.nextState(
+            initState, StateIntent.OPERATE, [uint256(900), uint256(0)], [int256(1000), int256(-100)]
+        );
         stateV1 = mutualSignStateBothWithEcdsaValidator(stateV1, newChannelId, ALICE_PK);
 
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(newChannelId, stateV1, NODE_PK);
@@ -339,7 +362,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
         super.setUp();
         createChannelWithDeposit();
 
-        initiateEscrowDepositState = nextState(
+        initiateEscrowDepositState = TestUtils.nextState(
             initState,
             StateIntent.INITIATE_ESCROW_DEPOSIT,
             [uint256(1000), uint256(500)],
@@ -354,7 +377,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
         escrowId = Utils.getEscrowId(channelId, initiateEscrowDepositVersion);
 
-        finalizeEscrowDepositState = nextState(
+        finalizeEscrowDepositState = TestUtils.nextState(
             initiateEscrowDepositState,
             StateIntent.FINALIZE_ESCROW_DEPOSIT,
             [uint256(1500), uint256(0)],
@@ -392,7 +415,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
     }
 
     function test_challenge_initiateEscrowDeposit_asExisting() public {
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with already enforced initiateEscrowDepositState state
@@ -422,7 +445,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
         cHub.challengeChannel(channelId, initState, challengerSig, ParticipantIndex.NODE);
 
         // Resolve challenge with newer initiateEscrowDepositState state (before timeout)
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Verify challenge was resolved
@@ -439,7 +462,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_asNew() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain (required for FINALIZE to be valid)
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Now challenge with FINALIZE_ESCROW_DEPOSIT
@@ -467,7 +490,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_asExisting() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Then enforce FINALIZE_ESCROW_DEPOSIT on-chain
@@ -496,7 +519,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_challenge_finalizeEscrowDeposit_resolve() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with older initiate state
@@ -548,7 +571,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowDeposit is ChannelHubTest_Chal
 
     function test_revert_onChallengeEscrowDeposit() public {
         // First enforce INITIATE_ESCROW_DEPOSIT on-chain
-        vm.prank(alice);
+        vm.prank(node);
         cHub.initiateEscrowDeposit(def, initiateEscrowDepositState);
 
         // Challenge with INITIATE_ESCROW_DEPOSIT state
@@ -582,7 +605,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowWithdrawal is ChannelHubTest_C
         super.setUp();
         createChannelWithDeposit();
 
-        initiateEscrowWithdrawalState = nextState(
+        initiateEscrowWithdrawalState = TestUtils.nextState(
             initState,
             StateIntent.INITIATE_ESCROW_WITHDRAWAL,
             [uint256(1000), uint256(0)],
@@ -597,7 +620,7 @@ contract ChannelHubTest_Challenge_HomeChain_EscrowWithdrawal is ChannelHubTest_C
 
         escrowId = Utils.getEscrowId(channelId, initiateEscrowWithdrawalVersion);
 
-        finalizeEscrowWithdrawalState = nextState(
+        finalizeEscrowWithdrawalState = TestUtils.nextState(
             initiateEscrowWithdrawalState,
             StateIntent.FINALIZE_ESCROW_WITHDRAWAL,
             [uint256(700), uint256(0)],
@@ -805,7 +828,7 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
     - a channel challenged with "InitiateMigration" state can be resolved with "operation" state
         (although this should not happen in practice since the node should finalize migration instead of resolving with an older state, but just to be safe)
     - a channel can NOT be challenged when in MIGRATED_OUT status
-    - a channel can NOT be challenged in Operating status with finalize migration state (use `finalizeMigration` function instead)
+    - a channel can NOT be challenged with FINALIZE_MIGRATION intent on home chain (must use finalizeMigration function for that)
     */
 
     uint64 initiateMigrationVersion = 1;
@@ -827,7 +850,7 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         createChannelWithDeposit();
 
         // INITIATE_MIGRATION state:
-        initiateMigrationState = nextState(
+        initiateMigrationState = TestUtils.nextState(
             initState,
             StateIntent.INITIATE_MIGRATION,
             [uint256(700), uint256(0)],
@@ -840,7 +863,7 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         initiateMigrationState = mutualSignStateBothWithEcdsaValidator(initiateMigrationState, channelId, ALICE_PK);
 
         // FINALIZE_MIGRATION state: Allocations zero out on old home, user receives allocation on new home
-        finalizeMigrationState = nextState(
+        finalizeMigrationState = TestUtils.nextState(
             initiateMigrationState,
             StateIntent.FINALIZE_MIGRATION,
             [uint256(0), uint256(0)], // Old home: allocations zero out
@@ -857,7 +880,7 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         finalizeMigrationState = mutualSignStateBothWithEcdsaValidator(finalizeMigrationState, channelId, ALICE_PK);
 
         // OPERATE state after migration initiation (for resolving challenge)
-        operateAfterMigrationInitState = nextState(
+        operateAfterMigrationInitState = TestUtils.nextState(
             initiateMigrationState, StateIntent.OPERATE, [uint256(650), uint256(0)], [int256(1000), int256(-350)]
         );
         operateAfterMigrationInitState =
@@ -969,15 +992,11 @@ contract ChannelHubTest_Challenge_HomeChain_HomeMigration is ChannelHubTest_Chal
         cHub.challengeChannel(channelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
     }
 
-    function test_revert_challenge_operating_withFinalizeMigration() public {
-        // Channel is in OPERATING status
-        // Try to challenge with FINALIZE_MIGRATION without INITIATE_MIGRATION first (should fail)
+    function test_revert_challengeWithFinalizeMigrationIntent() public {
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, finalizeMigrationState, NODE_PK);
 
         vm.prank(node);
-        // NOTE: IncorrectHomeChainId check happens before IncorrectPreviousStateIntent check
-        // finalizeMigrationState has swapped ledgers, so homeLedger.chainId != block.chainid
-        vm.expectRevert(ChannelEngine.IncorrectHomeChainId.selector);
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
         cHub.challengeChannel(channelId, finalizeMigrationState, challengerSig, ParticipantIndex.NODE);
     }
 }

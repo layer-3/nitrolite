@@ -19,12 +19,18 @@ func NewStateAdvancerV1(assetStore AssetStore) *StateAdvancerV1 {
 }
 
 // ValidateAdvancement validates that the proposed state is a valid advancement of the current state
+//
+// NOTE: User signature is not validated here
+//
+// TODO: Add shared JSON fixture suite consumed by both Go and TS test suites to guarantee validation parity
 func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State) error {
 	expectedState := currentState.NextState()
 	if proposedState.HomeChannelID == nil {
 		return fmt.Errorf("home channel ID cannot be nil")
 	}
 
+	// A non-nil state with a nil HomeChannelID is valid — it represents a user who received
+	// funds but has not yet opened a channel. In that case, adopt the proposed state's channel info.
 	if expectedState.HomeChannelID == nil {
 		expectedState.HomeChannelID = proposedState.HomeChannelID
 		expectedState.HomeLedger.BlockchainID = proposedState.HomeLedger.BlockchainID
@@ -60,10 +66,6 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("state ID mismatch: expected=%s, proposed=%s", expectedState.ID, proposedState.ID)
 	}
 
-	if proposedState.UserSig == nil {
-		return fmt.Errorf("user signature is required")
-	}
-
 	newTransition := proposedState.Transition
 
 	decimals, err := v.assetStore.GetAssetDecimals(proposedState.Asset)
@@ -75,7 +77,33 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("invalid amount for asset %s: %w", proposedState.Asset, err)
 	}
 
+	switch newTransition.Type {
+	case TransitionTypeAcknowledgement:
+		if !newTransition.Amount.IsZero() {
+			return fmt.Errorf("transition amount must be zero, got %s", newTransition.Amount.String())
+		}
+	case TransitionTypeFinalize:
+		if newTransition.Amount.IsNegative() {
+			return fmt.Errorf("transition amount must not be negative, got %s", newTransition.Amount.String())
+		}
+	default:
+		if !newTransition.Amount.IsPositive() {
+			return fmt.Errorf("transition amount must be positive, got %s", newTransition.Amount.String())
+		}
+	}
+
 	lastTransition := currentState.Transition
+
+	switch lastTransition.Type {
+	case TransitionTypeMutualLock:
+		if newTransition.Type != TransitionTypeEscrowDeposit {
+			return fmt.Errorf("after mutual lock, only escrow deposit is allowed, got: %d", newTransition.Type)
+		}
+	case TransitionTypeEscrowLock:
+		if newTransition.Type != TransitionTypeEscrowWithdraw {
+			return fmt.Errorf("after escrow lock, only escrow withdraw is allowed, got: %d", newTransition.Type)
+		}
+	}
 
 	switch newTransition.Type {
 	case TransitionTypeVoid:
@@ -144,7 +172,7 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		return fmt.Errorf("new transition does not match expected: %w", err)
 	}
 
-	if err := proposedState.HomeLedger.Equal(expectedState.HomeLedger); err != nil {
+	if err := expectedState.HomeLedger.Equal(proposedState.HomeLedger); err != nil {
 		return fmt.Errorf("home ledger mismatch: %w", err)
 	}
 	if err := proposedState.HomeLedger.Validate(); err != nil {
@@ -166,7 +194,7 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 	}
 
 	if expectedState.EscrowLedger != nil && proposedState.EscrowLedger != nil {
-		if err := proposedState.EscrowLedger.Equal(*expectedState.EscrowLedger); err != nil {
+		if err := expectedState.EscrowLedger.Equal(*proposedState.EscrowLedger); err != nil {
 			return fmt.Errorf("escrow ledger mismatch: %w", err)
 		}
 		if err := proposedState.EscrowLedger.Validate(); err != nil {

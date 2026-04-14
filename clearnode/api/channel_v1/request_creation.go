@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -24,8 +23,10 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		return
 	}
 
-	if !common.IsHexAddress(reqPayload.State.UserWallet) {
-		c.Fail(rpc.Errorf("invalid user_wallet address"), "")
+	var err error
+	reqPayload.State.UserWallet, err = core.NormalizeHexAddress(reqPayload.State.UserWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid user_wallet: %v", err), "")
 		return
 	}
 
@@ -38,6 +39,19 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 	channelDef, err := toCoreChannelDefinition(reqPayload.ChannelDefinition)
 	if err != nil {
 		c.Fail(err, "failed to parse channel definition")
+		return
+	}
+
+	if channelDef.Nonce == 0 {
+		c.Fail(nil, "nonce must be non-zero")
+		return
+	}
+	if channelDef.Challenge < h.minChallenge {
+		c.Fail(rpc.Errorf("challenge period must be at least %d seconds, but got %d", h.minChallenge, channelDef.Challenge), "")
+		return
+	}
+	if channelDef.Challenge > h.maxChallenge {
+		c.Fail(rpc.Errorf("challenge period must be at most %d seconds, but got %d", h.maxChallenge, channelDef.Challenge), "")
 		return
 	}
 
@@ -54,8 +68,8 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		c.Fail(rpc.Errorf(
 			"asset %s is not supported on blockchain %d with token address %s",
 			incomingState.Asset,
-			incomingState.EscrowLedger.BlockchainID,
-			incomingState.EscrowLedger.TokenAddress), "")
+			incomingState.HomeLedger.BlockchainID,
+			incomingState.HomeLedger.TokenAddress), "")
 		return
 	}
 
@@ -111,12 +125,6 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 			}
 		}
 
-		if channelDef.Nonce == 0 {
-			return rpc.Errorf("nonce must be non-zero")
-		}
-		if channelDef.Challenge < h.minChallenge {
-			return rpc.Errorf("challenge period must be at least %d seconds, but got %d", h.minChallenge, channelDef.Challenge)
-		}
 		logger.Debug("processing channel creation request", "incomingVersion", incomingState.Version)
 
 		if err := h.stateAdvancer.ValidateAdvancement(*currentState, incomingState); err != nil {

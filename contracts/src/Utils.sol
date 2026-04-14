@@ -34,6 +34,14 @@ library Utils {
         return keccak256(abi.encode(channelId, version));
     }
 
+    function getValidatorRegistrationMessage(address channelHub, uint8 validatorId, address validator)
+        internal
+        view
+        returns (bytes memory)
+    {
+        return abi.encode(block.chainid, channelHub, validatorId, validator);
+    }
+
     // ========== State ==========
 
     function pack(State memory state, bytes32 channelId) internal pure returns (bytes memory) {

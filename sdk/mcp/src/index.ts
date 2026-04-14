@@ -22,6 +22,8 @@ const PROTOCOL_DOCS = resolve(REPO_ROOT, 'docs/protocol');
 const API_YAML = resolve(REPO_ROOT, 'docs/api.yaml');
 const GO_SDK_ROOT = resolve(REPO_ROOT, 'sdk/go');
 const PKG_ROOT = resolve(REPO_ROOT, 'pkg');
+const GO_MODULE_PATH = 'github.com/layer-3/nitrolite';
+const GO_MODULE_VERSION = 'v1.2.0';
 
 // ---------------------------------------------------------------------------
 // Helpers — read SDK sources at startup
@@ -35,11 +37,20 @@ function readFile(path: string): string {
 /** Extract named exports from a barrel file */
 function extractExports(content: string): string[] {
     const names: string[] = [];
-    // Match: export { Foo, Bar } from '...'  and  export type { Baz } from '...'
-    for (const m of content.matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)) {
-        for (const name of m[1].split(',')) {
-            const clean = name.replace(/\s+as\s+\w+/, '').replace(/type\s+/, '').trim();
-            if (clean && !clean.startsWith('//')) names.push(clean);
+    // Match: export { Foo, type Bar } from '...' and export type { Baz } from '...'
+    for (const m of content.matchAll(/export\s+(type\s+)?\{([^}]+)\}/g)) {
+        const groupIsTypeOnly = Boolean(m[1]);
+        for (const item of m[2].split(',')) {
+            const raw = item.trim();
+            if (!raw || raw.startsWith('//')) continue;
+
+            const itemIsTypeOnly = groupIsTypeOnly || raw.startsWith('type ');
+            const spec = raw.replace(/^type\s+/, '').trim();
+            const aliasMatch = spec.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
+            if (!aliasMatch) continue;
+
+            const exportedName = aliasMatch[2] || aliasMatch[1];
+            names.push(itemIsTypeOnly ? `type ${exportedName}` : exportedName);
         }
     }
     // Match: export * from '...'
@@ -47,6 +58,18 @@ function extractExports(content: string): string[] {
         names.push(`* from '${m[1]}'`);
     }
     return names;
+}
+
+function findNamedExport(exports: string[], symbol: string): { found: boolean; isTypeOnly: boolean } {
+    if (exports.includes(`type ${symbol}`)) return { found: true, isTypeOnly: true };
+    if (exports.includes(symbol)) return { found: true, isTypeOnly: false };
+    return { found: false, isTypeOnly: false };
+}
+
+function renderImportStatement(pkg: string, symbol: string, isTypeOnly: boolean): string {
+    return isTypeOnly
+        ? `import type { ${symbol} } from '${pkg}';`
+        : `import { ${symbol} } from '${pkg}';`;
 }
 
 // ---------------------------------------------------------------------------
@@ -635,6 +658,12 @@ func main() {
 
     myAddr := client.GetUserAddress()
 
+    // Fund the home channel before moving funds into the app session
+    if _, err = client.Deposit(ctx, chainID, "usdc", decimal.NewFromInt(20)); err != nil { log.Fatal(err) }
+    txHash, err := client.Checkpoint(ctx, "usdc")
+    if err != nil { log.Fatal(err) }
+    log.Printf("Home channel funded with 20 USDC, tx: %s", txHash)
+
     // 1. Create app session
     definition := app.AppDefinitionV1{
         ApplicationID: "my-game",
@@ -763,6 +792,12 @@ func main() {
 
 \tmyAddr := client.GetUserAddress()
 \tpeer := os.Getenv("PEER_ADDRESS")
+
+\t// Fund the home channel before moving funds into the app session
+\tif _, err = client.Deposit(ctx, 11155111, "usdc", decimal.NewFromInt(20)); err != nil { log.Fatal(err) }
+\ttxHash, err := client.Checkpoint(ctx, "usdc")
+\tif err != nil { log.Fatal(err) }
+\tlog.Printf("Home channel funded with 20 USDC, tx: %s", txHash)
 
 \tdef := app.AppDefinitionV1{
 \t\tApplicationID: "my-app",
@@ -1017,6 +1052,11 @@ server.resource('examples-app-sessions', 'nitrolite://examples/app-sessions', as
 
 \`\`\`typescript
 import { app } from '@yellow-org/sdk';
+import Decimal from 'decimal.js';
+
+// Assumes client and CHAIN_ID are already defined.
+await client.deposit(CHAIN_ID, 'usdc', new Decimal(20));
+await client.checkpoint('usdc');
 
 // 1. Define the app session
 const definition: app.AppDefinitionV1 = {
@@ -1532,8 +1572,8 @@ async function main() {
     );
     console.log('Connected');
 
-    // Ensure funds are available
-    await client.deposit(CHAIN_ID, 'usdc', new Decimal(10));
+    // Ensure funds are available in the home channel before app-session funding
+    await client.deposit(CHAIN_ID, 'usdc', new Decimal(20));
     await client.checkpoint('usdc');
 
     // 1. Define app session
@@ -1833,17 +1873,17 @@ server.tool(
     'Check if a symbol is exported from sdk-compat barrel — returns yes/no + correct import path',
     { symbol: z.string().describe('Symbol name (e.g. "NitroliteClient", "RPCMethod", "createTransferMessage")') },
     async ({ symbol }) => {
-        const found = compatExports.some(e => e === symbol);
-        if (found) {
-            return { content: [{ type: 'text' as const, text: `**${symbol}** is exported from \`@yellow-org/sdk-compat\`.\n\n\`\`\`typescript\nimport { ${symbol} } from '@yellow-org/sdk-compat';\n\`\`\`` }] };
+        const compatMatch = findNamedExport(compatExports, symbol);
+        if (compatMatch.found) {
+            return { content: [{ type: 'text' as const, text: `**${symbol}** is exported from \`@yellow-org/sdk-compat\`.\n\n\`\`\`typescript\n${renderImportStatement('@yellow-org/sdk-compat', symbol, compatMatch.isTypeOnly)}\n\`\`\`` }] };
         }
 
         // Check if it's in the main SDK
         const sdkBarrelContent = readFile(resolve(SDK_ROOT, 'src/index.ts'));
         const sdkExports = extractExports(sdkBarrelContent);
-        const inSdk = sdkExports.some(e => e === symbol);
-        if (inSdk) {
-            return { content: [{ type: 'text' as const, text: `**${symbol}** is NOT in \`@yellow-org/sdk-compat\` but IS in \`@yellow-org/sdk\`.\n\n\`\`\`typescript\nimport { ${symbol} } from '@yellow-org/sdk';\n\`\`\`\n\n> Note: SDK classes should not be re-exported from compat (SSR risk). Import directly from \`@yellow-org/sdk\`.` }] };
+        const sdkMatch = findNamedExport(sdkExports, symbol);
+        if (sdkMatch.found) {
+            return { content: [{ type: 'text' as const, text: `**${symbol}** is NOT in \`@yellow-org/sdk-compat\` but IS in \`@yellow-org/sdk\`.\n\n\`\`\`typescript\n${renderImportStatement('@yellow-org/sdk', symbol, sdkMatch.isTypeOnly)}\n\`\`\`\n\n> Note: SDK classes should not be re-exported from compat (SSR risk). Import directly from \`@yellow-org/sdk\`.` }] };
         }
 
         return { content: [{ type: 'text' as const, text: `**${symbol}** was not found in either \`@yellow-org/sdk-compat\` or \`@yellow-org/sdk\` barrel exports. It may be a deep import or may not exist.` }] };
@@ -1938,7 +1978,7 @@ server.tool(
                 'go-ai-agent': GO_SCAFFOLD_AI_AGENT,
             };
             const baseName = template.replace('go-', '');
-            const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/layer-3/nitrolite v0.0.0\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
+            const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\t${GO_MODULE_PATH} ${GO_MODULE_VERSION}\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
             const envKey = template === 'go-ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY';
             const envExtra = template === 'go-transfer-app' ? '\nRECIPIENT=your_recipient_address' : template === 'go-app-session' ? '\nPEER_ADDRESS=peer_wallet_address' : '';
             const text = `# Scaffold: ${template}\n\n## go.mod\n\`\`\`\n${goMod}\n\`\`\`\n\n## main.go\n\`\`\`go\n${goTemplateMap[template]}\`\`\`\n\n## .env.example\n\`\`\`\n${envKey}=your_hex_key\nCLEARNODE_URL=wss://clearnode.example.com/ws\nRPC_URL=https://rpc.sepolia.org${envExtra}\n\`\`\`\n\n## Setup\n\`\`\`bash\ngo mod tidy\ngo run .\n\`\`\``;
@@ -2008,6 +2048,10 @@ async function main() {
     const myAddress = stateSigner.address;
 
     const client = await Client.create(CLEARNODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
+
+    // Fund the home channel before moving funds into the app session
+    await client.deposit(CHAIN_ID, 'usdc', new Decimal(20));
+    await client.checkpoint('usdc');
 
     // Define app session
     const definition: app.AppDefinitionV1 = {
@@ -2157,7 +2201,7 @@ server.prompt(
 2. **Authentication** — Connect wallet, establish WebSocket, authenticate with clearnode
 3. **Channel Lifecycle** — Deposit (auto-creates channel), query channels, close channel
 4. **Transfers** — Send tokens to another participant via state channels
-    5. **App Sessions** — Create sessions for multi-party apps, fund them with submitAppSessionDeposit, submit state, close
+5. **App Sessions** — Fund the home channel with deposit + checkpoint, then create sessions, fund them with submitAppSessionDeposit, submit state, close
 6. **Error Handling** — Common errors and how to handle them
 7. **Testing** — How to write tests against the SDK
 
@@ -2171,7 +2215,7 @@ Guide me through building a Nitrolite state channel application in Go. Cover:
 1. **Setup** — Install dependencies, create signers with sign.NewEthereumMsgSigner and sign.NewEthereumRawSigner
 2. **Client Creation** — sdk.NewClient with functional options (WithBlockchainRPC, WithHandshakeTimeout)
 3. **Channel Lifecycle** — Deposit (creates channel), Transfer, Checkpoint (on-chain), CloseHomeChannel + Checkpoint
-4. **App Sessions** — CreateAppSession, SubmitAppState (Operate/Withdraw/Close intents), SubmitAppSessionDeposit
+4. **App Sessions** — Deposit + Checkpoint on the home channel, then CreateAppSession, SubmitAppSessionDeposit, SubmitAppState (Operate/Withdraw/Close intents)
 5. **Error Handling** — Go error patterns, context.WithTimeout, defer client.Close()
 6. **Testing** — Standard Go test patterns with *_test.go files
 

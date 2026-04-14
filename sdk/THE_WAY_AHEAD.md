@@ -84,13 +84,7 @@ Current `package.json` needs these changes:
 }
 ```
 
-**Important:** The compiled `dist/index.js` needs a shebang (`#!/usr/bin/env node`) at the top for the `bin` entry to work. TypeScript's `tsc` strips shebangs. Fix with a postbuild step:
-
-```json
-"postbuild": "echo '#!/usr/bin/env node' | cat - dist/index.js > temp && mv temp dist/index.js"
-```
-
-Or use `tsup` as the build tool, which handles shebangs natively.
+**Important:** Keep the shebang (`#!/usr/bin/env node`) at the top of `sdk/mcp/src/index.ts`. TypeScript preserves shebangs when emitting JavaScript, so `tsc` will carry it through to `dist/index.js` and the `bin` entry will remain executable. `tsup` is still a reasonable alternative build tool here, but it is optional rather than required for shebang handling.
 
 ### Step 3: Create an npm account and get access
 

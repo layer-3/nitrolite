@@ -377,6 +377,34 @@ Fee-on-transfer tokens are **not supported**. The amount received by the contrac
 
 ---
 
+## Native ETH vs ERC20 Deposit Asymmetry
+
+`_pullFunds(from, token, amount)` enforces different funding mechanics depending on the asset type:
+
+- **ERC20 (`token != address(0)`)**: Calls `IERC20.safeTransferFrom(from, address(this), amount)`. Funds are pulled from the `from` address using a prior ERC20 allowance. Any caller can submit a signed state that triggers a deposit, and the funds come from the user's approval — the caller does not need to supply capital.
+
+- **Native ETH (`token == address(0)`)**: Requires `msg.value == amount`. The **caller** must attach the exact ETH amount, regardless of who the logical `from` address is. The `from` parameter is effectively ignored for the funding step.
+
+### Affected operations
+
+This asymmetry applies to every operation where `_pullFunds` is called with `from = user`:
+
+| Call site | Context |
+|-----------|---------|
+| `_applyEffects` | Channel deposits (`DEPOSIT` intent) |
+| `_applyEscrowDepositEffects` | Escrow deposit initiation (user funds on non-home chain) |
+| `_applyEscrowWithdrawalEffects` | Escrow withdrawal finalization (user funds on non-home chain) |
+
+`depositToNode()` is not affected — it always uses `from = msg.sender`.
+
+### Practical consequence
+
+For ERC20 channels, any party holding a valid signed state that requires a user deposit can submit it on-chain, and the user's pre-approved funds are pulled automatically. For native ETH channels, only a caller willing to supply the required `msg.value` can submit such a state. In practice, this means native ETH deposit states must be submitted by the user themselves (or by a party willing to front the ETH on their behalf).
+
+Integrators building relayers or third-party submission flows should account for this difference: ERC20 state submissions are permissionless given prior user approval, while native ETH state submissions that require user funds are not.
+
+---
+
 ## ERC20 Transfer Failure Attack Vectors
 
 ### Background

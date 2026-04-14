@@ -211,6 +211,8 @@ Off-chain activity can continue indefinitely between enforcements.
   * funds are pulled from User,
   * locked into the channel.
 
+**Native ETH vs ERC20 deposit mechanics:** For ERC20 tokens, the contract pulls funds from the user's address via `safeTransferFrom` using a prior allowance — any party can submit the signed state and the user's approved funds are transferred. For native ETH (`token = address(0)`), the **caller** must attach the required amount as `msg.value`. This means native ETH deposit states must be submitted by the user (or by a party willing to supply the ETH on their behalf). This asymmetry also applies to escrow deposit initiation and escrow withdrawal finalization on the non-home chain.
+
 ---
 
 ### 4. Withdrawal (single-chain)

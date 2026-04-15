@@ -379,23 +379,21 @@ Fee-on-transfer tokens are **not supported**. The amount received by the contrac
 
 ## Native ETH vs ERC20 Deposit Asymmetry
 
-`_pullFunds(from, token, amount)` enforces different funding mechanics depending on the asset type:
+When pulling funds from a user, ERC20 and native ETH behave differently:
 
-- **ERC20 (`token != address(0)`)**: Calls `IERC20.safeTransferFrom(from, address(this), amount)`. Funds are pulled from the `from` address using a prior ERC20 allowance. Any caller can submit a signed state that triggers a deposit, and the funds come from the user's approval — the caller does not need to supply capital.
+- **ERC20**: Funds are pulled via `transferFrom` using a prior user allowance. Any caller can submit a signed state that triggers a deposit — the funds come from the user's approval.
 
-- **Native ETH (`token == address(0)`)**: Requires `msg.value == amount`. The **caller** must attach the exact ETH amount, regardless of who the logical `from` address is. The `from` parameter is effectively ignored for the funding step.
+- **Native ETH**: The caller must attach the exact `msg.value`. Whoever submits the transaction must supply the ETH, regardless of who the logical depositor is.
 
 ### Affected operations
 
-This asymmetry applies to every operation where `_pullFunds` is called with `from = user`:
+This asymmetry applies to every operation that pulls funds from the user:
 
-| Call site | Context |
-|-----------|---------|
-| `_applyEffects` | Channel deposits (`DEPOSIT` intent) |
-| `_applyEscrowDepositEffects` | Escrow deposit initiation (user funds on non-home chain) |
-| `_applyEscrowWithdrawalEffects` | Escrow withdrawal finalization (user funds on non-home chain) |
-
-`depositToNode()` is not affected — it always uses `from = msg.sender`.
+| Function | Context |
+|----------|---------|
+| `createChannel` | Initial deposit on channel creation (`DEPOSIT` intent) |
+| `depositToChannel` | Channel deposit |
+| `initiateEscrowDeposit` | Escrow deposit initiation (non-home chain) |
 
 ### Practical consequence
 

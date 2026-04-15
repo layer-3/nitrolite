@@ -42,7 +42,6 @@ Virtual App Sessions (vApp) address these limitations with two fundamental chang
 | V1 Field | V2 Status | Rationale |
 |---|---|---|
 | `AppDefinitionV1.ApplicationID` | **Keep** | Identifies the end application on the platform. |
-| `AppDefinitionV1.Nonce` | **Keep** | Produces unique, deterministic session IDs. |
 | `AppStateUpdateV1.AppSessionID` | **Keep** | Links every update to its session. |
 | `AppStateUpdateV1.Version` | **Keep (evaluate)** | Critical for replay prevention and ordered history. May evolve — see [Section 6.1](#61-data-storage). |
 | `AppStateUpdateV1.SessionData` | **Keep (redesign)** | Renamed to `Data`. Becomes the primary payload validated by the WASM module. Storage model must change — see [Section 6.1](#61-data-storage). |
@@ -51,6 +50,7 @@ Virtual App Sessions (vApp) address these limitations with two fundamental chang
 
 | V1 Field | Rationale |
 |---|---|
+| `AppDefinitionV1.Nonce` | Removed — uniqueness is delegated to the application via `Metadata`. Apps provide unique metadata per session (e.g. game ID, match parameters). |
 | `AppDefinitionV1.Participants` | Replaced by `Metadata` — participant management moves into the WASM module. |
 | `AppDefinitionV1.Quorum` | Same as above; quorum logic becomes module-defined. |
 | `AppStateUpdateV1.Intent` | Deposit and withdraw intents are replaced by vouchers; operate and close semantics move into the module. The node no longer needs to interpret intent. |
@@ -66,6 +66,7 @@ Virtual App Sessions (vApp) address these limitations with two fundamental chang
 | `ValidationResult.VouchersIssued` | Result (module) | `[]Voucher` — vouchers emitted by the module, moving funds **out** of locked funds. Module-authorized (computed, not signed). |
 | `ValidationResult.ModuleState` | Result (module) | `bytes` — module's persistent working memory, stored by node, passed back on next validation. |
 | `ValidationResult.Events` | Result (module) | `[]Event` — structured logs emitted during validation. Indexed and queryable, not signed. |
+| `AppStateUpdate.CrossRefs` | Update (signed) | `[]CrossRef` — references to specific versions of other sessions. Node resolves and verifies; module receives resolved data. Enables cross-session data access and the multi-session architecture pattern. |
 | `AppSession.LockedFunds` | Node record | `[]AssetValue` — node-computed from voucher accounting: `prev + sum(used) - sum(issued)`. Not part of the signed update. |
 
 ---
@@ -78,7 +79,6 @@ Virtual App Sessions (vApp) address these limitations with two fundamental chang
 AppDefinition {
     NodeAddress    address     // node hosting this session, replay protection across nodes
     ApplicationID  string      // registered application identifier
-    Nonce          uint64      // uniqueness nonce
     Module         bytes32     // content-addressed reference to the WASM validation module
     Metadata       bytes       // constructor arguments, interpreted only by the module
 }
@@ -88,7 +88,12 @@ AppDefinition {
 replay protection (a signed update for node X cannot be replayed on node Y), and
 it enables efficient session lookup and indexing without relying solely on the hash.
 
-`SessionID = keccak256(abi.encode(NodeAddress, ApplicationID, Nonce, Module, Metadata))`
+Session uniqueness is delegated to the application via `Metadata`. The app is
+expected to include whatever uniqueness data it needs (game ID, match nonce,
+participant set, timestamp, etc.). This removes the protocol-level nonce and gives
+apps full control over session identity.
+
+`SessionID = keccak256(abi.encode(NodeAddress, ApplicationID, Module, Metadata))`
 
 ### 3.2 Voucher
 
@@ -154,6 +159,7 @@ AppStateUpdate {
     AppSessionID    bytes32         // deterministic session identifier
     Version         uint64          // monotonically increasing, starts at 1
     VouchersUsed    []Voucher       // funds entering the session (participant-authorized)
+    CrossRefs       []CrossRef      // references to other sessions (see Section 3.11)
     DataHash        bytes32         // keccak256 of Data
 }
 ```
@@ -161,6 +167,7 @@ AppStateUpdate {
 The signed payload is compact and fixed-structure. `LockedFunds` and `VouchersIssued`
 are absent — `LockedFunds` is node-computed from voucher accounting, and
 `VouchersIssued` is produced by the WASM module in its `ValidationResult`.
+`CrossRefs` defaults to empty for sessions that don't reference other sessions.
 
 ### 3.5 SignedAppStateUpdate
 
@@ -213,21 +220,23 @@ when the security policy requires it.
 
 ```
 ValidationContext {
-    Definition      AppDefinition       // immutable session definition
-    PrevVersion     uint64              // previous version (0 on first update)
-    PrevData        bytes               // resolved data from previous version (empty on first)
-    PrevLockedFunds []AssetValue        // previous locked funds (empty on first)
-    PrevModuleState bytes               // module's working memory from last validation (empty on first)
-    Update          AppStateUpdate      // the proposed update (contains DataHash)
-    Data            bytes               // resolved data for this update (verified against DataHash)
-    Signers         []Signer            // recovered and resolved signer identities
+    Definition          AppDefinition           // immutable session definition
+    PrevVersion         uint64                  // previous version (0 on first update)
+    PrevData            bytes                   // resolved data from previous version (empty on first)
+    PrevLockedFunds     []AssetValue            // previous locked funds (empty on first)
+    PrevModuleState     bytes                   // module's working memory from last validation (empty on first)
+    Update              AppStateUpdate          // the proposed update (contains DataHash, CrossRefs)
+    Data                bytes                   // resolved data for this update (verified against DataHash)
+    Signers             []Signer                // recovered and resolved signer identities
+    ResolvedCrossRefs   []ResolvedCrossRef      // node-verified cross-session data (see Section 3.11)
 }
 ```
 
 The context is optimized for validation power, not signing efficiency. The module
 receives fully resolved `Data` (not just hashes) for both previous and current
-versions. The signed `AppStateUpdate` is included for reference but the module
-primarily works with the resolved fields.
+versions. `ResolvedCrossRefs` carries the actual application data from referenced
+sessions, resolved and verified by the node. The signed `AppStateUpdate` is
+included for reference but the module primarily works with the resolved fields.
 
 ### 3.9 ValidationResult
 
@@ -276,6 +285,36 @@ accounting after each update. `Data` is stored content-addressed by `DataHash` a
 retrievable for historical access (host functions). `ModuleState` is the latest
 output from the module's `ValidationResult`.
 
+### 3.11 CrossRef and ResolvedCrossRef
+
+```
+CrossRef {
+    SessionID       bytes32         // referenced session
+    Version         uint64          // specific version pinned
+}
+```
+
+Included in the signed `AppStateUpdate.CrossRefs`. The signer commits to depending
+on a specific version of another session. This is deterministic — every node that
+has accepted the referenced session at that version holds identical data.
+
+```
+ResolvedCrossRef {
+    SessionID       bytes32         // referenced session
+    Version         uint64          // version that was referenced
+    Data            bytes           // application data from that session at that version
+}
+```
+
+The node resolves each `CrossRef` before calling the module: verifies the
+referenced session exists, has the specified version, and retrieves the stored
+application data for that version. The module receives `ResolvedCrossRef` with the
+actual data — no hash verification needed, the node already did it.
+
+`ResolvedCrossRef.Data` is the application data (the `Data` sidecar from the
+referenced session's update at that version). It does not include ModuleState or
+other internal state — Data is the public interface between sessions.
+
 ---
 
 ## 4. WASM Validation Module
@@ -313,6 +352,7 @@ See [Section 3.8](#38-validationcontext) for `ValidationContext` and
 The module can:
 - Validate that `Signers` satisfy application-defined quorum/permission rules.
 - Validate `Data` transitions (game moves, order book changes, etc.).
+- Access verified data from other sessions via `ResolvedCrossRefs`.
 - Issue vouchers to move funds out of the session.
 - Enforce constraints on `VouchersUsed` (incoming funds).
 - Persist working memory via `ModuleState` for use in subsequent validations.
@@ -335,6 +375,7 @@ The node enforces **before** calling the module:
 | Session status | `IsClosed == false` |
 | Data integrity | `keccak256(Data) == update.DataHash` |
 | Voucher consumption | Used vouchers exist in global active set with matching `DestinationID` |
+| CrossRef resolution | Each referenced session exists and has the specified version; resolve data |
 | Structural integrity | Required fields present, amounts positive |
 
 The module enforces **application rules** and produces results:
@@ -371,11 +412,14 @@ Node (pre-module):
   1. Structural validation (fields, types, session exists, IsClosed == false)
   2. Version check (version == current + 1)
   3. Data integrity (keccak256(Data) == update.DataHash)
-  4. Voucher consumption: for each VoucherUsed, verify exists in active set
-  5. Signature recovery (recover addresses from QuorumSigs)
+  4. CrossRef resolution: for each CrossRef, verify session exists at that
+     version, resolve data for that version
+  5. Voucher consumption: for each VoucherUsed, verify exists in active set
+  6. Signature recovery (recover addresses from QuorumSigs)
 
 Node (module):
-  6. Build ValidationContext (prev state, resolved Data, signers, prev ModuleState)
+  7. Build ValidationContext (prev state, resolved Data, signers,
+     prev ModuleState, ResolvedCrossRefs)
   7. Invoke WASM module: result = validate(context)
   8. If module returns Err: reject update
 
@@ -405,7 +449,7 @@ Node:
   3. Compute SessionID = keccak256(abi.encode(definition))
   4. Verify no session with this ID exists
   5. Verify signed_update.Version == 1 and signed_update.AppSessionID == SessionID
-  6. Run standard update flow (steps 3-16) with:
+  6. Run standard update flow (steps 3-17) with:
      PrevVersion=0, PrevData=empty, PrevLockedFunds=empty, PrevModuleState=empty
   7. If successful: create session record (IsClosed=false)
   8. If module returns Err: reject creation
@@ -501,6 +545,8 @@ maximums — a simple counter module needs less than a game engine.
 | Data size per update | 64 KB | node-configurable |
 | ModuleState size | 32 KB | node-configurable |
 | Events per update | 64 count, 32 KB total | node-configurable |
+| CrossRefs per update | 16 | node-configurable |
+| Total resolved CrossRef data | 128 KB | node-configurable |
 | Outstanding vouchers per session | 1000 | node-configurable |
 
 Modules exceeding limits cause the update to be rejected (not the session to be
@@ -680,6 +726,13 @@ needs more thought — what do developers actually query?
 - Get voucher by VoucherID.
 - Voucher history: all vouchers ever issued/consumed by a session.
 
+**CrossRef queries:**
+- List sessions that reference a given session via CrossRefs (reverse lookup).
+- Get updates that reference a specific session+version (which state updates
+  consumed a given action).
+- Action session polling: subscribe to new versions on a session (for operators
+  watching player action sessions).
+
 **Cross-session queries:**
 - Fund flow graph: trace voucher paths across sessions.
 - Application-level aggregation: total locked funds across all sessions for an app.
@@ -695,11 +748,13 @@ can't natively answer "which sessions is address X participating in?" unless:
 - The node indexes a well-known event topic for participant tracking.
 - Or the API delegates this query to the module (but modules don't handle queries).
 
-This is a significant UX regression from V1 if not addressed. A likely solution:
-define a **standard event topic** (e.g. `0x00000001` for `ParticipantAdded`,
-`0x00000002` for `ParticipantRemoved`) that the node indexes natively. Modules
-that want participant discoverability emit these events. The SDK provides helpers
-to emit them.
+This is a significant UX regression from V1 if not addressed. Likely solutions:
+- Define **standard event topics** (e.g. `0x00000001` for `ParticipantAdded`,
+  `0x00000002` for `ParticipantRemoved`) that the node indexes natively. Modules
+  that want participant discoverability emit these events. The SDK provides helpers.
+- For the multi-session pattern, CrossRef relationships provide structural
+  discoverability — the node can track which action sessions are referenced by
+  a state session, and action sessions are per-participant.
 
 ---
 
@@ -717,6 +772,7 @@ V1 and V2 app sessions will coexist. Key differences that affect migration:
 | Intents | operate, deposit, withdraw, close, rebalance | None (module-defined semantics) |
 | Data | Opaque string, stored inline | DataHash in signed update, raw bytes as sidecar |
 | Module output | N/A | VouchersIssued, ModuleState, Events, Close signal |
+| Cross-session data | N/A (sessions fully isolated) | CrossRefs for verified data references between sessions |
 
 Existing V1 sessions continue under V1 rules. New sessions choose V1 or V2 at
 creation time (determined by whether `Module` is set in the definition).
@@ -726,7 +782,7 @@ creation time (determined by whether `Module` is set in the definition).
 ## 8. Summary
 
 Virtual App Sessions (vApp) replace the fixed validation and per-participant
-allocation model of V1 with two primitives:
+allocation model of V1 with three primitives:
 
 1. **Vouchers** — decouple fund movement from state updates. Participants authorize
    incoming funds (VouchersUsed, signed); the module controls outgoing funds
@@ -735,13 +791,19 @@ allocation model of V1 with two primitives:
    transitions, issue vouchers, emit events, and maintain working memory
    (ModuleState). Developers define their own participant rules, data schemas,
    and transition logic.
+3. **CrossRefs** — enable verified cross-session data access. An update can
+   reference specific versions of other sessions; the node resolves and verifies
+   the data, and the module receives it directly. This enables shared catalogs,
+   oracle feeds, and the multi-session architecture pattern where per-participant
+   action sessions feed into an operator-driven state session, eliminating version
+   contention for concurrent apps.
 
-The signed update is minimal: `AppSessionID`, `Version`, `VouchersUsed`, `DataHash`.
-Everything else is either a sidecar (Data), module output (VouchersIssued,
-ModuleState, Events, Close), or node-computed (LockedFunds).
+The signed update is minimal: `AppSessionID`, `Version`, `VouchersUsed`,
+`CrossRefs`, `DataHash`. Everything else is either a sidecar (Data), module output
+(VouchersIssued, ModuleState, Events, Close), or node-computed (LockedFunds).
 
 Four design questions remain open before full specification:
 1. **Abuse response** — rate limiting thresholds, suspension triggers, recovery paths (Section 6.3.6).
 2. **WASM module publishing** — storage, execution environment, SDK, developer tooling (Section 6.4).
 3. **Upgradability** — forward-compatible encoding, context versioning, module compatibility (Section 6.5).
-4. **Read API** — session/update/voucher/event queries, participant discoverability without native tracking (Section 6.5).
+4. **Read API** — session/update/voucher/event queries, CrossRef reverse lookups, participant discoverability (Section 6.5).

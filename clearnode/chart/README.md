@@ -9,15 +9,12 @@ Clearnode Helm chart
 - Kubernetes 1.24+
 - Helm 3.0+
 - For TLS: cert-manager installed in the cluster
-- For Secrets Management (optional):
-  - [helm-secrets](https://github.com/jkroepke/helm-secrets/wiki) plugin: `helm plugin install https://github.com/jkroepke/helm-secrets --version v4.6.4`
-  - [vals](https://github.com/helmfile/vals): `go install github.com/helmfile/vals/cmd/vals@v0.41.0`
 
 ## Installing the Chart
 
 To install the chart with the release name `my-release`:
 ```bash
-helm install my-release git+https://github.com/erc7824/nitrolite@clearnode/chart?ref=main
+helm install my-release git+https://github.com/layer-3/nitrolite@clearnode/chart?ref=main
 ```
 
 The command deploys Clearnode on the Kubernetes cluster with default configuration. The [Parameters](#parameters) section lists the parameters that can be configured during installation.
@@ -110,38 +107,6 @@ By default, the chart creates an API Gateway and configures it to use TLS via ce
 3. Set `networking.externalHostname` to your domain name
 
 > **Warning**: The Gateway currently does not support configurations with a static IP address. Ensure that your setup uses a dynamic DNS or hostname for proper functionality. Alternatively, you can configure an ingress resource to use a static IP address if required.
-
-## Managing Secrets
-
-For managing sensitive values like API keys and credentials, you can use `helm-secrets` with `vals`:
-
-1. Set up the required environment variable:
-   ```bash
-   export HELM_SECRETS_BACKEND=vals
-   ```
-
-2. Create a values file with your secrets (e.g., `secrets.yaml`) and refer to secrets using the vals syntax:
-   ```yaml
-   apiKey: ref+awssecrets://my-secret/api-key
-   database:
-     password: ref+vault://secret/data/database?key=password
-   ```
-
-3. When deploying or upgrading, reference your secrets file with the `secrets://` prefix:
-   ```bash
-   helm upgrade --install my-release git+https://github.com/erc7824/nitrolite@clearnode/chart?ref=main \
-     -f values.yaml \
-     -f secrets://secrets.yaml
-   ```
-
-The vals tool supports [multiple backends](https://github.com/helmfile/vals/tree/main?tab=readme-ov-file#supported-backends) including:
-- AWS Secrets Manager and SSM Parameter Store
-- Google Cloud Secret Manager
-- HashiCorp Vault
-- Azure Key Vault
-- And many more
-
-For detailed usage, consult the [helm-secrets documentation](https://github.com/jkroepke/helm-secrets/wiki).
 
 ## Troubleshooting
 

@@ -162,6 +162,14 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 						alloc.Amount, alloc.Asset, update.AppStateUpdate.AppSessionID)
 				}
 
+				// Reject duplicate (participant, asset) entries
+				if newAllocations[alloc.Participant] != nil {
+					if _, exists := newAllocations[alloc.Participant][alloc.Asset]; exists {
+						return rpc.Errorf("duplicate allocation for participant %s, asset %s in session %s",
+							alloc.Participant, alloc.Asset, update.AppStateUpdate.AppSessionID)
+					}
+				}
+
 				if newAllocations[alloc.Participant] == nil {
 					newAllocations[alloc.Participant] = make(map[string]decimal.Decimal)
 				}

@@ -1720,3 +1720,109 @@ func TestSubmitAppState_AppRegistryDisabled(t *testing.T) {
 	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertExpectations(t)
 }
+
+func TestSubmitAppState_OperateIntent_DuplicateAllocation_Rejected(t *testing.T) {
+	// Setup
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xNode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	existingSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 5},
+			{WalletAddress: participant2, SignatureWeight: 5},
+		},
+		Quorum:  5,
+		Status:  app.AppSessionStatusOpen,
+		Version: 1,
+	}
+
+	currentAllocations := map[string]map[string]decimal.Decimal{
+		participant1: {"USDC": decimal.NewFromInt(50)},
+		participant2: {"USDC": decimal.NewFromInt(50)},
+	}
+
+	// Craft a malicious payload with duplicate (participant, asset) entries.
+	// The first entry inflates the sum to pass balance validation while
+	// the second overwrites the per-participant map to zero out balances.
+	appStateUpdateCore := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentOperate,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(100)}, // inflates sum
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(0)},   // duplicate overwrites to 0
+			{Participant: participant2, Asset: "USDC", Amount: decimal.NewFromInt(0)},
+		},
+	}
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdateCore)
+
+	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: appSessionID,
+			Intent:       app.AppStateUpdateIntentOperate,
+			Version:      "2",
+			Allocations: []rpc.AppAllocationV1{
+				{Participant: participant1, Asset: "USDC", Amount: "100"},
+				{Participant: participant1, Asset: "USDC", Amount: "0"}, // duplicate
+				{Participant: participant2, Asset: "USDC", Amount: "0"},
+			},
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	sessionBalances := map[string]decimal.Decimal{
+		"USDC": decimal.NewFromInt(100),
+	}
+
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
+	}, nil).Maybe()
+	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
+	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
+	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
+	}
+
+	handler.SubmitAppState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "expected error for duplicate allocation")
+	assert.Contains(t, respErr.Error(), "duplicate allocation")
+
+	// RecordLedgerEntry must never be called — the request should be rejected before ledger writes
+	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}

@@ -205,6 +205,13 @@ func (h *Handler) handleOperateIntent(
 			return rpc.Errorf("invalid amount for allocation with asset %s and participant %s: %w", alloc.Asset, alloc.Participant, err)
 		}
 
+		// Reject duplicate (participant, asset) entries
+		if incomingAllocations[alloc.Participant] != nil {
+			if _, exists := incomingAllocations[alloc.Participant][alloc.Asset]; exists {
+				return rpc.Errorf("duplicate allocation for participant %s, asset %s", alloc.Participant, alloc.Asset)
+			}
+		}
+
 		// Sum up allocations per asset
 		if existing, ok := allocationSum[alloc.Asset]; ok {
 			allocationSum[alloc.Asset] = existing.Add(alloc.Amount)
@@ -317,6 +324,13 @@ func (h *Handler) handleWithdrawIntent(
 			return rpc.Errorf("negative allocation: %s for asset %s", alloc.Amount, alloc.Asset)
 		}
 
+		// Reject duplicate (participant, asset) entries
+		if incomingAllocations[alloc.Participant] != nil {
+			if _, exists := incomingAllocations[alloc.Participant][alloc.Asset]; exists {
+				return rpc.Errorf("duplicate allocation for participant %s, asset %s", alloc.Participant, alloc.Asset)
+			}
+		}
+
 		// Check for new allocations (reject if current is zero but incoming is non-zero)
 		if !alloc.Amount.IsZero() {
 			currentAmount := decimal.Zero
@@ -403,6 +417,13 @@ func (h *Handler) handleCloseIntent(
 
 		if alloc.Amount.IsNegative() {
 			return rpc.Errorf("negative allocation: %s for asset %s", alloc.Amount, alloc.Asset)
+		}
+
+		// Reject duplicate (participant, asset) entries
+		if incomingAllocations[alloc.Participant] != nil {
+			if _, exists := incomingAllocations[alloc.Participant][alloc.Asset]; exists {
+				return rpc.Errorf("duplicate allocation for participant %s, asset %s", alloc.Participant, alloc.Asset)
+			}
 		}
 
 		if incomingAllocations[alloc.Participant] == nil {

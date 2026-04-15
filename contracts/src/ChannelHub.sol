@@ -44,6 +44,12 @@ import {EcdsaSignatureUtils} from "./sigValidators/EcdsaSignatureUtils.sol";
  * There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept
  * them, but any discrepancy will produce undefined accounting behavior for all users of that token.
  * Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
+ *
+ * NATIVE ETH vs ERC20 DEPOSIT ASYMMETRY:
+ *
+ * When user funds are pulled, ERC20 uses `transferFrom` (caller-agnostic, requires prior approval),
+ * while native ETH requires `msg.value == amount` (the transaction submitter must supply the ETH).
+ * For native ETH channels, deposit states must therefore be submitted by the user or a willing proxy.
  */
 contract ChannelHub is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -500,6 +506,7 @@ contract ChannelHub is ReentrancyGuard {
     // Create channel with DEPOSIT, WITHDRAW, or OPERATE intent
     // This enables users who already have off-chain virtual states with non-zero version
     // to create a channel and perform initial operation simultaneously
+    // NOTE: For native ETH channels with DEPOSIT intent, msg.sender must supply msg.value == deposit amount.
     function createChannel(ChannelDefinition calldata def, State calldata initState) external payable {
         require(
             initState.intent == StateIntent.DEPOSIT || initState.intent == StateIntent.WITHDRAW
@@ -537,6 +544,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelCreated(channelId, user, def, initState);
     }
 
+    // NOTE: For native ETH channels, msg.sender must supply msg.value == deposit amount.
     function depositToChannel(bytes32 channelId, State calldata candidate) public payable {
         require(candidate.intent == StateIntent.DEPOSIT, IncorrectStateIntent());
 
@@ -674,6 +682,7 @@ contract ChannelHub is ReentrancyGuard {
 
     // ========= Cross-Chain Functions ==========
 
+    // NOTE: On non-home chain, user funds are pulled. For native ETH, msg.sender must supply msg.value == deposit amount.
     function initiateEscrowDeposit(ChannelDefinition calldata def, State calldata candidate) external payable {
         require(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT, IncorrectStateIntent());
         _requireValidDefinition(def);

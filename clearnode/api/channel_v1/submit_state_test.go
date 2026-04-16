@@ -310,6 +310,11 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
 
+	// Sender state is stored before the transition-specific logic
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == senderWallet && state.NodeSig != nil
+	})).Return(nil)
+
 	// For issueTransferReceiverState - receiver has an active escrow lock
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
@@ -421,6 +426,11 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
 
+	// Sender state is stored before the transition-specific logic
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == senderWallet && state.NodeSig != nil
+	})).Return(nil)
+
 	rpcState := toRPCState(*incomingSenderState)
 	reqPayload := rpc.ChannelsV1SubmitStateRequest{
 		State: rpcState,
@@ -446,8 +456,7 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	require.NotNil(t, respErr, "Expected error when sender and receiver are the same wallet")
 	assert.Contains(t, respErr.Error(), "sender and receiver wallets are the same")
 
-	// StoreUserState for receiver should never be called
-	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything)
+	mockTxStore.AssertExpectations(t)
 }
 
 func TestSubmitState_EscrowLock_Success(t *testing.T) {

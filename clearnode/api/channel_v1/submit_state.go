@@ -132,6 +132,12 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 		nodeSig = _nodeSig.String()
 		incomingState.NodeSig = &nodeSig
 
+		// Store user state early — it's fully validated and signed at this point.
+		// The wrapping DB transaction ensures rollback if any subsequent step fails.
+		if err := tx.StoreUserState(incomingState); err != nil {
+			return rpc.Errorf("failed to store user state: %v", err)
+		}
+
 		if incomingTransition.Type != core.TransitionTypeAcknowledgement {
 			var transaction *core.Transaction
 			switch incomingTransition.Type {
@@ -223,10 +229,6 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				"to", transaction.ToAccount,
 				"asset", transaction.Asset,
 				"amount", transaction.Amount.String())
-		}
-
-		if err := tx.StoreUserState(incomingState); err != nil {
-			return rpc.Errorf("failed to store user state: %v", err)
 		}
 
 		// TODO: consider state checkpoint if channel is challenged

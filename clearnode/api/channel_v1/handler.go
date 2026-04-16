@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"context"
+	"strings"
 
 	"github.com/layer-3/nitrolite/clearnode/metrics"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -73,7 +74,7 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 		return nil, rpc.Errorf("invalid receiver wallet address: %v", err)
 	}
 
-	if senderState.UserWallet == receiverWallet {
+	if strings.EqualFold(senderState.UserWallet, receiverWallet) {
 		return nil, rpc.Errorf("sender and receiver wallets are the same")
 	}
 

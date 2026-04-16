@@ -186,6 +186,11 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		nodeSig = _nodeSig.String()
 		incomingState.NodeSig = &nodeSig
 
+		// Store the pending state
+		if err := tx.StoreUserState(incomingState); err != nil {
+			return rpc.Errorf("failed to store state: %v", err)
+		}
+
 		incomingTransition := incomingState.Transition
 
 		if incomingTransition.Type != core.TransitionTypeAcknowledgement {
@@ -226,10 +231,6 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 				"to", transaction.ToAccount,
 				"asset", transaction.Asset,
 				"amount", transaction.Amount.String())
-		}
-		// Store the pending state
-		if err := tx.StoreUserState(incomingState); err != nil {
-			return rpc.Errorf("failed to store state: %v", err)
 		}
 
 		logger.Info("channel creation request processed",

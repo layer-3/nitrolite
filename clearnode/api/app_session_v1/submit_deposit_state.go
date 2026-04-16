@@ -182,6 +182,22 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 				return rpc.Errorf("negative allocation: %s for asset %s", alloc.Amount, alloc.Asset)
 			}
 
+			decimals, err := h.assetStore.GetAssetDecimals(alloc.Asset)
+			if err != nil {
+				return rpc.Errorf("failed to get asset decimals: %v", err)
+			}
+
+			if err := core.ValidateDecimalPrecision(alloc.Amount, decimals); err != nil {
+				return rpc.Errorf("invalid amount for allocation with asset %s and participant %s: %w", alloc.Asset, alloc.Participant, err)
+			}
+
+			// Reject duplicate (participant, asset) entries
+			if incomingAllocations[alloc.Participant] != nil {
+				if _, exists := incomingAllocations[alloc.Participant][alloc.Asset]; exists {
+					return rpc.Errorf("duplicate allocation for participant %s, asset %s", alloc.Participant, alloc.Asset)
+				}
+			}
+
 			participantAllocs := currentAllocations[alloc.Participant]
 			if participantAllocs == nil {
 				participantAllocs = make(map[string]decimal.Decimal, 0)

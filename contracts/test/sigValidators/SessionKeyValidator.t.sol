@@ -209,3 +209,20 @@ contract SessionKeyValidatorTest_validateSignature is SessionKeyValidatorTest_Ba
         assertEq(ValidationResult.unwrap(result), ValidationResult.unwrap(VALIDATION_FAILURE));
     }
 }
+
+contract SessionKeyValidatorTest_validateChallengeSignature is SessionKeyValidatorTest_Base {
+    function test_revert_challengeWithSessionKeyNotSupported() public {
+        // Signature contents are irrelevant — the method always reverts regardless of input.
+        SessionKeyAuthorization memory skAuth = createSkAuth(sessionKey1, METADATA_HASH, USER_PK, true);
+        bytes memory skSignature = signChallengeWithSk(CHANNEL_ID, SIGNING_DATA, SESSION_KEY1_PK, true);
+        bytes memory signature = abi.encode(skAuth, skSignature);
+
+        vm.expectRevert(SessionKeyValidator.ChallengeWithSessionKeyNotSupported.selector);
+        validator.validateChallengeSignature(CHANNEL_ID, SIGNING_DATA, signature, user);
+    }
+
+    function test_revert_challengeWithSessionKeyNotSupported_emptySignature() public {
+        vm.expectRevert(SessionKeyValidator.ChallengeWithSessionKeyNotSupported.selector);
+        validator.validateChallengeSignature(CHANNEL_ID, SIGNING_DATA, "", user);
+    }
+}

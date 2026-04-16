@@ -231,13 +231,15 @@ The protocol maintains clear separation between protocol concerns (ChannelHub) a
    - Automatically tries EIP-191 (with Ethereum prefix) and raw ECDSA
    - 65-byte signatures: `[r: 32 bytes][s: 32 bytes][v: 1 byte]`
    - Recommended for all users and nodes
+   - `validateChallengeSignature`: appends `"challenge"` suffix to the signing data
 
 2. **SessionKeyValidator** (`src/sigValidators/SessionKeyValidator.sol`)
    - Session key delegation with metadata
    - Enables temporary signing authority (hot wallets, time-limited access)
    - Two-level validation: participant authorizes session key, session key signs state
    - **Safe for user usage** (with Clearnode validation)
-   - **NOT safe for node usage** (no user-side validation) - see SessionKeyValidator Security Considerations below
+   - **NOT safe for node usage** (no user-side validation) — see SessionKeyValidator Security Considerations below
+   - `validateChallengeSignature`: **not supported** — always reverts with `ChallengeWithSessionKeyNotSupported`
 
 See `signature-validators.md` for detailed documentation on each validator.
 
@@ -358,6 +360,12 @@ When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
    - User has no protection against misuse
 
 4. **Asymmetric security**: User-side session keys are safe (Clearnode validates), node-side session keys are unsafe (no user-side validator)
+
+#### Challenge Restriction
+
+Session keys cannot be used for challenge signatures. `SessionKeyValidator.validateChallengeSignature` always reverts with `ChallengeWithSessionKeyNotSupported`.
+
+**Rationale**: A session key authorization — once signed by the user — is permanently valid on-chain because the contract only checks the cryptographic signature, not expiration or revocation. If session keys were allowed to challenge, an expired or revoked key could put any channel (where the validator is approved) into `DISPUTED` state unilaterally, bypassing Clearnode's off-chain enforcement and causing a DoS on the channel.
 
 ---
 

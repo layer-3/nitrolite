@@ -8,11 +8,12 @@ This document describes the pluggable signature validation system in the Nitroli
 
 The protocol supports flexible signature validation through the `ISignatureValidator` interface. All validators implement:
 
-- `validateSignature(channelId, signingData, signature, participant)` - Validates a participant's signature
+- `validateSignature(channelId, signingData, signature, participant)` — Validates a state signature
+- `validateChallengeSignature(channelId, signingData, signature, participant)` — Validates a challenge signature
 
 Validators receive the core state data (`signingData`) and `channelId` separately, allowing them to construct the full message according to their signing scheme.
 
-For challenge signatures, ChannelHub appends `"challenge"` to the signing data before calling `validateSignature`.
+For challenge signatures, ChannelHub calls `validateChallengeSignature` rather than `validateSignature`. Each validator is responsible for constructing the challenge message and enforcing any validator-specific constraints (e.g., temporal bounds for session keys).
 
 ---
 
@@ -154,6 +155,10 @@ Default validator supporting standard ECDSA signatures. Automatically tries both
 2. If fails, try raw ECDSA recovery
 3. Return `VALIDATION_SUCCESS` if recovered address matches participant, `VALIDATION_FAILURE` otherwise
 
+### Challenge Validation
+
+`validateChallengeSignature` delegates to `validateSignature` with the signing data extended by a `"challenge"` suffix. The signer must sign `pack(channelId, signingData || "challenge")`. No temporal or scope checks apply — ECDSA keys do not expire.
+
 ### Use Cases
 
 - Standard wallet signatures (MetaMask, WalletConnect, hardware wallets)
@@ -194,6 +199,12 @@ Both use EIP-191 first, then raw ECDSA if that fails.
 ### Metadata
 
 Application-defined data encoding expiration, allowed channels, and permissions. **Validated off-chain by Clearnode, not on-chain.**
+
+### Challenge Signatures
+
+`validateChallengeSignature` is **not supported** and always reverts with `ChallengeWithSessionKeyNotSupported`.
+
+This is to prevent a vulnerability: since session key authorizations are permanently valid on-chain (expiration is opaque in metadataHash), allowing session keys to challenge would let any expired or revoked key put channels into `DISPUTED` state unilaterally, bypassing Clearnode's off-chain enforcement and causing a DoS on the channel.
 
 ---
 

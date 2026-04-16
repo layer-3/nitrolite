@@ -2,6 +2,7 @@ package app_session_v1
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/app"
@@ -337,9 +338,25 @@ func (h *Handler) handleWithdrawIntent(
 		incomingAllocations[alloc.Participant][alloc.Asset] = alloc.Amount
 	}
 
+	// Sort participant keys to ensure deterministic lock ordering and prevent deadlocks
+	participants := make([]string, 0, len(currentAllocations))
+	for participant := range currentAllocations {
+		participants = append(participants, participant)
+	}
+	sort.Strings(participants)
+
 	// Verify all current allocations are present and process withdrawals
-	for participant, assets := range currentAllocations {
-		for asset, currentAmount := range assets {
+	for _, participant := range participants {
+		assets := currentAllocations[participant]
+
+		assetKeys := make([]string, 0, len(assets))
+		for asset := range assets {
+			assetKeys = append(assetKeys, asset)
+		}
+		sort.Strings(assetKeys)
+
+		for _, asset := range assetKeys {
+			currentAmount := assets[asset]
 			if currentAmount.IsZero() {
 				continue
 			}
@@ -449,9 +466,25 @@ func (h *Handler) handleCloseIntent(
 		}
 	}
 
+	// Sort participant keys to ensure deterministic lock ordering and prevent deadlocks
+	participants := make([]string, 0, len(currentAllocations))
+	for participant := range currentAllocations {
+		participants = append(participants, participant)
+	}
+	sort.Strings(participants)
+
 	// Iterate over current allocations and release each non-zero amount
-	for participant, assets := range currentAllocations {
-		for asset, amount := range assets {
+	for _, participant := range participants {
+		assets := currentAllocations[participant]
+
+		assetKeys := make([]string, 0, len(assets))
+		for asset := range assets {
+			assetKeys = append(assetKeys, asset)
+		}
+		sort.Strings(assetKeys)
+
+		for _, asset := range assetKeys {
+			amount := assets[asset]
 			if amount.IsZero() {
 				continue
 			}

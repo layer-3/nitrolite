@@ -377,6 +377,32 @@ Fee-on-transfer tokens are **not supported**. The amount received by the contrac
 
 ---
 
+## Native ETH vs ERC20 Deposit Asymmetry
+
+When pulling funds from a user, ERC20 and native ETH behave differently:
+
+- **ERC20**: Funds are pulled via `transferFrom` using a prior user allowance. Any caller can submit a signed state that triggers a deposit — the funds come from the user's approval.
+
+- **Native ETH**: The caller must attach the exact `msg.value`. Whoever submits the transaction must supply the ETH, regardless of who the logical depositor is.
+
+### Affected operations
+
+This asymmetry applies to every operation that pulls funds from the user:
+
+| Function | Context |
+|----------|---------|
+| `createChannel` | Initial deposit on channel creation (`DEPOSIT` intent) |
+| `depositToChannel` | Channel deposit |
+| `initiateEscrowDeposit` | Escrow deposit initiation (non-home chain) |
+
+### Practical consequence
+
+For ERC20 channels, any party holding a valid signed state that requires a user deposit can submit it on-chain, and the user's pre-approved funds are pulled automatically. For native ETH channels, only a caller willing to supply the required `msg.value` can submit such a state. In practice, this means native ETH deposit states must be submitted by the user themselves (or by a party willing to front the ETH on their behalf).
+
+Integrators building relayers or third-party submission flows should account for this difference: ERC20 state submissions are permissionless given prior user approval, while native ETH state submissions that require user funds are not.
+
+---
+
 ## ERC20 Transfer Failure Attack Vectors
 
 ### Background

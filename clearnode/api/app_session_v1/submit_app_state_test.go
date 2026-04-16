@@ -410,6 +410,7 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
+		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16,
 	)
@@ -1620,7 +1621,7 @@ func TestSubmitAppState_AppRegistryDisabled(t *testing.T) {
 		return fn(mockStore)
 	}
 
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)
 

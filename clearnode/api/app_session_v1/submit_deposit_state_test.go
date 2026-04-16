@@ -544,7 +544,7 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 // app lookup and AllowAction are skipped but deposit still succeeds.
 func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
 	mockStore := new(MockStore)
-	mockSigner := NewMockSigner()
+	mockSigner := NewMockChannelSigner()
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	mockAssetStore := new(MockAssetStore)
 	mockStatePacker := new(MockStatePacker)

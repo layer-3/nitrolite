@@ -3,6 +3,7 @@ package channel_v1
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -342,6 +343,111 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	assert.Contains(t, respErr.Error(), "last signed state is a lock with escrow channel")
 
 	mockTxStore.AssertExpectations(t)
+}
+
+func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.T) {
+	// Verify that the sender==receiver check is case-insensitive.
+	// Ethereum addresses are hex and may differ only in case (checksummed vs lowercased).
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	minChallenge := uint32(3600)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     minChallenge,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	// Derive senderWallet from a real key — Address().String() returns checksummed (mixed case)
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	senderWallet := userSigner.PublicKey().Address().String() // checksummed, e.g. "0xAbCdEf..."
+
+	// Use uppercased hex digits for the same address so the test guarantees a case mismatch.
+	// Without EqualFold, "0xAbCdEf..." != "0xABCDEF..." would bypass the self-transfer check.
+	receiverWallet := "0x" + strings.ToUpper(senderWallet[2:])
+
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	transferAmount := decimal.NewFromInt(100)
+
+	currentSenderState := core.State{
+		ID:            core.GetStateID(senderWallet, asset, 1, 1),
+		Transition:    core.Transition{},
+		Asset:         asset,
+		UserWallet:    senderWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+
+	incomingSenderState := currentSenderState.NextState()
+	_, err := incomingSenderState.ApplyTransferSendTransition(receiverWallet, transferAmount)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	packedSenderState, _ := core.PackState(*incomingSenderState, mockAssetStore)
+	userSig, _ := userWalletSigner.Sign(packedSenderState)
+	userSigStr := userSig.String()
+	incomingSenderState.UserSig = &userSigStr
+
+	// Mock expectations — should reach the issueTransferReceiverState check
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckOpenChannel", senderWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
+	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
+	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
+
+	rpcState := toRPCState(*incomingSenderState)
+	reqPayload := rpc.ChannelsV1SubmitStateRequest{
+		State: rpcState,
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	rpcRequest := rpc.Message{
+		Method:  "channels.v1.submit_state",
+		Payload: payload,
+	}
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpcRequest,
+	}
+
+	handler.SubmitState(ctx)
+
+	// Should fail because sender and receiver are the same address (different case)
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when sender and receiver are the same wallet")
+	assert.Contains(t, respErr.Error(), "sender and receiver wallets are the same")
+
+	// StoreUserState for receiver should never be called
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything)
 }
 
 func TestSubmitState_EscrowLock_Success(t *testing.T) {

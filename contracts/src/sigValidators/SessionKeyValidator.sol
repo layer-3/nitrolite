@@ -53,6 +53,8 @@ function toSigningData(SessionKeyAuthorization memory skAuth) pure returns (byte
  * - Participants are responsible for session key management
  */
 contract SessionKeyValidator is ISignatureValidator {
+    error ChallengeWithSessionKeyNotSupported();
+
     /**
      * @notice Validates a signature using a delegated session key
      * @dev Validates:
@@ -92,5 +94,16 @@ contract SessionKeyValidator is ISignatureValidator {
         } else {
             return VALIDATION_FAILURE;
         }
+    }
+
+    /**
+     * @notice Challenge signatures via session keys are not supported
+     */
+    function validateChallengeSignature(bytes32, bytes calldata, bytes calldata, address)
+        external
+        pure
+        returns (ValidationResult)
+    {
+        revert ChallengeWithSessionKeyNotSupported();
     }
 }

@@ -29,12 +29,11 @@ contract ECDSAValidator is ISignatureValidator {
      * @param participant The expected signer's address
      * @return result VALIDATION_SUCCESS if valid, VALIDATION_FAILURE otherwise
      */
-    function validateSignature(
-        bytes32 channelId,
-        bytes calldata signingData,
-        bytes calldata signature,
-        address participant
-    ) external pure returns (ValidationResult) {
+    function validateSignature(bytes32 channelId, bytes memory signingData, bytes memory signature, address participant)
+        public
+        pure
+        returns (ValidationResult)
+    {
         require(channelId != bytes32(0), EmptyChannelId());
         require(participant != address(0), InvalidSignerAddress());
 
@@ -44,5 +43,23 @@ contract ECDSAValidator is ISignatureValidator {
         } else {
             return VALIDATION_FAILURE;
         }
+    }
+
+    /**
+     * @notice Validates a challenge signature
+     * @dev Appends "challenge" to the packed message and verifies the ECDSA signature.
+     * @param channelId The channel identifier to include in the signed message
+     * @param signingData The encoded state data (without channelId, signatures, or challenge suffix)
+     * @param signature The challenge signature to validate (format: [r: 32][s: 32][v: 1], 65 bytes)
+     * @param participant The expected challenger's address
+     * @return result VALIDATION_SUCCESS if valid, VALIDATION_FAILURE otherwise
+     */
+    function validateChallengeSignature(
+        bytes32 channelId,
+        bytes calldata signingData,
+        bytes calldata signature,
+        address participant
+    ) external pure returns (ValidationResult) {
+        return validateSignature(channelId, abi.encodePacked(signingData, "challenge"), signature, participant);
     }
 }

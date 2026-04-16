@@ -1041,9 +1041,8 @@ contract ChannelHub is ReentrancyGuard {
         ParticipantIndex challengerIdx
     ) internal view {
         bytes memory signingData = Utils.toSigningData(state);
-        bytes memory challengerSigningData = abi.encodePacked(signingData, "challenge");
         address challenger = challengerIdx == ParticipantIndex.USER ? user : NODE;
-        ValidationResult result = validator.validateSignature(channelId, challengerSigningData, sigData, challenger);
+        ValidationResult result = validator.validateChallengeSignature(channelId, signingData, sigData, challenger);
         require(ValidationResult.unwrap(result) != ValidationResult.unwrap(VALIDATION_FAILURE), IncorrectSignature());
     }
 

@@ -1,0 +1,46 @@
+# Nitrolite
+
+> State channel protocol for Ethereum and EVM-compatible blockchains. Instant off-chain transactions with on-chain security guarantees.
+
+## Documentation
+
+- [Protocol Overview](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/overview.md): Design goals, system roles, core concepts
+- [Terminology](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/terminology.md): Canonical definitions of all protocol terms
+- [State Model](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/state-model.md): State structure, versioning, consistency rules
+- [Channel Protocol](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/channel-protocol.md): Channel lifecycle, transitions, advancement rules
+- [Cryptography](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/cryptography.md): Encoding, hashing, signing, replay protection
+- [Enforcement](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/enforcement.md): On-chain checkpoints, validation, dispute resolution
+- [Interactions](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/interactions.md): Message envelope, wire format, operations
+- [Security](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/security-and-limitations.md): Security guarantees, trust assumptions, known limitations
+- [Cross-Chain](https://github.com/layer-3/nitrolite/blob/main/docs/protocol/cross-chain-and-assets.md): Unified asset model, cross-chain operations
+
+## SDKs
+
+- [TypeScript SDK](https://github.com/layer-3/nitrolite/tree/main/sdk/ts): `@yellow-org/sdk` — async/await, viem, decimal.js
+- [TypeScript Compat](https://github.com/layer-3/nitrolite/tree/main/sdk/ts-compat): `@yellow-org/sdk-compat` — migration bridge from v0.5.3
+- [Go SDK](https://github.com/layer-3/nitrolite/tree/main/sdk/go): `github.com/layer-3/nitrolite/sdk/go` — context.Context, (T, error) tuples
+
+## Clearnode API
+
+- [API Reference](https://github.com/layer-3/nitrolite/blob/main/clearnode/docs/API.md): All RPC methods with request/response examples
+- [Protocol Spec](https://github.com/layer-3/nitrolite/blob/main/clearnode/docs/Clearnode.protocol.md): Auth flow, channel creation, app sessions
+- [Entities](https://github.com/layer-3/nitrolite/blob/main/clearnode/docs/Entities.md): Data entity definitions
+- [Session Keys](https://github.com/layer-3/nitrolite/blob/main/clearnode/docs/SessionKeys.md): Delegated signing with spending caps
+
+## Smart Contracts
+
+- [Contracts Source](https://github.com/layer-3/nitrolite/tree/main/contracts/src): ChannelHub, ChannelEngine, EscrowDepositEngine, signature validators
+- [Contract Design](https://github.com/layer-3/nitrolite/blob/main/contracts/suggested-contract-design.md): Architecture rationale and unified transition pattern
+
+## AI Tooling
+
+- [TypeScript MCP Server](https://github.com/layer-3/nitrolite/tree/main/sdk/ts-mcp): MCP server for TS SDK + protocol knowledge (22 resources, 8 tools, 3 prompts)
+- [Go MCP Server](https://github.com/layer-3/nitrolite/tree/main/sdk/mcp-go): MCP server for Go SDK + protocol knowledge (16 resources, 5 tools, 2 prompts)
+
+## Key Concepts
+
+- **State Channels**: Off-chain state containers between a user and a node. Signed state updates exchanged off-chain; any party can enforce on-chain.
+- **Clearnode**: Off-chain broker that manages channels, processes RPC requests, and syncs with blockchain.
+- **Wire Format**: JSON-RPC over WebSocket. Request: `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`
+- **Authorization**: Every RPC request is signed via the `sig` field. Session keys enable delegated signing with spending caps.
+- **App Sessions**: Multi-party extensions on top of channels with quorum-based governance and custom application logic.

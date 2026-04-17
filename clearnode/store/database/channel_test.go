@@ -822,3 +822,87 @@ func TestDBStore_GetUserChannels(t *testing.T) {
 		assert.Equal(t, uint32(0), total)
 	})
 }
+
+func TestDBStore_GetChannelsCountByLabels(t *testing.T) {
+	t.Run("no channels returns empty", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		results, err := store.GetChannelsCountByLabels()
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+
+	t.Run("counts grouped by asset and status", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		for i := 0; i < 3; i++ {
+			require.NoError(t, store.CreateChannel(core.Channel{
+				ChannelID: fmt.Sprintf("0xchannel_open_usdc_%d", i), UserWallet: "0xuser1", Asset: "usdc",
+				Type: core.ChannelTypeHome, BlockchainID: 1, ChallengeDuration: 86400, Nonce: uint64(i + 1),
+				Status: core.ChannelStatusOpen,
+			}))
+		}
+		for i := 0; i < 2; i++ {
+			require.NoError(t, store.CreateChannel(core.Channel{
+				ChannelID: fmt.Sprintf("0xchannel_closed_usdc_%d", i), UserWallet: "0xuser1", Asset: "usdc",
+				Type: core.ChannelTypeHome, BlockchainID: 1, ChallengeDuration: 86400, Nonce: uint64(i + 10),
+				Status: core.ChannelStatusClosed,
+			}))
+		}
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID: "0xchannel_open_eth_0", UserWallet: "0xuser2", Asset: "eth",
+			Type: core.ChannelTypeHome, BlockchainID: 1, ChallengeDuration: 86400, Nonce: 1,
+			Status: core.ChannelStatusOpen,
+		}))
+
+		results, err := store.GetChannelsCountByLabels()
+		require.NoError(t, err)
+
+		countMap := make(map[string]uint64)
+		for _, r := range results {
+			countMap[r.Asset+"/"+r.Status.String()] = r.Count
+		}
+
+		assert.Equal(t, uint64(3), countMap["usdc/"+core.ChannelStatusOpen.String()])
+		assert.Equal(t, uint64(2), countMap["usdc/"+core.ChannelStatusClosed.String()])
+		assert.Equal(t, uint64(1), countMap["eth/"+core.ChannelStatusOpen.String()])
+	})
+
+	t.Run("reflects status transitions", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID: "0xchannel1", UserWallet: "0xuser1", Asset: "usdc",
+			Type: core.ChannelTypeHome, BlockchainID: 1, ChallengeDuration: 86400, Nonce: 1,
+			Status: core.ChannelStatusOpen,
+		}))
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID: "0xchannel2", UserWallet: "0xuser1", Asset: "usdc",
+			Type: core.ChannelTypeHome, BlockchainID: 1, ChallengeDuration: 86400, Nonce: 2,
+			Status: core.ChannelStatusOpen,
+		}))
+
+		// Transition one channel to closed
+		ch1, err := store.GetChannelByID("0xchannel1")
+		require.NoError(t, err)
+		ch1.Status = core.ChannelStatusClosed
+		require.NoError(t, store.UpdateChannel(*ch1))
+
+		results, err := store.GetChannelsCountByLabels()
+		require.NoError(t, err)
+
+		countMap := make(map[string]uint64)
+		for _, r := range results {
+			countMap[r.Asset+"/"+r.Status.String()] = r.Count
+		}
+
+		assert.Equal(t, uint64(1), countMap["usdc/"+core.ChannelStatusOpen.String()])
+		assert.Equal(t, uint64(1), countMap["usdc/"+core.ChannelStatusClosed.String()])
+	})
+}

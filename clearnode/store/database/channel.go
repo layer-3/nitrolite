@@ -152,6 +152,30 @@ func (s *DBStore) GetUserChannels(wallet string, status *core.ChannelStatus, ass
 	return channels, uint32(totalCount), nil
 }
 
+// ChannelCount holds the result of a COUNT() GROUP BY query on channels.
+type ChannelCount struct {
+	Asset  string             `gorm:"column:asset"`
+	Status core.ChannelStatus `gorm:"column:status"`
+	Count  uint64             `gorm:"column:count"`
+}
+
+// GetChannelsCountByLabels returns current channel counts grouped by asset and status.
+func (s *DBStore) GetChannelsCountByLabels() ([]ChannelCount, error) {
+	var results []ChannelCount
+	err := s.db.Raw(`
+		SELECT asset,
+		       status,
+		       COUNT(channel_id) AS count
+		FROM channels
+		GROUP BY asset, status
+	`).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel counts: %w", err)
+	}
+
+	return results, nil
+}
+
 // UpdateChannel persists changes to a channel's metadata (status, version, etc).
 func (s *DBStore) UpdateChannel(channel core.Channel) error {
 	updates := map[string]interface{}{

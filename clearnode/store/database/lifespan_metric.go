@@ -3,17 +3,18 @@ package database
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type LifespanMetric struct {
@@ -27,209 +28,6 @@ type LifespanMetric struct {
 
 func (LifespanMetric) TableName() string {
 	return "lifespan_metrics"
-}
-
-// ChannelCount holds the result of a COUNT() GROUP BY query on channels.
-type ChannelCount struct {
-	Asset       string             `gorm:"column:asset"`
-	Status      core.ChannelStatus `gorm:"column:status"`
-	Count       uint64             `gorm:"column:count"`
-	LastUpdated time.Time          `gorm:"column:last_updated"`
-}
-
-// GetChannelsCountByLabels computes channel count deltas since last processed timestamp,
-// upserts them as lifespan metrics, and returns the updated totals.
-func (s *DBStore) GetChannelsCountByLabels() ([]ChannelCount, error) {
-	metricName := "channels_total"
-
-	lastProcessedTimestamp, err := s.GetLifetimeMetricLastTimestamp(metricName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last processed timestamp: %w", err)
-	}
-
-	var deltas []ChannelCount
-	err = s.db.Raw(`
-		SELECT asset,
-		       status AS status,
-		       COUNT(channel_id)::bigint AS count,
-		       MAX(updated_at) AS last_updated
-		FROM channels
-		WHERE updated_at > ?
-		GROUP BY asset, status
-	`, lastProcessedTimestamp).Scan(&deltas).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute channel deltas: %w", err)
-	}
-
-	if len(deltas) > 0 {
-		now := time.Now()
-		valuesSQL := make([]string, 0, len(deltas))
-		args := make([]any, 0, len(deltas)*6)
-
-		for i, d := range deltas {
-			labelsMap := map[string]string{
-				"asset":  d.Asset,
-				"status": d.Status.String(),
-			}
-			labelsJSON, err := json.Marshal(labelsMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal labels for asset=%s status=%s: %w", d.Asset, d.Status, err)
-			}
-
-			id, err := getMetricID(metricName, "asset", d.Asset, "status", d.Status.String())
-			if err != nil {
-				return nil, fmt.Errorf("failed to compute metric ID for asset=%s status=%s: %w", d.Asset, d.Status, err)
-			}
-
-			deltaValue := decimal.NewFromUint64(d.Count)
-			base := i * 6
-			valuesSQL = append(valuesSQL,
-				fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d)",
-					base+1, base+2, base+3, base+4, base+5, base+6,
-				),
-			)
-
-			args = append(args,
-				id,                         // $1
-				metricName,                 // $2
-				datatypes.JSON(labelsJSON), // $3
-				deltaValue,                 // $4
-				d.LastUpdated,              // $5
-				now,                        // $6
-			)
-		}
-
-		upsertSQL := fmt.Sprintf(`
-			INSERT INTO lifespan_metrics (id, name, labels, value, last_timestamp, updated_at)
-			VALUES %s
-			ON CONFLICT (id) DO UPDATE
-			SET
-				value = lifespan_metrics.value + EXCLUDED.value,
-				last_timestamp = GREATEST(lifespan_metrics.last_timestamp, EXCLUDED.last_timestamp),
-				updated_at = now()
-		`, strings.Join(valuesSQL, ","))
-
-		if err := s.db.Exec(upsertSQL, args...).Error; err != nil {
-			return nil, fmt.Errorf("failed to upsert lifespan metrics: %w", err)
-		}
-	}
-
-	var results []ChannelCount
-	err = s.db.Raw(`
-		SELECT labels->>'asset' AS asset,
-		       labels->>'status' AS status,
-		       value::bigint AS count,
-		       last_timestamp AS last_updated
-		FROM lifespan_metrics
-		WHERE name = ?
-	`, metricName).Scan(&results).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to read lifespan metrics: %w", err)
-	}
-
-	return results, nil
-}
-
-// AppSessionCount holds the result of a COUNT() GROUP BY query on app sessions.
-type AppSessionCount struct {
-	Application string               `gorm:"column:application_id"`
-	Status      app.AppSessionStatus `gorm:"column:status"`
-	Count       uint64               `gorm:"column:count"`
-	LastUpdated time.Time            `gorm:"column:last_updated"`
-}
-
-// GetAppSessionsCountByLabels computes app session count deltas since last processed timestamp,
-// upserts them as lifespan metrics, and returns the updated totals.
-func (s *DBStore) GetAppSessionsCountByLabels() ([]AppSessionCount, error) {
-	metricName := "app_sessions_total"
-
-	lastProcessedTimestamp, err := s.GetLifetimeMetricLastTimestamp(metricName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last processed timestamp: %w", err)
-	}
-
-	// 2) Compute deltas since lastProcessedTimestamp.
-	var deltas []AppSessionCount
-	err = s.db.Raw(`
-		SELECT application_id,
-		       status AS status,
-		       COUNT(id)::bigint AS count,
-		       MAX(updated_at) AS last_updated
-		FROM app_sessions_v1
-		WHERE updated_at > ?
-		GROUP BY application_id, status
-	`, lastProcessedTimestamp).Scan(&deltas).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute app sessions deltas: %w", err)
-	}
-
-	if len(deltas) > 0 {
-		now := time.Now()
-		valuesSQL := make([]string, 0, len(deltas))
-		args := make([]any, 0, len(deltas)*6)
-
-		for i, d := range deltas {
-			labelsMap := map[string]string{
-				"application_id": d.Application,
-				"status":         d.Status.String(),
-			}
-			labelsJSON, err := json.Marshal(labelsMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal labels for application_id=%s status=%s: %w", d.Application, d.Status, err)
-			}
-
-			id, err := getMetricID(metricName, "application_id", d.Application, "status", d.Status.String())
-			if err != nil {
-				return nil, fmt.Errorf("failed to compute metric ID for application_id=%s status=%s: %w", d.Application, d.Status, err)
-			}
-
-			deltaValue := decimal.NewFromUint64(d.Count)
-			base := i * 6
-			valuesSQL = append(valuesSQL,
-				fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d)",
-					base+1, base+2, base+3, base+4, base+5, base+6,
-				),
-			)
-
-			args = append(args,
-				id,                         // $1
-				metricName,                 // $2
-				datatypes.JSON(labelsJSON), // $3
-				deltaValue,                 // $4
-				d.LastUpdated,              // $5
-				now,                        // $6
-			)
-		}
-
-		upsertSQL := fmt.Sprintf(`
-			INSERT INTO lifespan_metrics (id, name, labels, value, last_timestamp, updated_at)
-			VALUES %s
-			ON CONFLICT (id) DO UPDATE
-			SET
-				value = lifespan_metrics.value + EXCLUDED.value,
-				last_timestamp = GREATEST(lifespan_metrics.last_timestamp, EXCLUDED.last_timestamp),
-				updated_at = now()
-		`, strings.Join(valuesSQL, ","))
-
-		if err := s.db.Exec(upsertSQL, args...).Error; err != nil {
-			return nil, fmt.Errorf("failed to upsert lifespan metrics: %w", err)
-		}
-	}
-
-	var results []AppSessionCount
-	err = s.db.Raw(`
-		SELECT labels->>'application_id' AS application_id,
-		       labels->>'status' AS status,
-		       value::bigint AS count,
-		       last_timestamp AS last_updated
-		FROM lifespan_metrics
-		WHERE name = ?
-	`, metricName).Scan(&results).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to read lifespan metrics: %w", err)
-	}
-
-	return results, nil
 }
 
 // TotalValueLocked holds the total value locked for a given asset, along with the last update timestamp.
@@ -414,6 +212,101 @@ func (s *DBStore) GetLifetimeMetricLastTimestamp(name string) (time.Time, error)
 	}
 
 	return metric.LastTimestamp, nil
+}
+
+// NodeBalance holds on-chain liquidity for a given blockchain and asset.
+type NodeBalance struct {
+	BlockchainID string          `gorm:"column:blockchain_id"`
+	Asset        string          `gorm:"column:asset"`
+	Value        decimal.Decimal `gorm:"column:value"`
+	LastUpdated  time.Time       `gorm:"column:last_updated"`
+}
+
+// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+func (s *DBStore) SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error {
+	metricName := "node_balance"
+	blockchainIDStr := strconv.FormatUint(blockchainID, 10)
+
+	labelsMap := map[string]string{
+		"blockchain_id": blockchainIDStr,
+		"asset":         asset,
+	}
+	labelsJSON, err := json.Marshal(labelsMap)
+	if err != nil {
+		return fmt.Errorf("failed to marshal labels for blockchain_id=%s asset=%s: %w", blockchainIDStr, asset, err)
+	}
+
+	id, err := getMetricID(metricName, "blockchain_id", blockchainIDStr, "asset", asset)
+	if err != nil {
+		return fmt.Errorf("failed to compute metric ID for blockchain_id=%s asset=%s: %w", blockchainIDStr, asset, err)
+	}
+
+	now := time.Now()
+	metric := LifespanMetric{
+		ID:            id,
+		Name:          metricName,
+		Labels:        datatypes.JSON(labelsJSON),
+		Value:         value,
+		LastTimestamp:  now,
+		UpdatedAt:     now,
+	}
+
+	err = s.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value", "last_timestamp", "updated_at"}),
+	}).Create(&metric).Error
+	if err != nil {
+		return fmt.Errorf("failed to upsert node balance metric: %w", err)
+	}
+
+	return nil
+}
+
+// GetNodeBalance returns the on-chain liquidity per blockchain and asset.
+func (s *DBStore) GetNodeBalance() ([]NodeBalance, error) {
+	metricName := "node_balance"
+
+	var results []NodeBalance
+	err := s.db.Raw(`
+		SELECT labels->>'blockchain_id' AS blockchain_id,
+		       labels->>'asset' AS asset,
+		       value,
+		       last_timestamp AS last_updated
+		FROM lifespan_metrics
+		WHERE name = ?
+	`, metricName).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to read node balance metrics: %w", err)
+	}
+
+	return results, nil
+}
+
+// UserBalanceSummary holds off-chain liquidity metrics for a given blockchain and asset.
+type UserBalanceSummary struct {
+	BlockchainID uint64          `gorm:"column:home_blockchain_id"`
+	Asset        string          `gorm:"column:asset"`
+	Total        decimal.Decimal `gorm:"column:total"`
+	Underfunded  decimal.Decimal `gorm:"column:underfunded"`
+	Releasable   decimal.Decimal `gorm:"column:releasable"`
+}
+
+// GetUserBalanceSummary returns off-chain liquidity metrics per blockchain and asset.
+func (s *DBStore) GetUserBalanceSummary() ([]UserBalanceSummary, error) {
+	var results []UserBalanceSummary
+	err := s.db.Raw(`
+		SELECT home_blockchain_id, asset,
+		       SUM(CAST(balance AS DECIMAL)) AS total,
+		       SUM(CASE WHEN CAST(balance AS DECIMAL) > CAST(enforced AS DECIMAL) THEN CAST(balance AS DECIMAL) - CAST(enforced AS DECIMAL) ELSE 0 END) AS underfunded,
+		       SUM(CASE WHEN CAST(enforced AS DECIMAL) > CAST(balance AS DECIMAL) THEN CAST(enforced AS DECIMAL) - CAST(balance AS DECIMAL) ELSE 0 END) AS releasable
+		FROM user_balances
+		GROUP BY home_blockchain_id, asset
+	`).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get off-chain liquidity: %w", err)
+	}
+
+	return results, nil
 }
 
 func getMetricID(name string, labels ...string) (string, error) {

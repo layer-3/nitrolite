@@ -1061,6 +1061,7 @@ type EscrowWithdrawalDataResponse struct {
 type BalanceEntry struct {
 	Asset   string          `json:"asset"`   // Asset symbol
 	Balance decimal.Decimal `json:"balance"` // Balance amount
+	Enforced decimal.Decimal `json:"enforced"` // On-chain enforced balance
 }
 
 // PaginationParams provides pagination configuration for getters

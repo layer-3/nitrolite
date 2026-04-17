@@ -601,3 +601,65 @@ func TestDBStore_UpdateAppSession(t *testing.T) {
 		assert.Contains(t, err.Error(), "concurrent modification detected")
 	})
 }
+
+func TestDBStore_GetAppSessionsCountByLabels(t *testing.T) {
+	t.Run("no sessions returns empty", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		results, err := store.GetAppSessionsCountByLabels()
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+
+	t.Run("counts grouped by application and status", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		now := time.Now()
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s3", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusClosed, Nonce: 3, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s4", ApplicationID: "app2", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, UpdatedAt: now}).Error)
+
+		results, err := store.GetAppSessionsCountByLabels()
+		require.NoError(t, err)
+
+		countMap := make(map[string]uint64)
+		for _, r := range results {
+			countMap[r.Application+"/"+r.Status.String()] = r.Count
+		}
+
+		assert.Equal(t, uint64(2), countMap["app1/"+app.AppSessionStatusOpen.String()])
+		assert.Equal(t, uint64(1), countMap["app1/"+app.AppSessionStatusClosed.String()])
+		assert.Equal(t, uint64(1), countMap["app2/"+app.AppSessionStatusOpen.String()])
+	})
+
+	t.Run("reflects status transitions", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		now := time.Now()
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s1", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 1, Version: 1, UpdatedAt: now}).Error)
+		require.NoError(t, db.Create(&AppSessionV1{ID: "s2", ApplicationID: "app1", SessionData: "{}", Status: app.AppSessionStatusOpen, Nonce: 2, Version: 1, UpdatedAt: now}).Error)
+
+		// Transition one session to closed
+		require.NoError(t, store.UpdateAppSession(app.AppSessionV1{
+			SessionID: "s1", Status: app.AppSessionStatusClosed, SessionData: "{}", Version: 2,
+		}))
+
+		results, err := store.GetAppSessionsCountByLabels()
+		require.NoError(t, err)
+
+		countMap := make(map[string]uint64)
+		for _, r := range results {
+			countMap[r.Application+"/"+r.Status.String()] = r.Count
+		}
+
+		assert.Equal(t, uint64(1), countMap["app1/"+app.AppSessionStatusOpen.String()])
+		assert.Equal(t, uint64(1), countMap["app1/"+app.AppSessionStatusClosed.String()])
+	})
+}

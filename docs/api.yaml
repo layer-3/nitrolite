@@ -279,6 +279,9 @@ types:
         - name: amount
           type: string
           description: Balance amount
+        - name: enforced
+          type: string
+          description: On-chain enforced balance
 
   - transaction_type:
       description: Type of transaction

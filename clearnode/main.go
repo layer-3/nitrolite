@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -75,11 +76,8 @@ func main() {
 	wrapInTx := func(handler func(database.DatabaseStore) error) error {
 		return bb.DbStore.ExecuteInTransaction(handler)
 	}
-	useEHV1StoreInTx := func(h event_handlers.StoreTxHandler) error {
-		return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
-	}
 
-	eventHandlerService := event_handlers.NewEventHandlerService(useEHV1StoreInTx, logger)
+	eventHandlerService := event_handlers.NewEventHandlerService()
 
 	for _, b := range blockchains {
 		rpcURL, ok := bb.BlockchainRPCs[b.ID]
@@ -115,7 +113,11 @@ func main() {
 				logger.Fatal("failed to ensure signature validators are registered", "error", err, "blockchainID", b.ID)
 			}
 
-			reactor := evm.NewChannelHubReactor(b.ID, eventHandlerService, bb.DbStore.StoreContractEvent)
+			useCHRStoreInTx := func(h evm.ChannelHubReactorStoreTxHandler) error {
+				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
+			}
+
+			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
 			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
@@ -140,7 +142,11 @@ func main() {
 				logger.Fatal("failed to create locking client", "error", err, "blockchainID", b.ID)
 			}
 
-			reactor, err := evm.NewLockingContractReactor(b.ID, eventHandlerService, appRegistryClient.GetTokenDecimals, bb.DbStore.StoreContractEvent)
+			useLCRStoreInTx := func(h evm.LockingContractReactorStoreTxHandler) error {
+				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
+			}
+
+			reactor, err := evm.NewLockingContractReactor(b.ID, eventHandlerService, appRegistryClient.GetTokenDecimals, useLCRStoreInTx)
 			if err != nil {
 				logger.Fatal("failed to create app registry reactor", "error", err, "blockchainID", b.ID)
 			}
@@ -340,6 +346,8 @@ func runStoreMetricsExporter(
 		GetChannelsCountByLabels() ([]database.ChannelCount, error)
 		GetAppSessionsCountByLabels() ([]database.AppSessionCount, error)
 		GetTotalValueLocked() ([]database.TotalValueLocked, error)
+		GetNodeBalance() ([]database.NodeBalance, error)
+		GetUserBalanceSummary() ([]database.UserBalanceSummary, error)
 		CountActiveUsers(window time.Duration) ([]database.ActiveCountByLabel, error)
 		CountActiveAppSessions(window time.Duration) ([]database.ActiveCountByLabel, error)
 	},
@@ -384,6 +392,27 @@ func runStoreMetricsExporter(
 			} else {
 				for _, c := range tvlCounts {
 					metricExported.SetTotalValueLocked(c.Domain, c.Asset, c.Value.InexactFloat64())
+				}
+			}
+
+			nodeBalances, err := store.GetNodeBalance()
+			if err != nil {
+				logger.Error("failed to get node balances", "error", err)
+			} else {
+				for _, nb := range nodeBalances {
+					metricExported.SetNodeBalance(nb.BlockchainID, nb.Asset, nb.Value.InexactFloat64())
+				}
+			}
+
+			offChain, err := store.GetUserBalanceSummary()
+			if err != nil {
+				logger.Error("failed to get off-chain liquidity", "error", err)
+			} else {
+				for _, l := range offChain {
+					bid := strconv.FormatUint(l.BlockchainID, 10)
+					metricExported.SetUserBalanceTotal(bid, l.Asset, l.Total.InexactFloat64())
+					metricExported.SetUserBalanceUnderfunded(bid, l.Asset, l.Underfunded.InexactFloat64())
+					metricExported.SetUserBalanceReleasable(bid, l.Asset, l.Releasable.InexactFloat64())
 				}
 			}
 

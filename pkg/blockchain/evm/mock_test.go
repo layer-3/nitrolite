@@ -154,3 +154,8 @@ func (m *MockAssetStore) GetTokenAddress(asset string, blockchainID uint64) (str
 	args := m.Called(asset, blockchainID)
 	return args.String(0), args.Error(1)
 }
+
+func (m *MockAssetStore) GetTokenAsset(blockchainID uint64, tokenAddress string) (string, error) {
+	args := m.Called(blockchainID, tokenAddress)
+	return args.String(0), args.Error(1)
+}

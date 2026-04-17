@@ -208,6 +208,7 @@ export interface SessionKey {
 export interface BalanceEntry {
   asset: string;
   balance: Decimal;
+  enforced: Decimal;
 }
 
 export interface ActionAllowance {

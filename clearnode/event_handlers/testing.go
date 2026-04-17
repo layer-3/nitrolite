@@ -69,6 +69,18 @@ func (m *MockStore) ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uin
 	return args.Error(0)
 }
 
+// SetNodeBalance mocks upserting the on-chain liquidity
+func (m *MockStore) SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error {
+	args := m.Called(blockchainID, asset, value)
+	return args.Error(0)
+}
+
+// RefreshUserEnforcedBalance mocks recomputing the locked balance from DB
+func (m *MockStore) RefreshUserEnforcedBalance(wallet, asset string) error {
+	args := m.Called(wallet, asset)
+	return args.Error(0)
+}
+
 // UpdateUserStaked mocks updating the total staked amount for a user
 func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error {
 	args := m.Called(wallet, blockchainID, amount)

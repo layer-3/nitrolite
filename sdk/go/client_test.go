@@ -117,7 +117,7 @@ func TestClient_GetBalances(t *testing.T) {
 
 	mockResp := rpc.UserV1GetBalancesResponse{
 		Balances: []rpc.BalanceEntryV1{
-			{Asset: "USDC", Amount: "100.0"},
+			{Asset: "USDC", Amount: "100.0", Enforced: "0"},
 		},
 	}
 	mockDialer.RegisterResponse(rpc.UserV1GetBalancesMethod.String(), mockResp)

@@ -9,10 +9,26 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/pkg/core"
 )
+
+// mockLockingStore implements LockingContractReactorStore for testing
+type mockLockingStore struct {
+	mock.Mock
+}
+
+func (m *mockLockingStore) UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error {
+	args := m.Called(wallet, blockchainID, amount)
+	return args.Error(0)
+}
+
+func (m *mockLockingStore) StoreContractEvent(ev core.BlockchainEvent) error {
+	args := m.Called(ev)
+	return args.Error(0)
+}
 
 func TestAppRegistryReactor_HandleLocked(t *testing.T) {
 	userAddr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
@@ -39,23 +55,27 @@ func TestAppRegistryReactor_HandleLocked(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
+		store := new(mockLockingStore)
 		var capturedEvent *core.UserLockedBalanceUpdatedEvent
 		handler := &mockAppRegistryEventHandler{
-			handleFn: func(_ context.Context, ev *core.UserLockedBalanceUpdatedEvent) error {
+			handleFn: func(_ context.Context, _ core.LockingContractEventHandlerStore, ev *core.UserLockedBalanceUpdatedEvent) error {
 				capturedEvent = ev
 				return nil
 			},
 		}
 
-		var storedEvent core.BlockchainEvent
-		storeContractEvent := func(ev core.BlockchainEvent) error {
-			storedEvent = ev
-			return nil
+		useStoreInTx := func(handler LockingContractReactorStoreTxHandler) error {
+			return handler(store)
 		}
+
+		// Expect StoreContractEvent to be called
+		store.On("StoreContractEvent", mock.MatchedBy(func(ev core.BlockchainEvent) bool {
+			return ev.Name == "Locked" && ev.BlockNumber == 100 && ev.BlockchainID == blockchainID
+		})).Return(nil)
 
 		reactor, err := NewLockingContractReactor(blockchainID, handler, func() (uint8, error) {
 			return uint8(tokenDecimals), nil
-		}, storeContractEvent)
+		}, useStoreInTx)
 		require.NoError(t, err)
 
 		var processedSuccess bool
@@ -72,40 +92,43 @@ func TestAppRegistryReactor_HandleLocked(t *testing.T) {
 		assert.True(t, expectedBalance.Equal(capturedEvent.Balance), "expected %s, got %s", expectedBalance, capturedEvent.Balance)
 
 		assert.True(t, processedSuccess)
-		assert.Equal(t, "Locked", storedEvent.Name)
-		assert.Equal(t, uint64(100), storedEvent.BlockNumber)
-		assert.Equal(t, blockchainID, storedEvent.BlockchainID)
+		store.AssertExpectations(t)
 	})
 
 	t.Run("getTokenDecimals error", func(t *testing.T) {
 		handler := &mockAppRegistryEventHandler{
-			handleFn: func(_ context.Context, _ *core.UserLockedBalanceUpdatedEvent) error {
+			handleFn: func(_ context.Context, _ core.LockingContractEventHandlerStore, _ *core.UserLockedBalanceUpdatedEvent) error {
 				t.Fatal("handler should not be called")
 				return nil
 			},
 		}
 
-		storeContractEvent := func(_ core.BlockchainEvent) error { return nil }
+		useStoreInTx := func(handler LockingContractReactorStoreTxHandler) error {
+			return handler(nil)
+		}
 
 		_, err := NewLockingContractReactor(blockchainID, handler, func() (uint8, error) {
 			return 0, assert.AnError
-		}, storeContractEvent)
+		}, useStoreInTx)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get token decimals")
 	})
 
 	t.Run("handler error", func(t *testing.T) {
+		store := new(mockLockingStore)
 		handler := &mockAppRegistryEventHandler{
-			handleFn: func(_ context.Context, _ *core.UserLockedBalanceUpdatedEvent) error {
+			handleFn: func(_ context.Context, _ core.LockingContractEventHandlerStore, _ *core.UserLockedBalanceUpdatedEvent) error {
 				return assert.AnError
 			},
 		}
 
-		storeContractEvent := func(_ core.BlockchainEvent) error { return nil }
+		useStoreInTx := func(handler LockingContractReactorStoreTxHandler) error {
+			return handler(store)
+		}
 
 		reactor, err := NewLockingContractReactor(blockchainID, handler, func() (uint8, error) {
 			return uint8(tokenDecimals), nil
-		}, storeContractEvent)
+		}, useStoreInTx)
 		require.NoError(t, err)
 
 		var processedSuccess bool
@@ -119,9 +142,9 @@ func TestAppRegistryReactor_HandleLocked(t *testing.T) {
 }
 
 type mockAppRegistryEventHandler struct {
-	handleFn func(context.Context, *core.UserLockedBalanceUpdatedEvent) error
+	handleFn func(context.Context, core.LockingContractEventHandlerStore, *core.UserLockedBalanceUpdatedEvent) error
 }
 
-func (m *mockAppRegistryEventHandler) HandleUserLockedBalanceUpdated(ctx context.Context, ev *core.UserLockedBalanceUpdatedEvent) error {
-	return m.handleFn(ctx, ev)
+func (m *mockAppRegistryEventHandler) HandleUserLockedBalanceUpdated(ctx context.Context, tx core.LockingContractEventHandlerStore, ev *core.UserLockedBalanceUpdatedEvent) error {
+	return m.handleFn(ctx, tx, ev)
 }

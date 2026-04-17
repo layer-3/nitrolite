@@ -28,4 +28,7 @@ type MemoryStore interface {
 
 	// GetTokenDecimals returns the decimals for a token on a specific blockchain
 	GetTokenDecimals(blockchainID uint64, tokenAddress string) (uint8, error)
+
+	// GetTokenAsset returns the asset for a token on a specific blockchain
+	GetTokenAsset(blockchainID uint64, tokenAddress string) (string, error)
 }

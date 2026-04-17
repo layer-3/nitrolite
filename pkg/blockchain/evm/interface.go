@@ -6,11 +6,9 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 type HandleEvent func(ctx context.Context, eventLog types.Log) error
-type StoreContractEvent func(ev core.BlockchainEvent) error
 
 // ContractEventGetter is used by Listener for resumption and deduplication.
 type ContractEventGetter interface {
@@ -29,6 +27,9 @@ type AssetStore interface {
 
 	// GetTokenAddress returns the token address for a given asset on a specific blockchain
 	GetTokenAddress(asset string, blockchainID uint64) (string, error)
+
+	// GetTokenAsset returns the asset for a token on a specific blockchain
+	GetTokenAsset(blockchainID uint64, tokenAddress string) (string, error)
 }
 
 type EVMClient interface {

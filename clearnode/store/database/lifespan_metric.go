@@ -247,12 +247,12 @@ func (s *DBStore) SetNodeBalance(blockchainID uint64, asset string, value decima
 		Name:          metricName,
 		Labels:        datatypes.JSON(labelsJSON),
 		Value:         value,
-		LastTimestamp:  now,
+		LastTimestamp: now,
 		UpdatedAt:     now,
 	}
 
 	err = s.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "id"}},
+		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value", "last_timestamp", "updated_at"}),
 	}).Create(&metric).Error
 	if err != nil {
@@ -283,8 +283,10 @@ func (s *DBStore) GetNodeBalance() ([]NodeBalance, error) {
 }
 
 // UserBalanceSummary holds off-chain liquidity metrics for a given blockchain and asset.
+// BlockchainID is kept as a string to match the Prometheus exporter's
+// label type, avoiding conversions at the call site.
 type UserBalanceSummary struct {
-	BlockchainID uint64          `gorm:"column:home_blockchain_id"`
+	BlockchainID string          `gorm:"column:home_blockchain_id"`
 	Asset        string          `gorm:"column:asset"`
 	Total        decimal.Decimal `gorm:"column:total"`
 	Underfunded  decimal.Decimal `gorm:"column:underfunded"`
@@ -292,10 +294,13 @@ type UserBalanceSummary struct {
 }
 
 // GetUserBalanceSummary returns off-chain liquidity metrics per blockchain and asset.
+// Results include rows with home_blockchain_id = 0, representing balances not yet
+// associated with a home blockchain — useful for surfacing funds that aren't
+// attributed to any specific chain.
 func (s *DBStore) GetUserBalanceSummary() ([]UserBalanceSummary, error) {
 	var results []UserBalanceSummary
 	err := s.db.Raw(`
-		SELECT home_blockchain_id, asset,
+		SELECT CAST(home_blockchain_id AS TEXT) AS home_blockchain_id, asset,
 		       SUM(CAST(balance AS DECIMAL)) AS total,
 		       SUM(CASE WHEN CAST(balance AS DECIMAL) > CAST(enforced AS DECIMAL) THEN CAST(balance AS DECIMAL) - CAST(enforced AS DECIMAL) ELSE 0 END) AS underfunded,
 		       SUM(CASE WHEN CAST(enforced AS DECIMAL) > CAST(balance AS DECIMAL) THEN CAST(enforced AS DECIMAL) - CAST(balance AS DECIMAL) ELSE 0 END) AS releasable

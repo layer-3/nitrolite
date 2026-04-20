@@ -272,7 +272,7 @@ func TestGetUserBalanceSummary(t *testing.T) {
 		require.Len(t, results, 1)
 
 		r := results[0]
-		assert.Equal(t, uint64(1), r.BlockchainID)
+		assert.Equal(t, "1", r.BlockchainID)
 		assert.Equal(t, "usdc", r.Asset)
 		assert.True(t, decimal.NewFromInt(350).Equal(r.Total))        // 100+50+200
 		assert.True(t, decimal.NewFromInt(40).Equal(r.Underfunded))   // only user1: 100-60
@@ -295,7 +295,7 @@ func TestGetUserBalanceSummary(t *testing.T) {
 
 		totalMap := make(map[string]decimal.Decimal)
 		for _, r := range results {
-			key := fmt.Sprintf("%d/%s", r.BlockchainID, r.Asset)
+			key := fmt.Sprintf("%s/%s", r.BlockchainID, r.Asset)
 			totalMap[key] = r.Total
 		}
 
@@ -316,13 +316,13 @@ func TestGetUserBalanceSummary(t *testing.T) {
 		results, err := store.GetUserBalanceSummary()
 		require.NoError(t, err)
 
-		totalMap := make(map[uint64]decimal.Decimal)
+		totalMap := make(map[string]decimal.Decimal)
 		for _, r := range results {
 			totalMap[r.BlockchainID] = r.Total
 		}
 
-		assert.True(t, decimal.NewFromInt(100).Equal(totalMap[1]))
-		assert.True(t, decimal.NewFromInt(75).Equal(totalMap[0]))
+		assert.True(t, decimal.NewFromInt(100).Equal(totalMap["1"]))
+		assert.True(t, decimal.NewFromInt(75).Equal(totalMap["0"]))
 	})
 }
 

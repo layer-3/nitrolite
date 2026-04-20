@@ -93,7 +93,7 @@ func (r *LockingContractReactor) HandleEvent(ctx context.Context, l types.Log) e
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	return r.useStoreInTx(func(store LockingContractReactorStore) error {
+	err := r.useStoreInTx(func(store LockingContractReactorStore) error {
 		var err error
 		switch eventID {
 		case lockingContractAbi.Events["Locked"].ID:
@@ -106,9 +106,6 @@ func (r *LockingContractReactor) HandleEvent(ctx context.Context, l types.Log) e
 			err = r.handleWithdrawn(ctx, store, l)
 		default:
 			logger.Warn("unknown event: " + eventID.Hex())
-		}
-		if r.onEventProcessed != nil {
-			r.onEventProcessed(r.blockchainID, err == nil)
 		}
 		if err != nil {
 			logger.Warn("error processing event", "error", err)
@@ -130,6 +127,10 @@ func (r *LockingContractReactor) HandleEvent(ctx context.Context, l types.Log) e
 		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 		return nil
 	})
+	if r.onEventProcessed != nil {
+		r.onEventProcessed(r.blockchainID, err == nil)
+	}
+	return err
 }
 
 func (r *LockingContractReactor) handleLocked(ctx context.Context, store LockingContractReactorStore, l types.Log) error {

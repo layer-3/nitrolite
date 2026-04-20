@@ -143,6 +143,7 @@ func NewMemoryStoreV1(assetsConfig AssetsConfig, blockchainsConfig map[uint64]Bl
 		channelSigValidators: channelSigValidators,
 		supportedAssets:      supportedAssets,
 		tokenAssets:          tokenAssets,
+		tokenDecimals:        tokenDecimals,
 		assetDecimals:        assetDecimals,
 	}, nil
 }

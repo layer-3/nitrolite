@@ -61,6 +61,10 @@ func (s *DBStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 	wallet = strings.ToLower(wallet)
 	asset = strings.ToLower(asset)
 
+	// The protocol enforces at most one open home channel per (user, asset), so
+	// the subquery matches a single row in practice. ORDER BY is added as
+	// defence-in-depth to keep the result deterministic if that invariant is
+	// ever violated.
 	err := s.db.Exec(`
 		UPDATE user_balances
 		SET enforced = COALESCE((
@@ -72,6 +76,7 @@ func (s *DBStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 			  AND c.type = 1
 			  AND c.status <= 1
 			  AND c.state_version > 0
+			ORDER BY c.updated_at DESC
 			LIMIT 1
 		), 0)
 		WHERE user_wallet = ? AND asset = ?

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -409,10 +408,9 @@ func runStoreMetricsExporter(
 				logger.Error("failed to get off-chain liquidity", "error", err)
 			} else {
 				for _, l := range offChain {
-					bid := strconv.FormatUint(l.BlockchainID, 10)
-					metricExported.SetUserBalanceTotal(bid, l.Asset, l.Total.InexactFloat64())
-					metricExported.SetUserBalanceUnderfunded(bid, l.Asset, l.Underfunded.InexactFloat64())
-					metricExported.SetUserBalanceReleasable(bid, l.Asset, l.Releasable.InexactFloat64())
+					metricExported.SetUserBalanceTotal(l.BlockchainID, l.Asset, l.Total.InexactFloat64())
+					metricExported.SetUserBalanceUnderfunded(l.BlockchainID, l.Asset, l.Underfunded.InexactFloat64())
+					metricExported.SetUserBalanceReleasable(l.BlockchainID, l.Asset, l.Releasable.InexactFloat64())
 				}
 			}
 

@@ -9,8 +9,8 @@ config:
     user: clearnode_stress_v1_admin
   envSecret: clearnode-secret-env
   extraEnvs: 
-    CLEARNODE_DATABASE_MAX_OPEN_CONNS: "10"
-    CLEARNODE_DATABASE_MAX_IDLE_CONNS: "2"
+    CLEARNODE_DATABASE_MAX_OPEN_CONNS: "30"
+    CLEARNODE_DATABASE_MAX_IDLE_CONNS: "10"
     CLEARNODE_DATABASE_CONN_MAX_LIFETIME_SEC: "3600"
     CLEARNODE_DATABASE_CONN_MAX_IDLE_TIME_SEC: "600"
     CLEARNODE_SIGNER_TYPE: "gcp-kms"
@@ -44,12 +44,12 @@ metrics:
 
 resources:
   limits:
-    cpu: 200m
-    memory: 200Mi
+    cpu: 500m
+    memory: 512Mi
     ephemeral-storage: 256Mi
   requests:
-    cpu: 200m
-    memory: 200Mi
+    cpu: 500m
+    memory: 512Mi
     ephemeral-storage: 256Mi
 
 autoscaling:

@@ -7,10 +7,10 @@
   "chainId": 84532,
   "contractPath": "src/ChannelHub.sol:ChannelHub",
   "constructorArgs": ["0xCe87FD88F4B5Fd5475d163e2642C5c2c7dD655Ec", "0x2B6dc5BB33F3eaAbfd3A8d17fDb7BdB8fEf331f9"],
-  "libraries": [
-    "src/ChannelEngine.sol:ChannelEngine:0x353A207A7bC822D8d3E58bcA2f3F9E2b90B26e78",
-    "src/EscrowDepositEngine.sol:EscrowDepositEngine:0xb5c2e8BAD7417E654E9087753EC1D08762a06f91",
-    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine:0xaf9F833141094083B9de2cb6AA0f7E1f2d2DEee1"
-  ],
+  "libraries": {
+    "src/ChannelEngine.sol:ChannelEngine": "0x353A207A7bC822D8d3E58bcA2f3F9E2b90B26e78",
+    "src/EscrowDepositEngine.sol:EscrowDepositEngine": "0xb5c2e8BAD7417E654E9087753EC1D08762a06f91",
+    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine": "0xaf9F833141094083B9de2cb6AA0f7E1f2d2DEee1"
+  },
   "comment": "clearnet-stress-v1.2.1"
 }

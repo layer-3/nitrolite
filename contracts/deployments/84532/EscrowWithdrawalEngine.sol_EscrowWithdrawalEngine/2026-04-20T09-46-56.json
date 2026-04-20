@@ -1,7 +1,7 @@
 {
   "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
-  "deployedTo": "0xE749eCF94531A3dDbC5F293B91C9DAbE1Df44a06",
-  "transactionHash": "0x7bb8823f66bdb3f9bef019607214000a7dc0eb0148a523dbce2c6709d42e7a74",
+  "deployedTo": "0xaf9F833141094083B9de2cb6AA0f7E1f2d2DEee1",
+  "transactionHash": "0x93cf089b7e57207fad34690b6525d97b78d4452eadddc3dd979b28224528b89a",
   "commit": "6c0a41d5b08eb6356fd7391536ede1db8d0b6a73",
   "timestamp": 1776678416,
   "chainId": 84532,

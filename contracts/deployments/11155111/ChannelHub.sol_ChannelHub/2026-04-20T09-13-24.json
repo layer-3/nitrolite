@@ -1,0 +1,16 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0x3497229ed24ad7877160923A39B982FEd7a91e31",
+  "transactionHash": "0x54f8602c28e2937a0d52420a605ce41e551e2773a45e1ac141a25941592f9a23",
+  "commit": "6c0a41d5b08eb6356fd7391536ede1db8d0b6a73",
+  "timestamp": 1776676404,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": ["0x165fe1a7d70DcF7594442CA9E2A572aA43b79E07", "0x2b6dc5bb33f3eaabfd3a8d17fdb7bdb8fef331f9"],
+  "libraries": {
+    "src/ChannelEngine.sol:ChannelEngine": "0x353A207A7bC822D8d3E58bcA2f3F9E2b90B26e78",
+    "src/EscrowDepositEngine.sol:EscrowDepositEngine": "0xb5c2e8BAD7417E654E9087753EC1D08762a06f91",
+    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine": "0xaf9F833141094083B9de2cb6AA0f7E1f2d2DEee1"
+  },
+  "comment": "clearnet-stress-v1.2.1"
+}

@@ -5,7 +5,7 @@
   "commit": "6c0a41d5b08eb6356fd7391536ede1db8d0b6a73",
   "timestamp": 1776676404,
   "chainId": 11155111,
-  "contractPath": "src/sigValigators/ECDSAValidator.sol:ECDSAValidator",
+  "contractPath": "src/sigValidators/ECDSAValidator.sol:ECDSAValidator",
   "constructorArgs": [],
   "comment": "clearnet-stress-v1.2.1"
 }

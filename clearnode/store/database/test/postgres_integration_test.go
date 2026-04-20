@@ -113,7 +113,7 @@ func TestPostgres_StateOperations(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state)
+		err := store.StoreUserState(state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, asset, false)
@@ -169,9 +169,9 @@ func TestPostgres_StateOperations(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
-		require.NoError(t, store.StoreUserState(state3))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, store.StoreUserState(state3, ""))
 
 		retrieved, err := store.GetLastUserState(wallet2, asset, false)
 		require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestPostgres_TransactionOperations(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		err := store.RecordTransaction(tx1)
+		err := store.RecordTransaction(tx1, "")
 		require.NoError(t, err)
 
 		transactions, metadata, err := store.GetUserTransactions(wallet, nil, nil, nil, nil, &core.PaginationParams{})
@@ -236,8 +236,8 @@ func TestPostgres_TransactionOperations(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
 
 		assetFilter := "USDC"
 		transactions, _, err := store.GetUserTransactions(wallet2, &assetFilter, nil, nil, nil, &core.PaginationParams{})
@@ -446,8 +446,8 @@ func TestPostgres_UserBalances(t *testing.T) {
 		_, err = store.LockUserState(wallet, "ETH")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
 
 		balances, err := store.GetUserBalances(wallet)
 		require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestPostgres_DecimalPrecision(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state)
+		err := store.StoreUserState(state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, "USDC", false)
@@ -524,7 +524,7 @@ func TestPostgres_DecimalPrecision(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state)
+		err := store.StoreUserState(state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, "ETH", false)

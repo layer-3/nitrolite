@@ -71,6 +71,10 @@ type State struct {
 	UserSig *string `gorm:"column:user_sig;type:text"`
 	NodeSig *string `gorm:"column:node_sig;type:text"`
 
+	// ApplicationID is the self-declared origin tag of the client that caused
+	// this state transition (see rpc.ApplicationIDQueryParam). Advisory only.
+	ApplicationID *string `gorm:"column:application_id;size:66;index:idx_channel_states_app_id"`
+
 	// Read-only fields populated from JOINs with channels table
 	HomeBlockchainID   *uint64 `gorm:"->;column:home_blockchain_id"`
 	HomeTokenAddress   *string `gorm:"->;column:home_token_address"`
@@ -130,10 +134,15 @@ func (s *DBStore) GetLastUserState(wallet, asset string, signed bool) (*core.Sta
 }
 
 // StoreUserState persists a new user state to the database.
-func (s *DBStore) StoreUserState(state core.State) error {
+// applicationID is the client-declared origin tag; empty string → NULL column.
+func (s *DBStore) StoreUserState(state core.State, applicationID string) error {
 	dbState, err := coreStateToDB(&state)
 	if err != nil {
 		return fmt.Errorf("failed to encode transitions while creating a db state: %w", err)
+	}
+
+	if applicationID != "" {
+		dbState.ApplicationID = &applicationID
 	}
 
 	if err := s.db.Create(dbState).Error; err != nil {

@@ -137,6 +137,35 @@ func TestContext_Fail(t *testing.T) {
 	})
 }
 
+func TestGetApplicationID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns empty for nil context", func(t *testing.T) {
+		assert.Equal(t, "", GetApplicationID(nil))
+	})
+
+	t.Run("returns empty for nil storage", func(t *testing.T) {
+		assert.Equal(t, "", GetApplicationID(&Context{}))
+	})
+
+	t.Run("returns empty when unset", func(t *testing.T) {
+		ctx := &Context{Storage: NewSafeStorage()}
+		assert.Equal(t, "", GetApplicationID(ctx))
+	})
+
+	t.Run("returns value when set", func(t *testing.T) {
+		ctx := &Context{Storage: NewSafeStorage()}
+		ctx.Storage.Set(ApplicationIDQueryParam, "my-app")
+		assert.Equal(t, "my-app", GetApplicationID(ctx))
+	})
+
+	t.Run("returns empty when value is not a string", func(t *testing.T) {
+		ctx := &Context{Storage: NewSafeStorage()}
+		ctx.Storage.Set(ApplicationIDQueryParam, 123)
+		assert.Equal(t, "", GetApplicationID(ctx))
+	})
+}
+
 func TestSafeStorage(t *testing.T) {
 	t.Parallel()
 

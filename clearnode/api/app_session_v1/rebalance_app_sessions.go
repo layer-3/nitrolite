@@ -75,6 +75,8 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 	}
 
 	var batchID string
+	// applicationID is the shared application of all rebalanced sessions; enforced below.
+	var applicationID string
 	err := h.useStoreInTx(func(tx Store) error {
 		// Generate deterministic batch ID from session IDs and versions
 		sessionVersions := make([]app.AppSessionVersionV1, len(updates))
@@ -95,13 +97,20 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 		assetTotalDiff := make(map[string]decimal.Decimal)                       // asset -> total change
 
 		// Validate and process each session
-		for _, update := range updates {
+		for i, update := range updates {
 			appSession, err := tx.GetAppSession(update.AppStateUpdate.AppSessionID)
 			if err != nil {
 				return rpc.Errorf("failed to get app session %s: %v", update.AppStateUpdate.AppSessionID, err)
 			}
 			if appSession == nil {
 				return rpc.Errorf("app session not found: %s", update.AppStateUpdate.AppSessionID)
+			}
+
+			// All rebalanced sessions must belong to the same application.
+			if i == 0 {
+				applicationID = appSession.ApplicationID
+			} else if appSession.ApplicationID != applicationID {
+				return rpc.Errorf("cannot rebalance app sessions from different applications: %s vs %s", applicationID, appSession.ApplicationID)
 			}
 			if h.appRegistryEnabled {
 				registeredApp, err := tx.GetApp(appSession.ApplicationID)
@@ -302,7 +311,7 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 					amount,
 				)
 
-				if err := tx.RecordTransaction(*transaction); err != nil {
+				if err := tx.RecordTransaction(*transaction, applicationID); err != nil {
 					return rpc.Errorf("failed to record transaction for session %s: %v", sessionID, err)
 				}
 

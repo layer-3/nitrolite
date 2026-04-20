@@ -114,7 +114,7 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 
 // issueReleaseReceiverState creates a new channel state for a participant receiving funds from app session.
 // This follows the same pattern as issueTransferReceiverState in channel_v1 for transfer_receive transitions.
-func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, receiverWallet, asset, appSessionID string, amount decimal.Decimal) error {
+func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, receiverWallet, asset, appSessionID string, amount decimal.Decimal, applicationID string) error {
 	logger := log.FromContext(ctx)
 
 	// Lock the receiver's state to prevent concurrent modifications
@@ -175,7 +175,7 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 	}
 
 	// Store the new state
-	if err := tx.StoreUserState(*newState); err != nil {
+	if err := tx.StoreUserState(*newState, applicationID); err != nil {
 		return rpc.Errorf("failed to store receiver state: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 		return rpc.Errorf("failed to create transaction: %v", err)
 	}
 
-	if err := tx.RecordTransaction(*transaction); err != nil {
+	if err := tx.RecordTransaction(*transaction, applicationID); err != nil {
 		return rpc.Errorf("failed to record transaction: %v", err)
 	}
 	logger.Info("recorded transaction",

@@ -103,6 +103,11 @@ func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Sign
 	dialer := rpc.NewWebsocketDialer(dialerConfig)
 	rpcClient := rpc.NewClient(dialer)
 
+	dialURL, err := appendApplicationIDQueryParam(wsURL, config.ApplicationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid websocket URL: %w", err)
+	}
+
 	// Create client instance
 	client := &Client{
 		rpcClient:                rpcClient,
@@ -128,7 +133,7 @@ func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Sign
 	}
 
 	// Establish connection
-	err := rpcClient.Start(context.Background(), wsURL, handleError)
+	err = rpcClient.Start(context.Background(), dialURL, handleError)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to clearnode: %w", err)
 	}

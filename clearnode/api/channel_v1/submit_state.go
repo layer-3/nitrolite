@@ -27,6 +27,8 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 		return
 	}
 
+	applicationID := rpc.GetApplicationID(c)
+
 	var nodeSig string
 	incomingTransition := incomingState.Transition
 	err = h.useStoreInTx(func(tx Store) error {
@@ -134,7 +136,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 		// Store user state early — it's fully validated and signed at this point.
 		// The wrapping DB transaction ensures rollback if any subsequent step fails.
-		if err := tx.StoreUserState(incomingState); err != nil {
+		if err := tx.StoreUserState(incomingState, applicationID); err != nil {
 			return rpc.Errorf("failed to store user state: %v", err)
 		}
 
@@ -149,7 +151,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				}
 
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}
@@ -218,7 +220,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				return rpc.Errorf("transition '%s' is not supported by this endpoint", incomingTransition.Type.String())
 			}
 
-			if err := tx.RecordTransaction(*transaction); err != nil {
+			if err := tx.RecordTransaction(*transaction, applicationID); err != nil {
 				return rpc.Errorf("failed to record transaction")
 			}
 

@@ -45,8 +45,8 @@ func (m *MockStore) CheckOpenChannel(wallet, asset string) (string, bool, error)
 	return args.String(0), args.Bool(1), args.Error(2)
 }
 
-func (m *MockStore) StoreUserState(state core.State) error {
-	args := m.Called(state)
+func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
 	return args.Error(0)
 }
 
@@ -60,8 +60,8 @@ func (m *MockStore) ScheduleInitiateEscrowWithdrawal(stateID string, chainID uin
 	return args.Error(0)
 }
 
-func (m *MockStore) RecordTransaction(tx core.Transaction) error {
-	args := m.Called(tx)
+func (m *MockStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
 	return args.Error(0)
 }
 

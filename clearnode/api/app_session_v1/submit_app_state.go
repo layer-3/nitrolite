@@ -118,13 +118,13 @@ func (h *Handler) SubmitAppState(c *rpc.Context) {
 
 		case app.AppStateUpdateIntentWithdraw:
 			// For withdraw intent, validate and record ledger changes
-			if err := h.handleWithdrawIntent(ctx, tx, appStateUpd, currentAllocations, participantWeights); err != nil {
+			if err := h.handleWithdrawIntent(ctx, tx, appStateUpd, currentAllocations, participantWeights, appSession.ApplicationID); err != nil {
 				return err
 			}
 
 		case app.AppStateUpdateIntentClose:
 			// For close intent, validate final allocations and mark session as closed
-			if err := h.handleCloseIntent(ctx, tx, appStateUpd, currentAllocations, participantWeights); err != nil {
+			if err := h.handleCloseIntent(ctx, tx, appStateUpd, currentAllocations, participantWeights, appSession.ApplicationID); err != nil {
 				return err
 			}
 			appSession.Status = app.AppSessionStatusClosed
@@ -311,6 +311,7 @@ func (h *Handler) handleWithdrawIntent(
 	appStateUpd app.AppStateUpdateV1,
 	currentAllocations map[string]map[string]decimal.Decimal,
 	participantWeights map[string]uint8,
+	applicationID string,
 ) error {
 	// Build incoming allocations map for validation
 	incomingAllocations := make(map[string]map[string]decimal.Decimal)
@@ -405,7 +406,7 @@ func (h *Handler) handleWithdrawIntent(
 				}
 
 				// Issue new channel state for participant receiving withdrawn funds
-				if err := h.issueReleaseReceiverState(ctx, tx, participant, asset, appStateUpd.AppSessionID, withdrawAmount); err != nil {
+				if err := h.issueReleaseReceiverState(ctx, tx, participant, asset, appStateUpd.AppSessionID, withdrawAmount, applicationID); err != nil {
 					return rpc.Errorf("failed to issue release state for participant %s: %v", participant, err)
 				}
 			}
@@ -423,6 +424,7 @@ func (h *Handler) handleCloseIntent(
 	appStateUpd app.AppStateUpdateV1,
 	currentAllocations map[string]map[string]decimal.Decimal,
 	participantWeights map[string]uint8,
+	applicationID string,
 ) error {
 	// Build a map of incoming allocations for easy lookup
 	incomingAllocations := make(map[string]map[string]decimal.Decimal)
@@ -516,7 +518,7 @@ func (h *Handler) handleCloseIntent(
 			}
 
 			// Issue new channel state for participant receiving funds back
-			if err := h.issueReleaseReceiverState(ctx, tx, participant, asset, appStateUpd.AppSessionID, amount); err != nil {
+			if err := h.issueReleaseReceiverState(ctx, tx, participant, asset, appStateUpd.AppSessionID, amount, applicationID); err != nil {
 				return rpc.Errorf("failed to issue release state for participant %s: %v", participant, err)
 			}
 		}

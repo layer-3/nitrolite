@@ -73,8 +73,8 @@ func (m *MockStore) RecordLedgerEntry(userWallet, accountID, asset string, amoun
 	return args.Error(0)
 }
 
-func (m *MockStore) RecordTransaction(tx core.Transaction) error {
-	args := m.Called(tx)
+func (m *MockStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
 	return args.Error(0)
 }
 
@@ -97,8 +97,8 @@ func (m *MockStore) GetLastUserState(wallet, asset string, signed bool) (*core.S
 	return &state, args.Error(1)
 }
 
-func (m *MockStore) StoreUserState(state core.State) error {
-	args := m.Called(state)
+func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
 	return args.Error(0)
 }
 

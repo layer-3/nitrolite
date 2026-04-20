@@ -35,7 +35,7 @@ func TestDBStore_RecordTransaction(t *testing.T) {
 			CreatedAt:          time.Now(),
 		}
 
-		err := store.RecordTransaction(tx)
+		err := store.RecordTransaction(tx, "")
 		require.NoError(t, err)
 
 		// Verify transaction was recorded
@@ -75,7 +75,7 @@ func TestDBStore_RecordTransaction(t *testing.T) {
 			CreatedAt:          time.Now(),
 		}
 
-		err := store.RecordTransaction(tx)
+		err := store.RecordTransaction(tx, "")
 		require.NoError(t, err)
 
 		// Verify transaction was recorded
@@ -107,11 +107,11 @@ func TestDBStore_RecordTransaction(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		err := store.RecordTransaction(tx)
+		err := store.RecordTransaction(tx, "")
 		require.NoError(t, err)
 
 		// Try to record again with same ID
-		err = store.RecordTransaction(tx)
+		err = store.RecordTransaction(tx, "")
 		assert.Error(t, err)
 	})
 }
@@ -154,9 +154,9 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
-		require.NoError(t, store.RecordTransaction(tx3))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
+		require.NoError(t, store.RecordTransaction(tx3, ""))
 
 		// Get all transactions for user123
 		pagination := &core.PaginationParams{}
@@ -198,8 +198,8 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
 
 		// Filter by USDC
 		asset := "USDC"
@@ -240,8 +240,8 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
 
 		// Filter by deposit type
 		txType := core.TransactionTypeHomeDeposit
@@ -294,9 +294,9 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   baseTime.Add(-1 * time.Second),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
-		require.NoError(t, store.RecordTransaction(tx3))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
+		require.NoError(t, store.RecordTransaction(tx3, ""))
 
 		// Filter from 2 hours ago to now
 		fromTime := uint64(baseTime.Add(-2 * time.Hour).Unix())
@@ -327,7 +327,7 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 				Amount:      decimal.NewFromInt(int64(i * 100)),
 				CreatedAt:   time.Now().Add(time.Duration(i) * time.Minute),
 			}
-			require.NoError(t, store.RecordTransaction(tx))
+			require.NoError(t, store.RecordTransaction(tx, ""))
 		}
 
 		// Get first page (2 items)
@@ -405,10 +405,10 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   baseTime,
 		}
 
-		require.NoError(t, store.RecordTransaction(tx1))
-		require.NoError(t, store.RecordTransaction(tx2))
-		require.NoError(t, store.RecordTransaction(tx3))
-		require.NoError(t, store.RecordTransaction(tx4))
+		require.NoError(t, store.RecordTransaction(tx1, ""))
+		require.NoError(t, store.RecordTransaction(tx2, ""))
+		require.NoError(t, store.RecordTransaction(tx3, ""))
+		require.NoError(t, store.RecordTransaction(tx4, ""))
 
 		// Filter: USDC + Deposit + from 1 hour ago
 		asset := "USDC"
@@ -455,7 +455,7 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 
-		require.NoError(t, store.RecordTransaction(tx))
+		require.NoError(t, store.RecordTransaction(tx, ""))
 
 		pagination := &core.PaginationParams{}
 		transactions, metadata, err := store.GetUserTransactions("0xuser123", nil, nil, nil, nil, pagination)
@@ -465,5 +465,52 @@ func TestDBStore_GetUserTransactions(t *testing.T) {
 		assert.Equal(t, uint32(1), metadata.TotalCount)
 		assert.Equal(t, "tx1", transactions[0].ID)
 		assert.Equal(t, "0xuser123", transactions[0].ToAccount)
+	})
+
+	t.Run("ApplicationID is persisted when provided", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		tx := core.Transaction{
+			ID:          "txapp1",
+			Asset:       "USDC",
+			TxType:      core.TransactionTypeHomeDeposit,
+			FromAccount: "0xuserapp",
+			ToAccount:   "0xchannelapp",
+			Amount:      decimal.NewFromInt(500),
+			CreatedAt:   time.Now(),
+		}
+
+		require.NoError(t, store.RecordTransaction(tx, "my-app"))
+
+		var dbTx Transaction
+		require.NoError(t, db.Where("id = ?", "txapp1").First(&dbTx).Error)
+		require.NotNil(t, dbTx.ApplicationID)
+		assert.Equal(t, "my-app", *dbTx.ApplicationID)
+	})
+
+	t.Run("ApplicationID is NULL when empty", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		tx := core.Transaction{
+			ID:          "txnoapp",
+			Asset:       "USDC",
+			TxType:      core.TransactionTypeHomeDeposit,
+			FromAccount: "0xusernoapp",
+			ToAccount:   "0xchannelnoapp",
+			Amount:      decimal.NewFromInt(500),
+			CreatedAt:   time.Now(),
+		}
+
+		require.NoError(t, store.RecordTransaction(tx, ""))
+
+		var dbTx Transaction
+		require.NoError(t, db.Where("id = ?", "txnoapp").First(&dbTx).Error)
+		assert.Nil(t, dbTx.ApplicationID)
 	})
 }

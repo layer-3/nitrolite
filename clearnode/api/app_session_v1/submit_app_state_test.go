@@ -352,13 +352,13 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
-	mockStore.On("RecordTransaction", mock.Anything).Return(nil)
+	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		capturedState = state
 		return true
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
 		return session.Version == 2 && session.Status == app.AppSessionStatusOpen
@@ -640,7 +640,7 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState1, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
-	mockStore.On("RecordTransaction", mock.Anything).Return(nil)
+	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
 	// Participant 2: 50 USDC
 	mockStore.On("RecordLedgerEntry", participant2, appSessionID, "USDC", decimal.NewFromInt(-50)).Return(nil)
@@ -653,7 +653,7 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		capturedStates = append(capturedStates, state)
 		return true
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
 		return session.Version == 2 && session.Status == app.AppSessionStatusClosed
@@ -989,8 +989,8 @@ func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) 
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil).Maybe()
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(nil, nil).Maybe()
 	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil).Maybe()
-	mockStore.On("StoreUserState", mock.Anything).Return(nil).Maybe()
-	mockStore.On("RecordTransaction", mock.Anything).Return(nil).Maybe()
+	mockStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)

@@ -288,7 +288,7 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 		nodeSig = _nodeSig.String()
 		userState.NodeSig = &nodeSig
 
-		if err := tx.StoreUserState(userState); err != nil {
+		if err := tx.StoreUserState(userState, appSession.ApplicationID); err != nil {
 			return rpc.Errorf("failed to store user state: %v", err)
 		}
 
@@ -297,7 +297,7 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			return rpc.Errorf("failed to create transaction: %v", err)
 		}
 
-		if err := tx.RecordTransaction(*transaction); err != nil {
+		if err := tx.RecordTransaction(*transaction, appSession.ApplicationID); err != nil {
 			return rpc.Errorf("failed to record transaction: %v", err)
 		}
 		logger.Info("recorded transaction",

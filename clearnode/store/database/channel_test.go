@@ -234,7 +234,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -295,7 +295,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -341,7 +341,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -369,7 +369,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -418,7 +418,7 @@ func TestDBStore_CheckOpenChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		approvedSigValidators, hasOpenChannel, err := store.CheckOpenChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -477,7 +477,7 @@ func TestDBStore_CheckOpenChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		approvedSigValidators, hasOpenChannel, err := store.CheckOpenChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -524,7 +524,7 @@ func TestDBStore_CheckOpenChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		// Check for different asset
 		approvedSigValidators, hasOpenChannel, err := store.CheckOpenChannel("0xuser123", "ETH")

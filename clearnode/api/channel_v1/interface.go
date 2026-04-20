@@ -32,7 +32,9 @@ type Store interface {
 	CheckOpenChannel(wallet, asset string) (string, bool, error)
 
 	// StoreUserState persists a new user state to the database.
-	StoreUserState(state core.State) error
+	// applicationID is the client-declared origin tag (rpc.ApplicationIDQueryParam);
+	// empty string is persisted as NULL.
+	StoreUserState(state core.State, applicationID string) error
 
 	// EnsureNoOngoingStateTransitions validates that no blockchain operations are pending
 	// that would conflict with submitting a new state transition.
@@ -44,7 +46,9 @@ type Store interface {
 
 	// RecordTransaction creates a transaction record linking state transitions
 	// to track the history of operations (deposits, withdrawals, transfers, etc.).
-	RecordTransaction(tx core.Transaction) error
+	// applicationID is the client-declared origin tag (rpc.ApplicationIDQueryParam);
+	// empty string is persisted as NULL.
+	RecordTransaction(tx core.Transaction, applicationID string) error
 
 	// CreateChannel creates a new channel entity in the database.
 	// This is called during channel creation before the channel exists on-chain.

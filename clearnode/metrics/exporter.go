@@ -176,17 +176,17 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Namespace: MetricNamespace,
 			Name:      "user_states_total",
 			Help:      "Total number of user states",
-		}, []string{"asset", "home_blockchain_id", "transition"}),
+		}, []string{"asset", "home_blockchain_id", "transition", "application_id"}),
 		transactionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_total",
 			Help:      "Total number of transactions",
-		}, []string{"asset", "tx_type"}),
+		}, []string{"asset", "tx_type", "application_id"}),
 		transactionsAmountTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_amount_total",
 			Help:      "Total amount of transactions processed",
-		}, []string{"asset", "tx_type"}),
+		}, []string{"asset", "tx_type", "application_id"}),
 		channelSessionKeysTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "channel_session_keys_total",
@@ -278,14 +278,15 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 }
 
 // Shared
-func (m *runtimeMetricExporter) IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType) {
+func (m *runtimeMetricExporter) IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType, applicationID string) {
 	homeBlockchainIDStr := strconv.FormatUint(homeBlockchainID, 10)
-	m.userStatesTotal.WithLabelValues(asset, homeBlockchainIDStr, transition.String()).Inc()
+	m.userStatesTotal.WithLabelValues(asset, homeBlockchainIDStr, transition.String(), getApplicationIDLabelValue(applicationID)).Inc()
 }
 
-func (m *runtimeMetricExporter) RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal) {
-	m.transactionsTotal.WithLabelValues(asset, txType.String()).Inc()
-	m.transactionsAmountTotal.WithLabelValues(asset, txType.String()).Add(amount.InexactFloat64())
+func (m *runtimeMetricExporter) RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal, applicationID string) {
+	appIDLabelValue := getApplicationIDLabelValue(applicationID)
+	m.transactionsTotal.WithLabelValues(asset, txType.String(), appIDLabelValue).Inc()
+	m.transactionsAmountTotal.WithLabelValues(asset, txType.String(), appIDLabelValue).Add(amount.InexactFloat64())
 }
 
 // api/rpc_router

@@ -210,6 +210,7 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer wsConnection.Close()
 
 	connectionID := uuid.NewString()
+	applicationID := r.URL.Query().Get(ApplicationIDQueryParam)
 
 	connConfig := WebsocketConnectionConfig{
 		ConnectionID:      connectionID,
@@ -247,7 +248,7 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go connection.Serve(parentCtx, childHandleClosure)
-	go wn.processRequests(connection, parentCtx, childHandleClosure)
+	go wn.processRequests(connection, applicationID, parentCtx, childHandleClosure)
 
 	wg.Wait()
 }
@@ -264,9 +265,12 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // The method runs until the connection closes or the context is cancelled.
 // Each connection has its own SafeStorage instance for maintaining state
 // across requests.
-func (wn *WebsocketNode) processRequests(conn Connection, parentCtx context.Context, handleClosure func(error)) {
+func (wn *WebsocketNode) processRequests(conn Connection, applicationID string, parentCtx context.Context, handleClosure func(error)) {
 	defer handleClosure(nil) // Stop other goroutines when done
 	safeStorage := NewSafeStorage()
+	if applicationID != "" {
+		safeStorage.Set(ApplicationIDQueryParam, applicationID)
+	}
 
 	for {
 		var messageBytes []byte

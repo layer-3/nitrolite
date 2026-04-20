@@ -23,7 +23,8 @@ export {
   type Option,
   withHandshakeTimeout,
   withErrorHandler,
-  withBlockchainRPC
+  withBlockchainRPC,
+  withApplicationID
 } from './config.js';
 
 // Export asset store

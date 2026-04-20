@@ -23,7 +23,9 @@ type Store interface {
 	// Ledger operations
 	RecordLedgerEntry(userWallet, accountID, asset string, amount decimal.Decimal) error
 
-	RecordTransaction(tx core.Transaction) error
+	// RecordTransaction records a transaction. applicationID is the client-declared
+	// origin tag (rpc.ApplicationIDQueryParam); empty string is persisted as NULL.
+	RecordTransaction(tx core.Transaction, applicationID string) error
 
 	// Channel state operations
 
@@ -35,7 +37,9 @@ type Store interface {
 	// and returns the approved signature validators if such a channel exists.
 	CheckOpenChannel(wallet, asset string) (string, bool, error)
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
-	StoreUserState(state core.State) error
+	// StoreUserState persists a user state. applicationID is the client-declared
+	// origin tag (rpc.ApplicationIDQueryParam); empty string is persisted as NULL.
+	StoreUserState(state core.State, applicationID string) error
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
 	// App Session key state operations

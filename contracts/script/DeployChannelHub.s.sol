@@ -93,9 +93,8 @@ contract DeployChannelHub is Script {
         // ----------------------------------------------------------------
         // Summary
         // ----------------------------------------------------------------
-        string memory broadcastFile = string.concat(
-            "broadcast/DeployChannelHub.s.sol/", vm.toString(block.chainid), "/run-latest.json"
-        );
+        string memory broadcastFile =
+            string.concat("broadcast/DeployChannelHub.s.sol/", vm.toString(block.chainid), "/run-latest.json");
 
         console.log("");
         console.log("=== Deployment complete ===");

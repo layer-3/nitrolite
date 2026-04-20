@@ -16,7 +16,7 @@ Nitrolite is a complete state channel infrastructure consisting of several main 
 2.  **Clearnode**: A broker providing ledger services and off-chain state management.
 3.  **Go SDK**: Comprehensive Go library for building backend and CLI applications.
 4.  **TypeScript SDK**: Client-side library for building web and mobile applications.
-5.  **Cerebro (CLI)**: Interactive command-line interface for managing channels and assets.
+5.  **Cerebro**: REPL for managing channels and assets.
 
 ### Key Benefits
 
@@ -34,7 +34,7 @@ This repository contains:
 - **[`/clearnode`](/clearnode)**: Implementation of the Clearnode service.
 - **[`/sdk/go`](/sdk/go)**: Official Go SDK.
 - **[`/sdk/ts`](/sdk/ts)**: Official TypeScript SDK.
-- **[`/cerebro`](/cerebro)**: Clearnode CLI tool.
+- **[`/cerebro`](/cerebro)**: Cerebro REPL.
 - **[`/pkg`](/pkg)**: Shared Go packages (core state machine, signing, etc.).
 - **[`/docs`](/docs)**: Protocol specifications and architectural documentation.
 
@@ -100,31 +100,16 @@ npm install @layer-3/nitrolite
 ```
 See [SDK TS README](/sdk/ts/README.md).
 
-## Cerebro (CLI)
+## Cerebro
 
-Interactive CLI for interacting with Clearnode.
+REPL for interacting with Clearnode.
 
 ```bash
 # From the root directory
-go build -o nitrolite-cli ./cerebro
-./nitrolite-cli wss://node.example.com/ws
+go build -o cerebro ./cerebro
+./cerebro wss://node.example.com/ws
 ```
 See [Cerebro README](/cerebro/README.md).
-
-## Quick Start with Docker Compose
-
-Get started quickly with the local development environment:
-
-```bash
-# Start the environment
-docker-compose up -d
-
-# This will:
-# 1. Start a local Anvil blockchain on port 8545
-# 2. Deploy core Nitrolite contracts
-# 3. Seed test tokens and configuration
-# 4. Start the Clearnode service.
-```
 
 ## Development
 

@@ -35,7 +35,7 @@ func readSecure() string {
 
 func (o *Operator) showHelp() {
 	fmt.Println(`
-Clearnode CLI - SDK Development Tool
+Cerebro - Nitrolite SDK Development Tool
 =====================================
 
 CONFIGURATION

@@ -36,7 +36,7 @@ jobs:
         run: npm run typecheck
         working-directory: ${{ inputs.project-path }}
 
-      - name: Run tests
+      - name: Test
         run: npm test
         working-directory: ${{ inputs.project-path }}
 
@@ -45,5 +45,5 @@ jobs:
         working-directory: ${{ inputs.project-path }}
 
       - name: Build
-        run: npm run build
+        run: npm run build:ci
         working-directory: ${{ inputs.project-path }}

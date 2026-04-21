@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDir, '../../../..');
 
+// This guard intentionally parses rpc_router.go with regex. If router registration
+// is refactored away from direct Handle(rpc.XxxMethod.String(), ...) calls, update
+// extractRouterHandlers rather than treating the resulting failure as protocol drift.
 function extractGoMethodLiterals(source: string): Set<string> {
     const matches = source.matchAll(/^\s*[A-Za-z0-9]+Method\s+Method\s*=\s*"([^"]+)"$/gm);
     return new Set(Array.from(matches, ([, method]) => method));

@@ -37,6 +37,8 @@ await client.withdrawal(tokenAddress, amount);
 
 ## 3. Channel Operations
 
+Legacy channel helper imports may still exist to keep migration moving, but the supported path is the compat client methods below. Do not treat every legacy helper name as a protocol-backed one-to-one v1 RPC.
+
 | Operation | v0.5.3 | Compat |
 |-----------|--------|--------|
 | Create | Explicit `createChannel()` | Implicit on first `deposit()` |
@@ -64,7 +66,7 @@ const amount = 11_000_000n; // 11 USDC (6 decimals)
 // Manual conversion for display: formatUnits(amount, 6)
 ```
 
-**After (compat):** Accepts both; conversion handled internally
+**After (compat):** App-facing methods still accept raw token amounts, and the compat layer handles the conversion needed to call the v1 SDK correctly
 
 ```typescript
 // Raw BigInt still works

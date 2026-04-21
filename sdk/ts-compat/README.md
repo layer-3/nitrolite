@@ -2,16 +2,25 @@
 
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk-compat.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
-Compatibility layer that bridges the Nitrolite SDK **v0.5.3 API** to the **v1.0.0 runtime**, letting existing dApps upgrade to the new protocol with minimal code changes.
+`@yellow-org/sdk-compat` is a migration layer that preserves selected Nitrolite SDK **v0.5.3 app-facing APIs** over the **v1 runtime**.
 
-- Keep v0.5.3-style app-facing calls in your code.
+- Keep supported v0.5.3-style app-facing calls in your code.
 - Run them through `@yellow-org/sdk-compat`, backed by `@yellow-org/sdk`.
+- Treat it as a migration aid, not a drop-in replacement for the full published v0.5.3 package.
+
+## Compatibility Scope
+
+`@yellow-org/sdk-compat` is intentionally narrower than the published v0.5.3 package surface.
+
+- **Preserved app-facing APIs**: the `NitroliteClient` facade, selected auth helpers, app-session signing helpers, and many app-facing types remain available for supported migration paths.
+- **Transitional helper surfaces**: many legacy `create*Message` / `parse*Response` exports remain so imports can keep compiling during migration, but several are transitional shims rather than one-to-one v1 RPC mappings.
+- **Unsupported full-package parity**: low-level internals, broad root-export parity, and every legacy helper being runtime-faithful are not promised by this package.
 
 ## Why
 
-The v1.0.0 protocol introduces breaking changes across 14 dimensions — wire format, authentication, WebSocket lifecycle, unit system, asset resolution, and more. A direct migration touches 20+ files per app with deep, scattered rewrites.
+The v1 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, asset resolution, and more. For apps built around the old surface, a direct migration can require scattered rewrites across transport, signing, and amount-handling paths.
 
-The compat layer centralises this complexity into **~1,000 lines** that absorb the protocol differences, reducing per-app integration effort by an estimated **56–70%**.
+The compat layer centralizes the supported migration paths into one package so app code can move to client-level methods incrementally instead of rewriting every call site at once.
 
 ## Build Size
 
@@ -32,7 +41,7 @@ npm pack --dry-run --json
 
 ## Migration Guide
 
-Step-by-step guides for migrating from v0.5.3:
+Step-by-step guides for migrating supported app-facing paths from v0.5.3:
 
 - [Overview & Quick Start](./docs/migration-overview.md) — pattern changes, import swaps
 - [On-Chain Changes](./docs/migration-onchain.md) — deposits, withdrawals, channels
@@ -65,7 +74,7 @@ const client = await NitroliteClient.create({
 
 ### 2. Deposit & create a channel
 
-In v1.0.0, channel creation is implicit on deposit — no separate `createChannel()` call needed:
+In v1, channel creation is implicit on deposit — no separate `createChannel()` call needed:
 
 ```typescript
 const tokenAddress = '0x6E2C4707DA119425DF2C722E2695300154652F56'; // USDC on Sepolia
@@ -211,9 +220,9 @@ await client.close();
 | `waitForClose()` | Returns a promise that resolves when the connection is closed |
 | `refreshAssets()` | Re-fetch the asset map from the clearnode |
 
-### Accessing the v1.0.0 SDK Directly
+### Accessing the v1 SDK Directly
 
-The underlying v1.0.0 `Client` is exposed for advanced use cases not covered by the compat surface:
+The underlying v1 `Client` is exposed for advanced use cases not covered by the compat surface:
 
 ```typescript
 const v1Client = client.innerClient;
@@ -253,7 +262,7 @@ NEXT_PUBLIC_BLOCKCHAIN_RPCS=11155111:https://rpc.sepolia.io,1:https://mainnet.in
 
 ### `WalletStateSigner`
 
-A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1.0.0 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
+A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
 
 ```typescript
 import { WalletStateSigner } from '@yellow-org/sdk-compat';
@@ -317,7 +326,7 @@ try {
 
 ## Event Polling
 
-v0.5.3 used server-push WebSocket events. v1.0.0 uses a polling model. The `EventPoller` bridges this gap:
+v0.5.3 used server-push WebSocket events. v1 uses a polling model. The `EventPoller` bridges this gap:
 
 ```typescript
 import { EventPoller } from '@yellow-org/sdk-compat';
@@ -377,12 +386,12 @@ The compat layer accepts raw amounts (smallest token unit) and converts to human
 
 ## RPC Stubs
 
-The following functions exist so that any remaining v0.5.3 `create*Message` / `parse*Response` imports compile.
-`create*` helpers are mostly placeholders; `parse*` helpers perform lightweight normalization of known response shapes.
-Prefer calling `NitroliteClient` methods directly for new integrations:
+The following functions remain exported primarily so legacy `create*Message` / `parse*Response` imports can keep compiling while an app migrates.
+Many `create*` helpers are transitional shims rather than protocol-backed one-to-one v1 RPC mappings, and `parse*` helpers only do lightweight normalization of known response shapes.
+Prefer `NitroliteClient` methods directly for new integrations:
 
 ```typescript
-// These compile but do nothing meaningful:
+// Transitional compat exports:
 createGetChannelsMessage, parseGetChannelsResponse,
 createGetLedgerBalancesMessage, parseGetLedgerBalancesResponse,
 parseGetLedgerEntriesResponse, parseGetAppSessionsResponse,
@@ -462,7 +471,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 
 ### `buildClientOptions`
 
-Converts a `CompatClientConfig` into v1.0.0 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
+Converts a `CompatClientConfig` into v1 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
 
 ```typescript
 import { buildClientOptions, type CompatClientConfig } from '@yellow-org/sdk-compat';
@@ -491,7 +500,7 @@ const nextConfig = {
 
 | Package | Version |
 |---|---|
-| `@yellow-org/sdk` | `>=1.0.0` |
+| `@yellow-org/sdk` | `>=1.2.0` |
 | `viem` | `^2.0.0` |
 
 ## License

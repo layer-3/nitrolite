@@ -9,7 +9,7 @@ export interface EventPollerCallbacks {
 }
 
 /**
- * Polls the v1.0.0 Client for state changes and dispatches synthetic events
+ * Polls the v1 Client for state changes and dispatches synthetic events
  * that match the v0.5.3 push event shapes.
  */
 export class EventPoller {

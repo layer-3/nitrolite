@@ -1,10 +1,10 @@
 # Off-Chain Migration Guide
 
-This guide covers off-chain operations when migrating from v0.5.3 to the compat layer: authentication, app sessions, transfers, ledger queries, event polling, and RPC compatibility helpers.
+This guide covers off-chain operations when migrating from v0.5.3 to the compat layer: authentication, app sessions, transfers, ledger queries, event polling, and transitional RPC helper imports.
 
 ## 1. Authentication
 
-v1.0.0 handles authentication internally when using `NitroliteClient`. For legacy WebSocket-auth code paths, the compat layer keeps `createAuthRequestMessage`, `createAuthVerifyMessage`, `createAuthVerifyMessageWithJWT`, and `createEIP712AuthMessageSigner` available.
+v1 handles authentication internally when using `NitroliteClient`. For legacy WebSocket-auth code paths, the compat layer keeps `createAuthRequestMessage`, `createAuthVerifyMessage`, `createAuthVerifyMessageWithJWT`, and `createEIP712AuthMessageSigner` available.
 
 ## 2. App Sessions
 
@@ -54,7 +54,7 @@ await sendRequest(msg);
 
 ## 5. Event Polling
 
-v0.5.3 used WebSocket push events (`ChannelUpdate`, `BalanceUpdate`). v1.0.0 uses polling. The compat layer provides `EventPoller`:
+v0.5.3 used WebSocket push events (`ChannelUpdate`, `BalanceUpdate`). v1 uses polling. The compat layer provides `EventPoller`:
 
 ```typescript
 import { EventPoller } from '@yellow-org/sdk-compat';
@@ -70,4 +70,4 @@ poller.start();
 
 ## 6. RPC Compatibility Helpers
 
-The `create*Message` and `parse*Response` functions still exist so existing imports compile. Most `create*Message` helpers are transitional placeholders; prefer `NitroliteClient` methods directly for new code. Examples: `createGetChannelsMessage`, `parseGetChannelsResponse`, `createTransferMessage`, `createAppSessionMessage`, `createCloseAppSessionMessage`, etc.
+The `create*Message` and `parse*Response` exports still exist primarily so legacy imports can keep compiling while you migrate call sites. Treat them as transitional compatibility shims, not as proof of full one-to-one v1 RPC coverage. For new code, prefer `NitroliteClient` methods directly. Examples: `createGetChannelsMessage`, `parseGetChannelsResponse`, `createTransferMessage`, `createAppSessionMessage`, `createCloseAppSessionMessage`, etc.

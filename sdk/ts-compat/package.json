@@ -1,7 +1,7 @@
 {
     "name": "@yellow-org/sdk-compat",
     "version": "1.2.0",
-    "description": "Compatibility layer bridging Nitrolite SDK v0.5.3 API to v1.0.0, minimising migration effort for existing dApps.",
+    "description": "Curated migration layer preserving selected Nitrolite SDK v0.5.3 app-facing APIs over the v1 runtime.",
     "type": "module",
     "sideEffects": false,
     "main": "dist/index.js",
@@ -13,6 +13,8 @@
     "scripts": {
         "build": "tsc",
         "build:prod": "tsc -p tsconfig.prod.json",
+        "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs",
+        "lint": "eslint src test",
         "typecheck": "tsc --noEmit",
         "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
     },
@@ -42,8 +44,14 @@
         "decimal.js": "^10.4.3"
     },
     "devDependencies": {
+        "@types/jest": "30.0.0",
         "@yellow-org/sdk": "file:../ts",
+        "@typescript-eslint/eslint-plugin": "^8.55.0",
+        "@typescript-eslint/parser": "^8.55.0",
         "@types/node": "^25.3.0",
+        "eslint": "^10.0.0",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.1.2",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
         "viem": "^2.46.2"

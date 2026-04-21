@@ -34,7 +34,16 @@ function extractRouterHandlers(source: string): Set<string> {
         )
     );
 
-    return new Set(methodNames.map((name) => namedLiterals.get(name)).filter(Boolean) as string[]);
+    const unresolvedMethodNames = methodNames.filter((name) => !namedLiterals.has(name));
+    if (unresolvedMethodNames.length > 0) {
+        throw new Error(
+            `rpc_router.go references unresolved rpc method constants: ${unresolvedMethodNames.join(
+                ', '
+            )}`
+        );
+    }
+
+    return new Set(methodNames.map((name) => namedLiterals.get(name) as string));
 }
 
 function sorted(values: Set<string>): string[] {

@@ -2,7 +2,6 @@ import * as compat from '../../src/index.js';
 import { blockchainRPCsFromEnv, buildClientOptions } from '../../src/config.js';
 
 type SDKConfig = {
-    url: string;
     blockchainRPCs?: Map<bigint, string>;
 };
 
@@ -39,11 +38,8 @@ describe('compat root barrel config helpers', () => {
             11155111: 'https://rpc.sepolia.example',
         });
 
-        const config: SDKConfig = { url: 'wss://clearnode.example/ws' };
-        const opts = buildClientOptions({
-            wsURL: config.url,
-            blockchainRPCs: mappings,
-        });
+        const config: SDKConfig = {};
+        const opts = buildClientOptions({ blockchainRPCs: mappings });
         expect(opts).toHaveLength(2);
         for (const opt of opts) {
             opt(config);

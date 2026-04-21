@@ -500,7 +500,7 @@ const nextConfig = {
 
 | Package | Version |
 |---|---|
-| `@yellow-org/sdk` | `>=1.0.0` |
+| `@yellow-org/sdk` | `>=1.2.0` |
 | `viem` | `^2.0.0` |
 
 ## License

@@ -1,8 +1,12 @@
 // =============================================================================
 // @yellow-org/sdk-compat barrel export
 //
-// Re-exports everything apps previously imported from '@layer-3/nitrolite'
-// (v0.5.3) but backed by the v1.0.0+ SDK (@yellow-org/sdk).
+// Curated migration-layer exports for apps moving off '@layer-3/nitrolite'
+// (v0.5.3) onto the v1.0.0+ runtime (@yellow-org/sdk).
+//
+// This barrel preserves selected app-facing surfaces. It is not full package
+// parity with the published v0.5.3 package, and it is not a promise that every
+// legacy helper here is a runtime-faithful one-to-one v1 protocol mapping.
 // =============================================================================
 
 // --- Client facade ---

@@ -1,12 +1,10 @@
 # Migrating from v0.5.3 to Compat Layer
 
-This guide explains how to migrate your Nitrolite dApp from the v0.5.3 SDK to the **compat layer**, which bridges the old API to the v1.0.0 runtime with minimal code changes.
+This guide explains how to migrate your Nitrolite dApp from the v0.5.3 SDK to the **compat layer**, a curated migration layer that preserves selected app-facing APIs over the v1.0.0 runtime.
 
 ## 1. Why Use the Compat Layer
 
-The v1.0.0 protocol introduces breaking changes across wire format, authentication, WebSocket lifecycle, unit system, asset resolution, and more. A direct migration touches **20+ files** per app with deep, scattered rewrites.
-
-The compat layer centralises this complexity into **~5 file changes** per app. Instead of rewriting every RPC call, you swap imports and replace the `create-sign-send-parse` pattern with direct client method calls.
+The v1.0.0 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, and asset resolution. Instead of rewriting every RPC call at once, the compat layer lets supported app-facing paths move over incrementally by swapping imports and replacing the `create-sign-send-parse` pattern with direct client method calls.
 
 ## 2. Installation
 
@@ -21,9 +19,9 @@ npm install @yellow-org/sdk viem
 | Before (v0.5.3) | After (compat) |
 |-----------------|----------------|
 | `import { createGetChannelsMessage, parseGetChannelsResponse } from '@layer-3/nitrolite'` | `import { NitroliteClient } from '@yellow-org/sdk-compat'` |
-| Types: `AppSession`, `LedgerChannel`, `RPCAppDefinition` | Same types — re-exported from `@yellow-org/sdk-compat` |
+| Types: `AppSession`, `LedgerChannel`, `RPCAppDefinition` | Many app-facing types remain re-exported from `@yellow-org/sdk-compat` |
 
-For **types**, just change the package name. For **functions**, switch to client methods instead of `create*Message` / `parse*Response`.
+For **types**, many app-facing imports only need a package-name swap. For **functions**, prefer client methods instead of `create*Message` / `parse*Response`. Some legacy helper imports remain exported only as transitional migration shims.
 
 ## 4. The Key Pattern Change
 
@@ -45,8 +43,8 @@ const channels = await client.getChannels();
 
 ## 5. What Stays the Same
 
-- **Type shapes:** `AppSession`, `LedgerChannel`, `RPCAppDefinition`, `RPCBalance`, `RPCAsset`, etc.
-- **Response formats:** Balances, ledger entries, app sessions — same structure as v0.5.3.
+- **Many app-facing type shapes:** `AppSession`, `LedgerChannel`, `RPCAppDefinition`, `RPCBalance`, `RPCAsset`, etc.
+- **Familiar response shapes:** balances, ledger entries, and app sessions remain close to v0.5.3 for the supported app-facing paths.
 - **Auth helpers:** `createAuthRequestMessage`, `createAuthVerifyMessage`, `createAuthVerifyMessageWithJWT`, and `createEIP712AuthMessageSigner` remain available for legacy auth flows.
 
 ## 6. What Changes
@@ -55,7 +53,7 @@ const channels = await client.getChannels();
 |---------|--------|--------|
 | WebSocket | App creates and manages `WebSocket` | Managed internally by the client |
 | Signing | App passes `signer.sign` into every message | Internal — client uses `WalletClient` |
-| Amounts | Raw `BigInt` everywhere | Compat accepts both; conversion handled internally |
+| Amounts | Raw `BigInt` everywhere | Compat keeps raw-unit app-facing inputs and handles the v1 bridge internally |
 | Contract addresses | Manual config | Fetched from clearnode `get_config` |
 | Channel creation | Explicit `createChannel()` | Implicit on first `deposit()` |
 

@@ -243,6 +243,17 @@ describe('NitroliteClient compat mappings', () => {
         expect(innerClient.getOnChainBalance).toHaveBeenCalledWith(CURRENT_CHAIN, 'yusd', USER);
     });
 
+    it('rounds down on-chain decimal balances to token precision before converting to raw units', async () => {
+        const { client, innerClient } = makeCompatClient({
+            getOnChainBalance: jest.fn().mockResolvedValue(new Decimal('5.123456789')),
+        });
+
+        await client.refreshAssets();
+
+        await expect(client.getTokenBalance(CURRENT_TOKEN)).resolves.toBe(512345678n);
+        expect(innerClient.getOnChainBalance).toHaveBeenCalledWith(CURRENT_CHAIN, 'yusd', USER);
+    });
+
     it('exposes token-and-chain specific display data and assets list entries', async () => {
         const { client } = makeCompatClient();
 

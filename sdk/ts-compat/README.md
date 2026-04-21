@@ -217,11 +217,12 @@ App-session allocation strings remain **human-readable decimal strings** such as
 
 These legacy methods remain intentionally unsupported because the v1 runtime no longer offers an honest one-to-one mapping:
 
+- `createChannel(...)`
 - `checkpointChannel(...)`
 - `getAccountBalance(...)`
 - `getChannelBalance(...)`
 
-They fail fast with migration guidance instead of silently approximating old behavior.
+Workflow-style RPC helpers such as `createTransferMessage(...)`, `createCreateChannelMessage(...)`, `createCloseChannelMessage(...)`, and `createResizeChannelMessage(...)` are in the same category: they stay exported for migration, but now fail fast with migration guidance instead of silently approximating old behavior.
 
 ### Security Token Locking
 

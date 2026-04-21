@@ -17,6 +17,8 @@ await sendRequest(createCreateChannelMessage(signer.sign, { token: tokenAddress,
 await client.deposit(tokenAddress, amount);
 ```
 
+The legacy `createChannel()` client method and `createCreateChannelMessage(...)` helper still exist for migration, but they now throw with migration guidance instead of warning or fabricating a fake wire payload. Use `deposit(...)` or `depositAndCreateChannel(...)` instead.
+
 `createCreateChannelMessage` remains exported so old imports keep compiling, but it now fails fast with migration guidance because channel creation is no longer a standalone protocol-backed RPC in v1.
 
 ## 2. Withdrawals
@@ -43,7 +45,7 @@ Legacy channel helper imports may still exist to keep migration moving, but the 
 
 | Operation | v0.5.3 | Compat |
 |-----------|--------|--------|
-| Create | Explicit `createChannel()` | Implicit on first `deposit()` |
+| Create | Explicit `createChannel()` (now throwing migration shim) | Implicit on first `deposit()` |
 | Close | `createCloseChannelMessage` (now fail-fast shim) | `client.closeChannel()` |
 | Resize | `createResizeChannelMessage` (now fail-fast shim) | `client.resizeChannel({ allocate_amount, token })` |
 

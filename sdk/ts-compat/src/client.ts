@@ -127,7 +127,7 @@ export interface NitroliteClientConfig {
 }
 
 export class NitroliteClient {
-    /** The underlying v1.0.0 SDK Client -- use for any functionality not wrapped by compat. */
+    /** The underlying v1 SDK Client -- use for any functionality not wrapped by compat. */
     readonly innerClient: Client;
     readonly userAddress: Address;
 
@@ -346,7 +346,7 @@ export class NitroliteClient {
     }
 
     async createChannel(_respParams?: any): Promise<any> {
-        console.warn('[compat] createChannel is implicit in v1.0.0 -- use deposit() instead');
+        console.warn('[compat] createChannel is implicit in v1 -- use deposit() instead');
     }
 
     async closeChannel(params?: { tokenAddress?: Address | string } | any): Promise<any> {

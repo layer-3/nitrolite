@@ -2,7 +2,7 @@
 // @yellow-org/sdk-compat barrel export
 //
 // Curated migration-layer exports for apps moving off '@layer-3/nitrolite'
-// (v0.5.3) onto the v1.0.0+ runtime (@yellow-org/sdk).
+// (v0.5.3) onto the v1 runtime (@yellow-org/sdk).
 //
 // This barrel preserves selected app-facing surfaces. It is not full package
 // parity with the published v0.5.3 package, and it is not a promise that every

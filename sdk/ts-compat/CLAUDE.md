@@ -1,6 +1,6 @@
 # TypeScript SDK Compat (`@yellow-org/sdk-compat`)
 
-Curated migration layer that bridges the old `@layer-3/nitrolite` v0.5.3 API to the `@yellow-org/sdk` v1.0.0+ runtime. Helps existing dApps migrate supported app-facing paths.
+Curated migration layer that bridges the old `@layer-3/nitrolite` v0.5.3 API to the `@yellow-org/sdk` v1 runtime. Helps existing dApps migrate supported app-facing paths.
 
 ## Quick Reference
 

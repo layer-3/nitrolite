@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk-compat.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
-`@yellow-org/sdk-compat` is a migration layer that preserves selected Nitrolite SDK **v0.5.3 app-facing APIs** over the **v1.0.0 runtime**.
+`@yellow-org/sdk-compat` is a migration layer that preserves selected Nitrolite SDK **v0.5.3 app-facing APIs** over the **v1 runtime**.
 
 - Keep supported v0.5.3-style app-facing calls in your code.
 - Run them through `@yellow-org/sdk-compat`, backed by `@yellow-org/sdk`.
@@ -18,7 +18,7 @@
 
 ## Why
 
-The v1.0.0 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, asset resolution, and more. For apps built around the old surface, a direct migration can require scattered rewrites across transport, signing, and amount-handling paths.
+The v1 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, asset resolution, and more. For apps built around the old surface, a direct migration can require scattered rewrites across transport, signing, and amount-handling paths.
 
 The compat layer centralizes the supported migration paths into one package so app code can move to client-level methods incrementally instead of rewriting every call site at once.
 
@@ -74,7 +74,7 @@ const client = await NitroliteClient.create({
 
 ### 2. Deposit & create a channel
 
-In v1.0.0, channel creation is implicit on deposit — no separate `createChannel()` call needed:
+In v1, channel creation is implicit on deposit — no separate `createChannel()` call needed:
 
 ```typescript
 const tokenAddress = '0x6E2C4707DA119425DF2C722E2695300154652F56'; // USDC on Sepolia
@@ -220,9 +220,9 @@ await client.close();
 | `waitForClose()` | Returns a promise that resolves when the connection is closed |
 | `refreshAssets()` | Re-fetch the asset map from the clearnode |
 
-### Accessing the v1.0.0 SDK Directly
+### Accessing the v1 SDK Directly
 
-The underlying v1.0.0 `Client` is exposed for advanced use cases not covered by the compat surface:
+The underlying v1 `Client` is exposed for advanced use cases not covered by the compat surface:
 
 ```typescript
 const v1Client = client.innerClient;
@@ -262,7 +262,7 @@ NEXT_PUBLIC_BLOCKCHAIN_RPCS=11155111:https://rpc.sepolia.io,1:https://mainnet.in
 
 ### `WalletStateSigner`
 
-A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1.0.0 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
+A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
 
 ```typescript
 import { WalletStateSigner } from '@yellow-org/sdk-compat';
@@ -326,7 +326,7 @@ try {
 
 ## Event Polling
 
-v0.5.3 used server-push WebSocket events. v1.0.0 uses a polling model. The `EventPoller` bridges this gap:
+v0.5.3 used server-push WebSocket events. v1 uses a polling model. The `EventPoller` bridges this gap:
 
 ```typescript
 import { EventPoller } from '@yellow-org/sdk-compat';
@@ -471,7 +471,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 
 ### `buildClientOptions`
 
-Converts a `CompatClientConfig` into v1.0.0 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
+Converts a `CompatClientConfig` into v1 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
 
 ```typescript
 import { buildClientOptions, type CompatClientConfig } from '@yellow-org/sdk-compat';

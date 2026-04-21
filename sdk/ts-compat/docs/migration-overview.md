@@ -1,10 +1,10 @@
 # Migrating from v0.5.3 to Compat Layer
 
-This guide explains how to migrate your Nitrolite dApp from the v0.5.3 SDK to the **compat layer**, a curated migration layer that preserves selected app-facing APIs over the v1.0.0 runtime.
+This guide explains how to migrate your Nitrolite dApp from the v0.5.3 SDK to the **compat layer**, a curated migration layer that preserves selected app-facing APIs over the v1 runtime.
 
 ## 1. Why Use the Compat Layer
 
-The v1.0.0 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, and asset resolution. Instead of rewriting every RPC call at once, the compat layer lets supported app-facing paths move over incrementally by swapping imports and replacing the `create-sign-send-parse` pattern with direct client method calls.
+The v1 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, and asset resolution. Instead of rewriting every RPC call at once, the compat layer lets supported app-facing paths move over incrementally by swapping imports and replacing the `create-sign-send-parse` pattern with direct client method calls.
 
 ## 2. Installation
 

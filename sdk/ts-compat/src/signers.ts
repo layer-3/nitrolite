@@ -6,7 +6,7 @@ import type { MessageSigner, MessageSignerPayload } from './types.js';
  * v0.5.3-compatible WalletStateSigner.
  * In v0.5.3, this wraps a WalletClient and signs EIP-191 messages.
  * In the compat layer, it is only stored as a reference -- actual signing
- * is handled by the v1.0.0 SDK's ChannelDefaultSigner internally.
+ * is handled by the v1 SDK's ChannelDefaultSigner internally.
  * We keep the class so that NitroliteStore.state.walletStateSigner compiles.
  */
 export class WalletStateSigner {

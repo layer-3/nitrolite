@@ -350,12 +350,6 @@ state, err := client.ChannelsV1GetLatestState(ctx, rpc.ChannelsV1GetLatestStateR
     Asset:  "usdc",
 })
 
-// Get states with filters
-states, err := client.ChannelsV1GetStates(ctx, rpc.ChannelsV1GetStatesRequest{
-    Wallet: walletAddress,
-    Asset:  &asset,
-})
-
 // Request channel creation
 creation, err := client.ChannelsV1RequestCreation(ctx, rpc.ChannelsV1RequestCreationRequest{
     Wallet: walletAddress,
@@ -383,11 +377,6 @@ sessions, err := client.AppSessionsV1GetAppSessions(ctx, rpc.AppSessionsV1GetApp
 // Create app session
 session, err := client.AppSessionsV1CreateAppSession(ctx, rpc.AppSessionsV1CreateAppSessionRequest{
     Definition: definition,
-})
-
-// Close app session
-closeResp, err := client.AppSessionsV1CloseAppSession(ctx, rpc.AppSessionsV1CloseAppSessionRequest{
-    AppSessionID: sessionID,
 })
 
 // Submit deposit state

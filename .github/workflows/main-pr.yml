@@ -16,12 +16,19 @@ jobs:
     name: Test (Foundry)
     uses: ./.github/workflows/test-forge.yml
 
-  # test-sdk:
-  #   name: Test (SDK)
-  #   uses: ./.github/workflows/test-sdk.yml
-  #   with:
-  #     project-path: 'sdk'
-  #     project-name: 'SDK'
+  test-sdk-ts:
+    name: Test (TS SDK)
+    uses: ./.github/workflows/test-sdk.yml
+    with:
+      project-path: 'sdk/ts'
+      project-name: 'TS SDK'
+
+  test-sdk-compat:
+    name: Test (TS SDK Compat)
+    uses: ./.github/workflows/test-sdk.yml
+    with:
+      project-path: 'sdk/ts-compat'
+      project-name: 'TS SDK Compat'
 
   build-and-publish-clearnode:
     name: Build and Publish (Clearnode)
@@ -56,4 +63,3 @@ jobs:
           cache-from: type=gha
           build-args: |
             VERSION=${{ steps.sha.outputs.short_sha }}
-

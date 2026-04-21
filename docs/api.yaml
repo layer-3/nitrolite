@@ -589,43 +589,6 @@ api:
               errors:
                 - message: channel_not_found
                   description: The specified channel was not found
-            - name: get_states
-              description: Retrieve state history for a user with optional filtering
-              request:
-                - field_name: wallet
-                  type: string
-                  description: The user's wallet address
-                - field_name: asset
-                  type: string
-                  description: Filter by asset symbol
-                - field_name: epoch
-                  type: string
-                  description: Filter by user epoch index
-                  optional: true
-                - field_name: channel_id
-                  type: string
-                  description: Filter by Home/Escrow Channel ID
-                  optional: true
-                - field_name: only_signed
-                  type: boolean
-                  description: Return only signed states
-                - field_name: pagination
-                  type: pagination_params
-                  description: Pagination parameters (offset, limit, sort)
-                  optional: true
-              response:
-                - field_name: states
-                  type: array
-                  items:
-                    type: state
-                  description: List of states
-                - field_name: metadata
-                  type: pagination_metadata
-                  description: Pagination information
-                  optional: true
-              errors:
-                - message: invalid_parameters
-                  description: The request parameters are invalid
             - name: request_creation
               description: Request the creation of a channel from Node
               request:

@@ -89,28 +89,6 @@ export interface ChannelsV1GetLatestStateResponse {
   state: StateV1;
 }
 
-export interface ChannelsV1GetStatesRequest {
-  /** User's wallet address */
-  wallet: Address;
-  /** Asset symbol */
-  asset: string;
-  /** User epoch index filter */
-  epoch?: bigint; // uint64
-  /** Home/Escrow Channel ID filter */
-  channel_id?: string;
-  /** Return only signed states */
-  only_signed: boolean;
-  /** Pagination parameters */
-  pagination?: PaginationParamsV1;
-}
-
-export interface ChannelsV1GetStatesResponse {
-  /** List of states */
-  states: StateV1[];
-  /** Pagination information */
-  metadata: PaginationMetadataV1;
-}
-
 export interface ChannelsV1RequestCreationRequest {
   /** State to be submitted */
   state: StateV1;

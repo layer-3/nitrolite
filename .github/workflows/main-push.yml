@@ -16,15 +16,22 @@ jobs:
     name: Test (Foundry)
     uses: ./.github/workflows/test-forge.yml
 
-  # test-sdk:
-  #   name: Test (SDK)
-  #   uses: ./.github/workflows/test-sdk.yml
-  #   with:
-  #     project-path: 'sdk'
-  #     project-name: 'SDK'
+  test-sdk-ts:
+    name: Test (TS SDK)
+    uses: ./.github/workflows/test-sdk.yml
+    with:
+      project-path: 'sdk/ts'
+      project-name: 'TS SDK'
+
+  test-sdk-compat:
+    name: Test (TS SDK Compat)
+    uses: ./.github/workflows/test-sdk.yml
+    with:
+      project-path: 'sdk/ts-compat'
+      project-name: 'TS SDK Compat'
 
   # build-and-publish-sdk:
-  #   needs: test-sdk
+  #   needs: [test-sdk-ts, test-sdk-compat]
   #   name: Build and Publish (SDK)
   #   uses: ./.github/workflows/publish-sdk.yml
   #   secrets:
@@ -93,7 +100,7 @@ jobs:
   # notify-slack:
   #   name: Notify Slack
   #   runs-on: ubuntu-latest
-  #   needs: [deploy-prod, deploy-sandbox, deploy-uat, test-forge, test-sdk]
+  #   needs: [deploy-prod, deploy-sandbox, deploy-uat, test-forge, test-sdk-ts, test-sdk-compat]
   #   if: always()
 
   #   steps:
@@ -116,4 +123,3 @@ jobs:
   #           ⚠️ RC build or deployment was cancelled!
   #           ${{github.event.head_commit.message}}
   #         SLACK_FOOTER: 'Nitrolite CI/CD Pipeline'
-

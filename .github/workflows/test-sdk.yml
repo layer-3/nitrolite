@@ -5,18 +5,16 @@ on:
     inputs:
       project-path:
         description: 'Path to the SDK project directory'
-        required: false
+        required: true
         type: string
-        default: 'sdk'
       project-name:
         description: 'Human-readable name for the project'
-        required: false
+        required: true
         type: string
-        default: 'SDK'
 
 jobs:
   test:
-    name: Test ${{ inputs.project-name }}
+    name: Validate ${{ inputs.project-name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +32,18 @@ jobs:
         run: npm ci
         working-directory: ${{ inputs.project-path }}
 
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: ${{ inputs.project-path }}
+
       - name: Run tests
         run: npm test
+        working-directory: ${{ inputs.project-path }}
+
+      - name: Lint
+        run: npm run lint
+        working-directory: ${{ inputs.project-path }}
+
+      - name: Build
+        run: npm run build
         working-directory: ${{ inputs.project-path }}

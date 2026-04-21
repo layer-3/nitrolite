@@ -13,7 +13,7 @@
 `@yellow-org/sdk-compat` is intentionally narrower than the published v0.5.3 package surface.
 
 - **Preserved app-facing APIs**: the `NitroliteClient` facade, selected auth helpers, app-session signing helpers, and many app-facing types remain available for supported migration paths.
-- **Transitional helper surfaces**: many legacy `create*Message` / `parse*Response` exports remain so imports can keep compiling during migration, but several are transitional shims rather than one-to-one v1 RPC mappings.
+- **Transitional helper surfaces**: some legacy `create*Message` / `parse*Response` exports now emit real v1-compatible payloads inside the legacy `req`/`sig` envelope, while workflow-only helpers stay exported as fail-fast migration shims.
 - **Unsupported full-package parity**: low-level internals, broad root-export parity, and every legacy helper being runtime-faithful are not promised by this package.
 
 ## Why
@@ -145,6 +145,7 @@ await client.close();
 | `getEscrowChannel(escrowChannelId)` | Query an escrow channel by ID |
 | `getChannelData(channelId)` | Full channel + state for a specific channel |
 | `getLastAppSessionsListError()` | Last `getAppSessionsList()` error message (if any) |
+| `getOpenChannels()` | Read current-chain open channel IDs from the ChannelHub |
 
 ### App Sessions
 
@@ -154,6 +155,8 @@ await client.close();
 | `closeAppSession(appSessionId, allocations, quorumSigs)` | Close an app session with quorum signatures |
 | `submitAppState(params)` | Submit state update (operate/deposit/withdraw/close) |
 | `getAppDefinition(appSessionId)` | Get the definition for a session |
+
+App-session allocation strings remain **human-readable decimal strings** such as `'0.01'`. They are not raw smallest-unit token strings.
 
 ### App Registry
 
@@ -188,6 +191,8 @@ await client.close();
 |---|---|
 | `transfer(destination, allocations)` | Off-chain transfer to another participant |
 
+`TransferAllocation.amount` remains a **raw-unit string** in the smallest token denomination, for example `'5000000'` for 5 USDC.
+
 ### Asset Resolution
 
 | Method | Description |
@@ -199,6 +204,24 @@ await client.close();
 | `formatAmount(tokenAddress, rawAmount)` | Convert raw bigint → human-readable string |
 | `parseAmount(tokenAddress, humanAmount)` | Convert human-readable string → raw bigint |
 | `findOpenChannel(tokenAddress, chainId?)` | Find an open channel for a given token |
+
+### Legacy On-Chain Helpers
+
+| Method | Description |
+|---|---|
+| `approveTokens(tokenAddress, amount)` | Approve the current-chain ChannelHub using raw token units |
+| `getTokenAllowance(tokenAddress)` | Read current-chain ChannelHub allowance in raw token units |
+| `getTokenBalance(tokenAddress)` | Read current-chain wallet token balance in raw token units |
+
+### Unsupported Legacy Gaps
+
+These legacy methods remain intentionally unsupported because the v1 runtime no longer offers an honest one-to-one mapping:
+
+- `checkpointChannel(...)`
+- `getAccountBalance(...)`
+- `getChannelBalance(...)`
+
+They fail fast with migration guidance instead of silently approximating old behavior.
 
 ### Security Token Locking
 
@@ -375,32 +398,40 @@ await client.withdrawSecurityTokens(chainId, destinationWallet);
 
 ### Amount conventions
 
-The compat layer accepts raw amounts (smallest token unit) and converts to human-readable `Decimal` before delegating to the v1 SDK.
+The compat layer keeps the old amount conventions explicit instead of flattening them:
 
 | Method group | Input type | Example: 100 tokens (18 decimals) |
 |---|---|---|
 | `deposit`, `withdrawal`, `lockSecurityTokens`, `approveSecurityToken`, `getLockedBalance` | Raw `bigint` | `100_000_000_000_000_000_000n` |
 | `transfer` | Raw string via `TransferAllocation.amount` | `'100000000000000000000'` |
+| `createAppSession`, `closeAppSession`, `submitAppState` allocations | Human-readable decimal string | `'100.0'` |
 
 > For direct access to the v1 SDK's human-readable `Decimal` API, use `client.innerClient`.
 
 ## RPC Stubs
 
 The following functions remain exported primarily so legacy `create*Message` / `parse*Response` imports can keep compiling while an app migrates.
-Many `create*` helpers are transitional shims rather than protocol-backed one-to-one v1 RPC mappings, and `parse*` helpers only do lightweight normalization of known response shapes.
+Some `create*` helpers emit real live-v1 method names and payload shapes inside the legacy `req` / `sig` envelope. Workflow-only helpers fail fast with migration guidance instead of returning fake wire payloads. `parse*` helpers only do lightweight normalization of known response shapes.
 Prefer `NitroliteClient` methods directly for new integrations:
 
 ```typescript
-// Transitional compat exports:
+// Direct v1-compatible helper mappings:
 createGetChannelsMessage, parseGetChannelsResponse,
 createGetLedgerBalancesMessage, parseGetLedgerBalancesResponse,
-parseGetLedgerEntriesResponse, parseGetAppSessionsResponse,
-createTransferMessage, createAppSessionMessage, parseCreateAppSessionResponse,
+parseGetLedgerEntriesResponse, createGetAppSessionsMessage, parseGetAppSessionsResponse,
+createGetAppDefinitionMessage, parseGetAppDefinitionResponse,
+createAppSessionMessage, parseCreateAppSessionResponse,
 createCloseAppSessionMessage, parseCloseAppSessionResponse,
+createSubmitAppStateMessage, parseSubmitAppStateResponse,
+createPingMessage,
+
+// Migration-only shims that fail fast:
+createTransferMessage,
 createCreateChannelMessage, parseCreateChannelResponse,
 createCloseChannelMessage, parseCloseChannelResponse,
 createResizeChannelMessage, parseResizeChannelResponse,
-createPingMessage,
+
+// Generic normalizers:
 convertRPCToClientChannel, convertRPCToClientState,
 parseAnyRPCResponse, NitroliteRPC
 ```

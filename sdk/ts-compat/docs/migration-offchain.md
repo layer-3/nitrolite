@@ -53,7 +53,7 @@ await sendRequest(msg);
 ```
 **After:** `client.transfer(destination, allocations)`
 
-`createTransferMessage` remains exported only so old imports keep compiling, but it now fails fast with migration guidance because transfer is no longer a single direct v1 RPC helper.
+`createTransferMessage` remains exported only so old imports keep compiling, but it now fails fast with migration guidance because transfer is no longer a single direct v1 RPC helper. This is a deliberate runtime change from the old silent placeholder behavior.
 
 ## 4. Ledger Queries
 

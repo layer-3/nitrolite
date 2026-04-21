@@ -574,7 +574,8 @@ export class NitroliteClient {
     async getTokenBalance(tokenAddress: Address): Promise<bigint> {
         const info = await this.resolveToken(tokenAddress);
         const balance = await this.innerClient.getOnChainBalance(info.chainId, info.symbol, this.userAddress);
-        return parseUnits(balance.toString(), info.tokenDecimals);
+        const normalized = balance.toDecimalPlaces(info.tokenDecimals, Decimal.ROUND_DOWN);
+        return parseUnits(normalized.toString(), info.tokenDecimals);
     }
 
     // -----------------------------------------------------------------------

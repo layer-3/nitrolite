@@ -1,6 +1,6 @@
 # TypeScript SDK Compat (`@yellow-org/sdk-compat`)
 
-Compatibility layer that bridges the old `@layer-3/nitrolite` v0.5.3 API to the `@yellow-org/sdk` v1.0.0+ runtime. Lets existing dApps upgrade with minimal code changes.
+Curated migration layer that bridges the old `@layer-3/nitrolite` v0.5.3 API to the `@yellow-org/sdk` v1.0.0+ runtime. Helps existing dApps migrate supported app-facing paths.
 
 ## Quick Reference
 
@@ -13,7 +13,7 @@ Compatibility layer that bridges the old `@layer-3/nitrolite` v0.5.3 API to the 
 ## Package Details
 
 - **Name:** `@yellow-org/sdk-compat`
-- **Version:** 1.2.1
+- **Version:** 1.2.0
 - **Peer deps:** `@yellow-org/sdk >=1.2.0`, `viem ^2.0.0`
 - **Dev dep:** `"@yellow-org/sdk": "file:../ts"` — **must build `sdk/ts` first**
 
@@ -25,7 +25,7 @@ The main SDK (`@yellow-org/sdk`) has side effects on module evaluation that brea
 
 **SAFE:** `export type { StateSigner } from '@yellow-org/sdk'` (type-only exports are erased at compile time).
 
-This is documented in `src/index.ts` lines 154-158.
+This is documented in `src/index.ts`.
 
 ## Source Layout
 
@@ -57,4 +57,4 @@ This is documented in `src/index.ts` lines 154-158.
 2. Export it from `src/index.ts`
 3. If re-exporting from `@yellow-org/sdk`, use `export type` only (SSR safety)
 4. Update `README.md` (Types Reference, RPC Stubs, or Auth Helpers section)
-5. Add a test in `test/unit/exports.test.ts`
+5. Add or update a focused unit test under `test/unit/` that matches the surface you changed

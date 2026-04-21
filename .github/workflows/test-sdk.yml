@@ -11,6 +11,11 @@ on:
         description: 'Human-readable name for the project'
         required: true
         type: string
+      bootstrap-project-path:
+        description: 'Optional SDK project that must be built before validating the target project'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   test:
@@ -27,6 +32,16 @@ jobs:
           node-version-file: '${{ inputs.project-path }}/package.json'
           cache: 'npm'
           cache-dependency-path: '${{ inputs.project-path }}/package-lock.json'
+
+      - name: Install bootstrap dependencies
+        if: ${{ inputs.bootstrap-project-path != '' }}
+        run: npm ci
+        working-directory: ${{ inputs.bootstrap-project-path }}
+
+      - name: Build bootstrap project
+        if: ${{ inputs.bootstrap-project-path != '' }}
+        run: npm run build:ci
+        working-directory: ${{ inputs.bootstrap-project-path }}
 
       - name: Install dependencies
         run: npm ci

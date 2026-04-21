@@ -29,6 +29,7 @@ jobs:
   #   with:
   #     project-path: 'sdk/ts-compat'
   #     project-name: 'TS SDK Compat'
+  #     bootstrap-project-path: 'sdk/ts'
 
   # build-and-publish-sdk:
   #   needs: [test-sdk-ts, test-sdk-compat]

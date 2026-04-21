@@ -1,6 +1,6 @@
-import { State, TransitionType, ledgerEqual, validateLedger, transitionsEqual } from './types';
-import { StateAdvancer, AssetStore } from './interface';
-import { validateDecimalPrecision } from './utils';
+import { State, TransitionType, ledgerEqual, validateLedger, transitionsEqual } from './types.js';
+import { StateAdvancer, AssetStore } from './interface.js';
+import { validateDecimalPrecision } from './utils.js';
 import {
   nextState,
   applyAcknowledgementTransition,
@@ -14,7 +14,7 @@ import {
   applyEscrowWithdrawTransition,
   applyMigrateTransition,
   applyFinalizeTransition,
-} from './state';
+} from './state.js';
 
 export class StateAdvancerV1 implements StateAdvancer {
   constructor(private assetStore: AssetStore) {}

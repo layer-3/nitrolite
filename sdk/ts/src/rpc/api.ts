@@ -24,7 +24,6 @@ import {
   AppDefinitionV1,
   AppStateUpdateV1,
   AppSessionInfoV1,
-  AppAllocationV1,
   AppSessionKeyStateV1,
   SignedAppStateUpdateV1,
 } from '../app/types.js';
@@ -246,24 +245,6 @@ export interface AppSessionsV1CreateAppSessionResponse {
   /** Initial version of the session */
   version: string;
   /** Status of the session */
-  status: string;
-}
-
-export interface AppSessionsV1CloseAppSessionRequest {
-  /** Application session ID to close */
-  app_session_id: string;
-  /** Final asset allocations when closing the session */
-  allocations: AppAllocationV1[];
-  /** Optional final JSON stringified session data */
-  session_data?: string;
-}
-
-export interface AppSessionsV1CloseAppSessionResponse {
-  /** Closed application session ID */
-  app_session_id: string;
-  /** Final version of the session */
-  version: string;
-  /** Status of the session (closed) */
   status: string;
 }
 

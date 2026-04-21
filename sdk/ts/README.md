@@ -7,7 +7,7 @@ TypeScript SDK for Clearnode payment channels providing both high-level and low-
 - **State Operations**: `deposit()`, `withdraw()`, `transfer()`, `closeHomeChannel()`, `acknowledge()` - build and co-sign states off-chain
 - **Blockchain Settlement**: `checkpoint()` - the single entry point for all on-chain transactions
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
-- **Full Feature Parity**: 100% compatibility with Go SDK functionality
+- **Go-Aligned Surface**: core channel, blockchain, and app-session flows follow the Go SDK patterns without claiming complete parity for every helper
 
 > If you are migrating from `@layer-3/nitrolite@v0.5.3`, please consider using the [@yellow-org/sdk-compat](https://www.npmjs.com/package/@yellow-org/sdk-compat) package. It is a translation layer that uses this SDK underneath and maps the familiar v0.5.3 API surfaces to this SDK.
 
@@ -28,6 +28,11 @@ client.checkpoint(asset)                          // Settle latest state on-chai
 client.challenge(state)                           // Submit on-chain challenge
 client.approveToken(chainId, asset, amount)       // Approve token spending
 client.checkTokenAllowance(chainId, token, owner) // Check token allowance
+```
+
+### On-Chain Queries
+```typescript
+client.getOnChainBalance(chainId, asset, wallet)  // Query on-chain token or native balance
 ```
 
 ### Node Information

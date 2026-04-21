@@ -173,13 +173,6 @@ export class RPCClient {
     return this.call(Methods.AppSessionsV1CreateAppSessionMethod, req, signal);
   }
 
-  async appSessionsV1CloseAppSession(
-    req: API.AppSessionsV1CloseAppSessionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1CloseAppSessionResponse> {
-    return this.call(Methods.AppSessionsV1CloseAppSessionMethod, req, signal);
-  }
-
   // ============================================================================
   // App Session Key State - V1 API Methods
   // ============================================================================

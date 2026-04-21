@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
@@ -202,6 +203,14 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 // The method ensures proper cleanup when connections close, including
 // removing the connection from the hub and invoking disconnect callbacks.
 func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	applicationID := r.URL.Query().Get(ApplicationIDQueryParam)
+	if applicationID != "" && !app.IsValidApplicationID(applicationID) {
+		wn.cfg.Logger.Warn("rejecting connection with invalid application_id",
+			"remoteAddr", r.RemoteAddr, "applicationID", applicationID)
+		http.Error(w, fmt.Sprintf("invalid %s: must match %s", ApplicationIDQueryParam, app.ApplicationIDRegex.String()), http.StatusBadRequest)
+		return
+	}
+
 	wsConnection, err := wn.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		wn.cfg.Logger.Error("failed to upgrade connection to WebSocket", "error", err)
@@ -210,7 +219,6 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer wsConnection.Close()
 
 	connectionID := uuid.NewString()
-	applicationID := r.URL.Query().Get(ApplicationIDQueryParam)
 
 	connConfig := WebsocketConnectionConfig{
 		ConnectionID:      connectionID,

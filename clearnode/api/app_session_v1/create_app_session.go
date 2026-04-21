@@ -41,6 +41,10 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 		c.Fail(nil, "application id is required")
 		return
 	}
+	if !app.IsValidApplicationID(reqPayload.Definition.Application) {
+		c.Fail(rpc.Errorf("invalid application id: must match %s", app.ApplicationIDRegex.String()), "")
+		return
+	}
 
 	appDef, err := unmapAppDefinitionV1(reqPayload.Definition)
 	if err != nil {

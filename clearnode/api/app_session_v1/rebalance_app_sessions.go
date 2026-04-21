@@ -75,9 +75,9 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 	}
 
 	var batchID string
-	// applicationID is the shared application of all rebalanced sessions; enforced below.
-	var applicationID string
 	err := h.useStoreInTx(func(tx Store) error {
+		// applicationID is the shared application of all rebalanced sessions; enforced below.
+		var applicationID string
 		// Generate deterministic batch ID from session IDs and versions
 		sessionVersions := make([]app.AppSessionVersionV1, len(updates))
 		for i, u := range updates {

@@ -14,6 +14,15 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
+// Handlers in this package stamp DB writes with the session's stored
+// ApplicationID (persisted at app_session creation) rather than the
+// connection-scoped tag returned by rpc.GetApplicationID. This keeps app
+// session state attributable to the owning application even when a caller
+// connects without an app_id query parameter or with a different one —
+// e.g., a co-participant, a relay, or a re-connection. Channel-level
+// handlers (see clearnode/api/channel_v1) have no session to anchor to and
+// therefore use the connection tag.
+
 // Handler manages app session operations and provides RPC endpoints for app session management.
 type Handler struct {
 	useStoreInTx       StoreTxProvider

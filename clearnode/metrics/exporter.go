@@ -169,6 +169,13 @@ type runtimeMetricExporter struct {
 }
 
 // RuntimeMetricExporter exposes metrics related to runtime operations, such as API requests, channel state validations, and blockchain interactions.
+//
+// Cardinality note: user_states_total, transactions_total and
+// transactions_amount_total carry an application_id label. The value is
+// self-declared by clients and bounded only by the ingress regex
+// (pkg/app.ApplicationIDRegex, ~66 chars of [a-z0-9_-]). Operators running
+// untrusted clients should monitor series count on these metrics and, if
+// needed, add an allowlist or recording-rule aggregation before ingest.
 func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter, error) {
 	m := &runtimeMetricExporter{
 		// Shared

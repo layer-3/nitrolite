@@ -920,6 +920,21 @@ export class Client {
   }
 
   /**
+   * Query the on-chain token balance (ERC-20 or native ETH) for a wallet on a specific blockchain.
+   *
+   * @param chainId - The blockchain network ID (e.g., 11155111n for Sepolia)
+   * @param asset - The asset symbol to query (e.g., "usdc")
+   * @param wallet - The wallet address to query
+   * @returns The balance adjusted using token decimals for that chain/token
+   */
+  async getOnChainBalance(chainId: bigint, asset: string, wallet: Address): Promise<Decimal> {
+    await this.initializeBlockchainClient(chainId);
+    const blockchainClient = this.blockchainClients.get(chainId)!;
+
+    return await blockchainClient.getTokenBalance(asset, wallet);
+  }
+
+  /**
    * Check token allowance for a specific chain and token
    * @param chainId - The blockchain ID
    * @param tokenAddress - The ERC20 token contract address

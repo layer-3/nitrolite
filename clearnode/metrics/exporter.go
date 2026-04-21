@@ -374,37 +374,3 @@ const (
 func (res ActionResult) String() string {
 	return string(res)
 }
-
-// api/channel_v1
-// -* `user_states_total{asset, home_blockchain_id, transition}`
-// -* `transactions_total{asset, tx_type}`
-// -* `transactions_amount_total{asset, tx_type}`
-// - `channel_state_validations_total{sig_type, result}`
-
-// api/rpc_router.go
-// - `rpc_messages_total{msg_type, method}`
-// - `rpc_requests_total{method, status}`
-// - `rpc_request_duration_seconds{method, path, status}`
-// - `rpc_connections_total{region}`
-
-// api/app_session_v1
-// -* `app_state_updates{application}`
-// - `app_session_update_sig_validations_total{application, sig_type, result}`
-// -* `user_states_total{asset, home_blockchain_id, transition}`
-// -* `transactions_total{asset, tx_type}`
-// -* `transactions_amount_total{asset, tx_type}`
-// - `channel_state_sig_validations_total{sig_type, result}`
-
-// Blockchain Worker
-// -* `blockchain_actions_total{asset, blockchain_id, action_type, result}`
-
-// Event Listener
-// -* `blockchain_events_total{blockchain_id, process_result}`
-
-// By the end of this story a separate metric worker should expose the following metrics:
-
-// metric worker
-// - `channel_session_keys_total`
-// - `app_session_keys_total`
-// - `app_sessions_total{application,status}`
-// - `channels_total{asset,status}`

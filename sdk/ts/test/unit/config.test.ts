@@ -41,7 +41,9 @@ describe('appendApplicationIDQueryParam', () => {
     expect(new URL(out).searchParams.get(APPLICATION_ID_QUERY_PARAM)).toBe('a b&c');
   });
 
-  it('throws on an invalid URL', () => {
-    expect(() => appendApplicationIDQueryParam('://', 'x')).toThrow();
+  it('throws a descriptive error on an invalid URL', () => {
+    expect(() => appendApplicationIDQueryParam('://', 'x')).toThrow(
+      /cannot append app_id: invalid url/,
+    );
   });
 });

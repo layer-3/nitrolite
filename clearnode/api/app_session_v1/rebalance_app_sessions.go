@@ -107,10 +107,12 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 			}
 
 			// All rebalanced sessions must belong to the same application.
+			// Quoting keeps legacy (untagged, "") sessions visually
+			// distinguishable from tagged ones in the error message.
 			if i == 0 {
 				applicationID = appSession.ApplicationID
 			} else if appSession.ApplicationID != applicationID {
-				return rpc.Errorf("cannot rebalance app sessions from different applications: %s vs %s", applicationID, appSession.ApplicationID)
+				return rpc.Errorf("cannot rebalance app sessions from different applications: '%s' vs '%s'", applicationID, appSession.ApplicationID)
 			}
 			if h.appRegistryEnabled {
 				registeredApp, err := tx.GetApp(appSession.ApplicationID)

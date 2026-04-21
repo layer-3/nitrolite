@@ -36,7 +36,7 @@ type RuntimeMetricExporter interface {
 	// api/rpc_router
 	IncRPCMessage(msgType rpc.MsgType, method string)
 	IncRPCRequest(method, path string, success bool)
-	ObserveRPCDuration(method, path string, success bool, durationSecs time.Duration)
+	ObserveRPCDuration(method, path string, success bool, duration time.Duration)
 	SetRPCConnections(region, origin string, count uint32)
 
 	// api/app_session_v1

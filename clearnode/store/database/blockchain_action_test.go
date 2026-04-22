@@ -34,7 +34,7 @@ func TestDBStore_ScheduleCheckpoint(t *testing.T) {
 				UserBalance: decimal.NewFromInt(1000),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err := store.ScheduleCheckpoint(state.ID, 0)
 		require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestDBStore_ScheduleInitiateEscrowWithdrawal(t *testing.T) {
 				UserBalance: decimal.NewFromInt(500),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err := store.ScheduleInitiateEscrowWithdrawal(state.ID, 0)
 		require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestDBStore_ScheduleFinalizeEscrowDeposit(t *testing.T) {
 				UserBalance: decimal.NewFromInt(100),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err := store.ScheduleFinalizeEscrowDeposit(state.ID, 0)
 		require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestDBStore_ScheduleFinalizeEscrowWithdrawal(t *testing.T) {
 				UserBalance: decimal.NewFromInt(200),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err := store.ScheduleFinalizeEscrowWithdrawal(state.ID, 0)
 		require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestDBStore_Fail(t *testing.T) {
 				UserBalance: decimal.NewFromInt(300),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 		require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 
 		var action BlockchainAction
@@ -211,7 +211,7 @@ func TestDBStore_FailNoRetry(t *testing.T) {
 				UserBalance: decimal.NewFromInt(400),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 		require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 
 		var action BlockchainAction
@@ -251,7 +251,7 @@ func TestDBStore_RecordAttempt(t *testing.T) {
 				UserBalance: decimal.NewFromInt(150),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 		require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 
 		var action BlockchainAction
@@ -291,7 +291,7 @@ func TestDBStore_Complete(t *testing.T) {
 				UserBalance: decimal.NewFromInt(600),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 		require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 
 		var action BlockchainAction
@@ -329,7 +329,7 @@ func TestDBStore_Complete(t *testing.T) {
 				UserBalance: decimal.NewFromInt(250),
 			},
 		}
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 		require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 
 		var action BlockchainAction
@@ -390,9 +390,9 @@ func TestDBStore_GetActions(t *testing.T) {
 			HomeLedger: core.Ledger{UserBalance: decimal.NewFromInt(300)},
 		}
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
-		require.NoError(t, store.StoreUserState(state3))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, store.StoreUserState(state3, ""))
 
 		require.NoError(t, store.ScheduleCheckpoint(state1.ID, 0))
 		require.NoError(t, store.ScheduleInitiateEscrowWithdrawal(state2.ID, 0))
@@ -425,7 +425,7 @@ func TestDBStore_GetActions(t *testing.T) {
 				Transition: core.Transition{},
 				HomeLedger: core.Ledger{UserBalance: decimal.NewFromInt(int64(100 * (i + 1)))},
 			}
-			require.NoError(t, store.StoreUserState(state))
+			require.NoError(t, store.StoreUserState(state, ""))
 			require.NoError(t, store.ScheduleCheckpoint(state.ID, 0))
 		}
 
@@ -471,9 +471,9 @@ func TestDBStore_GetActions(t *testing.T) {
 			HomeLedger: core.Ledger{UserBalance: decimal.NewFromInt(300)},
 		}
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
-		require.NoError(t, store.StoreUserState(state3))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, store.StoreUserState(state3, ""))
 
 		require.NoError(t, store.ScheduleCheckpoint(state1.ID, 0))
 		require.NoError(t, store.ScheduleCheckpoint(state2.ID, 0))

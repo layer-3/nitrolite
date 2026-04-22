@@ -108,7 +108,7 @@ func TestRequestCreation_Success(t *testing.T) {
 		return tx.TxType == core.TransactionTypeHomeDeposit &&
 			tx.ToAccount == userWallet &&
 			tx.FromAccount != "" // homeChannelID will be set by handler
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Asset == asset &&
@@ -116,7 +116,7 @@ func TestRequestCreation_Success(t *testing.T) {
 			state.Epoch == 0 &&
 			state.NodeSig != nil &&
 			state.HomeChannelID != nil
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 
 	// Create RPC request
 	rpcState := toRPCState(*initialState)
@@ -266,7 +266,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 			state.NodeSig != nil &&
 			state.HomeChannelID != nil &&
 			state.Transition.Type == core.TransitionTypeAcknowledgement
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 
 	// Create RPC request
 	rpcState := toRPCState(*initialState)
@@ -318,7 +318,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	mockMemoryStore.AssertExpectations(t)
 	mockAssetStore.AssertExpectations(t)
 	mockTxStore.AssertExpectations(t)
-	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
 
 func TestRequestCreation_InvalidChallenge(t *testing.T) {

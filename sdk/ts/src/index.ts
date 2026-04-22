@@ -23,7 +23,10 @@ export {
   type Option,
   withHandshakeTimeout,
   withErrorHandler,
-  withBlockchainRPC
+  withBlockchainRPC,
+  withApplicationID,
+  APPLICATION_ID_QUERY_PARAM,
+  appendApplicationIDQueryParam
 } from './config.js';
 
 // Export asset store

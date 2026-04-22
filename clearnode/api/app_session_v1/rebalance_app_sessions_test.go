@@ -179,7 +179,7 @@ func TestRebalanceAppSessions_Success_TwoSessions(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", wallet2.Address, sessionID2, "USDC", decimal.NewFromInt(100)).Return(nil)
 	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
 		return tx.TxType == core.TransactionTypeRebalance && tx.Asset == "USDC"
-	})).Return(nil).Twice()
+	}), mock.Anything).Return(nil).Twice()
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
@@ -346,7 +346,7 @@ func TestRebalanceAppSessions_Success_MultiAsset(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", wallet1.Address, sessionID1, "ETH", decimal.RequireFromString("0.5")).Return(nil)
 	mockStore.On("RecordLedgerEntry", wallet2.Address, sessionID2, "USDC", decimal.NewFromInt(100)).Return(nil)
 	mockStore.On("RecordLedgerEntry", wallet2.Address, sessionID2, "ETH", decimal.RequireFromString("-0.5")).Return(nil)
-	mockStore.On("RecordTransaction", mock.Anything).Return(nil).Times(4) // 2 assets x 2 sessions
+	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil).Times(4) // 2 assets x 2 sessions
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
@@ -1106,7 +1106,7 @@ func TestRebalanceAppSessions_AppRegistryDisabled(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", wallet2.Address, sessionID2, "USDC", decimal.NewFromInt(100)).Return(nil)
 	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
 		return tx.TxType == core.TransactionTypeRebalance && tx.Asset == "USDC"
-	})).Return(nil).Twice()
+	}), mock.Anything).Return(nil).Twice()
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -1253,4 +1253,106 @@ func TestRebalanceAppSessions_Error_DuplicateAllocation(t *testing.T) {
 	assertError(t, ctx, "duplicate allocation")
 
 	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRebalanceAppSessions_Error_DifferentApplications(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(
+		storeTxProvider,
+		nil,
+		&MockActionGateway{},
+		nil,
+		nil,
+		nil,
+		"0xNode",
+		false, // registry disabled — simpler: skip GetApp path
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	wallet1 := NewTestAppSessionWallet(t)
+	wallet2 := NewTestAppSessionWallet(t)
+
+	sessionID1 := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	sessionID2 := "0x2222222222222222222222222222222222222222222222222222222222222222"
+
+	session1 := &app.AppSessionV1{
+		SessionID:     sessionID1,
+		ApplicationID: "app-one",
+		Participants:  []app.AppParticipantV1{{WalletAddress: wallet1.Address, SignatureWeight: 10}},
+		Quorum:        10,
+		Status:        app.AppSessionStatusOpen,
+		Version:       5,
+	}
+	session2 := &app.AppSessionV1{
+		SessionID:     sessionID2,
+		ApplicationID: "app-two", // Different application
+		Participants:  []app.AppParticipantV1{{WalletAddress: wallet2.Address, SignatureWeight: 10}},
+		Quorum:        10,
+		Status:        app.AppSessionStatusOpen,
+		Version:       3,
+	}
+
+	appStateUpdate1 := app.AppStateUpdateV1{
+		AppSessionID: sessionID1,
+		Intent:       app.AppStateUpdateIntentRebalance,
+		Version:      6,
+	}
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdate1)
+
+	appStateUpdate2 := app.AppStateUpdateV1{
+		AppSessionID: sessionID2,
+		Intent:       app.AppStateUpdateIntentRebalance,
+		Version:      4,
+	}
+	sig2 := wallet2.SignAppStateUpdate(t, appStateUpdate2)
+
+	reqPayload := rpc.AppSessionsV1RebalanceAppSessionsRequest{
+		SignedUpdates: []rpc.SignedAppStateUpdateV1{
+			{
+				AppStateUpdate: rpc.AppStateUpdateV1{
+					AppSessionID: sessionID1,
+					Intent:       app.AppStateUpdateIntentRebalance,
+					Version:      "6",
+				},
+				QuorumSigs: []string{sig1},
+			},
+			{
+				AppStateUpdate: rpc.AppStateUpdateV1{
+					AppSessionID: sessionID2,
+					Intent:       app.AppStateUpdateIntentRebalance,
+					Version:      "4",
+				},
+				QuorumSigs: []string{sig2},
+			},
+		},
+	}
+
+	mockStore.On("GetAppSession", sessionID1).Return(session1, nil)
+	mockStore.On("GetAppSession", sessionID2).Return(session2, nil)
+	// Session 1 is fully processed (tx rolls back on failure); session 2 trips the cross-app check.
+	emptyAllocations := map[string]map[string]decimal.Decimal{}
+	mockStore.On("GetParticipantAllocations", sessionID1).Return(emptyAllocations, nil).Maybe()
+	mockStore.On("UpdateAppSession", mock.Anything).Return(nil).Maybe()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, "app_sessions.v1.rebalance_app_sessions", payload),
+	}
+
+	handler.RebalanceAppSessions(ctx)
+
+	assertError(t, ctx, "cannot rebalance app sessions from different applications")
+
+	// Ledger/transaction writes happen only after all per-session validation completes,
+	// so the cross-app failure on session 2 must prevent them entirely.
+	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }

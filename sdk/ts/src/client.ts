@@ -14,7 +14,7 @@ import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV
 import { RPCClient } from './rpc/client.js';
 import { WebsocketDialer } from './rpc/dialer.js';
 import { ClientAssetStore } from './asset_store.js';
-import { Config, DefaultConfig, Option } from './config.js';
+import { appendApplicationIDQueryParam, Config, DefaultConfig, Option } from './config.js';
 import {
   generateNonce,
   transformNodeConfig,
@@ -199,8 +199,9 @@ export class Client {
       client.exitResolve?.();
     };
 
-    // Establish connection
-    await rpcClient.start(wsURL, handleError);
+    // Establish connection (append app_id query param if configured)
+    const dialURL = appendApplicationIDQueryParam(wsURL, config.applicationID);
+    await rpcClient.start(dialURL, handleError);
 
     return client;
   }

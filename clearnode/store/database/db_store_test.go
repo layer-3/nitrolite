@@ -39,7 +39,7 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -97,8 +97,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err = store.LockUserState("0xuser123", "ETH")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -167,8 +167,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -223,8 +223,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1))
-		require.NoError(t, store.StoreUserState(state2))
+		require.NoError(t, store.StoreUserState(state1, ""))
+		require.NoError(t, store.StoreUserState(state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -362,7 +362,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
@@ -442,7 +442,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -521,7 +521,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
@@ -586,7 +586,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -639,7 +639,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state))
+		require.NoError(t, store.StoreUserState(state, ""))
 
 		// Should not error because there's no signed state
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")

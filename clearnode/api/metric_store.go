@@ -15,22 +15,22 @@ type metricStore struct {
 	callbacks []func()
 }
 
-func (s *metricStore) RecordTransaction(tx core.Transaction) error {
-	if err := s.DatabaseStore.RecordTransaction(tx); err != nil {
+func (s *metricStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	if err := s.DatabaseStore.RecordTransaction(tx, applicationID); err != nil {
 		return err
 	}
 	s.callbacks = append(s.callbacks, func() {
-		s.m.RecordTransaction(tx.Asset, tx.TxType, tx.Amount)
+		s.m.RecordTransaction(tx.Asset, tx.TxType, tx.Amount, applicationID)
 	})
 	return nil
 }
 
-func (s *metricStore) StoreUserState(state core.State) error {
-	if err := s.DatabaseStore.StoreUserState(state); err != nil {
+func (s *metricStore) StoreUserState(state core.State, applicationID string) error {
+	if err := s.DatabaseStore.StoreUserState(state, applicationID); err != nil {
 		return err
 	}
 	s.callbacks = append(s.callbacks, func() {
-		s.m.IncUserState(state.Asset, state.HomeLedger.BlockchainID, state.Transition.Type)
+		s.m.IncUserState(state.Asset, state.HomeLedger.BlockchainID, state.Transition.Type, applicationID)
 	})
 	return nil
 }

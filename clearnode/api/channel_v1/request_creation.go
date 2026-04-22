@@ -79,6 +79,8 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		return
 	}
 
+	applicationID := rpc.GetApplicationID(c)
+
 	var nodeSig string
 	err = h.useStoreInTx(func(tx Store) error {
 		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
@@ -187,7 +189,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		incomingState.NodeSig = &nodeSig
 
 		// Store the pending state
-		if err := tx.StoreUserState(incomingState); err != nil {
+		if err := tx.StoreUserState(incomingState, applicationID); err != nil {
 			return rpc.Errorf("failed to store state: %v", err)
 		}
 
@@ -208,7 +210,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 				// We return Node's signature, the user is expected to submit this on blockchain.
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}
@@ -220,7 +222,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 				return rpc.Errorf("transition '%s' is not supported by this endpoint", incomingTransition.Type.String())
 			}
 
-			if err := tx.RecordTransaction(*transaction); err != nil {
+			if err := tx.RecordTransaction(*transaction, applicationID); err != nil {
 				return rpc.Errorf("failed to record transaction")
 			}
 

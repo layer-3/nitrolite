@@ -32,7 +32,10 @@ type DatabaseStore interface {
 	GetUserTransactions(wallet string, asset *string, txType *core.TransactionType, fromTime *uint64, toTime *uint64, paginate *core.PaginationParams) ([]core.Transaction, core.PaginationMetadata, error)
 
 	// RecordTransaction creates a transaction record linking state transitions.
-	RecordTransaction(tx core.Transaction) error
+	// applicationID is the self-declared origin tag of the client that caused
+	// the transaction (see rpc.ApplicationIDQueryParam); empty string means no
+	// app_id was supplied and the column is persisted as NULL.
+	RecordTransaction(tx core.Transaction, applicationID string) error
 
 	// --- Channel Operations ---
 
@@ -69,7 +72,10 @@ type DatabaseStore interface {
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
 
 	// StoreUserState persists a new user state to the database.
-	StoreUserState(state core.State) error
+	// applicationID is the self-declared origin tag of the client that caused
+	// the transition (see rpc.ApplicationIDQueryParam); empty string means no
+	// app_id was supplied and the column is persisted as NULL.
+	StoreUserState(state core.State, applicationID string) error
 
 	// EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error

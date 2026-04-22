@@ -169,6 +169,13 @@ type runtimeMetricExporter struct {
 }
 
 // RuntimeMetricExporter exposes metrics related to runtime operations, such as API requests, channel state validations, and blockchain interactions.
+//
+// Cardinality note: user_states_total, transactions_total and
+// transactions_amount_total carry an application_id label. The value is
+// self-declared by clients and bounded only by the ingress regex
+// (pkg/app.ApplicationIDRegex, ~66 chars of [a-z0-9_-]). Operators running
+// untrusted clients should monitor series count on these metrics and, if
+// needed, add an allowlist or recording-rule aggregation before ingest.
 func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter, error) {
 	m := &runtimeMetricExporter{
 		// Shared
@@ -176,17 +183,17 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Namespace: MetricNamespace,
 			Name:      "user_states_total",
 			Help:      "Total number of user states",
-		}, []string{"asset", "home_blockchain_id", "transition"}),
+		}, []string{"asset", "home_blockchain_id", "transition", "application_id"}),
 		transactionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_total",
 			Help:      "Total number of transactions",
-		}, []string{"asset", "tx_type"}),
+		}, []string{"asset", "tx_type", "application_id"}),
 		transactionsAmountTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_amount_total",
 			Help:      "Total amount of transactions processed",
-		}, []string{"asset", "tx_type"}),
+		}, []string{"asset", "tx_type", "application_id"}),
 		channelSessionKeysTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "channel_session_keys_total",
@@ -278,14 +285,15 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 }
 
 // Shared
-func (m *runtimeMetricExporter) IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType) {
+func (m *runtimeMetricExporter) IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType, applicationID string) {
 	homeBlockchainIDStr := strconv.FormatUint(homeBlockchainID, 10)
-	m.userStatesTotal.WithLabelValues(asset, homeBlockchainIDStr, transition.String()).Inc()
+	m.userStatesTotal.WithLabelValues(asset, homeBlockchainIDStr, transition.String(), getApplicationIDLabelValue(applicationID)).Inc()
 }
 
-func (m *runtimeMetricExporter) RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal) {
-	m.transactionsTotal.WithLabelValues(asset, txType.String()).Inc()
-	m.transactionsAmountTotal.WithLabelValues(asset, txType.String()).Add(amount.InexactFloat64())
+func (m *runtimeMetricExporter) RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal, applicationID string) {
+	appIDLabelValue := getApplicationIDLabelValue(applicationID)
+	m.transactionsTotal.WithLabelValues(asset, txType.String(), appIDLabelValue).Inc()
+	m.transactionsAmountTotal.WithLabelValues(asset, txType.String(), appIDLabelValue).Add(amount.InexactFloat64())
 }
 
 // api/rpc_router
@@ -373,37 +381,3 @@ const (
 func (res ActionResult) String() string {
 	return string(res)
 }
-
-// api/channel_v1
-// -* `user_states_total{asset, home_blockchain_id, transition}`
-// -* `transactions_total{asset, tx_type}`
-// -* `transactions_amount_total{asset, tx_type}`
-// - `channel_state_validations_total{sig_type, result}`
-
-// api/rpc_router.go
-// - `rpc_messages_total{msg_type, method}`
-// - `rpc_requests_total{method, status}`
-// - `rpc_request_duration_seconds{method, path, status}`
-// - `rpc_connections_total{region}`
-
-// api/app_session_v1
-// -* `app_state_updates{application}`
-// - `app_session_update_sig_validations_total{application, sig_type, result}`
-// -* `user_states_total{asset, home_blockchain_id, transition}`
-// -* `transactions_total{asset, tx_type}`
-// -* `transactions_amount_total{asset, tx_type}`
-// - `channel_state_sig_validations_total{sig_type, result}`
-
-// Blockchain Worker
-// -* `blockchain_actions_total{asset, blockchain_id, action_type, result}`
-
-// Event Listener
-// -* `blockchain_events_total{blockchain_id, process_result}`
-
-// By the end of this story a separate metric worker should expose the following metrics:
-
-// metric worker
-// - `channel_session_keys_total`
-// - `app_session_keys_total`
-// - `app_sessions_total{application,status}`
-// - `channels_total{asset,status}`

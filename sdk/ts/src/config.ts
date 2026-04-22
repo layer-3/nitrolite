@@ -19,6 +19,13 @@ export interface Config {
   blockchainRPCs?: Map<bigint, string>;
 
   pingInterval?: number;
+
+  /**
+   * Advisory origin tag sent to the clearnode as the "app_id" WebSocket query
+   * parameter. The clearnode stamps this value on records produced by requests
+   * from this client. Empty / undefined means no tag is sent.
+   */
+  applicationID?: string;
 }
 
 /**
@@ -61,6 +68,44 @@ export function withErrorHandler(handler: (error: Error) => void): Option {
   return (config: Config) => {
     config.errorHandler = handler;
   };
+}
+
+/**
+ * The URL query parameter name used to declare the client's application
+ * identity during the WebSocket upgrade. Kept in sync with
+ * pkg/rpc.ApplicationIDQueryParam on the server.
+ */
+export const APPLICATION_ID_QUERY_PARAM = 'app_id';
+
+/**
+ * withApplicationID sets the application ID sent to the clearnode as the
+ * `app_id` WebSocket query parameter. Advisory origin tag only.
+ */
+export function withApplicationID(appID: string): Option {
+  return (config: Config) => {
+    config.applicationID = appID;
+  };
+}
+
+/**
+ * appendApplicationIDQueryParam returns `wsURL` with the `app_id` query
+ * parameter set to `applicationID`. If `applicationID` is empty the URL is
+ * returned unchanged. Any existing `app_id` value is overwritten. Throws a
+ * descriptive error if `wsURL` cannot be parsed.
+ */
+export function appendApplicationIDQueryParam(wsURL: string, applicationID?: string): string {
+  if (!applicationID) {
+    return wsURL;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(wsURL);
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(`cannot append ${APPLICATION_ID_QUERY_PARAM}: invalid url ${JSON.stringify(wsURL)} (${cause})`);
+  }
+  parsed.searchParams.set(APPLICATION_ID_QUERY_PARAM, applicationID);
+  return parsed.toString();
 }
 
 /**

@@ -10,46 +10,61 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
+// defaultApplicationIDLabelValue is the value used for the application_id
+// metric label when a request arrives without an app_id query parameter, so
+// dashboards have a readable bucket for unattributed traffic.
+const defaultApplicationIDLabelValue = "_DEFAULT"
+
+// getApplicationIDLabelValue returns applicationID unchanged if non-empty,
+// otherwise defaultApplicationIDLabelValue.
+func getApplicationIDLabelValue(applicationID string) string {
+	if applicationID == "" {
+		return defaultApplicationIDLabelValue
+	}
+	return applicationID
+}
+
 // RuntimeMetricExporter defines the interface for recording runtime metrics across various components of the system.
 type RuntimeMetricExporter interface {
 	// Shared
-	IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType)  // +
-	RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal) // +
-	IncChannelStateSigValidation(sigType core.ChannelSignerType, success bool)           // +
-	IncChannelSessionKeys()                                                              // +
-	IncAppSessionKeys()                                                                  // +
+	IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType, applicationID string)
+	RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal, applicationID string)
+	IncChannelStateSigValidation(sigType core.ChannelSignerType, success bool)
+	IncChannelSessionKeys()
+	IncAppSessionKeys()
 
 	// api/rpc_router
-	IncRPCMessage(msgType rpc.MsgType, method string)                                 // +
-	IncRPCRequest(method, path string, success bool)                                  // +
-	ObserveRPCDuration(method, path string, success bool, durationSecs time.Duration) // +
-	SetRPCConnections(region, origin string, count uint32)                            // +
+	IncRPCMessage(msgType rpc.MsgType, method string)
+	IncRPCRequest(method, path string, success bool)
+	ObserveRPCDuration(method, path string, success bool, duration time.Duration)
+	SetRPCConnections(region, origin string, count uint32)
 
 	// api/app_session_v1
-	IncAppStateUpdate(applicationID string)                                                                  // +
-	IncAppSessionUpdateSigValidation(applicationID string, sigType app.AppSessionSignerTypeV1, success bool) // +
+	IncAppStateUpdate(applicationID string)
+	IncAppSessionUpdateSigValidation(applicationID string, sigType app.AppSessionSignerTypeV1, success bool)
 
 	// Blockchain Worker
-	IncBlockchainAction(asset string, blockchainID uint64, actionType string, success bool) // +
+	IncBlockchainAction(asset string, blockchainID uint64, actionType string, success bool)
 
 	// Event Listener
-	IncBlockchainEvent(blockchainID uint64, handledSuccessfully bool) // +
+	IncBlockchainEvent(blockchainID uint64, handledSuccessfully bool)
 }
 
 // noopRuntimeMetricExporter is a no-op implementation for use in tests.
 type noopRuntimeMetricExporter struct{}
 
-func NewNoopRuntimeMetricExporter() RuntimeMetricExporter                                         { return noopRuntimeMetricExporter{} }
-func (noopRuntimeMetricExporter) IncUserState(string, uint64, core.TransitionType)                {}
-func (noopRuntimeMetricExporter) RecordTransaction(string, core.TransactionType, decimal.Decimal) {}
-func (noopRuntimeMetricExporter) IncChannelStateSigValidation(core.ChannelSignerType, bool)       {}
-func (noopRuntimeMetricExporter) IncChannelSessionKeys()                                          {}
-func (noopRuntimeMetricExporter) IncAppSessionKeys()                                              {}
-func (noopRuntimeMetricExporter) IncRPCMessage(rpc.MsgType, string)                               {}
-func (noopRuntimeMetricExporter) IncRPCRequest(string, string, bool)                              {}
-func (noopRuntimeMetricExporter) ObserveRPCDuration(string, string, bool, time.Duration)          {}
-func (noopRuntimeMetricExporter) SetRPCConnections(string, string, uint32)                        {}
-func (noopRuntimeMetricExporter) IncAppStateUpdate(string)                                        {}
+func NewNoopRuntimeMetricExporter() RuntimeMetricExporter                                  { return noopRuntimeMetricExporter{} }
+func (noopRuntimeMetricExporter) IncUserState(string, uint64, core.TransitionType, string) {}
+func (noopRuntimeMetricExporter) RecordTransaction(string, core.TransactionType, decimal.Decimal, string) {
+}
+func (noopRuntimeMetricExporter) IncChannelStateSigValidation(core.ChannelSignerType, bool) {}
+func (noopRuntimeMetricExporter) IncChannelSessionKeys()                                    {}
+func (noopRuntimeMetricExporter) IncAppSessionKeys()                                        {}
+func (noopRuntimeMetricExporter) IncRPCMessage(rpc.MsgType, string)                         {}
+func (noopRuntimeMetricExporter) IncRPCRequest(string, string, bool)                        {}
+func (noopRuntimeMetricExporter) ObserveRPCDuration(string, string, bool, time.Duration)    {}
+func (noopRuntimeMetricExporter) SetRPCConnections(string, string, uint32)                  {}
+func (noopRuntimeMetricExporter) IncAppStateUpdate(string)                                  {}
 func (noopRuntimeMetricExporter) IncAppSessionUpdateSigValidation(string, app.AppSessionSignerTypeV1, bool) {
 }
 func (noopRuntimeMetricExporter) IncBlockchainAction(string, uint64, string, bool) {

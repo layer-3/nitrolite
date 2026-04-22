@@ -14,6 +14,15 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
+// Handlers in this package stamp DB writes with the session's stored
+// ApplicationID (persisted at app_session creation) rather than the
+// connection-scoped tag returned by rpc.GetApplicationID. This keeps app
+// session state attributable to the owning application even when a caller
+// connects without an app_id query parameter or with a different one —
+// e.g., a co-participant, a relay, or a re-connection. Channel-level
+// handlers (see clearnode/api/channel_v1) have no session to anchor to and
+// therefore use the connection tag.
+
 // Handler manages app session operations and provides RPC endpoints for app session management.
 type Handler struct {
 	useStoreInTx       StoreTxProvider
@@ -114,7 +123,7 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 
 // issueReleaseReceiverState creates a new channel state for a participant receiving funds from app session.
 // This follows the same pattern as issueTransferReceiverState in channel_v1 for transfer_receive transitions.
-func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, receiverWallet, asset, appSessionID string, amount decimal.Decimal) error {
+func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, receiverWallet, asset, appSessionID string, amount decimal.Decimal, applicationID string) error {
 	logger := log.FromContext(ctx)
 
 	// Lock the receiver's state to prevent concurrent modifications
@@ -175,7 +184,7 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 	}
 
 	// Store the new state
-	if err := tx.StoreUserState(*newState); err != nil {
+	if err := tx.StoreUserState(*newState, applicationID); err != nil {
 		return rpc.Errorf("failed to store receiver state: %v", err)
 	}
 
@@ -184,7 +193,7 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 		return rpc.Errorf("failed to create transaction: %v", err)
 	}
 
-	if err := tx.RecordTransaction(*transaction); err != nil {
+	if err := tx.RecordTransaction(*transaction, applicationID); err != nil {
 		return rpc.Errorf("failed to record transaction: %v", err)
 	}
 	logger.Info("recorded transaction",

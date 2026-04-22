@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
@@ -202,6 +203,14 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 // The method ensures proper cleanup when connections close, including
 // removing the connection from the hub and invoking disconnect callbacks.
 func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	applicationID := r.URL.Query().Get(ApplicationIDQueryParam)
+	if applicationID != "" && !app.IsValidApplicationID(applicationID) {
+		wn.cfg.Logger.Warn("rejecting connection with invalid application_id",
+			"remoteAddr", r.RemoteAddr, "applicationID", applicationID)
+		http.Error(w, fmt.Sprintf("invalid %s: must match %s", ApplicationIDQueryParam, app.ApplicationIDRegex.String()), http.StatusBadRequest)
+		return
+	}
+
 	wsConnection, err := wn.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		wn.cfg.Logger.Error("failed to upgrade connection to WebSocket", "error", err)
@@ -247,7 +256,7 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go connection.Serve(parentCtx, childHandleClosure)
-	go wn.processRequests(connection, parentCtx, childHandleClosure)
+	go wn.processRequests(connection, applicationID, parentCtx, childHandleClosure)
 
 	wg.Wait()
 }
@@ -264,9 +273,12 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // The method runs until the connection closes or the context is cancelled.
 // Each connection has its own SafeStorage instance for maintaining state
 // across requests.
-func (wn *WebsocketNode) processRequests(conn Connection, parentCtx context.Context, handleClosure func(error)) {
+func (wn *WebsocketNode) processRequests(conn Connection, applicationID string, parentCtx context.Context, handleClosure func(error)) {
 	defer handleClosure(nil) // Stop other goroutines when done
 	safeStorage := NewSafeStorage()
+	if applicationID != "" {
+		safeStorage.Set(ApplicationIDQueryParam, applicationID)
+	}
 
 	for {
 		var messageBytes []byte

@@ -137,7 +137,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 			state.Version == expectedReceiverState.Version &&
 			state.Transition.Type == core.TransitionTypeTransferReceive &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// For recordTransaction
 	mockTxStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
@@ -145,7 +145,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 			tx.Amount.Equal(transferAmount) &&
 			tx.FromAccount == senderWallet &&
 			tx.ToAccount == receiverWallet
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// For storing sender state
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -154,7 +154,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 			state.Version == incomingSenderState.Version &&
 			state.Transition.Type == core.TransitionTypeTransferSend &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingSenderState)
@@ -313,7 +313,7 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	// Sender state is stored before the transition-specific logic
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == senderWallet && state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// For issueTransferReceiverState - receiver has an active escrow lock
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
@@ -429,7 +429,7 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	// Sender state is stored before the transition-specific logic
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == senderWallet && state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	rpcState := toRPCState(*incomingSenderState)
 	reqPayload := rpc.ChannelsV1SubmitStateRequest{
@@ -573,13 +573,13 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 			tx.FromAccount == homeChannelID &&
 			tx.ToAccount == escrowChannelID &&
 			tx.Amount.Equal(lockAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Version == incomingState.Version &&
 			state.Transition.Type == core.TransitionTypeEscrowLock &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -729,7 +729,7 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 			tx.FromAccount == homeChannelID &&
 			tx.ToAccount == escrowChannelID &&
 			tx.Amount.Equal(withdrawAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Store incoming state with node signature
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -737,7 +737,7 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 			state.Version == incomingState.Version &&
 			state.Transition.Type == core.TransitionTypeEscrowWithdraw &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -866,13 +866,13 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 			tx.FromAccount == homeChannelID &&
 			tx.ToAccount == userWallet &&
 			tx.Amount.Equal(depositAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Version == incomingState.Version &&
 			state.Transition.Type == core.TransitionTypeHomeDeposit &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1001,14 +1001,14 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 			tx.FromAccount == userWallet &&
 			tx.ToAccount == homeChannelID &&
 			tx.Amount.Equal(withdrawalAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Version == incomingState.Version &&
 
 			state.Transition.Type == core.TransitionTypeHomeWithdrawal &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1160,14 +1160,14 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 			tx.FromAccount == homeChannelID &&
 			tx.ToAccount == escrowChannelID &&
 			tx.Amount.Equal(lockAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Version == incomingState.Version &&
 
 			state.Transition.Type == core.TransitionTypeMutualLock &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1318,7 +1318,7 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 			tx.FromAccount == escrowChannelID &&
 			tx.ToAccount == userWallet &&
 			tx.Amount.Equal(depositAmount)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Store incoming state with node signature
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1327,7 +1327,7 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 
 			state.Transition.Type == core.TransitionTypeEscrowDeposit &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1456,7 +1456,7 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 			tx.FromAccount == userWallet &&
 			tx.ToAccount == homeChannelID &&
 			tx.Amount.Equal(userBalance)
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == userWallet &&
 			state.Version == incomingState.Version &&
@@ -1465,7 +1465,7 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 			state.Transition.Amount.Equal(userBalance) &&
 			state.HomeLedger.UserBalance.IsZero() &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1594,7 +1594,7 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 			state.Version == incomingState.Version &&
 			state.Transition.Type == core.TransitionTypeAcknowledgement &&
 			state.NodeSig != nil
-	})).Return(nil)
+	}), mock.Anything).Return(nil)
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingState)
@@ -1631,7 +1631,7 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 
 	// Verify all mock expectations - notably RecordTransaction should NOT have been called
 	mockTxStore.AssertExpectations(t)
-	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
 
 // Helper function to create a string pointer

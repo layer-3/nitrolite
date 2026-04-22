@@ -29,6 +29,10 @@ type Transaction struct {
 	ReceiverNewStateID *string              `gorm:"column:receiver_new_state_id;size:64"`
 	Amount             decimal.Decimal      `gorm:"column:amount;type:decimal(38,18);not null"`
 	CreatedAt          time.Time
+
+	// ApplicationID is the self-declared origin tag of the client that caused
+	// this transaction (see rpc.ApplicationIDQueryParam). Advisory only.
+	ApplicationID *string `gorm:"column:application_id;size:66;index:idx_transactions_app_id"`
 }
 
 func (Transaction) TableName() string {
@@ -36,7 +40,8 @@ func (Transaction) TableName() string {
 }
 
 // RecordTransaction creates a transaction record linking state transitions.
-func (s *DBStore) RecordTransaction(tx core.Transaction) error {
+// applicationID is the client-declared origin tag; empty string → NULL column.
+func (s *DBStore) RecordTransaction(tx core.Transaction, applicationID string) error {
 	dbTx := Transaction{
 		ID:          strings.ToLower(tx.ID),
 		Type:        tx.TxType,
@@ -53,6 +58,9 @@ func (s *DBStore) RecordTransaction(tx core.Transaction) error {
 	if tx.ReceiverNewStateID != nil {
 		lowered := strings.ToLower(*tx.ReceiverNewStateID)
 		dbTx.ReceiverNewStateID = &lowered
+	}
+	if applicationID != "" {
+		dbTx.ApplicationID = &applicationID
 	}
 
 	if err := s.db.Create(&dbTx).Error; err != nil {

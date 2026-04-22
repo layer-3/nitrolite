@@ -62,7 +62,7 @@ func (h *Handler) getChannelSigValidator(tx Store, asset string) *core.ChannelSi
 // issueTransferReceiverState creates and stores a new state for the receiver of a transfer.
 // It reads the receiver's current state, applies a transfer_receive transition with the same
 // amount and tx hash, signs it with the node's key, and persists it.
-func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, senderState core.State) (*core.State, error) {
+func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, senderState core.State, applicationID string) (*core.State, error) {
 	logger := log.FromContext(ctx)
 
 	incomingTransition := senderState.Transition
@@ -130,7 +130,7 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 		nodeSig := _nodeSig.String()
 		newState.NodeSig = &nodeSig
 	}
-	if err := tx.StoreUserState(*newState); err != nil {
+	if err := tx.StoreUserState(*newState, applicationID); err != nil {
 		return nil, rpc.Errorf("failed to store receiver state")
 	}
 

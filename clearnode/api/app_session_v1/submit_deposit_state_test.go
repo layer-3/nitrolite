@@ -182,14 +182,14 @@ func TestSubmitDepositState_Success(t *testing.T) {
 			state.Version == incomingUserState.Version &&
 			state.Transition.Type == core.TransitionTypeCommit &&
 			state.NodeSig != nil
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 
 	// Mock transaction recording
 	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
 		return tx.TxType == core.TransactionTypeCommit &&
 			tx.Amount.Equal(depositAmount) &&
 			tx.ToAccount == appSessionID
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingUserState)
@@ -661,10 +661,10 @@ func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
 	})).Return(nil).Once()
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == participant1 && state.NodeSig != nil
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
 		return tx.TxType == core.TransactionTypeCommit && tx.Amount.Equal(depositAmount)
-	})).Return(nil).Once()
+	}), mock.Anything).Return(nil).Once()
 
 	rpcState := toRPCState(*incomingUserState)
 	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{

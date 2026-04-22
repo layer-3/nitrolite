@@ -380,14 +380,23 @@ export class NitroliteClient {
     }
 
     private getRPCUrl(chainId: number): string {
-        return this._blockchainRPCs[chainId]
-            ?? this.walletClient.chain?.rpcUrls.public?.http?.[0]
-            ?? this.walletClient.chain?.rpcUrls.default?.http?.[0]
-            ?? (() => {
-                throw new Error(
-                    `[compat] No RPC URL configured for chain ${chainId}. Pass blockchainRPCs when creating NitroliteClient.`,
-                );
-            })();
+        const configured = this._blockchainRPCs[chainId];
+        if (configured) {
+            return configured;
+        }
+
+        const walletChain = this.walletClient.chain;
+        if (walletChain && Number(walletChain.id) === chainId) {
+            const walletRpcUrl = walletChain.rpcUrls.public?.http?.[0]
+                ?? walletChain.rpcUrls.default?.http?.[0];
+            if (walletRpcUrl) {
+                return walletRpcUrl;
+            }
+        }
+
+        throw new Error(
+            `[compat] No RPC URL configured for chain ${chainId}. Pass blockchainRPCs when creating NitroliteClient.`,
+        );
     }
 
     private async getReadClientForChain(chainId: bigint): Promise<PublicClient> {

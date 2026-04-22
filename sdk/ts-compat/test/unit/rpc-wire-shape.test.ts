@@ -229,20 +229,28 @@ describe('compat RPC helper wire shapes', () => {
     it('normalizes snake_case live responses into legacy parse helper shapes', () => {
         expect(
             parseGetAppSessionsResponse(
-                JSON.stringify({ res: [1, 'app_sessions.v1.get_app_sessions', { app_sessions: [{ app_session_id: 's1' }] }] }),
+                JSON.stringify({ res: [1, 'app_sessions.v1.get_app_sessions', { app_sessions: [{ app_session_id: 's1' }] }, 1234] }),
             ),
         ).toEqual({ params: { appSessions: [{ app_session_id: 's1' }] } });
 
         expect(
             parseCreateAppSessionResponse(
-                JSON.stringify({ res: [1, 'app_sessions.v1.create_app_session', { app_session_id: 's1', version: '1', status: 'open' }] }),
+                JSON.stringify({ res: [1, 'app_sessions.v1.create_app_session', { app_session_id: 's1', version: '1', status: 'open' }, 1234] }),
             ),
         ).toEqual({ params: { appSessionId: 's1', version: '1', status: 'open' } });
 
         expect(
             parseGetAppDefinitionResponse(
-                JSON.stringify({ res: [1, 'app_sessions.v1.get_app_definition', { definition: { application_id: 'app-1' } }] }),
+                JSON.stringify({ res: [1, 'app_sessions.v1.get_app_definition', { definition: { application_id: 'app-1' } }, 1234] }),
             ),
         ).toEqual({ params: { application_id: 'app-1' } });
+    });
+
+    it('accepts bare legacy response arrays using the same tuple layout', () => {
+        expect(
+            parseGetAppSessionsResponse(
+                JSON.stringify([1, 'app_sessions.v1.get_app_sessions', { app_sessions: [{ app_session_id: 's1' }] }, 1234]),
+            ),
+        ).toEqual({ params: { appSessions: [{ app_session_id: 's1' }] } });
     });
 });

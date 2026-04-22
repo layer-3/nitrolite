@@ -35,7 +35,7 @@ import {
 
 type LegacyRPCEnvelope = {
     req?: [number, string, unknown, number];
-    res?: [number, string, unknown];
+    res?: [number, string, unknown, number?];
     sig?: string;
 };
 
@@ -63,9 +63,9 @@ function extractResponsePayload(raw: string): { requestId: number; method: strin
 
     if (Array.isArray(data)) {
         return {
-            requestId: data[1] ?? 0,
-            method: data[2] ?? '',
-            payload: data[3] ?? {},
+            requestId: data[0] ?? 0,
+            method: data[1] ?? '',
+            payload: data[2] ?? {},
         };
     }
 

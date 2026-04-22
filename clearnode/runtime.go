@@ -204,6 +204,7 @@ func InitBackbone() *Backbone {
 	return &Backbone{
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
+		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
 		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
 		ValidationLimits:            conf.ValidationLimits,

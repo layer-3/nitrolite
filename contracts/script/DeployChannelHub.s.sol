@@ -13,7 +13,10 @@ import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
  * @notice Forge script to deploy engine libraries and ChannelHub
  * @dev Foundry automatically deploys unlinked libraries (ChannelEngine,
  *      EscrowDepositEngine, EscrowWithdrawalEngine) before ChannelHub in the
- *      broadcast batch. Their addresses appear in the broadcast JSON output.
+ *      broadcast batch via the CREATE2 factory (0x4e59b44847b379578588920ca78fbf26c0b4956c,
+ *      salt = bytes32(0)). Their addresses are deterministic and are logged in the
+ *      summary below. Tx hashes for all deployments are written to the broadcast JSON
+ *      after the script completes.
  *
  * Usage:
  *   DEFAULT_VALIDATOR_ADDR=<addr>   Address of an already-deployed ISignatureValidator.
@@ -43,13 +46,14 @@ contract DeployChannelHub is Script {
         console.log("Chain ID:          ", block.chainid);
 
         // ----------------------------------------------------------------
-        // Predict addresses for informational logging.
-        // NOTE: Unlinked libraries (ChannelEngine, EscrowDepositEngine,
-        // EscrowWithdrawalEngine) are deployed by Foundry via the CREATE2
-        // deployer (0x4e59b44847b379578588920ca78fbf26c0b4956c) and do NOT
-        // consume the deployer's CREATE nonce.  Their exact addresses appear
-        // in the broadcast JSON after the run.
+        // Pre-compute all deployment addresses for informational logging.
+        // Libraries are deployed by Foundry via the CREATE2 factory with
+        // salt = bytes32(0), making their addresses fully deterministic.
         // ----------------------------------------------------------------
+        address channelEngineAddr = _computeLibraryAddress("ChannelEngine.sol:ChannelEngine");
+        address escrowDepositAddr = _computeLibraryAddress("EscrowDepositEngine.sol:EscrowDepositEngine");
+        address escrowWithdrawalAddr = _computeLibraryAddress("EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine");
+
         uint64 nonce = vm.getNonce(deployer);
 
         bool deployValidator = defaultValidatorAddr == address(0);
@@ -59,12 +63,9 @@ contract DeployChannelHub is Script {
         } else {
             console.log("DefaultValidator:  ", defaultValidatorAddr);
         }
-
-        // Libraries are deployed via the CREATE2 deployer; they do not affect
-        // the deployer's nonce sequence, so ChannelHub lands at nonce `nonce`.
-        console.log(
-            "ChannelEngine/EscrowDepositEng/EscrowWithdrawEng: deployed via CREATE2 deployer (see broadcast JSON)"
-        );
+        console.log("ChannelEngine:     ", channelEngineAddr);
+        console.log("EscrowDepositEngine:  ", escrowDepositAddr);
+        console.log("EscrowWithdrawalEngine: ", escrowWithdrawalAddr);
         console.log("ChannelHub:        ", vm.computeCreateAddress(deployer, nonce));
 
         vm.startBroadcast();
@@ -92,11 +93,31 @@ contract DeployChannelHub is Script {
         // ----------------------------------------------------------------
         // Summary
         // ----------------------------------------------------------------
+        string memory broadcastFile =
+            string.concat("broadcast/DeployChannelHub.s.sol/", vm.toString(block.chainid), "/run-latest.json");
+
         console.log("");
         console.log("=== Deployment complete ===");
         console.log("DefaultSigValidator:", defaultValidatorAddr);
         console.log("Node:               ", nodeAddr);
         console.log("ChannelHub:         ", address(hub));
-        console.log("(Library addresses are logged in the broadcast JSON)");
+        console.log("");
+        console.log("=== Libraries (deployed via CREATE2, salt=0) ===");
+        console.log("  ChannelEngine    :", channelEngineAddr);
+        console.log("  EscrowDepositEngine :", escrowDepositAddr);
+        console.log("  EscrowWithdrawalEngine:", escrowWithdrawalAddr);
+        console.log("");
+        console.log(string.concat("  (tx hashes: ", broadcastFile, ")"));
+    }
+
+    // ----------------------------------------------------------------
+    // Internal helpers
+    // ----------------------------------------------------------------
+
+    /// @dev Compute the deterministic CREATE2 address Foundry uses when
+    ///      auto-deploying an unlinked library: CREATE2_FACTORY, salt=bytes32(0).
+    function _computeLibraryAddress(string memory artifact) internal view returns (address) {
+        bytes memory creationCode = vm.getCode(artifact);
+        return vm.computeCreate2Address(bytes32(0), keccak256(creationCode), CREATE2_FACTORY);
     }
 }

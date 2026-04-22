@@ -7,20 +7,20 @@ assets:
       - blockchain_id: 11155111
         address: "0xD3E8Eb01Ae895262f187c4aAe936eC5c0665bbf8"
         decimals: 6
-      - blockchain_id: 80002
-        address: "0x0827b6aAA03475A8BF59Ee1A2bD76903DDFbaDB6"
+      - blockchain_id: 84532
+        address: "0x541aa129B863bbd8A7176a1579b7558CACc06671"
         decimals: 8
   - name: "BNB"
     symbol: "bnb"
-    decimals: 18
+    decimals: 8
     suggested_blockchain_id: 11155111
     tokens:
       - blockchain_id: 11155111
         address: "0x719a00F9e8b831335F156337cEF7dC48986b2e84"
         decimals: 18
-      - blockchain_id: 80002
-        address: "0x9d8193e5655a36FFB9CD7D88D31c91d2650896D0"
-        decimals: 18
+      - blockchain_id: 84532
+        address: "0x96dE620f629efd76935070f040A9B3AC855339EB"
+        decimals: 8
   - name: "Ether"
     symbol: "eth"
     decimals: 18
@@ -29,12 +29,7 @@ assets:
       - blockchain_id: 11155111
         address: "0x0000000000000000000000000000000000000000"
         decimals: 18
-  - name: "POL"
-    symbol: "pol"
-    decimals: 18
-    suggested_blockchain_id: 80002
-    tokens:
-      - blockchain_id: 80002
+      - blockchain_id: 84532
         address: "0x0000000000000000000000000000000000000000"
         decimals: 18
   - name: "Yellow"

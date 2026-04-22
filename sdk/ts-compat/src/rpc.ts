@@ -368,6 +368,8 @@ export async function createCloseAppSessionMessage(
     requestId?: number,
     timestamp?: number,
 ): Promise<string> {
+    const version = requireSubmitVersion('createCloseAppSessionMessage', params.version);
+
     return newSignedMessage(
         signer,
         'app_sessions.v1.submit_app_state',
@@ -375,7 +377,7 @@ export async function createCloseAppSessionMessage(
             {
                 app_session_id: params.app_session_id,
                 intent: RPCAppStateIntent.Close,
-                version: requireSubmitVersion('createCloseAppSessionMessage', params.version),
+                version,
                 allocations: params.allocations,
                 session_data: params.session_data,
                 quorum_sigs: params.quorum_sigs,

@@ -702,6 +702,17 @@ export class NitroliteClient {
         return channels;
     }
 
+    /**
+     * Returns clearnode ledger balances encoded with asset-level decimals.
+     *
+     * @remarks
+     * The raw string amounts returned here are not guaranteed to match the raw
+     * token-unit bigint values expected by on-chain helpers such as deposit(),
+     * withdrawal(), approveTokens(), getTokenBalance(), or getTokenAllowance().
+     * When asset decimals and chain-specific token decimals differ, convert via
+     * the token helpers instead of passing BigInt(balance.amount) through
+     * directly to an on-chain method.
+     */
     async getBalances(wallet?: Address): Promise<LedgerBalance[]> {
         const balances = await this.innerClient.getBalances(wallet ?? this.userAddress);
         const result: LedgerBalance[] = [];

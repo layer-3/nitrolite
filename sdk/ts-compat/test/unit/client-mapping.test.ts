@@ -78,6 +78,7 @@ function makeCompatClient(innerOverrides: Record<string, unknown> = {}) {
         userAddress: USER,
         walletClient: {
             chain: {
+                id: Number(CURRENT_CHAIN),
                 rpcUrls: {
                     public: { http: ['https://rpc.base-sepolia.example'] },
                     default: { http: ['https://rpc.base-sepolia.example'] },
@@ -252,6 +253,26 @@ describe('NitroliteClient compat mappings', () => {
 
         await expect(client.getTokenBalance(CURRENT_TOKEN)).resolves.toBe(512345678n);
         expect(innerClient.getOnChainBalance).toHaveBeenCalledWith(CURRENT_CHAIN, 'yusd', USER);
+    });
+
+    it('does not reuse the connected wallet rpc url for a different requested chain', () => {
+        const { client } = makeCompatClient();
+        Object.assign(client, {
+            _blockchainRPCs: {},
+            walletClient: {
+                chain: {
+                    id: 11155111,
+                    rpcUrls: {
+                        public: { http: ['https://rpc.sepolia.example'] },
+                        default: { http: ['https://rpc.sepolia.example'] },
+                    },
+                },
+            },
+        });
+
+        expect(() => (client as unknown as Record<string, (chainId: number) => string>).getRPCUrl(84532)).toThrow(
+            '[compat] No RPC URL configured for chain 84532.',
+        );
     });
 
     it('exposes token-and-chain specific display data and assets list entries', async () => {

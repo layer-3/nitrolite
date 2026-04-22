@@ -71,7 +71,7 @@ describe('TS RPC drift guards', () => {
         expect({ missing, extra }).toEqual({ missing: [], extra: [] });
     });
 
-    it('keeps every TS raw RPC method registered by the live router', () => {
+    it('keeps the TS raw RPC method surface aligned with live router registrations', () => {
         const routerMethods = extractRouterHandlers(
             fs.readFileSync(path.join(repoRoot, 'clearnode/api/rpc_router.go'), 'utf8')
         );

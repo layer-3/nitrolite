@@ -27,11 +27,11 @@ The runtime smoke builds the TS SDK, builds TS compat, builds a temporary local 
 
 This is not a load test. It uses empty local `blockchains` and `assets` config so PR CI does not depend on external RPC endpoints, wallets, or shared Clearnode deployments.
 
-To run the same lightweight compatibility smoke against a shared Clearnode, use external-node mode:
+To run the same lightweight compatibility smoke against an existing Clearnode, use external-node mode:
 
 ```bash
 CLEARNODE_RUNTIME_SMOKE_EXTERNAL=1 \
-CLEARNODE_RUNTIME_SMOKE_WS_URL=wss://clearnode-stress.yellow.org/v1/ws \
+CLEARNODE_RUNTIME_SMOKE_WS_URL=<wss-or-ws-clearnode-url> \
 ./scripts/check-protocol-drift.sh --runtime
 ```
 
@@ -92,16 +92,16 @@ Each guard includes at least one negative test or mutation-style check that prov
 - Transform fixture failure: update or add raw Clearnode fixtures only for wire shapes the SDK intentionally supports. Do not silently accept missing required fields that would later crash consumers.
 - Compat mapping failure: current v1 SDK shapes are primary. Legacy fallbacks must stay explicit in tests; do not add broad best-effort mappers without fixture coverage.
 - Runtime setup/startup failure: inspect `runtime-smoke-logs` in CI or the preserved temp log directory locally. `[setup]` points to build/setup, `[startup]` to local Clearnode process exit, `[connection]` to WebSocket readiness, and `[transform]` or `[compat mapping]` to SDK response handling.
-- Shared stress smoke failure: rerun the manual workflow or local external-node command to confirm it is not shared-environment state. Stress smoke is release signal, not a PR blocker.
+- External smoke failure: rerun the manual workflow or local external-node command to confirm it is not shared-environment state. External smoke is release/demo signal, not a PR blocker.
 
 ## CI Policy
 
 `Test (Protocol Drift Static)` runs on PRs and main pushes. It is deterministic and does not call shared Clearnode deployments.
 
-`Test (Protocol Drift Runtime)` also runs on PRs and main pushes. It starts an isolated local Clearnode inside the GitHub Actions job and does not use shared stress or sandbox endpoints.
+`Test (Protocol Drift Runtime)` also runs on PRs and main pushes. It starts an isolated local Clearnode inside the GitHub Actions job and does not use shared external or sandbox endpoints.
 
 If runtime smoke fails in CI, inspect the `protocol-drift-runtime-smoke-logs` artifact. The smoke command categorizes failures as setup, startup, connection, timeout, transform, or compat mapping failures.
 
 The runtime job uses read-only repository permissions and no secrets. It builds Clearnode locally instead of pulling or publishing an image, so ordinary PRs do not need package-write permissions. If organization policy restricts forked PR workflows, a maintainer can rerun the same command locally or through an allowed CI rerun.
 
-Shared stress Clearnode checks are manual only through the `Protocol Drift Stress Smoke` workflow. They are not PR-blocking and are not scheduled by default. `wss://clearnode-stress.yellow.org/v1/ws` can be newer than sandbox while audit remediations roll out, so it is useful for release confidence but must not be a default PR blocker.
+External Clearnode checks are manual only through the `Protocol Drift External Smoke` workflow. The workflow requires the caller to provide the WebSocket URL, is not PR-blocking, and is not scheduled by default. Team-owned temporary environments can still be useful for release confidence, but they must not become default PR blockers unless their availability and data contract are owned.

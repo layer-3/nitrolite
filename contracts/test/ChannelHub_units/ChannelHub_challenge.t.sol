@@ -14,6 +14,7 @@ import {
     ParticipantIndex
 } from "../../src/interfaces/Types.sol";
 
+// forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_challenge is ChannelHubTest_Base {
     ChannelDefinition internal def;
     bytes32 internal channelId;
@@ -73,6 +74,34 @@ contract ChannelHubTest_challenge is ChannelHubTest_Base {
         );
         escrowState = mutualSignStateBothWithEcdsaValidator(escrowState, channelId, ALICE_PK);
     }
+
+    // ========== StateIntent ==========
+
+    function test_revert_closeIntent() public {
+        State memory state;
+        state.version = 1;
+        state.intent = StateIntent.CLOSE;
+
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, state, ALICE_PK);
+
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        vm.prank(alice);
+        cHub.challengeChannel(channelId, state, challengerSig, ParticipantIndex.USER);
+    }
+
+    function test_revert_finalizeMigrationIntent() public {
+        State memory state;
+        state.version = 1;
+        state.intent = StateIntent.FINALIZE_MIGRATION;
+
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, state, ALICE_PK);
+
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        vm.prank(alice);
+        cHub.challengeChannel(channelId, state, challengerSig, ParticipantIndex.USER);
+    }
+
+    // ========== INITIATE_ESCROW_DEPOSIT caller restriction ==========
 
     function test_revert_initiateEscrowDeposit_homeChain_callerNotNode() public {
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, escrowState, ALICE_PK);

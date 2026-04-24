@@ -7,6 +7,7 @@ import {ChannelEngine} from "../../src/ChannelEngine.sol";
 import {ChannelStatus, State, StateIntent, Ledger} from "../../src/interfaces/Types.sol";
 import {TestUtils} from "../TestUtils.sol";
 
+// forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelEngineTest_ValidateTransition is Test {
     // ======== Helpers ========
 

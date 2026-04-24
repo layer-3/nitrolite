@@ -8,6 +8,7 @@ import {Utils} from "../../src/Utils.sol";
 import {ChannelDefinition, ChannelStatus, State, StateIntent, Ledger} from "../../src/interfaces/Types.sol";
 import {TestUtils} from "../TestUtils.sol";
 
+// forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_createChannel is ChannelHubTest_Base {
     ChannelDefinition internal def;
     bytes32 internal channelId;
@@ -153,6 +154,16 @@ contract ChannelHubTest_createChannel is ChannelHubTest_Base {
 
         vm.prank(alice);
         vm.expectRevert(ChannelHub.IncorrectChannelStatus.selector);
+        cHub.createChannel(def, state);
+    }
+
+    // ========== StateIntent ==========
+
+    function test_revert_ifDisallowedIntent() public {
+        State memory state;
+        state.intent = StateIntent.CLOSE;
+
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
         cHub.createChannel(def, state);
     }
 

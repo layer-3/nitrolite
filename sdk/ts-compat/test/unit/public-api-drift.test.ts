@@ -187,6 +187,28 @@ describe('compat public runtime API drift guard', () => {
         expect(serializePublicApi()).toMatchSnapshot();
     });
 
+    it('keeps session-key compat helpers and client methods public', () => {
+        expect(Object.keys(publicApi)).toEqual(
+            expect.arrayContaining(['toSessionKeyQuorumSignature', 'NitroliteClient'])
+        );
+
+        const api = serializePublicApi();
+        const client = api.find((member) => member.name === 'NitroliteClient');
+        expect(client?.properties).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining('signChannelSessionKeyState:'),
+                expect.stringContaining('submitChannelSessionKeyState:'),
+                expect.stringContaining('getLastChannelKeyStates:'),
+                expect.stringContaining('signSessionKeyState:'),
+                expect.stringContaining('submitSessionKeyState:'),
+                expect.stringContaining('getLastKeyStates:'),
+            ])
+        );
+
+        const helper = api.find((member) => member.name === 'toSessionKeyQuorumSignature');
+        expect(helper?.signatures?.[0]).toContain('signature: Hex | string');
+    });
+
     it('proves adversarial public export removal is observable', () => {
         const exports = new Set(Object.keys(publicApi));
         exports.delete('NitroliteClient');

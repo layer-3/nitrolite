@@ -9,6 +9,7 @@ import {EscrowStatus} from "../src/interfaces/Types.sol";
  * @title TestChannelHub
  * @notice Test harness contract that exposes internal ChannelHub functions for testing
  */
+// forge-lint: disable-next-item(mixed-case-function)
 contract TestChannelHub is ChannelHub {
     constructor(ISignatureValidator _defaultSigValidator, address _node) ChannelHub(_defaultSigValidator, _node) {}
 

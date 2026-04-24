@@ -68,7 +68,7 @@ For a new RPC method, update all applicable surfaces in the same PR: Go method c
 
 For a new DTO field, update the Go JSON-tagged struct and TS request/response interface together. Optionality must match unless a small, named override is added to the drift test.
 
-For a new response transform, add a raw fixture and expected behavior test. Unsupported wire shapes should fail clearly instead of silently producing partial data.
+For a new response transform, add a raw fixture and expected behavior test in the relevant drift test. Unsupported wire shapes should fail clearly instead of silently producing partial data. If the high-level client method performs the transform inline, add a client-level mock test in addition to any isolated transform test.
 
 For intentional app/session-key signing vector changes, regenerate the Go source-of-truth hashes from the repo root:
 
@@ -81,6 +81,18 @@ Then update `sdk/ts/test/unit/app-signing-drift.test.ts` with the changed hashes
 ## Adversarial Proof
 
 Each guard includes at least one negative test or mutation-style check that proves the guard would fail if the relevant surface drifted. These checks must use fixtures, temp copies, or local in-test mutations. They must not leave tracked files dirty.
+
+## Troubleshooting
+
+- Missing RPC method or client wrapper: update Go method constants, router registrations, TS method constants, and the public TS client wrapper together. If the method is intentionally raw-only, add an explicit exemption in the RPC drift test.
+- DTO optionality or field drift: compare the failing method/type/field path in the drift output, then update the Go JSON-tagged struct and TS request/response interface in the same PR.
+- Public API snapshot drift: treat the diff as an SDK API change. If intentional, update snapshots with `npm run drift:check -- -u` in the affected package and document the API change in the PR body.
+- ABI drift: regenerate Foundry artifacts and SDK ABI files with `cd contracts && forge build` and `cd ../sdk/ts && npm run codegen-abi`. If AppRegistry changes, remember it is currently manifest-guarded because the matching artifact is not in this repo.
+- Signing hash mismatch: regenerate Go source-of-truth vectors with `go run ./scripts/drift/generate-app-signing-vectors.go`, then inspect whether the change is field order, enum value, amount formatting, nonce/version encoding, or exact session-data bytes.
+- Transform fixture failure: update or add raw Clearnode fixtures only for wire shapes the SDK intentionally supports. Do not silently accept missing required fields that would later crash consumers.
+- Compat mapping failure: current v1 SDK shapes are primary. Legacy fallbacks must stay explicit in tests; do not add broad best-effort mappers without fixture coverage.
+- Runtime setup/startup failure: inspect `runtime-smoke-logs` in CI or the preserved temp log directory locally. `[setup]` points to build/setup, `[startup]` to local Clearnode process exit, `[connection]` to WebSocket readiness, and `[transform]` or `[compat mapping]` to SDK response handling.
+- Shared stress smoke failure: rerun the manual workflow or local external-node command to confirm it is not shared-environment state. Stress smoke is release signal, not a PR blocker.
 
 ## CI Policy
 

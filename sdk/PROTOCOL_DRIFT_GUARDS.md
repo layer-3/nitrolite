@@ -31,7 +31,7 @@ This is not a load test. It uses empty local `blockchains` and `assets` config s
 
 - RPC method drift: compares Go RPC method literals, Clearnode router registrations, TS method constants, and public TS client wrappers.
 - RPC DTO drift: compares Go JSON-tagged DTO structs against TS request/response interfaces for required fields, optional fields, and scalar/container shape.
-- Public runtime API drift: snapshots root runtime exports for `@yellow-org/sdk` and `@yellow-org/sdk-compat`.
+- Public API drift: snapshots root runtime exports and compiler-derived TypeScript signatures for `@yellow-org/sdk` and `@yellow-org/sdk-compat`, including type-only exports, interfaces, functions, classes, public class methods, enums, constants, and type aliases.
 - ABI drift: compares checked-in `ChannelHub` functions against the current Foundry artifact, checks SDK-consumed ERC20 functions against the ERC20 artifact, and guards the manually checked-in AppRegistry ABI against an explicit consumed-function manifest until that contract artifact exists in this repo.
 - Signing drift: compares TS app-session packers against Go-generated canonical vectors.
 - Transform drift: checks raw Clearnode response fixtures for app sessions, node config, assets, and strict failure on unsupported required shapes.

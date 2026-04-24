@@ -1,5 +1,2468 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
+exports[`SDK public runtime API drift guard keeps root TypeScript public API signatures intentional 1`] = `
+[
+  {
+    "kind": "interface",
+    "name": "ActionAllowance",
+    "properties": [
+      "allowance: bigint",
+      "gatedAction: string",
+      "timeWindow: string",
+      "used: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ActionAllowanceV1",
+    "properties": [
+      "allowance: string",
+      "gated_action: string",
+      "time_window: string",
+      "used: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppAllocationV1",
+    "properties": [
+      "amount: Decimal",
+      "asset: string",
+      "participant: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppDefinitionV1",
+    "properties": [
+      "applicationId: string",
+      "nonce: bigint",
+      "participants: AppParticipantV1[]",
+      "quorum: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppInfoV1",
+    "properties": [
+      "created_at: string",
+      "creation_approval_not_required: boolean",
+      "id: string",
+      "metadata: string",
+      "owner_wallet: string",
+      "updated_at: string",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "applyAcknowledgementTransition",
+    "signatures": [
+      "(state: State): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyChannelCreation",
+    "signatures": [
+      "(state: State, channelDef: ChannelDefinition, blockchainId: bigint, tokenAddress: Address, nodeAddress: Address): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyCommitTransition",
+    "signatures": [
+      "(state: State, accountId: string, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyEscrowDepositTransition",
+    "signatures": [
+      "(state: State, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyEscrowLockTransition",
+    "signatures": [
+      "(state: State, blockchainId: bigint, tokenAddress: Address, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyEscrowWithdrawTransition",
+    "signatures": [
+      "(state: State, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyFinalizeTransition",
+    "signatures": [
+      "(state: State): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyHomeDepositTransition",
+    "signatures": [
+      "(state: State, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyHomeWithdrawalTransition",
+    "signatures": [
+      "(state: State, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyMigrateTransition",
+    "signatures": [
+      "(state: State, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyMutualLockTransition",
+    "signatures": [
+      "(state: State, blockchainId: bigint, tokenAddress: Address, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyReceiverTransitions",
+    "signatures": [
+      "(state: State, ...transitions: Transition[]): void",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyReleaseTransition",
+    "signatures": [
+      "(state: State, accountId: string, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyTransferReceiveTransition",
+    "signatures": [
+      "(state: State, sender: string, amount: Decimal, txId: string): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "applyTransferSendTransition",
+    "signatures": [
+      "(state: State, recipient: string, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "AppParticipantV1",
+    "properties": [
+      "signatureWeight: number",
+      "walletAddress: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionInfoV1",
+    "properties": [
+      "allocations: AppAllocationV1[]",
+      "appDefinition: AppDefinitionV1",
+      "appSessionId: string",
+      "isClosed: boolean",
+      "sessionData: string",
+      "version: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "constructors": [
+      "(inner: StateSigner): AppSessionKeySignerV1",
+    ],
+    "kind": "class",
+    "name": "AppSessionKeySignerV1",
+    "properties": [
+      "getAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionKeyStateV1",
+    "properties": [
+      "app_session_ids: string[]",
+      "application_ids: string[]",
+      "expires_at: string",
+      "session_key: string",
+      "user_address: string",
+      "user_sig: string",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Void = 0",
+      "Open = 1",
+      "Closed = 2",
+    ],
+    "name": "AppSessionStatus",
+  },
+  {
+    "kind": "function",
+    "name": "appSessionStatusToString",
+    "signatures": [
+      "(status: AppSessionStatus): string",
+    ],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1CreateAppSessionMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1CreateAppSessionRequest",
+    "properties": [
+      "definition: AppDefinitionV1",
+      "owner_sig: string",
+      "quorum_sigs: string[]",
+      "session_data: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1CreateAppSessionResponse",
+    "properties": [
+      "app_session_id: string",
+      "status: string",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1GetAppDefinitionMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetAppDefinitionRequest",
+    "properties": [
+      "app_session_id: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetAppDefinitionResponse",
+    "properties": [
+      "definition: AppDefinitionV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1GetAppSessionsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetAppSessionsRequest",
+    "properties": [
+      "app_session_id: string",
+      "pagination: PaginationParamsV1",
+      "participant: Address",
+      "status: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetAppSessionsResponse",
+    "properties": [
+      "app_sessions: AppSessionInfoV1[]",
+      "metadata: PaginationMetadataV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1GetLastKeyStatesMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetLastKeyStatesRequest",
+    "properties": [
+      "session_key: string",
+      "user_address: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1GetLastKeyStatesResponse",
+    "properties": [
+      "states: AppSessionKeyStateV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1Group",
+    "type": "string",
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1RebalanceAppSessionsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1RebalanceAppSessionsRequest",
+    "properties": [
+      "signed_updates: SignedAppStateUpdateV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1RebalanceAppSessionsResponse",
+    "properties": [
+      "batch_id: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1SubmitAppStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitAppStateRequest",
+    "properties": [
+      "app_state_update: AppStateUpdateV1",
+      "quorum_sigs: string[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitAppStateResponse",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1SubmitDepositStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitDepositStateRequest",
+    "properties": [
+      "app_state_update: AppStateUpdateV1",
+      "quorum_sigs: string[]",
+      "user_state: StateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitDepositStateResponse",
+    "properties": [
+      "signature: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppSessionsV1SubmitSessionKeyStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitSessionKeyStateRequest",
+    "properties": [
+      "state: AppSessionKeyStateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionsV1SubmitSessionKeyStateResponse",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionV1",
+    "properties": [
+      "application: string",
+      "createdAt: Date",
+      "nonce: bigint",
+      "participants: AppParticipantV1[]",
+      "quorum: number",
+      "sessionData: string",
+      "sessionId: string",
+      "status: AppSessionStatus",
+      "updatedAt: Date",
+      "version: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppSessionVersionV1",
+    "properties": [
+      "sessionId: string",
+      "version: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "constructors": [
+      "(inner: StateSigner): AppSessionWalletSignerV1",
+    ],
+    "kind": "class",
+    "name": "AppSessionWalletSignerV1",
+    "properties": [
+      "getAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Operate = 0",
+      "Deposit = 1",
+      "Withdraw = 2",
+      "Close = 3",
+      "Rebalance = 4",
+    ],
+    "name": "AppStateUpdateIntent",
+  },
+  {
+    "kind": "function",
+    "name": "appStateUpdateIntentToString",
+    "signatures": [
+      "(intent: AppStateUpdateIntent): string",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "AppStateUpdateV1",
+    "properties": [
+      "allocations: AppAllocationV1[]",
+      "appSessionId: string",
+      "intent: AppStateUpdateIntent",
+      "sessionData: string",
+      "version: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppsV1GetAppsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppsV1GetAppsRequest",
+    "properties": [
+      "app_id: string",
+      "owner_wallet: string",
+      "pagination: PaginationParamsV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppsV1GetAppsResponse",
+    "properties": [
+      "apps: AppInfoV1[]",
+      "metadata: PaginationMetadataV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "AppsV1Group",
+    "type": "string",
+  },
+  {
+    "kind": "const",
+    "name": "AppsV1SubmitAppVersionMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "AppsV1SubmitAppVersionRequest",
+    "properties": [
+      "app: AppV1",
+      "owner_sig: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppsV1SubmitAppVersionResponse",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AppV1",
+    "properties": [
+      "creation_approval_not_required: boolean",
+      "id: string",
+      "metadata: string",
+      "owner_wallet: string",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Asset",
+    "properties": [
+      "decimals: number",
+      "name: string",
+      "suggestedBlockchainId: bigint",
+      "symbol: string",
+      "tokens: Token[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AssetAllowance",
+    "properties": [
+      "allowance: Decimal",
+      "asset: string",
+      "used: Decimal",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AssetAllowanceV1",
+    "properties": [
+      "allowance: Decimal",
+      "asset: string",
+      "used: Decimal",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AssetStore",
+    "properties": [
+      "getAssetDecimals: (asset: string): Promise<number>",
+      "getTokenDecimals: (blockchainId: bigint, tokenAddress: Address): Promise<number>",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "AssetV1",
+    "properties": [
+      "decimals: number",
+      "name: string",
+      "suggested_blockchain_id: string",
+      "symbol: string",
+      "tokens: TokenV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "BalanceEntry",
+    "properties": [
+      "asset: string",
+      "balance: Decimal",
+      "enforced: Decimal",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "BalanceEntryV1",
+    "properties": [
+      "amount: string",
+      "asset: string",
+      "enforced: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Blockchain",
+    "properties": [
+      "blockStep: bigint",
+      "channelHubAddress: Address",
+      "id: bigint",
+      "lockingContractAddress: Address",
+      "name: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "BlockchainEvent",
+    "properties": [
+      "blockNumber: bigint",
+      "blockchainId: bigint",
+      "contractAddress: Address",
+      "logIndex: number",
+      "name: string",
+      "transactionHash: Hex",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "BlockchainEventHandler",
+    "properties": [
+      "handleEscrowDepositChallenged: (event: EscrowDepositChallengedEvent): Promise<void>",
+      "handleEscrowDepositFinalized: (event: EscrowDepositFinalizedEvent): Promise<void>",
+      "handleEscrowDepositInitiated: (event: EscrowDepositInitiatedEvent): Promise<void>",
+      "handleEscrowWithdrawalChallenged: (event: EscrowWithdrawalChallengedEvent): Promise<void>",
+      "handleEscrowWithdrawalFinalized: (event: EscrowWithdrawalFinalizedEvent): Promise<void>",
+      "handleEscrowWithdrawalInitiated: (event: EscrowWithdrawalInitiatedEvent): Promise<void>",
+      "handleHomeChannelChallenged: (event: HomeChannelChallengedEvent): Promise<void>",
+      "handleHomeChannelCheckpointed: (event: HomeChannelCheckpointedEvent): Promise<void>",
+      "handleHomeChannelClosed: (event: HomeChannelClosedEvent): Promise<void>",
+      "handleHomeChannelCreated: (event: HomeChannelCreatedEvent): Promise<void>",
+      "handleHomeChannelMigrated: (event: HomeChannelMigratedEvent): Promise<void>",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "BlockchainInfoV1",
+    "properties": [
+      "blockchain_id: string",
+      "channel_hub_address: Address",
+      "locking_contract_address: Address",
+      "name: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Channel",
+    "properties": [
+      "approvedSigValidators: string",
+      "asset: string",
+      "blockchainId: bigint",
+      "challengeDuration: number",
+      "challengeExpiresAt: Date",
+      "channelId: string",
+      "nonce: bigint",
+      "stateVersion: bigint",
+      "status: ChannelStatus",
+      "tokenAddress: Address",
+      "type: ChannelType",
+      "userWallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "CHANNEL_HUB_VERSION",
+    "type": "1",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelChallengedEvent",
+    "properties": [
+      "challengeExpiry: bigint",
+      "channelId: string",
+      "stateVersion: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "constructors": [
+      "(inner: StateSigner): ChannelDefaultSigner",
+    ],
+    "kind": "class",
+    "name": "ChannelDefaultSigner",
+    "properties": [
+      "getAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelDefinition",
+    "properties": [
+      "approvedSigValidators: string",
+      "challenge: number",
+      "nonce: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelDefinitionV1",
+    "properties": [
+      "approved_sig_validators: string",
+      "challenge: number",
+      "nonce: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelEvent",
+    "properties": [
+      "channelId: string",
+      "stateVersion: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "User = 0",
+      "Node = 1",
+    ],
+    "name": "ChannelParticipant",
+  },
+  {
+    "constructors": [
+      "(sessionKeyPrivateKey: Hex, walletAddress: Address, metadataHash: Hex, authSignature: Hex): ChannelSessionKeyStateSigner",
+    ],
+    "kind": "class",
+    "name": "ChannelSessionKeyStateSigner",
+    "properties": [
+      "getAddress: (): Address",
+      "getSessionKeyAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelSessionKeyStateV1",
+    "properties": [
+      "assets: string[]",
+      "expires_at: string",
+      "session_key: string",
+      "user_address: string",
+      "user_sig: string",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Default = 0x00",
+      "SessionKey = 0x01",
+    ],
+    "name": "ChannelSignerType",
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Void = 0",
+      "Open = 1",
+      "Challenged = 2",
+      "Closed = 3",
+    ],
+    "name": "ChannelStatus",
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1GetChannelsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetChannelsRequest",
+    "properties": [
+      "asset: string",
+      "channel_type: string",
+      "pagination: PaginationParamsV1",
+      "status: string",
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetChannelsResponse",
+    "properties": [
+      "channels: ChannelV1[]",
+      "metadata: PaginationMetadataV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1GetEscrowChannelMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetEscrowChannelRequest",
+    "properties": [
+      "escrow_channel_id: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetEscrowChannelResponse",
+    "properties": [
+      "channel: ChannelV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1GetHomeChannelMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetHomeChannelRequest",
+    "properties": [
+      "asset: string",
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetHomeChannelResponse",
+    "properties": [
+      "channel: ChannelV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1GetLastKeyStatesMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetLastKeyStatesRequest",
+    "properties": [
+      "session_key: string",
+      "user_address: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetLastKeyStatesResponse",
+    "properties": [
+      "states: ChannelSessionKeyStateV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1GetLatestStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetLatestStateRequest",
+    "properties": [
+      "asset: string",
+      "only_signed: boolean",
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1GetLatestStateResponse",
+    "properties": [
+      "state: StateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1HomeChannelCreatedEvent",
+    "properties": [
+      "channel: ChannelV1",
+      "initial_state: StateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1RequestCreationMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1RequestCreationRequest",
+    "properties": [
+      "channel_definition: ChannelDefinitionV1",
+      "state: StateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1RequestCreationResponse",
+    "properties": [
+      "signature: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1SubmitSessionKeyStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1SubmitSessionKeyStateRequest",
+    "properties": [
+      "state: ChannelSessionKeyStateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1SubmitSessionKeyStateResponse",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelsV1SubmitStateMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1SubmitStateRequest",
+    "properties": [
+      "state: StateV1",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelsV1SubmitStateResponse",
+    "properties": [
+      "signature: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Home = 1",
+      "Escrow = 2",
+    ],
+    "name": "ChannelType",
+  },
+  {
+    "kind": "interface",
+    "name": "ChannelV1",
+    "properties": [
+      "approved_sig_validators: string",
+      "asset: string",
+      "blockchain_id: string",
+      "challenge_duration: number",
+      "challenge_expires_at: string",
+      "channel_id: string",
+      "nonce: string",
+      "state_version: string",
+      "status: string",
+      "token_address: Address",
+      "type: string",
+      "user_wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ChannelV1Group",
+    "type": "string",
+  },
+  {
+    "constructors": [
+      "(rpcClient: RPCClient, config: Config, stateSigner: StateSigner, txSigner: TransactionSigner, assetStore: ClientAssetStore): Client",
+    ],
+    "kind": "class",
+    "name": "Client",
+    "properties": [
+      "acknowledge: (asset: string): Promise<core.State>",
+      "approveSecurityToken: (chainId: bigint, amount: Decimal): Promise<string>",
+      "approveToken: (chainId: bigint, asset: string, amount: Decimal): Promise<string>",
+      "cancelSecurityTokensWithdrawal: (blockchainId: bigint): Promise<string>",
+      "challenge: (state: core.State): Promise<string>",
+      "checkTokenAllowance: (chainId: bigint, tokenAddress: string, owner: string): Promise<bigint>",
+      "checkpoint: (asset: string): Promise<string>",
+      "close: (): Promise<void>",
+      "closeHomeChannel: (asset: string): Promise<core.State>",
+      "createAppSession: (definition: app.AppDefinitionV1, sessionData: string, quorumSigs: string[], opts?: { ownerSig?: string; }): Promise<{ appSessionId: string; version: string; status: string; }>",
+      "deposit: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
+      "escrowSecurityTokens: (targetWalletAddress: string, blockchainId: bigint, amount: Decimal): Promise<string>",
+      "getActionAllowances: (wallet: Address): Promise<core.ActionAllowance[]>",
+      "getAppDefinition: (appSessionId: string): Promise<app.AppDefinitionV1>",
+      "getAppSessions: (options?: { appSessionId?: string; wallet?: Address; status?: string; page?: number; pageSize?: number; }): Promise<{ sessions: app.AppSessionInfoV1[]; metadata: core.PaginationMetadata; }>",
+      "getApps: (options?: { appId?: string; ownerWallet?: string; page?: number; pageSize?: number; }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata; }>",
+      "getAssets: (blockchainId?: bigint): Promise<core.Asset[]>",
+      "getBalances: (wallet: Address): Promise<core.BalanceEntry[]>",
+      "getBlockchains: (): Promise<core.Blockchain[]>",
+      "getChannels: (wallet: Address, options?: { status?: string; asset?: string; channelType?: string; pagination?: core.PaginationParams; }): Promise<{ channels: core.Channel[]; metadata: core.PaginationMetadata; }>",
+      "getConfig: (): Promise<core.NodeConfig>",
+      "getEscrowChannel: (escrowChannelId: string): Promise<core.Channel>",
+      "getHomeChannel: (wallet: Address, asset: string): Promise<core.Channel>",
+      "getLastChannelKeyStates: (userAddress: string, sessionKey?: string): Promise<ChannelSessionKeyStateV1[]>",
+      "getLastKeyStates: (userAddress: string, sessionKey?: string): Promise<app.AppSessionKeyStateV1[]>",
+      "getLatestState: (wallet: Address, asset: string, onlySigned: boolean): Promise<core.State>",
+      "getLockedBalance: (chainId: bigint, wallet: string): Promise<Decimal>",
+      "getOnChainBalance: (chainId: bigint, asset: string, wallet: Address): Promise<Decimal>",
+      "getTransactions: (wallet: Address, options?: { asset?: string; txType?: core.TransactionType; fromTime?: bigint; toTime?: bigint; page?: number; pageSize?: number; }): Promise<{ transactions: core.Transaction[]; metadata: core.PaginationMetadata; }>",
+      "getUserAddress: (): Address",
+      "initiateSecurityTokensWithdrawal: (blockchainId: bigint): Promise<string>",
+      "ping: (): Promise<void>",
+      "rebalanceAppSessions: (signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string>",
+      "registerApp: (appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void>",
+      "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
+      "signChannelSessionKeyState: (state: ChannelSessionKeyStateV1): Promise<Hex>",
+      "signSessionKeyState: (state: app.AppSessionKeyStateV1): Promise<Hex>",
+      "signState: (state: core.State): Promise<Hex>",
+      "submitAppSessionDeposit: (appStateUpdate: app.AppStateUpdateV1, quorumSigs: string[], asset: string, depositAmount: Decimal): Promise<string>",
+      "submitAppState: (appStateUpdate: app.AppStateUpdateV1, quorumSigs: string[]): Promise<void>",
+      "submitChannelSessionKeyState: (state: ChannelSessionKeyStateV1): Promise<void>",
+      "submitSessionKeyState: (state: app.AppSessionKeyStateV1): Promise<void>",
+      "transfer: (recipientWallet: string, asset: string, amount: Decimal): Promise<core.State>",
+      "validateAndSignState: (currentState: core.State, proposedState: core.State): Promise<Hex>",
+      "waitForClose: (): Promise<void>",
+      "withdraw: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
+      "withdrawSecurityTokens: (blockchainId: bigint, destinationWalletAddress: string): Promise<string>",
+    ],
+    "staticProperties": [
+      "create: (wsURL: string, stateSigner: StateSigner, txSigner: TransactionSigner, ...opts: Option[]): Promise<Client>",
+    ],
+  },
+  {
+    "constructors": [
+      "(getAssetsFn: () => Promise<core.Asset[]>): ClientAssetStore",
+    ],
+    "kind": "class",
+    "name": "ClientAssetStore",
+    "properties": [
+      "assetExistsOnBlockchain: (blockchainId: bigint, asset: string): Promise<boolean>",
+      "clearCache: (): void",
+      "getAssetDecimals: (asset: string): Promise<number>",
+      "getSuggestedBlockchainId: (asset: string): Promise<bigint>",
+      "getTokenAddress: (asset: string, blockchainId: bigint): Promise<Address>",
+      "getTokenDecimals: (blockchainId: bigint, tokenAddress: string): Promise<number>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Config",
+    "properties": [
+      "blockchainRPCs: Map<bigint, string>",
+      "errorHandler: (error: Error) => void",
+      "handshakeTimeout: number",
+      "pingInterval: number",
+      "url: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "createSigners",
+    "signatures": [
+      "(privateKey: Hex): { stateSigner: StateSigner; txSigner: TransactionSigner; }",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "decimalToBigInt",
+    "signatures": [
+      "(amount: Decimal, decimals: number): bigint",
+    ],
+  },
+  {
+    "kind": "const",
+    "name": "DEFAULT_CHALLENGE_PERIOD",
+    "type": "86400",
+  },
+  {
+    "kind": "const",
+    "name": "DefaultConfig",
+    "type": "Partial<Config>",
+  },
+  {
+    "kind": "const",
+    "name": "DefaultWebsocketDialerConfig",
+    "type": "WebsocketDialerConfig",
+  },
+  {
+    "kind": "interface",
+    "name": "Dialer",
+    "properties": [
+      "call: (req: Message, signal?: AbortSignal): Promise<Message>",
+      "close: (): Promise<void>",
+      "dial: (url: string, handleClosure: (err?: Error) => void): Promise<void>",
+      "eventChannel: (): AsyncIterable<Message>",
+      "isConnected: (): boolean",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "ErrAlreadyConnected",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrConnectionTimeout",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrDialingWebsocket",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrInvalidRequestMethod",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrMarshalingRequest",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrNilRequest",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrNoResponse",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrNotConnected",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ERROR_PARAM_KEY",
+    "type": "'error'",
+  },
+  {
+    "kind": "function",
+    "name": "errorf",
+    "signatures": [
+      "(format: string, ...args: unknown[]): RPCError",
+    ],
+  },
+  {
+    "kind": "const",
+    "name": "ErrReadingMessage",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrSendingPing",
+    "type": "RPCError",
+  },
+  {
+    "kind": "const",
+    "name": "ErrSendingRequest",
+    "type": "RPCError",
+  },
+  {
+    "declaration": "ChannelChallengedEvent",
+    "kind": "type",
+    "name": "EscrowDepositChallengedEvent",
+    "type": "ChannelChallengedEvent",
+  },
+  {
+    "kind": "interface",
+    "name": "EscrowDepositDataResponse",
+    "properties": [
+      "challengeExpiry: bigint",
+      "escrowChannelId: string",
+      "lastState: State",
+      "node: Address",
+      "unlockExpiry: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "EscrowDepositFinalizedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "EscrowDepositInitiatedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "declaration": "ChannelChallengedEvent",
+    "kind": "type",
+    "name": "EscrowWithdrawalChallengedEvent",
+    "type": "ChannelChallengedEvent",
+  },
+  {
+    "kind": "interface",
+    "name": "EscrowWithdrawalDataResponse",
+    "properties": [
+      "escrowChannelId: string",
+      "lastState: State",
+      "node: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "EscrowWithdrawalFinalizedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "EscrowWithdrawalInitiatedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "constructors": [
+      "(privateKeyOrAccount: Hex | ReturnType<typeof privateKeyToAccount>): EthereumMsgSigner",
+    ],
+    "kind": "class",
+    "name": "EthereumMsgSigner",
+    "properties": [
+      "getAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "constructors": [
+      "(privateKeyOrAccount: Hex | ReturnType<typeof privateKeyToAccount>): EthereumRawSigner",
+    ],
+    "kind": "class",
+    "name": "EthereumRawSigner",
+    "properties": [
+      "getAccount: (): ReturnType<typeof privateKeyToAccount>",
+      "getAddress: (): Address",
+      "sendTransaction: (tx: any): Promise<Hex>",
+      "signMessage: (message: { raw: Hex; }): Promise<Hex>",
+      "signPersonalMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "declaration": "string",
+    "kind": "type",
+    "name": "Event",
+    "type": "string",
+  },
+  {
+    "kind": "SourceFile",
+    "name": "evm",
+  },
+  {
+    "kind": "function",
+    "name": "generateAppSessionIDV1",
+    "signatures": [
+      "(definition: AppDefinitionV1): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "generateChannelMetadata",
+    "signatures": [
+      "(asset: string): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "generateNonce",
+    "signatures": [
+      "(): bigint",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "generateRebalanceBatchIDV1",
+    "signatures": [
+      "(sessionVersions: AppSessionVersionV1[]): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "generateRebalanceTransactionIDV1",
+    "signatures": [
+      "(batchId: string, sessionId: string, asset: string): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getChannelSessionKeyAuthMetadataHashV1",
+    "signatures": [
+      "(version: bigint, assets: string[], expiresAt: bigint): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getEscrowChannelId",
+    "signatures": [
+      "(homeChannelId: string, stateVersion: bigint): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getHomeChannelId",
+    "signatures": [
+      "(node: Address, user: Address, asset: string, nonce: bigint, challengeDuration: number, approvedSigValidators?: string): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getLastTransition",
+    "signatures": [
+      "(state: State): Transition | null",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getOffsetAndLimit",
+    "signatures": [
+      "(params: PaginationParams | undefined, defaultLimit: number, maxLimit: number): { offset: number; limit: number; }",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getReceiverTransactionId",
+    "signatures": [
+      "(fromAccount: string, receiverNewStateId: string): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getSenderTransactionId",
+    "signatures": [
+      "(toAccount: string, senderNewStateId: string): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getStateId",
+    "signatures": [
+      "(userWallet: Address, asset: string, epoch: bigint, version: bigint): string",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "getStateTransitionHash",
+    "signatures": [
+      "(transition: Transition): string",
+    ],
+  },
+  {
+    "declaration": "string",
+    "kind": "type",
+    "name": "Group",
+    "type": "string",
+  },
+  {
+    "declaration": "ChannelChallengedEvent",
+    "kind": "type",
+    "name": "HomeChannelChallengedEvent",
+    "type": "ChannelChallengedEvent",
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "HomeChannelCheckpointedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "HomeChannelClosedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "HomeChannelCreatedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "kind": "interface",
+    "name": "HomeChannelDataResponse",
+    "properties": [
+      "challengeExpiry: bigint",
+      "definition: ChannelDefinition",
+      "lastState: State",
+      "node: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "declaration": "ChannelEvent",
+    "kind": "type",
+    "name": "HomeChannelMigratedEvent",
+    "type": "ChannelEvent",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_CLOSE",
+    "type": "1",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_DEPOSIT",
+    "type": "2",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_FINALIZE_ESCROW_DEPOSIT",
+    "type": "5",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_FINALIZE_ESCROW_WITHDRAWAL",
+    "type": "7",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_FINALIZE_MIGRATION",
+    "type": "9",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_INITIATE_ESCROW_DEPOSIT",
+    "type": "4",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_INITIATE_ESCROW_WITHDRAWAL",
+    "type": "6",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_INITIATE_MIGRATION",
+    "type": "8",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_OPERATE",
+    "type": "0",
+  },
+  {
+    "kind": "const",
+    "name": "INTENT_WITHDRAW",
+    "type": "3",
+  },
+  {
+    "kind": "function",
+    "name": "isFinal",
+    "signatures": [
+      "(state: State): boolean",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "Ledger",
+    "properties": [
+      "blockchainId: bigint",
+      "nodeBalance: Decimal",
+      "nodeNetFlow: Decimal",
+      "tokenAddress: Address",
+      "userBalance: Decimal",
+      "userNetFlow: Decimal",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "ledgerEqual",
+    "signatures": [
+      "(a: Ledger, b: Ledger): string | null",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "LedgerV1",
+    "properties": [
+      "blockchain_id: string",
+      "node_balance: string",
+      "node_net_flow: string",
+      "token_address: Address",
+      "user_balance: string",
+      "user_net_flow: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Listener",
+    "properties": [
+      "listen: (): Promise<void>",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "marshalMessage",
+    "signatures": [
+      "(message: Message): string",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "Message",
+    "properties": [
+      "method: string",
+      "payload: Payload",
+      "requestId: number",
+      "timestamp: number",
+      "type: MsgType",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "messageError",
+    "signatures": [
+      "(message: Message): Error | null",
+    ],
+  },
+  {
+    "declaration": "string",
+    "kind": "type",
+    "name": "Method",
+    "type": "string",
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Req = 1",
+      "Resp = 2",
+      "Event = 3",
+      "RespErr = 4",
+    ],
+    "name": "MsgType",
+  },
+  {
+    "kind": "function",
+    "name": "newChannel",
+    "signatures": [
+      "(channelId: string, userWallet: Address, asset: string, type: ChannelType, blockchainId: bigint, tokenAddress: Address, nonce: bigint, challenge: number, approvedSigValidators?: string): Channel",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newErrorPayload",
+    "signatures": [
+      "(errMsg: string): Payload",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newErrorResponse",
+    "signatures": [
+      "(requestId: number, method: string, errMsg: string): Message",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newEvent",
+    "signatures": [
+      "(requestId: number, method: string, payload?: Payload): Message",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newMessage",
+    "signatures": [
+      "(type: MsgType, requestId: number, method: string, payload?: Payload): Message",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newPayload",
+    "signatures": [
+      "(v: unknown): Payload",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newRequest",
+    "signatures": [
+      "(requestId: number, method: string, payload?: Payload): Message",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newResponse",
+    "signatures": [
+      "(requestId: number, method: string, payload?: Payload): Message",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newRPCClient",
+    "signatures": [
+      "(dialer: Dialer): RPCClient",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newStatePackerV1",
+    "signatures": [
+      "(assetStore: AssetStore): StatePackerV1",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newTransaction",
+    "signatures": [
+      "(id: string, asset: string, txType: TransactionType, fromAccount: Address, toAccount: Address, amount: Decimal): Transaction",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newTransition",
+    "signatures": [
+      "(type: TransitionType, txId: string, accountId: string, amount: Decimal): Transition",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newVoidState",
+    "signatures": [
+      "(asset: string, userWallet: Address): State",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "newWebsocketDialer",
+    "signatures": [
+      "(config?: WebsocketDialerConfig): WebsocketDialer",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "nextState",
+    "signatures": [
+      "(state: State): State",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "NodeConfig",
+    "properties": [
+      "blockchains: Blockchain[]",
+      "nodeAddress: Address",
+      "nodeVersion: string",
+      "supportedSigValidators: number[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "NodeV1GetAssetsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1GetAssetsRequest",
+    "properties": [
+      "blockchain_id: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1GetAssetsResponse",
+    "properties": [
+      "assets: AssetV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "NodeV1GetConfigMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1GetConfigRequest",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1GetConfigResponse",
+    "properties": [
+      "blockchains: BlockchainInfoV1[]",
+      "node_address: Address",
+      "node_version: string",
+      "supported_sig_validators: number[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "NodeV1Group",
+    "type": "string",
+  },
+  {
+    "kind": "const",
+    "name": "NodeV1PingMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1PingRequest",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "NodeV1PingResponse",
+    "properties": [],
+    "signatures": [],
+  },
+  {
+    "declaration": "(config: Config) => void",
+    "kind": "type",
+    "name": "Option",
+    "type": "Option",
+  },
+  {
+    "kind": "function",
+    "name": "packAppSessionKeyStateV1",
+    "signatures": [
+      "(state: AppSessionKeyStateV1): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packAppStateUpdateV1",
+    "signatures": [
+      "(stateUpdate: AppStateUpdateV1): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packAppV1",
+    "signatures": [
+      "(app: AppV1): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packChallengeState",
+    "signatures": [
+      "(state: State, assetStore: AssetStore): Promise<\`0x\${string}\`>",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packChannelKeyStateV1",
+    "signatures": [
+      "(sessionKey: Address, metadataHash: \`0x\${string}\`): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packCreateAppSessionRequestV1",
+    "signatures": [
+      "(definition: AppDefinitionV1, sessionData: string): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packState",
+    "signatures": [
+      "(state: State, assetStore: AssetStore): Promise<\`0x\${string}\`>",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "PaginationMetadata",
+    "properties": [
+      "page: number",
+      "pageCount: number",
+      "perPage: number",
+      "totalCount: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "PaginationMetadataV1",
+    "properties": [
+      "page: number",
+      "page_count: number",
+      "per_page: number",
+      "total_count: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "PaginationParams",
+    "properties": [
+      "limit: number",
+      "offset: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "PaginationParamsV1",
+    "properties": [
+      "limit: number",
+      "offset: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "declaration": "Record<string, unknown>",
+    "kind": "type",
+    "name": "Payload",
+    "type": "Payload",
+  },
+  {
+    "kind": "function",
+    "name": "payloadError",
+    "signatures": [
+      "(payload: Payload): Error | null",
+    ],
+  },
+  {
+    "constructors": [
+      "(dialer: Dialer): RPCClient",
+    ],
+    "kind": "class",
+    "name": "RPCClient",
+    "properties": [
+      "appSessionsV1CreateAppSession: (req: API.AppSessionsV1CreateAppSessionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1CreateAppSessionResponse>",
+      "appSessionsV1GetAppDefinition: (req: API.AppSessionsV1GetAppDefinitionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppDefinitionResponse>",
+      "appSessionsV1GetAppSessions: (req: API.AppSessionsV1GetAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppSessionsResponse>",
+      "appSessionsV1GetLastKeyStates: (req: API.AppSessionsV1GetLastKeyStatesRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetLastKeyStatesResponse>",
+      "appSessionsV1RebalanceAppSessions: (req: API.AppSessionsV1RebalanceAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1RebalanceAppSessionsResponse>",
+      "appSessionsV1SubmitAppState: (req: API.AppSessionsV1SubmitAppStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitAppStateResponse>",
+      "appSessionsV1SubmitDepositState: (req: API.AppSessionsV1SubmitDepositStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitDepositStateResponse>",
+      "appSessionsV1SubmitSessionKeyState: (req: API.AppSessionsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitSessionKeyStateResponse>",
+      "appsV1GetApps: (req: API.AppsV1GetAppsRequest, signal?: AbortSignal): Promise<API.AppsV1GetAppsResponse>",
+      "appsV1SubmitAppVersion: (req: API.AppsV1SubmitAppVersionRequest, signal?: AbortSignal): Promise<API.AppsV1SubmitAppVersionResponse>",
+      "channelsV1GetChannels: (req: API.ChannelsV1GetChannelsRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetChannelsResponse>",
+      "channelsV1GetEscrowChannel: (req: API.ChannelsV1GetEscrowChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetEscrowChannelResponse>",
+      "channelsV1GetHomeChannel: (req: API.ChannelsV1GetHomeChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetHomeChannelResponse>",
+      "channelsV1GetLastKeyStates: (req: API.ChannelsV1GetLastKeyStatesRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetLastKeyStatesResponse>",
+      "channelsV1GetLatestState: (req: API.ChannelsV1GetLatestStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetLatestStateResponse>",
+      "channelsV1RequestCreation: (req: API.ChannelsV1RequestCreationRequest, signal?: AbortSignal): Promise<API.ChannelsV1RequestCreationResponse>",
+      "channelsV1SubmitSessionKeyState: (req: API.ChannelsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1SubmitSessionKeyStateResponse>",
+      "channelsV1SubmitState: (req: API.ChannelsV1SubmitStateRequest, signal?: AbortSignal): Promise<API.ChannelsV1SubmitStateResponse>",
+      "close: (): Promise<void>",
+      "eventChannel: (): AsyncIterable<Message>",
+      "isConnected: (): boolean",
+      "nodeV1GetAssets: (req: API.NodeV1GetAssetsRequest, signal?: AbortSignal): Promise<API.NodeV1GetAssetsResponse>",
+      "nodeV1GetConfig: (signal?: AbortSignal): Promise<API.NodeV1GetConfigResponse>",
+      "nodeV1Ping: (signal?: AbortSignal): Promise<void>",
+      "start: (url: string, handleClosure: (err?: Error) => void): Promise<void>",
+      "userV1GetActionAllowances: (req: API.UserV1GetActionAllowancesRequest, signal?: AbortSignal): Promise<API.UserV1GetActionAllowancesResponse>",
+      "userV1GetBalances: (req: API.UserV1GetBalancesRequest, signal?: AbortSignal): Promise<API.UserV1GetBalancesResponse>",
+      "userV1GetTransactions: (req: API.UserV1GetTransactionsRequest, signal?: AbortSignal): Promise<API.UserV1GetTransactionsResponse>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "constructors": [
+      "(message: string): RPCError",
+    ],
+    "kind": "class",
+    "name": "RPCError",
+    "properties": [
+      "message: string",
+      "name: string",
+      "stack: string",
+    ],
+    "staticProperties": [
+      "captureStackTrace: (targetObject: object, constructorOpt?: Function): void",
+      "prepareStackTrace: (err: Error, stackTraces: NodeJS.CallSite[]): any",
+      "stackTraceLimit: number",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "SessionKey",
+    "properties": [
+      "allowances: AssetAllowance[]",
+      "application: string",
+      "createdAt: string",
+      "expiresAt: string",
+      "id: bigint",
+      "scope: string",
+      "sessionKey: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "SessionKeyV1",
+    "properties": [
+      "allowances: AssetAllowanceV1[]",
+      "application: string",
+      "createdAt: Date",
+      "expiresAt: Date",
+      "id: bigint",
+      "scope: string",
+      "sessionKey: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "SignedAppStateUpdateV1",
+    "properties": [
+      "appStateUpdate: AppStateUpdateV1",
+      "quorumSigs: string[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "State",
+    "properties": [
+      "asset: string",
+      "epoch: bigint",
+      "escrowChannelId: string",
+      "escrowLedger: Ledger",
+      "homeChannelId: string",
+      "homeLedger: Ledger",
+      "id: string",
+      "nodeSig: Hex",
+      "transition: Transition",
+      "userSig: Hex",
+      "userWallet: Address",
+      "version: bigint",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "StateAdvancer",
+    "properties": [
+      "validateAdvancement: (currentState: State, proposedState: State): Promise<void>",
+    ],
+    "signatures": [],
+  },
+  {
+    "constructors": [
+      "(assetStore: AssetStore): StateAdvancerV1",
+    ],
+    "kind": "class",
+    "name": "StateAdvancerV1",
+    "properties": [
+      "validateAdvancement: (currentState: State, proposedState: State): Promise<void>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "StatePacker",
+    "properties": [
+      "packState: (state: State): Promise<\`0x\${string}\`>",
+    ],
+    "signatures": [],
+  },
+  {
+    "constructors": [
+      "(assetStore: AssetStore): StatePackerV1",
+    ],
+    "kind": "class",
+    "name": "StatePackerV1",
+    "properties": [
+      "packChallengeState: (state: State): Promise<\`0x\${string}\`>",
+      "packState: (state: State): Promise<\`0x\${string}\`>",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "StateSigner",
+    "properties": [
+      "getAddress: (): Address",
+      "signMessage: (hash: Hex): Promise<Hex>",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "StateV1",
+    "properties": [
+      "asset: string",
+      "epoch: string",
+      "escrow_channel_id: string",
+      "escrow_ledger: LedgerV1",
+      "home_channel_id: string",
+      "home_ledger: LedgerV1",
+      "id: string",
+      "node_sig: string",
+      "transition: TransitionV1",
+      "user_sig: string",
+      "user_wallet: Address",
+      "version: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Token",
+    "properties": [
+      "address: Address",
+      "blockchainId: bigint",
+      "decimals: number",
+      "name: string",
+      "symbol: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "TokenV1",
+    "properties": [
+      "address: Address",
+      "blockchain_id: string",
+      "decimals: number",
+      "name: string",
+      "symbol: string",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "Transaction",
+    "properties": [
+      "amount: Decimal",
+      "asset: string",
+      "createdAt: Date",
+      "fromAccount: Address",
+      "id: string",
+      "receiverNewStateId: string",
+      "senderNewStateId: string",
+      "toAccount: Address",
+      "txType: TransactionType",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "TransactionSigner",
+    "properties": [
+      "getAccount: (() => ReturnType<typeof privateKeyToAccount>) | undefined",
+      "getAddress: (): Address",
+      "sendTransaction: (tx: any): Promise<Hex>",
+      "signMessage: (message: { raw: Hex; }): Promise<Hex>",
+      "signPersonalMessage: ((hash: Hex) => Promise<Hex>) | undefined",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "HomeDeposit = 10",
+      "HomeWithdrawal = 11",
+      "EscrowDeposit = 20",
+      "EscrowWithdraw = 21",
+      "Transfer = 30",
+      "Commit = 40",
+      "Release = 41",
+      "Rebalance = 42",
+      "Migrate = 100",
+      "EscrowLock = 110",
+      "MutualLock = 120",
+      "Finalize = 200",
+    ],
+    "name": "TransactionType",
+  },
+  {
+    "kind": "interface",
+    "name": "TransactionV1",
+    "properties": [
+      "amount: string",
+      "asset: string",
+      "created_at: string",
+      "from_account: Address",
+      "id: string",
+      "receiver_new_state_id: string",
+      "sender_new_state_id: string",
+      "to_account: Address",
+      "tx_type: TransactionType",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "transformActionAllowance",
+    "signatures": [
+      "(a: ActionAllowanceV1): core.ActionAllowance",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformAppDefinitionFromRPC",
+    "signatures": [
+      "(raw: any): AppDefinitionV1",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformAppDefinitionToRPC",
+    "signatures": [
+      "(def: AppDefinitionV1): any",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformAppSessionInfo",
+    "signatures": [
+      "(raw: any): AppSessionInfoV1",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformAppStateUpdateToRPC",
+    "signatures": [
+      "(update: AppStateUpdateV1): { app_session_id: string; intent: AppStateUpdateIntent; version: string; allocations: Array<{ participant: \`0x\${string}\`; asset: string; amount: string; }>; session_data: string; }",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformAssets",
+    "signatures": [
+      "(assets: AssetV1[]): core.Asset[]",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformBalances",
+    "signatures": [
+      "(balances: BalanceEntryV1[]): core.BalanceEntry[]",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformChannel",
+    "signatures": [
+      "(channel: ChannelV1): core.Channel",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformLedger",
+    "signatures": [
+      "(ledger: LedgerV1): core.Ledger",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformNodeConfig",
+    "signatures": [
+      "(resp: API.NodeV1GetConfigResponse): core.NodeConfig",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformPaginationMetadata",
+    "signatures": [
+      "(metadata: PaginationMetadataV1): core.PaginationMetadata",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformSignedAppStateUpdateToRPC",
+    "signatures": [
+      "(signed: SignedAppStateUpdateV1): { app_state_update: { app_session_id: string; intent: AppStateUpdateIntent; version: string; allocations: Array<{ participant: \`0x\${string}\`; asset: string; amount: string; }>; session_data: string; }; quorum_sigs: Array<string>; }",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformState",
+    "signatures": [
+      "(state: StateV1): core.State",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformTransaction",
+    "signatures": [
+      "(tx: TransactionV1): core.Transaction",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transformTransition",
+    "signatures": [
+      "(transition: TransitionV1): core.Transition",
+    ],
+  },
+  {
+    "kind": "interface",
+    "name": "Transition",
+    "properties": [
+      "accountId: string",
+      "amount: Decimal",
+      "txId: string",
+      "type: TransitionType",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "transitionRequiresOpenChannel",
+    "signatures": [
+      "(type: TransitionType): boolean",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transitionsEqual",
+    "signatures": [
+      "(a: Transition, b: Transition): string | null",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transitionToIntent",
+    "signatures": [
+      "(transition: Transition): number",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "transitionToString",
+    "signatures": [
+      "(type: TransitionType): string",
+    ],
+  },
+  {
+    "kind": "enum",
+    "members": [
+      "Void = 0",
+      "Acknowledgement = 1",
+      "HomeDeposit = 10",
+      "HomeWithdrawal = 11",
+      "EscrowDeposit = 20",
+      "EscrowWithdraw = 21",
+      "TransferSend = 30",
+      "TransferReceive = 31",
+      "Commit = 40",
+      "Release = 41",
+      "Migrate = 100",
+      "EscrowLock = 110",
+      "MutualLock = 120",
+      "Finalize = 200",
+    ],
+    "name": "TransitionType",
+  },
+  {
+    "kind": "interface",
+    "name": "TransitionV1",
+    "properties": [
+      "account_id: string",
+      "amount: string",
+      "tx_id: string",
+      "type: TransitionType",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "translatePayload",
+    "signatures": [
+      "<T>(payload: Payload): T",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "unmarshalMessage",
+    "signatures": [
+      "(data: string): Message",
+    ],
+  },
+  {
+    "kind": "const",
+    "name": "UserV1GetActionAllowancesMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetActionAllowancesRequest",
+    "properties": [
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetActionAllowancesResponse",
+    "properties": [
+      "allowances: ActionAllowanceV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "UserV1GetBalancesMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetBalancesRequest",
+    "properties": [
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetBalancesResponse",
+    "properties": [
+      "balances: BalanceEntryV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "UserV1GetTransactionsMethod",
+    "type": "string",
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetTransactionsRequest",
+    "properties": [
+      "asset: string",
+      "from_time: bigint",
+      "pagination: PaginationParamsV1",
+      "to_time: bigint",
+      "tx_type: TransactionType",
+      "wallet: Address",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "interface",
+    "name": "UserV1GetTransactionsResponse",
+    "properties": [
+      "metadata: PaginationMetadataV1",
+      "transactions: TransactionV1[]",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "UserV1Group",
+    "type": "string",
+  },
+  {
+    "kind": "function",
+    "name": "validateDecimalPrecision",
+    "signatures": [
+      "(amount: Decimal, maxDecimals: number): void",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "validateLedger",
+    "signatures": [
+      "(ledger: Ledger): void",
+    ],
+  },
+  {
+    "constructors": [
+      "(config?: WebsocketDialerConfig): WebsocketDialer",
+    ],
+    "kind": "class",
+    "name": "WebsocketDialer",
+    "properties": [
+      "call: (req: Message, signal?: AbortSignal): Promise<Message>",
+      "close: (): Promise<void>",
+      "dial: (url: string, handleClosure: (err?: Error) => void): Promise<void>",
+      "eventChannel: (): AsyncIterable<Message>",
+      "isConnected: (): boolean",
+    ],
+    "staticProperties": [],
+  },
+  {
+    "kind": "interface",
+    "name": "WebsocketDialerConfig",
+    "properties": [
+      "eventChanSize: number",
+      "handshakeTimeout: number",
+    ],
+    "signatures": [],
+  },
+  {
+    "kind": "function",
+    "name": "withBlockchainRPC",
+    "signatures": [
+      "(chainId: bigint, rpcUrl: string): Option",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "withErrorHandler",
+    "signatures": [
+      "(handler: (error: Error) => void): Option",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "withHandshakeTimeout",
+    "signatures": [
+      "(timeout: number): Option",
+    ],
+  },
+]
+`;
+
 exports[`SDK public runtime API drift guard keeps root runtime exports intentional 1`] = `
 [
   "AppSessionKeySignerV1",

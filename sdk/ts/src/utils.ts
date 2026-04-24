@@ -355,17 +355,37 @@ export function transformSignedAppStateUpdateToRPC(signed: SignedAppStateUpdateV
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
+  const allocations = raw.allocations || [];
+  if (!Array.isArray(allocations)) {
+    throw new Error('Invalid app session allocations: expected allocations to be an array');
+  }
+
   return {
     appSessionId: raw.app_session_id,
     appDefinition: transformAppDefinitionFromRPC(raw.app_definition),
     isClosed: raw.status === 'closed',
     sessionData: raw.session_data || '',
     version: BigInt(raw.version),
-    allocations: (raw.allocations || []).map((a: any) => ({
-      participant: a.participant as Address,
-      asset: a.asset,
-      amount: new Decimal(a.amount),
-    })),
+    allocations: allocations.map(transformAppAllocationFromRPC),
+  };
+}
+
+function transformAppAllocationFromRPC(raw: any, index: number) {
+  const context = `app session allocation[${index}]`;
+  if (!raw || typeof raw.participant !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field participant`);
+  }
+  if (typeof raw.asset !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field asset`);
+  }
+  if (typeof raw.amount !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field amount`);
+  }
+
+  return {
+    participant: raw.participant as Address,
+    asset: raw.asset,
+    amount: new Decimal(raw.amount),
   };
 }
 
@@ -374,7 +394,7 @@ export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppDefinitionFromRPC(raw: any): AppDefinitionV1 {
-  if (!raw.application_id || raw.nonce === undefined || raw.nonce === null) {
+  if (!raw || !raw.application_id || raw.nonce === undefined || raw.nonce === null) {
     throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
   }
   return {

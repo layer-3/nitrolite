@@ -15,6 +15,7 @@
         "build:ci": "tsc",
         "build:prod": "tsc -p tsconfig.prod.json",
         "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs",
+        "drift:check": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --runTestsByPath test/unit/client.test.ts test/unit/config.test.ts test/unit/public-api-drift.test.ts",
         "lint": "eslint src test",
         "typecheck": "tsc --noEmit",
         "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""

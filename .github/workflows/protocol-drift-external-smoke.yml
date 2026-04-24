@@ -1,19 +1,18 @@
-name: Protocol Drift Stress Smoke
+name: Protocol Drift External Smoke
 
 on:
   workflow_dispatch:
     inputs:
       clearnode_ws_url:
-        description: Lightweight shared Clearnode WebSocket URL to smoke test
+        description: Existing Clearnode WebSocket URL to smoke test, for example wss://...
         required: true
-        default: wss://clearnode-stress.yellow.org/v1/ws
 
 permissions:
   contents: read
 
 jobs:
-  protocol-drift-stress-smoke:
-    name: Protocol Drift Stress Smoke
+  protocol-drift-external-smoke:
+    name: Protocol Drift External Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -42,17 +41,17 @@ jobs:
         run: npm ci
         working-directory: sdk/ts-compat
 
-      - name: Run shared Clearnode compatibility smoke
+      - name: Run external Clearnode compatibility smoke
         run: ./scripts/check-protocol-drift.sh --runtime
         env:
           CLEARNODE_RUNTIME_SMOKE_EXTERNAL: '1'
           CLEARNODE_RUNTIME_SMOKE_WS_URL: ${{ inputs.clearnode_ws_url }}
           CLEARNODE_RUNTIME_SMOKE_LOG_DIR: runtime-smoke-logs
 
-      - name: Upload stress smoke logs
+      - name: Upload external smoke logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: protocol-drift-stress-smoke-logs
+          name: protocol-drift-external-smoke-logs
           path: runtime-smoke-logs
           if-no-files-found: ignore

@@ -31,6 +31,38 @@ jobs:
       project-name: 'TS SDK Compat'
       bootstrap-project-path: 'sdk/ts'
 
+  test-protocol-drift-static:
+    name: Test (Protocol Drift Static)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: sdk/ts/package.json
+          cache: npm
+          cache-dependency-path: |
+            sdk/ts/package-lock.json
+            sdk/ts-compat/package-lock.json
+
+      - name: Install TS SDK dependencies
+        run: npm ci
+        working-directory: sdk/ts
+
+      - name: Build TS SDK for compat file dependency
+        run: npm run build:ci
+        working-directory: sdk/ts
+
+      - name: Install TS SDK Compat dependencies
+        run: npm ci
+        working-directory: sdk/ts-compat
+
+      - name: Run static protocol drift checks
+        run: ./scripts/check-protocol-drift.sh --static
+
   # build-and-publish-sdk:
   #   needs: [test-sdk-ts, test-sdk-compat]
   #   name: Build and Publish (SDK)

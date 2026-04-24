@@ -18,6 +18,7 @@ const readyTimeoutMs = Number(process.env.CLEARNODE_RUNTIME_SMOKE_READY_TIMEOUT_
 const adversarialMode = process.env.CLEARNODE_RUNTIME_SMOKE_ADVERSARIAL ?? '';
 const externalLogDirInput = process.env.CLEARNODE_RUNTIME_SMOKE_LOG_DIR ?? '';
 const externalLogDir = externalLogDirInput ? path.resolve(repoRoot, externalLogDirInput) : '';
+const useExternalNode = process.env.CLEARNODE_RUNTIME_SMOKE_EXTERNAL === '1';
 const privateKey =
   '0x59c6995e998f97a5a0044966f094538f0d0921e301baca6a9ae52cd7834c90b9';
 
@@ -72,12 +73,12 @@ function openWebSocket(url, timeoutMs = 500) {
   });
 }
 
-async function waitForWebSocket(url, child, timeoutMs = 15000) {
+async function waitForWebSocket(url, child = null, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
 
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
+    if (child && child.exitCode !== null) {
       throw new SmokeError(
         'startup',
         `Clearnode exited before readiness with code ${child.exitCode}`
@@ -111,6 +112,25 @@ async function stopProcess(child) {
   if (exited) return;
 
   child.kill('SIGKILL');
+}
+
+async function closeClient(client) {
+  if (!client) return;
+
+  const closed = await Promise.race([
+    client.close().then(
+      () => true,
+      (err) => {
+        console.warn(`[runtime-smoke] client.close failed: ${err.message ?? err}`);
+        return true;
+      }
+    ),
+    sleep(3000).then(() => false),
+  ]);
+
+  if (!closed) {
+    console.warn('[runtime-smoke] client.close timed out; continuing cleanup');
+  }
 }
 
 async function runCommand(command, args, options, category) {
@@ -188,27 +208,31 @@ async function runSmoke() {
   ].join('\n');
 
   try {
-    logStep(`writing isolated config in ${configDir}`);
-    await writeConfig(configDir);
-    logStep('building temporary Clearnode binary');
-    await runCommand('go', ['build', '-o', binaryPath, './clearnode'], { cwd: repoRoot }, 'setup');
+    if (useExternalNode) {
+      logStep(`using external Clearnode at ${wsURL}`);
+    } else {
+      logStep(`writing isolated config in ${configDir}`);
+      await writeConfig(configDir);
+      logStep('building temporary Clearnode binary');
+      await runCommand('go', ['build', '-o', binaryPath, './clearnode'], { cwd: repoRoot }, 'setup');
 
-    logStep(`starting Clearnode and waiting for ${wsURL}`);
-    child = spawn(binaryPath, {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        CLEARNODE_CONFIG_DIR_PATH: configDir,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+      logStep(`starting Clearnode and waiting for ${wsURL}`);
+      child = spawn(binaryPath, {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          CLEARNODE_CONFIG_DIR_PATH: configDir,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
 
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+    }
 
     await waitForWebSocket(wsURL, child, readyTimeoutMs);
 
@@ -225,23 +249,28 @@ async function runSmoke() {
 
     logStep('calling getConfig');
     const config = await withTimeout('client.getConfig', client.getConfig());
-    assertSmoke(
-      config.nodeAddress.toLowerCase() === wallet.toLowerCase(),
-      'transform',
-      `expected node address ${wallet}, got ${config.nodeAddress}`
-    );
+    assertSmoke(typeof config.nodeAddress === 'string', 'transform', 'node config nodeAddress is not a string');
     assertSmoke(Array.isArray(config.blockchains), 'transform', 'node config blockchains is not an array');
-    assertSmoke(config.blockchains.length === 0, 'transform', 'runtime smoke config should expose no blockchains');
     assertSmoke(
       Array.isArray(config.supportedSigValidators),
       'transform',
       'node config supportedSigValidators is not an array'
     );
+    if (!useExternalNode) {
+      assertSmoke(
+        config.nodeAddress.toLowerCase() === wallet.toLowerCase(),
+        'transform',
+        `expected node address ${wallet}, got ${config.nodeAddress}`
+      );
+      assertSmoke(config.blockchains.length === 0, 'transform', 'runtime smoke config should expose no blockchains');
+    }
 
     logStep('calling getAssets');
     const assets = await withTimeout('client.getAssets', client.getAssets());
     assertSmoke(Array.isArray(assets), 'transform', 'assets response is not an array');
-    assertSmoke(assets.length === 0, 'transform', 'runtime smoke config should expose no assets');
+    if (!useExternalNode) {
+      assertSmoke(assets.length === 0, 'transform', 'runtime smoke config should expose no assets');
+    }
 
     logStep('calling getAppSessions');
     const appSessions = await withTimeout(
@@ -306,7 +335,7 @@ async function runSmoke() {
     process.exitCode = 1;
   } finally {
     try {
-      if (client) await client.close();
+      await closeClient(client);
     } finally {
       if (child) {
         logStep('stopping Clearnode');
@@ -322,3 +351,4 @@ async function runSmoke() {
 }
 
 await runSmoke();
+process.exit(process.exitCode ?? 0);

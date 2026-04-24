@@ -33,7 +33,7 @@ This is not a load test. It uses empty local `blockchains` and `assets` config s
 - RPC DTO drift: compares Go JSON-tagged DTO structs against TS request/response interfaces for required fields, optional fields, and scalar/container shape.
 - Public API drift: snapshots root runtime exports and compiler-derived TypeScript signatures for `@yellow-org/sdk` and `@yellow-org/sdk-compat`, including type-only exports, interfaces, functions, classes, public class methods, enums, constants, and type aliases.
 - ABI drift: compares checked-in `ChannelHub` functions against the current Foundry artifact, checks SDK-consumed ERC20 functions against the ERC20 artifact, and guards the manually checked-in AppRegistry ABI against an explicit consumed-function manifest until that contract artifact exists in this repo.
-- Signing drift: compares TS app-session packers against Go-generated canonical vectors.
+- Signing drift: compares TS app-session and session-key packers against Go-generated canonical vectors for create, deposit, withdraw, operate, fractional decimal, and uint64 boundary cases.
 - Transform drift: checks raw Clearnode response fixtures for app sessions, node config, assets, and strict failure on unsupported required shapes.
 - Compat drift: checks current v1 app-session shape, legacy flat fallback shape, and asset decimal conversion in `NitroliteClient.getAppSessionsList()`.
 - Runtime smoke drift: starts an isolated local Clearnode and verifies live SDK/compat calls against the current runtime response shape.
@@ -59,6 +59,14 @@ For a new RPC method, update all applicable surfaces in the same PR: Go method c
 For a new DTO field, update the Go JSON-tagged struct and TS request/response interface together. Optionality must match unless a small, named override is added to the drift test.
 
 For a new response transform, add a raw fixture and expected behavior test. Unsupported wire shapes should fail clearly instead of silently producing partial data.
+
+For intentional app/session-key signing vector changes, regenerate the Go source-of-truth hashes from the repo root:
+
+```bash
+go run ./scripts/drift/generate-app-signing-vectors.go
+```
+
+Then update `sdk/ts/test/unit/app-signing-drift.test.ts` with the changed hashes in the same PR as the Go packing/protocol change.
 
 ## Adversarial Proof
 

@@ -1,3 +1,5 @@
+{{- $profile := "tiny" -}}
+{{- $p := index .Values.profiles $profile -}}
 config:
   args: ["clearnode"]
   logLevel: info
@@ -8,9 +10,9 @@ config:
     name: clearnode_stress_v1
     user: clearnode_stress_v1_admin
   envSecret: clearnode-secret-env
-  extraEnvs: 
-    CLEARNODE_DATABASE_MAX_OPEN_CONNS: "10"
-    CLEARNODE_DATABASE_MAX_IDLE_CONNS: "2"
+  extraEnvs:
+    CLEARNODE_DATABASE_MAX_OPEN_CONNS: "{{ $p.database.maxOpenConns }}"
+    CLEARNODE_DATABASE_MAX_IDLE_CONNS: "{{ $p.database.maxIdleConns }}"
     CLEARNODE_DATABASE_CONN_MAX_LIFETIME_SEC: "3600"
     CLEARNODE_DATABASE_CONN_MAX_IDLE_TIME_SEC: "600"
     CLEARNODE_SIGNER_TYPE: "gcp-kms"
@@ -42,15 +44,9 @@ metrics:
   port: 4242
   endpoint: "/metrics"
 
+replicaCount: {{ $p.replicaCount }}
 resources:
-  limits:
-    cpu: 200m
-    memory: 200Mi
-    ephemeral-storage: 256Mi
-  requests:
-    cpu: 200m
-    memory: 200Mi
-    ephemeral-storage: 256Mi
+  {{- toYaml $p.resources | nindent 2 }}
 
 autoscaling:
   enabled: false

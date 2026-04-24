@@ -1,7 +1,13 @@
 environments:
-  sandbox-v1: {}
-  stress-v1: {}
-  v1-rc: {}
+  sandbox-v1:
+    values:
+      - chart/config/profiles.yaml
+  stress-v1:
+    values:
+      - chart/config/profiles.yaml
+  v1-rc:
+    values:
+      - chart/config/profiles.yaml
 
 ---
 
@@ -14,7 +20,7 @@ releases:
       - chart/config/secrets.yaml
       - chart/config/{{ .Environment.Name }}/secrets.yaml
     values:
-      - chart/config/{{ .Environment.Name }}/clearnode.yaml
+      - chart/config/{{ .Environment.Name }}/clearnode.yaml.gotmpl
     set:
       - name: image.tag
         value: '{{ requiredEnv "IMAGE_TAG" }}'

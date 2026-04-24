@@ -72,10 +72,6 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
     uint64 constant FOREIGN_CHAIN_ID = 42;
     address constant FOREIGN_TOKEN = address(42);
 
-    Ledger EMPTY_LEDGER = Ledger({
-        chainId: 0, token: address(0), decimals: 0, userAllocation: 0, userNetFlow: 0, nodeAllocation: 0, nodeNetFlow: 0
-    });
-
     // ======== Setup ========
 
     function setUp() public override {
@@ -134,7 +130,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: 0
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });
@@ -159,7 +155,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: int256(DEPOSIT_AMOUNT)
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });
@@ -272,7 +268,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: DEPOSIT_AMOUNT,
                 nodeNetFlow: int256(DEPOSIT_AMOUNT)
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });
@@ -300,7 +296,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: int256(DEPOSIT_AMOUNT)
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });
@@ -351,7 +347,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: 500
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });
@@ -400,7 +396,7 @@ contract ChannelHubTest_emitsNodeBalanceUpdated is ChannelHubTest_Base {
                 nodeAllocation: 0,
                 nodeNetFlow: 0
             }),
-            nonHomeLedger: EMPTY_LEDGER,
+            nonHomeLedger: TestUtils.emptyLedger(),
             userSig: "",
             nodeSig: ""
         });

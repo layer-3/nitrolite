@@ -31,6 +31,10 @@ import {
   transformAppDefinitionFromRPC,
   transformActionAllowance,
 } from './utils.js';
+import {
+  transformChannelSessionKeyState,
+  transformAppSessionKeyState,
+} from './session_key_state_transforms.js';
 import * as blockchain from './blockchain/index.js';
 import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state.js';
 import { newVoidState } from './core/types.js';
@@ -1701,7 +1705,9 @@ export class Client {
       session_key: sessionKey,
     };
     const resp = await this.rpcClient.channelsV1GetLastKeyStates(req);
-    return resp.states;
+    return resp.states.map((state, index) =>
+      transformChannelSessionKeyState(state, `channel session key state[${index}]`)
+    );
   }
 
   // ============================================================================
@@ -1751,7 +1757,9 @@ export class Client {
       session_key: sessionKey,
     };
     const resp = await this.rpcClient.appSessionsV1GetLastKeyStates(req);
-    return resp.states;
+    return resp.states.map((state, index) =>
+      transformAppSessionKeyState(state, `app session key state[${index}]`)
+    );
   }
 
   // ============================================================================

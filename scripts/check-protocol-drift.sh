@@ -10,8 +10,8 @@ Usage: scripts/check-protocol-drift.sh [--static|--runtime]
   --static   Run deterministic protocol/SDK/compat drift checks.
   --runtime  Run runtime smoke checks against an ephemeral/local Clearnode.
 
-Runtime smoke is intentionally not implemented in the static runner yet; CI will
-wire it once the ephemeral Clearnode harness lands.
+Runtime smoke starts an isolated local Clearnode with a temporary config. It is a
+lightweight compatibility smoke, not a load or stress test.
 USAGE
 }
 
@@ -42,8 +42,10 @@ case "$mode" in
     run_package "sdk/ts-compat" "drift:check"
     ;;
   --runtime)
-    echo "::error::runtime protocol drift smoke is not implemented yet; use --static for deterministic checks" >&2
-    exit 2
+    echo "==> Running Nitrolite protocol runtime smoke checks"
+    run_package "sdk/ts" "build:ci"
+    run_package "sdk/ts-compat" "build:ci"
+    node "$ROOT/scripts/drift/runtime-smoke.mjs"
     ;;
   -h|--help)
     usage

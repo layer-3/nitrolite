@@ -27,6 +27,16 @@ The runtime smoke builds the TS SDK, builds TS compat, builds a temporary local 
 
 This is not a load test. It uses empty local `blockchains` and `assets` config so PR CI does not depend on external RPC endpoints, wallets, or shared Clearnode deployments.
 
+To run the same lightweight compatibility smoke against a shared Clearnode, use external-node mode:
+
+```bash
+CLEARNODE_RUNTIME_SMOKE_EXTERNAL=1 \
+CLEARNODE_RUNTIME_SMOKE_WS_URL=wss://clearnode-stress.yellow.org/v1/ws \
+./scripts/check-protocol-drift.sh --runtime
+```
+
+External-node mode does not start a local Clearnode and does not assert local-only empty config. It still checks `ping`, `getConfig`, `getAssets`, `getAppSessions`, key-state reads, and compat mapping.
+
 ## Guard Layers
 
 - RPC method drift: compares Go RPC method literals, Clearnode router registrations, TS method constants, and public TS client wrappers.
@@ -82,4 +92,4 @@ If runtime smoke fails in CI, inspect the `protocol-drift-runtime-smoke-logs` ar
 
 The runtime job uses read-only repository permissions and no secrets. It builds Clearnode locally instead of pulling or publishing an image, so ordinary PRs do not need package-write permissions. If organization policy restricts forked PR workflows, a maintainer can rerun the same command locally or through an allowed CI rerun.
 
-Shared stress Clearnode checks are manual/nightly only. `wss://clearnode-stress.yellow.org/v1/ws` can be newer than sandbox while audit remediations roll out, so it is useful for release confidence but must not be a default PR blocker.
+Shared stress Clearnode checks are manual only through the `Protocol Drift Stress Smoke` workflow. They are not PR-blocking and are not scheduled by default. `wss://clearnode-stress.yellow.org/v1/ws` can be newer than sandbox while audit remediations roll out, so it is useful for release confidence but must not be a default PR blocker.

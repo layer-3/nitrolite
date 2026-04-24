@@ -438,7 +438,7 @@ export const ChannelHubAbi = [
       }
     ],
     outputs: [],
-    stateMutability: 'payable'
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -585,7 +585,7 @@ export const ChannelHubAbi = [
       }
     ],
     outputs: [],
-    stateMutability: 'payable'
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -2585,7 +2585,7 @@ export const ChannelHubAbi = [
       }
     ],
     outputs: [],
-    stateMutability: 'payable'
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -5531,6 +5531,11 @@ export const ChannelHubAbi = [
   {
     type: 'error',
     name: 'IncorrectChannelStatus',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectMsgSender',
     inputs: []
   },
   {

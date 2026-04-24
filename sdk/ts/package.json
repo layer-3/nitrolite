@@ -22,6 +22,7 @@
         "lint": "eslint src test --ext .ts",
         "typecheck": "tsc --noEmit",
         "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs",
+        "drift:check": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --runTestsByPath test/unit/rpc-drift.test.ts test/unit/rpc-dto-drift.test.ts test/unit/public-api-drift.test.ts test/unit/abi-drift.test.ts test/unit/app-signing-drift.test.ts test/unit/transform-drift.test.ts",
         "test:types": "npm run validate",
         "dev": "npm run watch",
         "dev:docs": "npm run docs:tutorials && npm run watch",

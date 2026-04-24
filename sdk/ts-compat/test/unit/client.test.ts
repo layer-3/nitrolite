@@ -119,4 +119,13 @@ describe('NitroliteClient getAppSessionsList compat mapping', () => {
             },
         ]);
     });
+
+    it('maps an empty app session list without requiring legacy fields', async () => {
+        const client = makeClient([]);
+
+        await expect(client.getAppSessionsList()).resolves.toEqual([]);
+        expect(client.innerClient.getAppSessions).toHaveBeenCalledWith({
+            wallet: wallet.toLowerCase(),
+        });
+    });
 });

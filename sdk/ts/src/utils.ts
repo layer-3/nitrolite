@@ -374,7 +374,7 @@ export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppDefinitionFromRPC(raw: any): AppDefinitionV1 {
-  if (!raw.application_id || raw.nonce === undefined || raw.nonce === null) {
+  if (!raw || !raw.application_id || raw.nonce === undefined || raw.nonce === null) {
     throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
   }
   return {

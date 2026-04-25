@@ -1167,3 +1167,148 @@ func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
 	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertExpectations(t)
 }
+
+// TestCreateAppSession_NonAlphanumericApplicationID_Success verifies that application IDs
+// containing characters that would not have matched the old ApplicationIDRegex (e.g. uppercase
+// letters, dots, slashes) are now accepted, since the IsValidApplicationID check was removed.
+func TestCreateAppSession_NonAlphanumericApplicationID_Success(t *testing.T) {
+	for _, appID := range []string{
+		"MY.APP.123",       // dots and uppercase
+		"APP/subpath",      // slash
+		"Test App",         // space
+		"UPPER_CASE_APP",   // uppercase with underscores
+		"app:v2.3.4",       // colon and dots
+	} {
+		appID := appID // capture range variable
+		t.Run(appID, func(t *testing.T) {
+			mockStore := new(MockStore)
+			storeTxProvider := func(fn StoreTxHandler) error {
+				return fn(mockStore)
+			}
+
+			mockSigner := NewMockChannelSigner()
+			mockAssetStore := new(MockAssetStore)
+			mockStatePacker := new(MockStatePacker)
+
+			handler := NewHandler(
+				storeTxProvider,
+				mockAssetStore,
+				&MockActionGateway{},
+				mockSigner,
+				core.NewStateAdvancerV1(mockAssetStore),
+				mockStatePacker,
+				"0xnode",
+				true, // appRegistryEnabled
+				metrics.NewNoopRuntimeMetricExporter(),
+				32, 1024, 256, 16,
+			)
+
+			wallet1 := NewTestAppSessionWallet(t)
+			participant1 := wallet1.Address
+
+			appDef := app.AppDefinitionV1{
+				ApplicationID: appID,
+				Participants: []app.AppParticipantV1{
+					{WalletAddress: participant1, SignatureWeight: 1},
+				},
+				Quorum: 1,
+				Nonce:  99999,
+			}
+			sig1 := wallet1.SignCreateRequest(t, appDef, "")
+
+			reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+				Definition: rpc.AppDefinitionV1{
+					Application: appID,
+					Participants: []rpc.AppParticipantV1{
+						{WalletAddress: participant1, SignatureWeight: 1},
+					},
+					Quorum: 1,
+					Nonce:  "99999",
+				},
+				QuorumSigs: []string{sig1},
+			}
+
+			mockStore.On("GetApp", appID).Return(&app.AppInfoV1{
+				App: app.AppV1{ID: appID, CreationApprovalNotRequired: true},
+			}, nil).Once()
+			mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
+
+			payload, err := rpc.NewPayload(reqPayload)
+			require.NoError(t, err)
+
+			ctx := &rpc.Context{
+				Context: context.Background(),
+				Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+			}
+
+			handler.CreateAppSession(ctx)
+
+			require.NotNil(t, ctx.Response)
+			if respErr := ctx.Response.Error(); respErr != nil {
+				t.Fatalf("appID %q: unexpected error: %v", appID, respErr)
+			}
+			assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+
+			var resp rpc.AppSessionsV1CreateAppSessionResponse
+			err = ctx.Response.Payload.Translate(&resp)
+			require.NoError(t, err)
+			assert.NotEmpty(t, resp.AppSessionID)
+
+			mockStore.AssertExpectations(t)
+		})
+	}
+}
+
+// TestCreateAppSession_EmptyApplicationID_Rejected verifies that an empty application ID
+// is still rejected even after the regex validation was removed.
+func TestCreateAppSession_EmptyApplicationID_Rejected(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(
+		storeTxProvider,
+		nil,
+		&MockActionGateway{},
+		nil,
+		nil,
+		nil,
+		"0xnode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	participant1 := "0x1111111111111111111111111111111111111111"
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "", // empty — must still be rejected
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 1},
+			},
+			Quorum: 1,
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{"0x1234"},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	err = ctx.Response.Error()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "application id is required")
+
+	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
+	mockStore.AssertNotCalled(t, "CreateAppSession", mock.Anything)
+}

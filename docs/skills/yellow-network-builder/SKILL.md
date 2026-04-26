@@ -24,6 +24,34 @@ times off-chain via signed state updates; settle on-chain once. Finality
 < 1 second, zero gas per operation, funds always recoverable via the
 Custody contract.
 
+## "Brokers" — clarifying a confusing term
+
+Yellow's docs call ClearNode operators "brokers" because they hold and
+update ledger state. They are **not** market-makers. There is no public
+broker registry, no broker matching engine, no `submit_order` /
+`get_quote` RPC. Order books, quotes, matching — all of it lives in the
+**application layer** that you build.
+
+Public ClearNodes (sandbox + mainnet) are reachable by anyone — no
+partnership, no whitelisting. Running your own ClearNode requires locking
+**250,000 $YELLOW** as operator collateral; using one does not.
+
+For asset exchange (swaps), see `yellow-swap-design`.
+
+## Yellow Network repo map (github.com/layer-3)
+
+| Repo | What it is | Use for |
+|---|---|---|
+| [`nitrolite`](https://github.com/layer-3/nitrolite) | Protocol + Go/TS SDK + ClearNode + smart contracts | Default starting point; everything builders need |
+| [`docs`](https://github.com/layer-3/docs) | Source of `docs.yellow.org` | Cite the docs site, not the repo, for stable URLs |
+| [`clearsync`](https://github.com/layer-3/clearsync) | B2B inter-exchange clearing protocol (Solidity + Go) | Algo-trading firms / exchanges, not retail apps |
+| [`broker-contracts`](https://github.com/layer-3/broker-contracts) | Early broker token + LiteVault primitives | Reference only; dormant since 2025 |
+| [`cosign-demo`](https://github.com/layer-3/cosign-demo) | Shared-approval demo on Nitrolite | Learn app sessions by example |
+
+`yellow.pro` is a Yellow-built consumer **trading product** (UI). It is
+**not** publicly callable infrastructure — don't try to integrate against
+it as a backend.
+
 ## Three-layer architecture
 
 | Layer | Components | Speed | Cost |
@@ -84,6 +112,7 @@ Drop into the right specialist skill for the task:
 - `yellow-state-channels` — channel lifecycle (off-chain + on-chain)
 - `yellow-deposits-withdrawals` — on-chain funding in/out
 - `yellow-queries` — 12 read-only RPC methods
+- `yellow-swap-design` — three patterns for off-chain asset exchange when there's no native swap protocol
 - `yellow-notifications` — `bu`/`cu`/`tr`/`asu` server-push
 
 **On-chain**

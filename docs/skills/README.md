@@ -28,6 +28,7 @@ Reach for these skills when you're building **on top of Yellow Network** — ope
 - [`yellow-state-channels`](./yellow-state-channels/SKILL.md) — channel lifecycle (open, operate, close), cooperative + unilateral close paths, challenge-response.
 - [`yellow-app-sessions`](./yellow-app-sessions/SKILL.md) — multi-party off-chain accounts: 2-of-3 escrow, stake-with-slashing, turn-based games. Definition, allocations, quorum.
 - [`yellow-custody-contract`](./yellow-custody-contract/SKILL.md) — Solidity reference for the on-chain anchor: `IChannel`, `IDeposit`, `IChannelReader`, EIP-712 `VirtualApp:Custody` domain, structs, events.
+- [`yellow-swap-design`](./yellow-swap-design/SKILL.md) — three patterns for off-chain asset exchange (treasury-convert, market-maker agent, P2P matching) when the protocol does not provide a canonical swap primitive.
 
 ### SDKs
 

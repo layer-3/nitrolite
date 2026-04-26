@@ -61,8 +61,8 @@ create_app_session ──▶ [open]
 
 | Field | Meaning |
 |---|---|
-| `application` | Your app identifier. |
-| `protocol` | Nitro protocol version. Current: `NitroRPC/0.4`. |
+| `application` | Free-form string identifying your app's session protocol. There is **no central registry / enum** — pick a stable name + version (e.g. `"swap-mm-v1"`, `"escrow-v2"`, `"my-game-app-v1"`) and stick to it. Documented examples in Yellow's docs: `payment-app-v1`, `gaming-app-v1`, `escrow-app-v1`, `tournament-v1`, `subscription-v1`. Match an existing one if your semantics are identical; otherwise mint your own. For swaps specifically, see the `yellow-swap-design` skill. |
+| `protocol` | **Nitro RPC protocol version**, NOT app type. Verified `RPCProtocolVersion` enum: `NitroRPC/0.4` (current) or `NitroRPC/0.2` (legacy). |
 | `participants[]` | Addresses that can sign state updates. Order is preserved and referenced by `weights` / `allocations`. |
 | `weights[]` | Voting weight per participant for state updates & close. Must have same length as `participants`. |
 | `quorum` | Minimum **sum of weights** required to approve a state update or close. If `sum(weights) = 100` and `quorum = 80`, you need any subset totaling ≥ 80. |

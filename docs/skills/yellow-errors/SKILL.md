@@ -142,7 +142,7 @@ Safe to retry:
 
 **Never retry blindly**:
 - `Session key already registered` — you'll just fail again
-- `Invalid signature` — bug in your signer; retry won't help
+- `invalid challenge or signature` — bug in your signer or wrong wallet; retry won't help, perform a fresh `auth_request` only if the challenge aged out
 - `Challenge expired` — must go through a fresh auth first
 - `Insufficient balance` — no amount of retrying will fund you
 

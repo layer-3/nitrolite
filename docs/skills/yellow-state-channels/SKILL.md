@@ -56,7 +56,7 @@ regardless of move count; on-chain the same game would cost $100s.
 
 ## Channel lifecycle (on-chain state machine)
 
-```
+```text
 VOID ──create() (2 sigs) ─────────────▶ ACTIVE   (implicit join, recommended)
 VOID ──create() (1 sig) ──────────────▶ INITIAL ──join() ──▶ ACTIVE  (legacy)
 

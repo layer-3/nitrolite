@@ -331,7 +331,7 @@ The companion package `@yellow-org/sdk-compat` (also `1.2.0`, `peerDependencies:
 
 From the compat README, verbatim:
 
-```
+```text
 createGetChannelsMessage, parseGetChannelsResponse,
 createGetLedgerBalancesMessage, parseGetLedgerBalancesResponse,
 parseGetLedgerEntriesResponse, parseGetAppSessionsResponse,

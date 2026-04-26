@@ -21,7 +21,7 @@ sessions) is rejected. Spec:
 
 ## The 3 steps
 
-```
+```text
 Client                                ClearNode
   │  1. auth_request                    │
   │  { address, session_key,            │
@@ -233,9 +233,12 @@ await client.send('transfer', {
 ## Recommended helper shape
 
 ```ts
-authenticate(client, config, signRequest): Promise<{ jwt }>
+// The server returns the JWT in a field named `jwt_token`. Match that
+// shape in your helpers — using just `jwt` here is the bug the docs above
+// flag as a "common mistake".
+authenticate(client, config, signRequest): Promise<{ jwt_token: string }>
 sendAuthRequest(client, config): Promise<challengeMessage>
-sendAuthVerify(client, challenge, signRequest): Promise<{ jwt }>
+sendAuthVerify(client, challenge, signRequest): Promise<{ jwt_token: string }>
 ```
 
 Keep the `signRequest` callback external — the EIP-712 Policy signer for

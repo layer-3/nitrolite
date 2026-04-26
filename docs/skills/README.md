@@ -1,6 +1,6 @@
 # Yellow Network builder skills
 
-A reference library of [Claude Code skills](https://claude.com/blog/claude-code-skills) for builders integrating with Yellow Network. Each skill is a focused markdown document with frontmatter that AI coding agents (Claude Code, Cursor, etc.) can load on demand.
+A reference library of [Claude Code skills](https://claude.com/blog/claude-code-skills) for builders integrating with Yellow Network. Each skill is a focused Markdown document with frontmatter that AI coding agents (Claude Code, Cursor, etc.) can load on demand.
 
 ## When to use these
 

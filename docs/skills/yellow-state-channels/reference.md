@@ -6,7 +6,7 @@ on-chain details.
 
 ## EIP-712 Custody domain
 
-```
+```text
 name:              "VirtualApp:Custody"
 version:           "0.3.0"
 chainId:           <chain_id of deployment>
@@ -38,7 +38,7 @@ struct Channel {
 
 Channel ID derivation (deterministic — same off-chain and on-chain):
 
-```
+```text
 channelId = keccak256(abi.encode(participants, adjudicator, challenge, nonce, chainId))
 ```
 
@@ -160,7 +160,7 @@ parameters. Enables composable governance.
 
 ### Step-by-step
 
-```
+```text
 1. Challenger has state S_n with version = n
    → calls challenge(channelId, S_n, sigs)
    → Custody verifies signatures via adjudicator.isValid

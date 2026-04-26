@@ -51,19 +51,21 @@ docker compose up
 | 4242 | Prometheus metrics |
 | 5432 | Postgres (if using postgres driver) |
 
-Key env vars:
+Key env vars (verified against `clearnode/runtime.go` and `clearnode/main.go`):
 
 | Var | Meaning |
 |---|---|
 | `BROKER_PRIVATE_KEY` | ClearNode operator key |
-| `DATABASE_DRIVER` | `postgres` or `sqlite` (default `sqlite`) |
 | `CLEARNODE_DATABASE_URL` | DB connection string |
 | `CLEARNODE_CONFIG_DIR_PATH` | Config override dir |
 | `CLEARNODE_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
-| `HTTP_PORT` | Override :8000 |
-| `METRICS_PORT` | Override :4242 |
-| `MSG_EXPIRY_TIME` | Max req age in seconds (default 60) |
 | `<CHAIN>_BLOCKCHAIN_RPC` | Per-chain RPC URL (e.g. `ETHEREUM_BLOCKCHAIN_RPC`) |
+
+For ports + database driver + message-expiry settings, edit the YAML
+config under `CLEARNODE_CONFIG_DIR_PATH` — the runtime does not read
+`HTTP_PORT`, `METRICS_PORT`, `DATABASE_DRIVER`, or `MSG_EXPIRY_TIME`
+as environment variables. Earlier versions of these docs listed them as
+env vars; that was wrong.
 
 ## Builder Suite Index
 
@@ -240,7 +242,7 @@ await client.transfer(
 
 ## Fund Flow
 
-```
+```text
 User Wallet (ERC-20 on any chain)
   |
   | deposit (on-chain tx)

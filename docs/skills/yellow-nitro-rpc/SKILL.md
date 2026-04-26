@@ -125,6 +125,9 @@ Connect to sandbox and send any method — you should see your `auth_challenge`
 response come back with the same `requestId` you sent:
 
 ```bash
+# One-time: install the WS client used in the snippet
+npm install ws
+
 node -e "
 const WS = require('ws');
 const ws = new WS('wss://clearnet-sandbox.yellow.com/ws');
@@ -142,7 +145,7 @@ ws.on('message', (d) => { console.log(d.toString()); process.exit(0); });
 ```
 
 You should see:
-```
+```text
 {"res":[42,"auth_challenge",{"challenge_message":"<uuid>"},<ms>],"sig":["0x..."]}
 ```
 

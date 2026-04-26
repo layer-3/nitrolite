@@ -154,7 +154,7 @@ function checkpoint(
 
 Typical flow:
 
-```
+```text
 off-chain    create_channel (RPC) ─▶ ClearNode returns channel + state0 + serverSig
 on-chain     Custody.create(channel, state0, userSig, serverSig)     (2 sigs)
 off-chain    resize_channel (RPC) ─▶ ClearNode returns stateN + serverSig

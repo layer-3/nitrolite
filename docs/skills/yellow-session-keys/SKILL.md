@@ -23,7 +23,7 @@ Benefits: no wallet prompts per action, tighter blast radius if compromised
 
 ## Lifecycle
 
-```
+```text
 1. Generate session key (local)     ──▶  (sessionKey.address, sessionKey.privKey)
 2. Send auth_request with           ──▶  session_key, allowances, scope, expires_at
 3. Receive auth_challenge
@@ -164,7 +164,7 @@ const { session_keys } = await client.send('get_session_keys', {
 
 The clearnode tracks spending per (session_key, asset) pair:
 
-```
+```text
 remaining = allowance - used
 ```
 

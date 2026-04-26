@@ -19,7 +19,7 @@ The on-chain gateway between your EOA/smart wallet and the off-chain
 
 ## Model
 
-```
+```text
  EOA / Smart Wallet
       │
       │  (1) ERC-20 approve(Custody, amount)

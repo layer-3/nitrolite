@@ -4,7 +4,7 @@
 
 Always prefer the implicit join (single transaction) approach. Collect all participant signatures before calling `create()`. Avoid the two-step create→join flow unless you have no choice.
 
-```
+```text
 // CORRECT: supply both sigs, transition directly to ACTIVE
 create(channel, stateWithSigs[0+1]) → ACTIVE in one tx
 
@@ -17,7 +17,7 @@ join(channelId, sig[1]) → ACTIVE
 
 State versions must be strictly monotonically increasing. Never skip or repeat.
 
-```
+```text
 // CORRECT
 version 1 → 2 → 3 → 4 → 5
 
@@ -78,7 +78,7 @@ Checkpoint long-running channels periodically to bound worst-case dispute rollba
 
 The resize state data must encode `int256[]` delta amounts. Fund conservation must hold:
 
-```
+```text
 sum(allocations_resize_state) = sum(allocations_prev_state) + sum(delta_amounts)
 ```
 

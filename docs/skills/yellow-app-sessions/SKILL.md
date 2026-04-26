@@ -23,7 +23,7 @@ Spec: <https://docs.yellow.org/docs/protocol/off-chain/app-sessions>.
 
 ## Lifecycle
 
-```
+```text
 create_app_session ──▶ [open]
                         │
                         │  submit_app_state (0..N updates)
@@ -104,7 +104,7 @@ prefixes — so v0.5.3 and v1 quorum payloads are wire-incompatible.
 
 The `app_session_id` is deterministic:
 
-```
+```text
 keccak256(JSON.stringify({
   application, protocol, participants, weights, quorum, challenge, nonce
 }))
@@ -172,7 +172,7 @@ instantly to each participant's unified balance.
 
 ### Pattern A — 2-of-3 escrow (marketplace)
 
-```
+```text
 participants: [Buyer, Seller, Judge]
 weights:      [40,    40,     50]     // sum = 130
 quorum:       80                       // any 2 parties
@@ -189,7 +189,7 @@ close, allocations reflect the resolution (100/0, 0/100, or split).
 
 ### Pattern B — Stake (slashing)
 
-```
+```text
 participants: [Agent, Treasury, SlashAuthority]
 weights:      [0,     0,        100]
 quorum:       100
@@ -205,7 +205,7 @@ Slash: SlashAuthority signs a close redirecting N% to Treasury.
 
 ### Pattern C — Turn-based game
 
-```
+```text
 participants: [Player1, Player2]
 weights:      [50,       50]
 quorum:       100                      // both must sign every state

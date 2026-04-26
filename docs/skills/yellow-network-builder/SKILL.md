@@ -90,8 +90,10 @@ const client = await Client.create(
   stateSigner, txSigner,
 );
 
-await client.deposit({ chainId: 137, token: USDC, amount: '100' });
-await client.transfer({ destination: '0x…', allocations: [{ asset: 'usdc', amount: '50' }] });
+// v1 Client methods are positional. blockchainId is bigint, amount is Decimal.
+import Decimal from 'decimal.js';
+await client.deposit(137n, 'usdc', new Decimal('100'));
+await client.transfer('0x…', 'usdc', new Decimal('50'));
 ```
 
 See `yellow-sdk-v1` for the full Client API.

@@ -288,7 +288,8 @@ const { ledger_transactions } = await client.send('get_ledger_transactions', {
   limit: 50, sort: 'desc',
 });
 for (const tx of ledger_transactions) {
-  render(tx.tx_type, tx.sender, tx.receiver, tx.amount, tx.asset);
+  // schema fields are from_account / to_account (not sender / receiver)
+  render(tx.tx_type, tx.from_account, tx.to_account, tx.amount, tx.asset);
 }
 ```
 

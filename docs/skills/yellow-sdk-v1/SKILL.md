@@ -9,6 +9,7 @@ last_verified: 2026-04-26
 user-invocable: true
 source_urls:
   - https://www.npmjs.com/package/@yellow-org/sdk
+  - https://github.com/layer-3/nitrolite/blob/main/docs/api.yaml
   - https://docs.yellow.org/docs/0.5.x/build/quick-start
   - https://docs.yellow.org/docs/0.5.x/guides/migration-guide
 ---

@@ -1,0 +1,10 @@
+{
+  "name": "yellow-network-builder",
+  "description": "Comprehensive Yellow Network development guide. Covers architecture, ClearNode integration, Nitrolite SDK, state channels, app sessions, session keys, unified balance, and multi-chain deployment. Use when: building on Yellow Network, integrating with ClearNode, creating app sessions, managing channels, or troubleshooting Yellow Network SDK errors.",
+  "version": "1.0.0",
+  "author": {
+    "name": "YellowNetwork Builder Team"
+  },
+  "license": "MIT",
+  "keywords": ["yellow-network", "state-channels", "nitrolite", "clearnode", "web3", "layer-3"]
+}

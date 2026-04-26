@@ -1,0 +1,10 @@
+{
+  "name": "yellow-state-channels",
+  "description": "State channel protocol patterns for Yellow Network. Covers channel lifecycle, on-chain custody contracts, adjudicators, dispute resolution, challenge-response, checkpointing, resize operations, and Solidity smart contract development. Use when: working with channel creation/closing, handling disputes, building custom adjudicators, or debugging on-chain settlement.",
+  "version": "1.0.0",
+  "author": {
+    "name": "YellowNetwork Builder Team"
+  },
+  "license": "MIT",
+  "keywords": ["state-channels", "nitrolite", "custody-contract", "adjudicator", "dispute"]
+}

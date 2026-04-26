@@ -11,20 +11,34 @@ to hydrate UI, reconcile accounting, and verify protocol health.
 
 ## Method index
 
-| Method | Auth | Purpose |
-|---|---|---|
-| `ping` | public | Liveness check + latency measurement |
-| `get_config` | public | ClearNode configuration (supported chains, protocol version) |
-| `get_assets` | public | Supported tokens and their decimals per chain |
-| `get_app_definition` | public | Resolve a known app by id to its full `definition` |
-| `get_channels` | public | List payment channels for a participant |
-| `get_app_sessions` | public | List app sessions (escrow, stake, games) |
-| `get_ledger_entries` | public | Double-entry bookkeeping audit trail |
-| `get_ledger_transactions` | public | User-facing transaction history |
-| `get_ledger_balances` | **auth** | Current balances per asset (unified or per app session) |
-| `get_user_tag` | **auth** | Returns the authenticated user's own tag |
-| `get_session_keys` | **auth** | Your active session keys + per-asset allowance usage |
-| `get_rpc_history` | **auth** | Your recent RPC calls to this ClearNode |
+The wire-format method names depend on which protocol version your
+ClearNode speaks:
+
+- `NitroRPC/0.2` and `NitroRPC/0.4` (the `@erc7824/nitrolite@^0.5.3` SDK
+  era — what most existing integrations target): unversioned method
+  names, e.g. `get_channels`, `ping`.
+- `NitroRPC/0.4+` v1 (the `@yellow-org/sdk@^1.x` era): namespaced
+  method names per `docs/api.yaml`, e.g. `channels.v1.get_channels`,
+  `node.v1.ping`. The v1 wire layer also carries a `Group` enum so
+  routing can be keyed off the namespace prefix.
+
+Both columns below describe the same RPC. Pick the column matching your
+SDK version:
+
+| v0.5.3 wire name | v1 canonical name | Auth | Purpose |
+|---|---|---|---|
+| `ping` | `node.v1.ping` | public | Liveness check + latency measurement |
+| `get_config` | `node.v1.get_config` | public | ClearNode configuration (supported chains, protocol version) |
+| `get_assets` | `assets.v1.get_assets` | public | Supported tokens and their decimals per chain |
+| `get_app_definition` | `apps.v1.get_app_definition` | public | Resolve a known app by id to its full `definition` |
+| `get_channels` | `channels.v1.get_channels` | public | List payment channels for a participant |
+| `get_app_sessions` | `app_sessions.v1.get_app_sessions` | public | List app sessions (escrow, stake, games) |
+| `get_ledger_entries` | `ledger.v1.get_ledger_entries` | public | Double-entry bookkeeping audit trail |
+| `get_ledger_transactions` | `ledger.v1.get_ledger_transactions` | public | User-facing transaction history |
+| `get_ledger_balances` | `ledger.v1.get_ledger_balances` | **auth** | Current balances per asset (unified or per app session) |
+| `get_user_tag` | `users.v1.get_user_tag` | **auth** | Returns the authenticated user's own tag |
+| `get_session_keys` | `sessions.v1.get_session_keys` | **auth** | Your active session keys + per-asset allowance usage |
+| `get_rpc_history` | `rpc.v1.get_rpc_history` | **auth** | Your recent RPC calls to this ClearNode |
 
 **Pagination defaults** for methods that accept them: `offset = 0`,
 `limit = 10` (max **100**), `sort = "desc"` (by `created_at`).

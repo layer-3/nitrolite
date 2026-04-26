@@ -213,15 +213,15 @@ const sessionKey = privateKeyToAccount(generatePrivateKey());
 // Use @yellow-org/sdk's Client.create() which authenticates inline,
 // or build the 3-step handshake — see yellow-clearnode-auth
 //
-// Auth Policy payload includes:
-//   wallet: agentAddress              // Main wallet (EOA)
-//   sessionKeyAddress: sessionKey.address
-//   appName: 'my-app'
-//   allowances: [
-//     { asset: 'usdc', amount: '10000.0' },
+// Auth Policy payload (canonical v0.5.3+ field names):
+//   address:     agentAddress              // Main wallet (EOA)
+//   session_key: sessionKey.address
+//   application: 'my-app'
+//   allowances:  [
+//     { asset: 'usdc',   amount: '10000.0' },
 //     { asset: 'yellow', amount: '100000.0' },
 //   ]
-//   expireSeconds: 86_400             // 24 hours
+//   expires_at:  Date.now() + 86_400_000    // milliseconds
 // Signed with the main wallet via EIP-712.
 // After verify, use sessionKey.sign() for all subsequent operations.
 ```
@@ -232,11 +232,10 @@ const sessionKey = privateKeyToAccount(generatePrivateKey());
 // Use client.transfer(...) from @yellow-org/sdk,
 // or send a raw 'transfer' Nitro RPC — see yellow-transfers
 
-// Instant off-chain transfer — no gas
-await client.transfer(
-  recipientAddress,
-  [{ asset: 'usdc', amount: '50.0' }],
-);
+// Instant off-chain transfer — no gas. v1 Client.transfer takes positional
+// args: (recipientWallet, asset, Decimal amount).
+import Decimal from 'decimal.js';
+await client.transfer(recipientAddress, 'usdc', new Decimal('50.0'));
 ```
 
 

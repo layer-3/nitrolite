@@ -70,8 +70,9 @@ static create(
 - `withHandshakeTimeout(ms: number)`
 - `withErrorHandler((error: Error) => void)`
 - `withBlockchainRPC(chainId: bigint, rpcUrl: string)`
+- `withApplicationID(applicationId: string)`
 
-> The README also documents `withPingInterval(ms)`, but as of `1.2.0` it is **not** re-exported from the package root (`dist/index.d.ts` only lists the three above). Treat `withPingInterval` as README-only drift until a future release; keep-alive is handled internally with a default interval.
+> The README also documents `withPingInterval(ms)`, but as of `1.2.0` it is **not** re-exported from the package root (`dist/index.d.ts` only lists the four above). Treat `withPingInterval` as README-only drift until a future release; keep-alive is handled internally with a default interval.
 
 ### State operations (off-chain, two-step pattern)
 
@@ -231,9 +232,15 @@ Low-level method constants live in `rpc/methods.d.ts`. They are grouped into fiv
 - `AppSessionsV1GetAppDefinitionMethod`
 - `AppSessionsV1GetAppSessionsMethod`
 - `AppSessionsV1CreateAppSessionMethod`
-- `AppSessionsV1CloseAppSessionMethod`
 - `AppSessionsV1SubmitSessionKeyStateMethod`
 - `AppSessionsV1GetLastKeyStatesMethod`
+
+> **No dedicated close method in v1.** v0.5.3 had `close_app_session`, but
+> v1 unifies closing into `AppSessionsV1SubmitAppStateMethod` with the
+> `intent` field set to `"close"` (per `app_state_update.intent` in
+> `docs/api.yaml`). The final `allocations` array passed in the close
+> state determines how the session funds are released to participants'
+> unified balances.
 
 ### `apps.v1.*` (group: `AppsV1Group`)
 

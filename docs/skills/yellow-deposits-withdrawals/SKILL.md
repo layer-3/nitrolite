@@ -164,9 +164,13 @@ function balanceOf(address account, address token) external view returns (uint25
 Events to subscribe to for on-chain reconciliation:
 
 ```solidity
-event Deposited(address indexed account, address indexed token, uint256 amount);
-event Withdrawn(address indexed account, address indexed token, uint256 amount);
+event Deposited(address indexed token, uint256 amount);
+event Withdrawn(address indexed token, uint256 amount);
 ```
+
+The `account` is identified by the transaction `msg.sender` rather than an
+event parameter — match logs against the originating tx to attribute the
+deposit / withdrawal to a wallet.
 
 Exact ABI lives in the `@erc7824/nitrolite` package (`abi/` folder) and
 the Yellow Network contract repo.

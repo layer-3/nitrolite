@@ -124,8 +124,17 @@ patterns above. Pick the one that matches your liquidity model.
 
 ## What to put in the app session for a swap
 
+The v1 SDK uses `appSessionsV1CreateAppSession` to open the session and
+`submitAppState` with `intent: 'close'` to close — there's no dedicated
+`close_app_session` method in v1 (see `yellow-sdk-v1` reference). The
+v0.5.3 SDK still exposes `sendCreateAppSession` / `sendCloseAppSession`
+helpers as a separate code path.
+
 ```ts
-const swap = await sendCreateAppSession(signer, requestSigner, {
+// v1 — @yellow-org/sdk
+import { appSessionsV1CreateAppSession, submitAppState } from '@yellow-org/sdk';
+
+const swap = await appSessionsV1CreateAppSession(signer, requestSigner, {
   definition: {
     application: 'swap-mm-v1',         // your name, free-form
     protocol:    'NitroRPC/0.4',       // NitroRPC version (NOT app type)
@@ -142,10 +151,11 @@ const swap = await sendCreateAppSession(signer, requestSigner, {
 });
 
 // MM-bot pre-signed the desired ending state where the assets cross.
-// User co-signs → the session is now in a state that on close credits the
-// user with ETH and the MM with YELLOW.
-await sendCloseAppSession(signer, requestSigner, {
+// User co-signs → submit_app_state with intent="close" releases the funds.
+await submitAppState(signer, requestSigner, {
   app_session_id: swap.app_session_id,
+  intent:  'close',                     // <- the v1 way to close a session
+  version: 1,                            // current_version + 1
   allocations: [
     { participant: userAddress, asset: 'eth',    amount: '0.002' },
     { participant: mmAddress,   asset: 'yellow', amount: '100' },

@@ -113,7 +113,11 @@ if (method === 'error') {
 ```ts
 function handleError(err: Error) {
   const msg = err.message;
-  if (msg.startsWith('session expired') || msg.startsWith('Authentication required')) {
+  // Match both lower- and upper-case forms — current sandbox emits lowercase
+  // ("authentication required") while older docs / clients still surface the
+  // capitalised form.
+  const lower = msg.toLowerCase();
+  if (lower.startsWith('session expired') || lower.startsWith('authentication required')) {
     return reAuthenticate();
   }
   if (msg.includes('allowance exceeded') || msg.includes('Allowance exceeded')) {

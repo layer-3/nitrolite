@@ -100,14 +100,16 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleHomeChannelChallenged_Success(t *testing.T) {
-	// Setup
+func TestHandleHomeChannelChallenged_LogsOnly(t *testing.T) {
+	// Automatic challenge response was removed because non-checkpointable intents (CLOSE,
+	// escrow initiate/finalize, migration) cannot be resolved via ScheduleCheckpoint. The
+	// handler must only fetch the channel for context and emit a warning — no state mutation,
+	// no scheduled action, no enforced-balance refresh.
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
 	service := &EventHandlerService{}
 
-	// Test data
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
 	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
@@ -121,36 +123,70 @@ func TestHandleHomeChannelChallenged_Success(t *testing.T) {
 		StateVersion: 3,
 	}
 
-	state := &core.State{
-		ID:      "state123",
-		Version: 6,
-		HomeLedger: core.Ledger{
-			BlockchainID: 0,
-		},
-	}
-
 	event := &core.HomeChannelChallengedEvent{
 		ChannelID:       channelID,
 		StateVersion:    4,
 		ChallengeExpiry: challengeExpiry,
 	}
 
-	// Mock expectations
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
-		return ch.ChannelID == channelID &&
-			ch.Status == core.ChannelStatusChallenged &&
-			ch.StateVersion == 4 &&
-			ch.ChallengeExpiresAt != nil
-	})).Return(nil)
-	mockStore.On("GetLastStateByChannelID", channelID, true).Return(state, nil)
-	mockStore.On("ScheduleCheckpoint", "state123", uint64(0)).Return(nil)
-	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
-	// Execute
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
-	// Assert
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleCheckpoint", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
+}
+
+func TestHandleHomeChannelChallenged_ChannelNotFound(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xMissingChannel"
+
+	event := &core.HomeChannelChallengedEvent{
+		ChannelID:       channelID,
+		StateVersion:    1,
+		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(nil, nil)
+
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleHomeChannelChallenged_TypeMismatch(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xEscrowAsHome"
+
+	channel := &core.Channel{
+		ChannelID: channelID,
+		Type:      core.ChannelTypeEscrow,
+		Status:    core.ChannelStatusOpen,
+	}
+
+	event := &core.HomeChannelChallengedEvent{
+		ChannelID:       channelID,
+		StateVersion:    1,
+		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
 }

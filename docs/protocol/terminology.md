@@ -74,7 +74,7 @@ An entity capable of producing signatures. Each signer is associated with a spec
 
 ### Session Key
 
-A delegated signing key authorized by a participant's primary key to sign specific types of state updates on their behalf. Session key authorization MUST be associated with the same address as the channel's user or node participant.
+A delegated signing key authorized by a participant's primary key to sign state updates on their behalf within an authorization scope. Session key authorization MUST be associated with the same address as the channel's user or node participant. The authorization scope is defined by an extensible metadata structure (see [Cryptography — Session Key Authorization](cryptography.md#session-key-authorization)). Participants SHOULD treat session-key compromise as equivalent to control of the participant's authority within the scope they issued, for the duration of the validity window.
 
 ### Signature Validation Mode
 

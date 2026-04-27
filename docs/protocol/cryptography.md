@@ -95,11 +95,24 @@ The authorization is constructed as follows:
 
 1. The participant signs a message containing:
    - the session key address
-   - authorization metadata hash (`keccak256` over scope, expiration and possible other data)
+   - authorization metadata hash (`keccak256` over the canonically encoded authorization metadata structure)
 2. The authorization signature is produced using the participant's primary key
 3. The session key MAY then produce signatures on behalf of the participant within the authorized scope
 
 Session key signatures MUST include the authorization proof alongside the session key signature. The authorization proof is canonically encoded as a tuple containing the session key authorization and the raw signature bytes.
+
+### Authorization Metadata
+
+The authorization metadata structure defines the scope of a session key. It MUST contain at least the following fields, which constitute the minimum scope every implementation MUST enforce:
+
+| Field        | Purpose                                                                                                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`    | Replay and revocation guard for the participant's session-key delegations. Issuing a session-key state with a higher version supersedes prior versions, so the previous delegation MUST be treated as revoked once a newer one is registered. |
+| `expires_at` | Bounds the lifetime of the delegation; signatures produced after expiry MUST be rejected.                                                                                                                                                     |
+
+Implementations MAY extend the metadata structure with additional restrictions (for example: authorized assets, allowed transitions, channels, recipients, or per-asset spending limits). Restrictions that an implementation does not encode and enforce are not applied: a session key whose authorization does not narrow a given dimension can sign any otherwise-valid state along that dimension, up to the participant's full balance, until the authorization expires. Participants SHOULD scope the metadata fields available to them accordingly and treat session-key compromise as equivalent to control of the participant's authority within the scope they issued, for the duration of the validity window.
+
+Only the `keccak256` hash of the canonically encoded metadata is bound into the authorization signature; the full structure is supplied alongside the signature at validation time. This indirection lets implementations extend the metadata structure with additional fields purely at the off-chain layer, without changes to the on-chain validator and without invalidating session keys issued under earlier metadata layouts: the on-chain layer only verifies the metadata hash, while the off-chain layer is responsible for decoding the full metadata and enforcing every field it understands.
 
 ## Replay Protection
 

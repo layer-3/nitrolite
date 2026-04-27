@@ -207,7 +207,7 @@ func TestGetChannels_EmptyResult(t *testing.T) {
 	mockTxStore := new(MockStore)
 	handler := newGetChannelsHandler(mockTxStore)
 
-	userWallet := "0xNoChannelsUser"
+	userWallet := "0x0000000000000000000000000000000000000099"
 
 	mockTxStore.On("GetUserChannels", userWallet, (*core.ChannelStatus)(nil), (*string)(nil), (*core.ChannelType)(nil), uint32(100), uint32(0)).
 		Return([]core.Channel{}, uint32(0), nil)
@@ -281,6 +281,33 @@ func TestGetChannels_InvalidStatus(t *testing.T) {
 
 	assert.Equal(t, rpc.MsgTypeRespErr, ctx.Response.Type, "invalid status should produce error response")
 
+	mockTxStore.AssertExpectations(t)
+}
+
+// TestGetChannels_NormalizesWallet verifies that a wallet submitted in mixed case is
+// normalized to canonical lowercase before being passed to the store.
+func TestGetChannels_NormalizesWallet(t *testing.T) {
+	mockTxStore := new(MockStore)
+	handler := newGetChannelsHandler(mockTxStore)
+
+	canonicalWallet := "0x1234567890abcdef1234567890abcdef12345678"
+	mixedCaseWallet := "0x1234567890ABCDEF1234567890abcdef12345678"
+
+	mockTxStore.On("GetUserChannels", canonicalWallet, (*core.ChannelStatus)(nil), (*string)(nil), (*core.ChannelType)(nil), uint32(100), uint32(0)).
+		Return([]core.Channel{}, uint32(0), nil)
+
+	reqPayload := rpc.ChannelsV1GetChannelsRequest{Wallet: mixedCaseWallet}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_channels", Payload: payload},
+	}
+
+	handler.GetChannels(ctx)
+
+	require.Nil(t, ctx.Response.Error())
 	mockTxStore.AssertExpectations(t)
 }
 

@@ -46,6 +46,12 @@ func (h *Handler) GetChannels(c *rpc.Context) {
 		c.Fail(rpc.Errorf("wallet is required"), "missing wallet")
 		return
 	}
+	normalizedWallet, err := core.NormalizeHexAddress(req.Wallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid wallet: %v", err), "")
+		return
+	}
+	req.Wallet = normalizedWallet
 
 	var statusFilter *core.ChannelStatus
 	if req.Status != nil && *req.Status != "" {
@@ -89,7 +95,7 @@ func (h *Handler) GetChannels(c *rpc.Context) {
 	var channels []core.Channel
 	var totalCount uint32
 
-	err := h.useStoreInTx(func(tx Store) error {
+	err = h.useStoreInTx(func(tx Store) error {
 		var err error
 		channels, totalCount, err = tx.GetUserChannels(req.Wallet, statusFilter, req.Asset, typeFilter, limit, offset)
 		if err != nil {

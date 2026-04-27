@@ -211,6 +211,58 @@ func TestSubmitAppVersion_InvalidVersion(t *testing.T) {
 	assert.Contains(t, err.Error(), "version 1")
 }
 
+// TestSubmitAppVersion_NormalizesMixedCaseOwnerWallet verifies that an owner_wallet
+// submitted in mixed case is normalized to the canonical lowercase form before being
+// persisted and used for signature verification.
+func TestSubmitAppVersion_NormalizesMixedCaseOwnerWallet(t *testing.T) {
+	appEntry := app.AppV1{
+		ID:       "test-app",
+		Metadata: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Version:  1,
+	}
+
+	addr, sig := testOwnerWallet(t, appEntry)
+
+	mockStore := &MockStore{
+		createAppFn: func(entry app.AppV1) error {
+			assert.Equal(t, addr, entry.OwnerWallet, "owner wallet must be persisted as canonical lowercase form")
+			return nil
+		},
+	}
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(mockStore, storeTxProvider, &MockActionGateway{}, 4096)
+
+	mixedCaseOwner := "0x" + strings.ToUpper(strings.TrimPrefix(addr, "0x"))
+	require.NotEqual(t, addr, mixedCaseOwner)
+
+	reqPayload := rpc.AppsV1SubmitAppVersionRequest{
+		App: rpc.AppV1{
+			ID:          "test-app",
+			OwnerWallet: mixedCaseOwner,
+			Metadata:    "0x0000000000000000000000000000000000000000000000000000000000000000",
+			Version:     "1",
+		},
+		OwnerSig: sig,
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppsV1SubmitAppVersionMethod), payload),
+	}
+
+	handler.SubmitAppVersion(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.NoError(t, ctx.Response.Error())
+}
+
 func TestSubmitAppVersion_InvalidSignature(t *testing.T) {
 	mockStore := &MockStore{}
 	handler := newHandlerWithDefaults(mockStore)

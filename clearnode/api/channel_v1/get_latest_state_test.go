@@ -205,3 +205,34 @@ func TestGetLatestState_OnlySigned(t *testing.T) {
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
+
+// TestGetLatestState_NormalizesWallet verifies the wallet is normalized before the store call.
+func TestGetLatestState_NormalizesWallet(t *testing.T) {
+	mockTxStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(h StoreTxHandler) error { return h(mockTxStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	canonicalWallet := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	mixedCaseWallet := "0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD"
+	asset := "USDC"
+
+	state := core.State{UserWallet: canonicalWallet, Asset: asset, Version: 1}
+	mockTxStore.On("GetLastUserState", canonicalWallet, asset, false).Return(state, nil)
+
+	reqPayload := rpc.ChannelsV1GetLatestStateRequest{Wallet: mixedCaseWallet, Asset: asset}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_latest_state", Payload: payload},
+	}
+
+	handler.GetLatestState(ctx)
+
+	require.Nil(t, ctx.Response.Error())
+	mockTxStore.AssertExpectations(t)
+}

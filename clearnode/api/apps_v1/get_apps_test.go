@@ -15,7 +15,7 @@ func TestGetApps_Success(t *testing.T) {
 	mockStore := &MockStore{
 		getAppsFn: func(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
 			return []app.AppInfoV1{
-				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111", Metadata: "0x00", Version: 1}},
+				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111111111111111111111111111111111111111", Metadata: "0x00", Version: 1}},
 				{App: app.AppV1{ID: "app-2", OwnerWallet: "0x2222", Metadata: "0x00", Version: 1}},
 			}, core.PaginationMetadata{TotalCount: 2, Page: 1, PerPage: 50}, nil
 		},
@@ -80,7 +80,7 @@ func TestGetApps_FilterByAppID(t *testing.T) {
 			require.NotNil(t, appID)
 			assert.Equal(t, "app-1", *appID)
 			return []app.AppInfoV1{
-				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111", Version: 1}},
+				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111111111111111111111111111111111111111", Version: 1}},
 			}, core.PaginationMetadata{TotalCount: 1, Page: 1, PerPage: 50}, nil
 		},
 	}
@@ -112,16 +112,16 @@ func TestGetApps_FilterByOwnerWallet(t *testing.T) {
 	mockStore := &MockStore{
 		getAppsFn: func(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
 			require.NotNil(t, ownerWallet)
-			assert.Equal(t, "0x1111", *ownerWallet)
+			assert.Equal(t, "0x1111111111111111111111111111111111111111", *ownerWallet)
 			return []app.AppInfoV1{
-				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111", Version: 1}},
+				{App: app.AppV1{ID: "app-1", OwnerWallet: "0x1111111111111111111111111111111111111111", Version: 1}},
 			}, core.PaginationMetadata{TotalCount: 1, Page: 1, PerPage: 50}, nil
 		},
 	}
 
 	handler := NewHandler(mockStore, nil, nil, 4096)
 
-	owner := "0x1111"
+	owner := "0x1111111111111111111111111111111111111111"
 	reqPayload := rpc.AppsV1GetAppsRequest{OwnerWallet: &owner}
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -139,5 +139,36 @@ func TestGetApps_FilterByOwnerWallet(t *testing.T) {
 	var resp rpc.AppsV1GetAppsResponse
 	require.NoError(t, ctx.Response.Payload.Translate(&resp))
 	assert.Len(t, resp.Apps, 1)
-	assert.Equal(t, "0x1111", resp.Apps[0].OwnerWallet)
+	assert.Equal(t, "0x1111111111111111111111111111111111111111", resp.Apps[0].OwnerWallet)
+}
+
+// TestGetApps_NormalizesOwnerWallet verifies that an owner_wallet filter submitted in
+// mixed case is normalized to canonical lowercase before being passed to the store.
+func TestGetApps_NormalizesOwnerWallet(t *testing.T) {
+	canonicalOwner := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	mixedCaseOwner := "0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD"
+
+	mockStore := &MockStore{
+		getAppsFn: func(appID *string, ownerWallet *string, _ *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
+			require.NotNil(t, ownerWallet)
+			assert.Equal(t, canonicalOwner, *ownerWallet)
+			return []app.AppInfoV1{}, core.PaginationMetadata{}, nil
+		},
+	}
+
+	handler := NewHandler(mockStore, nil, nil, 4096)
+
+	reqPayload := rpc.AppsV1GetAppsRequest{OwnerWallet: &mixedCaseOwner}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppsV1GetAppsMethod), payload),
+	}
+
+	handler.GetApps(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.NoError(t, ctx.Response.Error())
 }

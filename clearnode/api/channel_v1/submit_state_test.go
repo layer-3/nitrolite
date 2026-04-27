@@ -16,6 +16,40 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
+func TestSubmitState_InvalidUserWallet_Rejected(t *testing.T) {
+	mockTxStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(h StoreTxHandler) error { return h(mockTxStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	reqPayload := rpc.ChannelsV1SubmitStateRequest{
+		State: rpc.StateV1{
+			UserWallet: "0xnot-a-valid-address",
+			Asset:      "USDC",
+			Epoch:      "1",
+			Version:    "1",
+			Transition: rpc.TransitionV1{Amount: "0"},
+		},
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "invalid user_wallet")
+	mockTxStore.AssertNotCalled(t, "LockUserState", mock.Anything, mock.Anything)
+}
+
 func TestSubmitState_TransferSend_Success(t *testing.T) {
 	// Setup
 	mockTxStore := new(MockStore)

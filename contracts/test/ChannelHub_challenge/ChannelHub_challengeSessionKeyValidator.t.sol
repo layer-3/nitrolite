@@ -6,7 +6,6 @@ import {ChannelHubTest_Challenge_Base} from "./ChannelHub_Challenge_Base.t.sol";
 import {Utils} from "../../src/Utils.sol";
 import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "../TestUtils.sol";
 import {ChannelDefinition, State, StateIntent, Ledger, ParticipantIndex} from "../../src/interfaces/Types.sol";
-import {ChannelHub} from "../../src/ChannelHub.sol";
 import {SessionKeyValidator, SessionKeyAuthorization} from "../../src/sigValidators/SessionKeyValidator.sol";
 
 /*

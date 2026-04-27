@@ -696,7 +696,7 @@ contract ChannelHub is ReentrancyGuard {
 
         if (_isChannelHomeChain(channelId)) {
             require(msg.sender == NODE, IncorrectMsgSender());
-            _processHomeChainEscrowInitiate(channelId, candidate);
+            _processHomeChainEscrow(channelId, candidate);
             emit EscrowDepositInitiatedOnHome(escrowId, channelId, candidate);
         } else {
             // NON-HOME CHAIN: Create escrow record - recover addresses from signatures
@@ -734,17 +734,20 @@ contract ChannelHub is ReentrancyGuard {
     }
 
     function finalizeEscrowDeposit(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
-        EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
-
         if (_isEscrowDepositHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user from channel definition
-            ChannelMeta storage channelMeta = _channels[channelId];
-            _processHomeChainEscrowFinalize(channelId, candidate, channelMeta.definition.user);
+            require(candidate.intent == StateIntent.FINALIZE_ESCROW_DEPOSIT, IncorrectStateIntent());
+
+            ChannelDefinition storage metaDef = _channels[channelId].definition;
+            _validateSignatures(channelId, candidate, metaDef.user, metaDef.approvedSignatureValidators);
+
+            _processHomeChainEscrow(channelId, candidate);
             emit EscrowDepositFinalizedOnHome(escrowId, channelId, candidate);
             return;
         }
 
         // NON-HOME CHAIN: Use escrow metadata
+        EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
         require(meta.channelId == channelId, IncorrectChannelId()); // Validate consistency
         address user = meta.user;
         EscrowStatus status = meta.status;
@@ -794,7 +797,7 @@ contract ChannelHub is ReentrancyGuard {
 
         if (_isChannelHomeChain(channelId)) {
             // HOME CHAIN: Process through channel state, no escrow metadata
-            _processHomeChainEscrowInitiate(channelId, candidate);
+            _processHomeChainEscrow(channelId, candidate);
             emit EscrowWithdrawalInitiatedOnHome(escrowId, channelId, candidate);
         } else {
             // NON-HOME CHAIN
@@ -832,17 +835,20 @@ contract ChannelHub is ReentrancyGuard {
     }
 
     function finalizeEscrowWithdrawal(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
-        EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
-
         if (_isEscrowWithdrawalHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user from channel definition
-            ChannelMeta storage channelMeta = _channels[channelId];
-            _processHomeChainEscrowFinalize(channelId, candidate, channelMeta.definition.user);
+            require(candidate.intent == StateIntent.FINALIZE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
+
+            ChannelDefinition storage metaDef = _channels[channelId].definition;
+            _validateSignatures(channelId, candidate, metaDef.user, metaDef.approvedSignatureValidators);
+
+            _processHomeChainEscrow(channelId, candidate);
             emit EscrowWithdrawalFinalizedOnHome(escrowId, channelId, candidate);
             return;
         }
 
         // NON-HOME CHAIN: Use escrow metadata
+        EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
         require(meta.channelId == channelId, IncorrectChannelId()); // Validate consistency
         address user = meta.user;
         EscrowStatus status = meta.status;
@@ -1046,8 +1052,8 @@ contract ChannelHub is ReentrancyGuard {
         require(ValidationResult.unwrap(result) != ValidationResult.unwrap(VALIDATION_FAILURE), IncorrectSignature());
     }
 
-    /// @dev Process HOME CHAIN path for escrow initiate operations
-    function _processHomeChainEscrowInitiate(bytes32 channelId, State calldata candidate) internal {
+    /// @dev Process HOME CHAIN path for escrow operations
+    function _processHomeChainEscrow(bytes32 channelId, State calldata candidate) internal {
         ChannelDefinition memory metaDef = _channels[channelId].definition;
 
         ChannelEngine.TransitionContext memory ctx =
@@ -1055,18 +1061,6 @@ contract ChannelHub is ReentrancyGuard {
         ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
         _applyEffects(channelId, metaDef, candidate, effects);
-    }
-
-    /// @dev Process HOME CHAIN path for escrow finalize operations
-    function _processHomeChainEscrowFinalize(bytes32 channelId, State calldata candidate, address user) internal {
-        ChannelDefinition memory channelDef = _channels[channelId].definition;
-        _validateSignatures(channelId, candidate, user, channelDef.approvedSignatureValidators);
-
-        ChannelEngine.TransitionContext memory ctx =
-            _buildChannelContext(channelId, _nodeBalances[candidate.homeLedger.token]);
-        ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
-
-        _applyEffects(channelId, channelDef, candidate, effects);
     }
 
     function _buildChannelContext(bytes32 channelId, uint256 nodeAvailableFunds)

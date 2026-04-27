@@ -82,3 +82,31 @@ func TestGetBalances_Success(t *testing.T) {
 	// Verify all mock expectations
 	mockStore.AssertExpectations(t)
 }
+
+// TestGetBalances_NormalizesWallet verifies the wallet is normalized before the store call.
+func TestGetBalances_NormalizesWallet(t *testing.T) {
+	mockStore := new(MockStore)
+
+	handler := &Handler{
+		store: mockStore,
+	}
+
+	canonicalWallet := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	mixedCaseWallet := "0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD"
+
+	mockStore.On("GetUserBalances", canonicalWallet).Return([]core.BalanceEntry{}, nil)
+
+	reqPayload := rpc.UserV1GetBalancesRequest{Wallet: mixedCaseWallet}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "user.v1.get_balances", Payload: payload},
+	}
+
+	handler.GetBalances(ctx)
+
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}

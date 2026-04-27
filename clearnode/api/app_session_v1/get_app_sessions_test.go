@@ -410,3 +410,34 @@ func TestGetAppSessions_StoreError(t *testing.T) {
 	// Verify all mock expectations
 	mockStore.AssertExpectations(t)
 }
+
+// TestGetAppSessions_NormalizesParticipant verifies the participant filter is normalized
+// before being passed to the store.
+func TestGetAppSessions_NormalizesParticipant(t *testing.T) {
+	mockStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(fn StoreTxHandler) error { return fn(mockStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	canonicalParticipant := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	mixedCaseParticipant := "0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD"
+
+	mockStore.On("GetAppSessions", (*string)(nil), &canonicalParticipant, app.AppSessionStatusVoid, &core.PaginationParams{}).
+		Return([]app.AppSessionV1{}, core.PaginationMetadata{}, nil)
+
+	reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{Participant: &mixedCaseParticipant}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "app_sessions.v1.get_app_sessions", Payload: payload},
+	}
+
+	handler.GetAppSessions(ctx)
+
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}

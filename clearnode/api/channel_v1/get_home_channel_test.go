@@ -163,3 +163,34 @@ func TestGetHomeChannel_NotFound(t *testing.T) {
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)
 }
+
+// TestGetHomeChannel_NormalizesWallet verifies the wallet is normalized before the store call.
+func TestGetHomeChannel_NormalizesWallet(t *testing.T) {
+	mockTxStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(h StoreTxHandler) error { return h(mockTxStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	canonicalWallet := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	mixedCaseWallet := "0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD"
+	asset := "USDC"
+
+	homeChannel := core.Channel{ChannelID: "0xch", UserWallet: canonicalWallet, Asset: asset, Type: core.ChannelTypeHome}
+	mockTxStore.On("GetActiveHomeChannel", canonicalWallet, asset).Return(&homeChannel, nil)
+
+	reqPayload := rpc.ChannelsV1GetHomeChannelRequest{Wallet: mixedCaseWallet, Asset: asset}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_home_channel", Payload: payload},
+	}
+
+	handler.GetHomeChannel(ctx)
+
+	require.Nil(t, ctx.Response.Error())
+	mockTxStore.AssertExpectations(t)
+}

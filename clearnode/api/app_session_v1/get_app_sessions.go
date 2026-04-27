@@ -23,6 +23,15 @@ func (h *Handler) GetAppSessions(c *rpc.Context) {
 		return
 	}
 
+	if req.Participant != nil {
+		normalizedParticipant, err := core.NormalizeHexAddress(*req.Participant)
+		if err != nil {
+			c.Fail(rpc.Errorf("invalid participant: %v", err), "")
+			return
+		}
+		req.Participant = &normalizedParticipant
+	}
+
 	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
 		paginationParams.Offset = req.Pagination.Offset

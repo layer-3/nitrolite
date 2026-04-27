@@ -13,6 +13,13 @@ func (h *Handler) GetTransactions(c *rpc.Context) {
 		return
 	}
 
+	normalizedWallet, err := core.NormalizeHexAddress(req.Wallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid wallet: %v", err), "")
+		return
+	}
+	req.Wallet = normalizedWallet
+
 	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
 		paginationParams.Offset = req.Pagination.Offset
@@ -23,7 +30,7 @@ func (h *Handler) GetTransactions(c *rpc.Context) {
 	var transactions []core.Transaction
 	var metadata core.PaginationMetadata
 
-	transactions, metadata, err := h.store.GetUserTransactions(req.Wallet, req.Asset, req.TxType, req.FromTime, req.ToTime, &paginationParams)
+	transactions, metadata, err = h.store.GetUserTransactions(req.Wallet, req.Asset, req.TxType, req.FromTime, req.ToTime, &paginationParams)
 	if err != nil {
 		c.Fail(err, "failed to retrieve transactions")
 		return

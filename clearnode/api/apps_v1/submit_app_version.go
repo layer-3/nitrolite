@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 	"github.com/layer-3/nitrolite/pkg/sign"
 )
@@ -25,6 +26,11 @@ func (h *Handler) SubmitAppVersion(c *rpc.Context) {
 	}
 	if req.App.OwnerWallet == "" {
 		c.Fail(nil, "owner_wallet is required")
+		return
+	}
+	normalizedOwnerWallet, err := core.NormalizeHexAddress(req.App.OwnerWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid owner_wallet: %v", err), "")
 		return
 	}
 	if req.OwnerSig == "" {
@@ -49,14 +55,14 @@ func (h *Handler) SubmitAppVersion(c *rpc.Context) {
 	}
 
 	err = h.useStoreInTx(func(tx Store) error {
-		err := h.actionGateway.AllowAppRegistration(tx, req.App.OwnerWallet)
+		err := h.actionGateway.AllowAppRegistration(tx, normalizedOwnerWallet)
 		if err != nil {
 			return rpc.NewError(err)
 		}
 
 		appEntry := app.AppV1{
 			ID:                          strings.ToLower(req.App.ID),
-			OwnerWallet:                 strings.ToLower(req.App.OwnerWallet),
+			OwnerWallet:                 normalizedOwnerWallet,
 			Metadata:                    req.App.Metadata,
 			Version:                     version,
 			CreationApprovalNotRequired: req.App.CreationApprovalNotRequired,

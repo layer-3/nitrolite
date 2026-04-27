@@ -20,6 +20,47 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
+func TestSubmitDepositState_InvalidUserWallet_Rejected(t *testing.T) {
+	mockStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx:   func(h StoreTxHandler) error { return h(mockStore) },
+		metrics:        metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionData: 1024,
+	}
+
+	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: "0xappsession",
+			Version:      "2",
+			Intent:       app.AppStateUpdateIntentDeposit,
+		},
+		UserState: rpc.StateV1{
+			UserWallet: "ZZ-not-an-address",
+			Asset:      "USDC",
+			Epoch:      "1",
+			Version:    "1",
+			Transition: rpc.TransitionV1{Amount: "0"},
+		},
+		QuorumSigs: []string{"0xdeadbeef"},
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "app_sessions.v1.submit_deposit_state", Payload: payload},
+	}
+
+	handler.SubmitDepositState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "invalid user_wallet")
+	mockStore.AssertNotCalled(t, "LockUserState", mock.Anything, mock.Anything)
+}
+
 func TestSubmitDepositState_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

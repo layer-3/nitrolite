@@ -13,8 +13,15 @@ func (h *Handler) GetLatestState(c *rpc.Context) {
 		return
 	}
 
+	normalizedWallet, err := core.NormalizeHexAddress(req.Wallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid wallet: %v", err), "")
+		return
+	}
+	req.Wallet = normalizedWallet
+
 	var state core.State
-	err := h.useStoreInTx(func(tx Store) error {
+	err = h.useStoreInTx(func(tx Store) error {
 		lastState, err := tx.GetLastUserState(req.Wallet, req.Asset, req.OnlySigned)
 		if err != nil {
 			return rpc.Errorf("failed to get last user state: %v", err)

@@ -7,6 +7,7 @@ import {Utils} from "../../src/Utils.sol";
 import {ChannelHub} from "../../src/ChannelHub.sol";
 import {State, ChannelDefinition, StateIntent, Ledger, ChannelStatus} from "../../src/interfaces/Types.sol";
 
+// forge-lint: disable-next-item(unsafe-typecast)
 contract ChannelHubTest_initiateEscrowDeposit is ChannelHubTest_Base {
     ChannelDefinition internal def;
     bytes32 internal channelId;
@@ -66,6 +67,18 @@ contract ChannelHubTest_initiateEscrowDeposit is ChannelHubTest_Base {
         );
         escrowState = mutualSignStateBothWithEcdsaValidator(escrowState, channelId, ALICE_PK);
     }
+
+    // ========== StateIntent ==========
+
+    function test_revert_ifWrongIntent() public {
+        State memory state;
+        state.intent = StateIntent.DEPOSIT;
+
+        vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        cHub.initiateEscrowDeposit(def, state);
+    }
+
+    // ========== INITIATE_ESCROW_DEPOSIT caller restriction ==========
 
     function test_revert_homeChain_callerNotNode() public {
         vm.expectRevert(ChannelHub.IncorrectMsgSender.selector);

@@ -36,6 +36,13 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 		c.Fail(err, "failed to parse app state update")
 		return
 	}
+
+	reqPayload.UserState.UserWallet, err = core.NormalizeHexAddress(reqPayload.UserState.UserWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid user_wallet: %v", err), "")
+		return
+	}
+
 	userState, err := unmapStateV1(reqPayload.UserState)
 	if err != nil {
 		c.Fail(err, "failed to parse user state")

@@ -70,11 +70,19 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 		return
 	}
 
-	// Validate quorum against total weights and check for duplicate participants
+	// Validate quorum against total weights and check for duplicate participants.
+	// Normalize each participant's wallet so the deduplication, packing, app session ID
+	// derivation, and stored participant list all see the canonical (lowercase, 0x-prefixed)
+	// representation regardless of how the caller cased the address or whether they
+	// included the 0x prefix.
 	var totalWeights uint8
 	participantWeights := make(map[string]uint8)
-	for _, participant := range reqPayload.Definition.Participants {
-		participantWallet := strings.ToLower(participant.WalletAddress)
+	for i, participant := range reqPayload.Definition.Participants {
+		participantWallet, err := core.NormalizeHexAddress(participant.WalletAddress)
+		if err != nil {
+			c.Fail(rpc.Errorf("invalid participant wallet_address %q: %v", participant.WalletAddress, err), "")
+			return
+		}
 
 		// Check for duplicate participant addresses
 		if _, exists := participantWeights[participantWallet]; exists {
@@ -83,6 +91,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 		}
 		totalWeights += participant.SignatureWeight
 		participantWeights[participantWallet] = participant.SignatureWeight
+		appDef.Participants[i].WalletAddress = participantWallet
 	}
 
 	if reqPayload.Definition.Quorum > totalWeights {

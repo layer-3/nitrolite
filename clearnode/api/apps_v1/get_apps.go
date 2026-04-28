@@ -16,6 +16,15 @@ func (h *Handler) GetApps(c *rpc.Context) {
 		return
 	}
 
+	if req.OwnerWallet != nil {
+		normalizedOwnerWallet, err := core.NormalizeHexAddress(*req.OwnerWallet)
+		if err != nil {
+			c.Fail(rpc.Errorf("invalid owner_wallet: %v", err), "")
+			return
+		}
+		req.OwnerWallet = &normalizedOwnerWallet
+	}
+
 	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
 		paginationParams.Offset = req.Pagination.Offset

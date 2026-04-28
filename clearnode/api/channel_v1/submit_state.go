@@ -21,6 +21,13 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 		return
 	}
 
+	var err error
+	reqPayload.State.UserWallet, err = core.NormalizeHexAddress(reqPayload.State.UserWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid user_wallet: %v", err), "")
+		return
+	}
+
 	incomingState, err := toCoreState(reqPayload.State)
 	if err != nil {
 		c.Fail(err, "failed to parse state")

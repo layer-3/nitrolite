@@ -13,8 +13,15 @@ func (h *Handler) GetHomeChannel(c *rpc.Context) {
 		return
 	}
 
+	normalizedWallet, err := core.NormalizeHexAddress(req.Wallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid wallet: %v", err), "")
+		return
+	}
+	req.Wallet = normalizedWallet
+
 	var channel *core.Channel
-	err := h.useStoreInTx(func(tx Store) error {
+	err = h.useStoreInTx(func(tx Store) error {
 		var err error
 		channel, err = tx.GetActiveHomeChannel(req.Wallet, req.Asset)
 		if err != nil {

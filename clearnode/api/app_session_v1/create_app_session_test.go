@@ -1167,3 +1167,65 @@ func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
 	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertExpectations(t)
 }
+
+// TestCreateAppSession_DuplicateParticipantAcrossCases verifies that two participant
+// addresses that differ only in letter case are detected as duplicates. Without address
+// normalization the duplicate-check map would key on the raw representation and accept
+// the same wallet twice.
+func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
+	mockStore := new(MockStore)
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xnode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16,
+	)
+
+	lower := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	upper := "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: lower, SignatureWeight: 1},
+				{WalletAddress: upper, SignatureWeight: 1},
+			},
+			Quorum: 1,
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{"0xdeadbeef"},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "duplicate participant address")
+	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
+	mockStore.AssertNotCalled(t, "CreateAppSession", mock.Anything)
+}

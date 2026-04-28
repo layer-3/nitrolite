@@ -1,6 +1,7 @@
 package user_v1
 
 import (
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
@@ -11,6 +12,13 @@ func (h *Handler) GetBalances(c *rpc.Context) {
 		c.Fail(err, "failed to parse parameters")
 		return
 	}
+
+	normalizedWallet, err := core.NormalizeHexAddress(req.Wallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid wallet: %v", err), "")
+		return
+	}
+	req.Wallet = normalizedWallet
 
 	balances, err := h.store.GetUserBalances(req.Wallet)
 	if err != nil {

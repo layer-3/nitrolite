@@ -21,7 +21,7 @@ npm install @yellow-org/sdk viem
 | `import { createGetChannelsMessage, parseGetChannelsResponse } from '@layer-3/nitrolite'` | `import { NitroliteClient } from '@yellow-org/sdk-compat'` |
 | Types: `AppSession`, `LedgerChannel`, `RPCAppDefinition` | Many app-facing types remain re-exported from `@yellow-org/sdk-compat` |
 
-For **types**, many app-facing imports only need a package-name swap. For **functions**, prefer client methods instead of `create*Message` / `parse*Response`. Some legacy helper imports remain exported only as transitional migration shims.
+For **types**, many app-facing imports only need a package-name swap. For **functions**, prefer client methods instead of `create*Message` / `parse*Response`. Some legacy helper imports remain exported as direct v1-compatible request builders; workflow-style helpers stay exported as fail-fast migration shims so imports keep compiling while call sites move.
 
 ## 4. The Key Pattern Change
 
@@ -53,7 +53,7 @@ const channels = await client.getChannels();
 |---------|--------|--------|
 | WebSocket | App creates and manages `WebSocket` | Managed internally by the client |
 | Signing | App passes `signer.sign` into every message | Internal — client uses `WalletClient` |
-| Amounts | Raw `BigInt` everywhere | Compat keeps raw-unit app-facing inputs and handles the v1 bridge internally |
+| Amounts | Raw `BigInt` everywhere | Compat keeps legacy amount conventions explicit: transfers stay raw-unit strings, app-session allocations stay human-decimal strings |
 | Contract addresses | Manual config | Fetched from clearnode `get_config` |
 | Channel creation | Explicit `createChannel()` | Implicit on first `deposit()` |
 
@@ -79,7 +79,7 @@ const balances = await client.getBalances();
 const sessions = await client.getAppSessionsList();
 
 // Transfer
-await client.transfer(recipientAddress, [{ asset: 'usdc', amount: '5.0' }]);
+await client.transfer(recipientAddress, [{ asset: 'usdc', amount: '5000000' }]);
 
 // Cleanup
 await client.closeChannel();

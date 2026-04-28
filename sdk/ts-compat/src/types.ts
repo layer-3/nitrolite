@@ -48,6 +48,7 @@ export enum RPCAppStateIntent {
     Operate = 'operate',
     Deposit = 'deposit',
     Withdraw = 'withdraw',
+    Close = 'close',
 }
 
 export enum RPCTxType {
@@ -170,6 +171,7 @@ export interface ResizeChannelRequestParams {
 
 export interface TransferAllocation {
     asset: string;
+    /** Raw token units in the smallest denomination (for example 5 USDC = "5000000"). */
     amount: string;
 }
 
@@ -189,6 +191,7 @@ export interface RPCAppDefinition {
 
 export interface RPCAppSessionAllocation {
     asset: string;
+    /** Human-readable decimal string, matching the legacy app-session APIs (for example "0.01"). */
     amount: string;
     participant: Address;
 }
@@ -340,6 +343,7 @@ export interface ClearNodeAsset {
     token: Address;
     chainId: number;
     symbol: string;
+    /** Token decimals for this specific chain/token entry. */
     decimals: number;
 }
 

@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0x165fe1a7d70DcF7594442CA9E2A572aA43b79E07",
+  "transactionHash": "0x00dd759837ba610d871720c093e6ae25a01dae1aae2061a800dab828df2b1868",
+  "commit": "6c0a41d5b08eb6356fd7391536ede1db8d0b6a73",
+  "timestamp": 1776676404,
+  "chainId": 11155111,
+  "contractPath": "src/sigValidators/ECDSAValidator.sol:ECDSAValidator",
+  "constructorArgs": [],
+  "comment": "clearnet-stress-v1.2.1"
+}

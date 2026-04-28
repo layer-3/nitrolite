@@ -1,6 +1,6 @@
 {
     "name": "@yellow-org/sdk-compat",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Curated migration layer preserving selected Nitrolite SDK v0.5.3 app-facing APIs over the v1 runtime.",
     "type": "module",
     "sideEffects": false,
@@ -37,7 +37,7 @@
         "node": ">=20.0.0"
     },
     "peerDependencies": {
-        "@yellow-org/sdk": ">=1.2.0",
+        "@yellow-org/sdk": ">=1.2.1",
         "viem": "^2.0.0"
     },
     "dependencies": {

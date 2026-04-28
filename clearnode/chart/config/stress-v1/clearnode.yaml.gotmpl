@@ -46,18 +46,7 @@ metrics:
 
 replicaCount: {{ $p.replicaCount }}
 resources:
-<<<<<<< HEAD:clearnode/chart/config/stress-v1/clearnode.yaml.gotmpl
   {{- toYaml $p.resources | nindent 2 }}
-=======
-  limits:
-    cpu: 500m
-    memory: 512Mi
-    ephemeral-storage: 256Mi
-  requests:
-    cpu: 500m
-    memory: 512Mi
-    ephemeral-storage: 256Mi
->>>>>>> fef2edaf (apply fixes):clearnode/chart/config/stress-v1/clearnode.yaml
 
 autoscaling:
   enabled: false

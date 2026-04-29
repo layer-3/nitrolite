@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "clearnode.common.fullname" . }}
+  name: {{ include "nitronode.common.fullname" . }}
   labels:
-    {{- include "clearnode.common.labels" . | nindent 4 }}
+    {{- include "nitronode.common.labels" . | nindent 4 }}
     app.kubernetes.io/component: server
 spec:
-  {{- include "clearnode.component.replicaCount" . | nindent 2 }}
+  {{- include "nitronode.component.replicaCount" . | nindent 2 }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -14,30 +14,30 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      {{- include "clearnode.common.selectorLabels" . | nindent 6 }}
+      {{- include "nitronode.common.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: server
   template:
     metadata:
       annotations:
-        {{- include "clearnode.component.metricsAnnotations" .Values.metrics | nindent 8 }}
+        {{- include "nitronode.component.metricsAnnotations" .Values.metrics | nindent 8 }}
         {{- if .Values.config.secretEnvs }}
         checksum/secret: {{ include (print $.Template.BasePath "/env-secret.yaml") . | sha256sum }}
         {{- end }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
-        {{- include "clearnode.common.selectorLabels" . | nindent 8 }}
+        {{- include "nitronode.common.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
     spec:
       {{- if .Values.serviceAccount.create }}
-      serviceAccountName: {{ include "clearnode.common.fullname" . }}
+      serviceAccountName: {{ include "nitronode.common.fullname" . }}
       {{- end }}
       containers:
         - name: api
           args: {{ .Values.config.args | toYaml | nindent 10 }}
-          image: {{ include "clearnode.component.image" .Values.image }}
+          image: {{ include "nitronode.component.image" .Values.image }}
           imagePullPolicy: IfNotPresent
           env:
-            {{- include "clearnode.common.env" . | nindent 12 }}
+            {{- include "nitronode.common.env" . | nindent 12 }}
           {{- if or .Values.config.secretEnvs .Values.config.envSecret }}
           envFrom:
             {{- if .Values.config.envSecret }}
@@ -46,7 +46,7 @@ spec:
             {{- end }}
             {{- if .Values.config.secretEnvs }}
             - secretRef:
-                name: {{ include "clearnode.common.fullname" . }}-secret-env
+                name: {{ include "nitronode.common.fullname" . }}-secret-env
             {{- end }}
           {{- end }}
           volumeMounts:
@@ -57,19 +57,19 @@ spec:
               mountPath: /etc/gcp
               readOnly: true
             {{- end }}
-          {{- include "clearnode.component.ports" .Values.service | nindent 10 }}
-          {{- include "clearnode.component.resources" .Values.resources | nindent 10 }}
-          {{- include "clearnode.component.probes" . | nindent 10 }}
+          {{- include "nitronode.component.ports" .Values.service | nindent 10 }}
+          {{- include "nitronode.component.resources" .Values.resources | nindent 10 }}
+          {{- include "nitronode.component.probes" . | nindent 10 }}
       volumes:
         - name: config
           configMap:
-            name: {{ include "clearnode.common.fullname" . }}-config
+            name: {{ include "nitronode.common.fullname" . }}-config
         {{- if .Values.config.gcpSaSecret }}
         - name: gcp-sa
           secret:
             secretName: {{ .Values.config.gcpSaSecret }}
         {{- end }}
-      {{- include "clearnode.common.imagePullSecrets" . | nindent 6 }}
-      {{- include "clearnode.common.nodeSelectorLabels" . | nindent 6 }}
-      {{- include "clearnode.common.affinity" . | nindent 6 }}
-      {{- include "clearnode.common.tolerations" . | nindent 6 }}
+      {{- include "nitronode.common.imagePullSecrets" . | nindent 6 }}
+      {{- include "nitronode.common.nodeSelectorLabels" . | nindent 6 }}
+      {{- include "nitronode.common.affinity" . | nindent 6 }}
+      {{- include "nitronode.common.tolerations" . | nindent 6 }}

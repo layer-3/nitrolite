@@ -2,13 +2,13 @@
 apiVersion: monitoring.googleapis.com/v1
 kind: PodMonitoring
 metadata:
-  name: {{ include "clearnode.common.fullname" . }}
+  name: {{ include "nitronode.common.fullname" . }}
   labels:
-    {{- include "clearnode.common.labels" . | nindent 4 }}
+    {{- include "nitronode.common.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      {{- include "clearnode.common.selectorLabels" . | nindent 6 }}
+      {{- include "nitronode.common.selectorLabels" . | nindent 6 }}
   endpoints:
   - port: {{ .Values.metrics.port }}
     path: {{ .Values.metrics.endpoint }}

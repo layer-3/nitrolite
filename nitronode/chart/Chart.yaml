@@ -1,5 +1,5 @@
 ---
 apiVersion: v2
-description: Clearnode Helm chart
-name: clearnode
+description: Nitronode Helm chart
+name: nitronode
 version: 1.0.0

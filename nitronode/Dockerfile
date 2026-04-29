@@ -11,17 +11,17 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o ./bin/clearnode -ldflags "-X main.Version=${VERSION}" ./clearnode
+RUN go build -o ./bin/nitronode -ldflags "-X main.Version=${VERSION}" ./nitronode
 
 FROM alpine:3.23.3
 
-RUN addgroup -g 1001 -S clearnode
-RUN adduser -S clearnode -u 1001 -G clearnode
+RUN addgroup -g 1001 -S nitronode
+RUN adduser -S nitronode -u 1001 -G nitronode
 
-USER clearnode
+USER nitronode
 
 COPY --from=builder /build/bin /bin
 
 EXPOSE 7824 4242
 
-CMD ["clearnode"]
+CMD ["nitronode"]

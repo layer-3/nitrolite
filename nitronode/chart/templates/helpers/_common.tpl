@@ -3,7 +3,7 @@
 {{/*
 Expand the name of the component.
 */}}
-{{- define "clearnode.common.name" -}}
+{{- define "nitronode.common.name" -}}
 {{- .Chart.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -11,7 +11,7 @@ Expand the name of the component.
 Create a default fully common name.
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "clearnode.common.fullname" -}}
+{{- define "nitronode.common.fullname" -}}
 {{- if .Values.prefixOverride }}
 {{- printf "%s-%s" .Values.prefixOverride .Chart.Name | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,7 +26,7 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Common Selector labels
 */}}
-{{- define "clearnode.common.selectorLabels" -}}
+{{- define "nitronode.common.selectorLabels" -}}
 app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
@@ -34,9 +34,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 Common labels
 */}}
-{{- define "clearnode.common.labels" -}}
-helm.sh/chart: {{ include "clearnode.common.chart" . }}
-{{ include "clearnode.common.selectorLabels" . }}
+{{- define "nitronode.common.labels" -}}
+helm.sh/chart: {{ include "nitronode.common.chart" . }}
+{{ include "nitronode.common.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -49,21 +49,21 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "clearnode.common.chart" -}}
+{{- define "nitronode.common.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Returns common image pull secrets
 */}}
-{{- define "clearnode.common.imagePullSecrets" -}}
+{{- define "nitronode.common.imagePullSecrets" -}}
 {{- if or .Values.imagePullSecret .Values.ghcrPullDockerConfigJson }}
 imagePullSecrets:
 {{- if .Values.imagePullSecret }}
 - name: {{ .Values.imagePullSecret }}
 {{- end }}
 {{- if .Values.ghcrPullDockerConfigJson }}
-- name: {{ include "clearnode.common.fullname" . }}-ghcr-pull
+- name: {{ include "nitronode.common.fullname" . }}-ghcr-pull
 {{- end }}
 {{- end }}
 {{- end }}
@@ -71,21 +71,21 @@ imagePullSecrets:
 {{/*
 Returns common environment variables
 */}}
-{{- define "clearnode.common.env" -}}
-- name: CLEARNODE_LOG_LEVEL
+{{- define "nitronode.common.env" -}}
+- name: NITRONODE_LOG_LEVEL
   value: {{ .Values.config.logLevel }}
-- name: CLEARNODE_CONFIG_DIR_PATH
+- name: NITRONODE_CONFIG_DIR_PATH
   value: /app/config
 {{- with .Values.config.database }}
-- name: CLEARNODE_DATABASE_DRIVER
+- name: NITRONODE_DATABASE_DRIVER
   value: {{ .driver }}
-- name: CLEARNODE_DATABASE_NAME
+- name: NITRONODE_DATABASE_NAME
   value: {{ .name }}
-- name: CLEARNODE_DATABASE_HOST
+- name: NITRONODE_DATABASE_HOST
   value: {{ .host }}
-- name: CLEARNODE_DATABASE_PORT
+- name: NITRONODE_DATABASE_PORT
   value: "{{ print .port }}"
-- name: CLEARNODE_DATABASE_USERNAME
+- name: NITRONODE_DATABASE_USERNAME
   value: {{ .user }}
 {{- end }}
 {{- range $key, $value := .Values.config.extraEnvs }}
@@ -101,7 +101,7 @@ Returns common environment variables
 {{/*
 Returns common node selector labels
 */}}
-{{- define "clearnode.common.nodeSelectorLabels" -}}
+{{- define "nitronode.common.nodeSelectorLabels" -}}
 {{- with .Values.nodeSelector }}
 nodeSelector:
   {{ toYaml . | nindent 2 }}
@@ -111,7 +111,7 @@ nodeSelector:
 {{/*
 Returns common tolerations
 */}}
-{{- define "clearnode.common.tolerations" -}}
+{{- define "nitronode.common.tolerations" -}}
 {{- with .Values.tolerations }}
 tolerations:
 {{ toYaml . }}
@@ -121,7 +121,7 @@ tolerations:
 {{/*
 Returns common pod's affinity
 */}}
-{{- define "clearnode.common.affinity" -}}
+{{- define "nitronode.common.affinity" -}}
 {{- with .Values.affinity }}
 affinity:
   {{ toYaml . | nindent 2 }}

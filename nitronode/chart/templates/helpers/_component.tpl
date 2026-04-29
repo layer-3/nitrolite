@@ -3,7 +3,7 @@
 {{/*
 Returns Prometheus metrics' annotations depending on input Values
 */}}
-{{- define "clearnode.component.metricsAnnotations" -}}
+{{- define "nitronode.component.metricsAnnotations" -}}
 prometheus.io/scrape: {{ default false .enabled | print | quote }}
 prometheus.io/port: {{ default "4242" .port | print | quote }}
 prometheus.io/path: {{ default "/metrics" .endpoint | print | quote }}
@@ -12,7 +12,7 @@ prometheus.io/path: {{ default "/metrics" .endpoint | print | quote }}
 {{/*
 Returns replica count depending on component and HPA settings
 */}}
-{{- define "clearnode.component.replicaCount" -}}
+{{- define "nitronode.component.replicaCount" -}}
 {{- if not (and .autoscaling .autoscaling.enabled) }}
 replicas: {{ .replicaCount }}
 {{- end }}
@@ -21,14 +21,14 @@ replicas: {{ .replicaCount }}
 {{/*
 Returns full docker image name 
 */}}
-{{- define "clearnode.component.image" -}}
+{{- define "nitronode.component.image" -}}
 {{ printf "%s:%s" (print .repository) (print .tag) }}
 {{- end }}
 
 {{/*
 Returns container ports configuration depending on input service
 */}}
-{{- define "clearnode.component.ports" -}}
+{{- define "nitronode.component.ports" -}}
 {{- if .http.enabled }}
 ports:
 {{- with .http }}
@@ -42,7 +42,7 @@ ports:
 {{/*
 Returns component's resource consumption
 */}}
-{{- define "clearnode.component.resources" -}}
+{{- define "nitronode.component.resources" -}}
 resources:
   requests:
     cpu: {{ default "100m" .requests.cpu }}
@@ -57,7 +57,7 @@ resources:
 {{/*
 Returns component's probes
 */}}
-{{- define "clearnode.component.probes" -}}
+{{- define "nitronode.component.probes" -}}
 {{- $port := default .Values.service.http.port .Values.service.http.internalPort }}
 {{- range $name, $probe := .Values.probes }}
 {{- if $probe.enabled }}

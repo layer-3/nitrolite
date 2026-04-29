@@ -67,34 +67,34 @@ func (b *Backbone) Close() error {
 
 type FullConfig struct {
 	Database                    database.DatabaseConfig
-	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"CLEARNODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
-	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"CLEARNODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
-	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"CLEARNODE_ACTION_LIMITS_ENABLED"`
-	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"CLEARNODE_APP_REGISTRY_ENABLED"`
+	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
+	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
+	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"NITRONODE_ACTION_LIMITS_ENABLED"`
+	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"NITRONODE_APP_REGISTRY_ENABLED"`
 	Signer                      SignerConfig     `yaml:"signer"`
-	SignerType                  string           `yaml:"signer_type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
-	SignerKey                   string           `yaml:"signer_key" env:"CLEARNODE_SIGNER_KEY"`                     // required when signer_type=key
-	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`         // required when signer_type=gcp-kms
+	SignerType                  string           `yaml:"signer_type" env:"NITRONODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
+	SignerKey                   string           `yaml:"signer_key" env:"NITRONODE_SIGNER_KEY"`                     // required when signer_type=key
+	GCPKMSKeyName               string           `yaml:"gcp_kms_key_name" env:"NITRONODE_GCP_KMS_KEY_NAME"`         // required when signer_type=gcp-kms
 	ValidationLimits            ValidationLimits `yaml:"validation_limits"`
-	RateLimitPerSec             float64          `yaml:"rate_limit_per_sec" env:"CLEARNODE_RATE_LIMIT_PER_SEC" env-default:"10"`
-	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"CLEARNODE_RATE_LIMIT_BURST" env-default:"20"`
-	WsProcessBufferSize         int              `yaml:"ws_process_buffer_size" env:"CLEARNODE_WS_PROCESS_BUFFER_SIZE" env-default:"64"`
-	WsWriteBufferSize           int              `yaml:"ws_write_buffer_size" env:"CLEARNODE_WS_WRITE_BUFFER_SIZE" env-default:"64"`
+	RateLimitPerSec             float64          `yaml:"rate_limit_per_sec" env:"NITRONODE_RATE_LIMIT_PER_SEC" env-default:"10"`
+	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"NITRONODE_RATE_LIMIT_BURST" env-default:"20"`
+	WsProcessBufferSize         int              `yaml:"ws_process_buffer_size" env:"NITRONODE_WS_PROCESS_BUFFER_SIZE" env-default:"64"`
+	WsWriteBufferSize           int              `yaml:"ws_write_buffer_size" env:"NITRONODE_WS_WRITE_BUFFER_SIZE" env-default:"64"`
 }
 
 type SignerConfig struct {
-	Type          string `yaml:"type" env:"CLEARNODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
-	Key           string `yaml:"key" env:"CLEARNODE_SIGNER_KEY"`                     // required when type=key
-	GCPKMSKeyName string `yaml:"gcp_kms_key_name" env:"CLEARNODE_GCP_KMS_KEY_NAME"`  // required when type=gcp-kms
+	Type          string `yaml:"type" env:"NITRONODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
+	Key           string `yaml:"key" env:"NITRONODE_SIGNER_KEY"`                     // required when type=key
+	GCPKMSKeyName string `yaml:"gcp_kms_key_name" env:"NITRONODE_GCP_KMS_KEY_NAME"`  // required when type=gcp-kms
 }
 
 // ValidationLimits defines configurable upper bounds for dynamic-length request fields.
 type ValidationLimits struct {
-	MaxParticipants   int `yaml:"max_participants" env:"CLEARNODE_MAX_PARTICIPANTS" env-default:"32"`
-	MaxSessionDataLen int `yaml:"max_session_data_len" env:"CLEARNODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
-	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"CLEARNODE_MAX_APP_METADATA_LEN" env-default:"1024"`
-	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"CLEARNODE_MAX_SESSION_KEY_IDS" env-default:"10"`
-	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"CLEARNODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	MaxParticipants   int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
+	MaxSessionDataLen int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
+	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
+	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
+	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
 }
 
 // InitBackbone initializes the backbone components of the application.
@@ -225,7 +225,9 @@ func InitBackbone() *Backbone {
 }
 
 func initBase(logger log.Logger) string {
-	configDirPath := os.Getenv("CLEARNODE_CONFIG_DIR_PATH")
+	migrateLegacyClearnodeEnv(logger)
+
+	configDirPath := os.Getenv("NITRONODE_CONFIG_DIR_PATH")
 	if configDirPath == "" {
 		configDirPath = "."
 	}
@@ -237,6 +239,33 @@ func initBase(logger log.Logger) string {
 	}
 
 	return configDirPath
+}
+
+// migrateLegacyClearnodeEnv copies any CLEARNODE_* environment variables to their
+// NITRONODE_* counterparts when the new name is unset. The legacy prefix is
+// deprecated and will be removed in a future release.
+func migrateLegacyClearnodeEnv(logger log.Logger) {
+	const legacyPrefix = "CLEARNODE_"
+	const newPrefix = "NITRONODE_"
+	for _, kv := range os.Environ() {
+		eq := strings.IndexByte(kv, '=')
+		if eq < 0 {
+			continue
+		}
+		key := kv[:eq]
+		if !strings.HasPrefix(key, legacyPrefix) {
+			continue
+		}
+		newKey := newPrefix + strings.TrimPrefix(key, legacyPrefix)
+		if _, set := os.LookupEnv(newKey); set {
+			continue
+		}
+		if err := os.Setenv(newKey, kv[eq+1:]); err != nil {
+			logger.Warn("failed to migrate legacy env var", "from", key, "to", newKey, "error", err)
+			continue
+		}
+		logger.Warn("CLEARNODE_* env var is deprecated, use NITRONODE_*", "from", key, "to", newKey)
+	}
 }
 
 func initLogger() log.Logger {
@@ -256,7 +285,7 @@ func initSigner(logger log.Logger, signerType, privateKey, gcpKMSKeyName string)
 	switch signerType {
 	case "key":
 		if privateKey == "" {
-			logger.Fatal("CLEARNODE_SIGNER_KEY is required when CLEARNODE_SIGNER_TYPE=key")
+			logger.Fatal("NITRONODE_SIGNER_KEY is required when NITRONODE_SIGNER_TYPE=key")
 		}
 		signer, err = sign.NewEthereumRawSigner(privateKey)
 		if err != nil {
@@ -264,7 +293,7 @@ func initSigner(logger log.Logger, signerType, privateKey, gcpKMSKeyName string)
 		}
 	case "gcp-kms":
 		if gcpKMSKeyName == "" {
-			logger.Fatal("CLEARNODE_GCP_KMS_KEY_NAME is required when CLEARNODE_SIGNER_TYPE=gcp-kms")
+			logger.Fatal("NITRONODE_GCP_KMS_KEY_NAME is required when NITRONODE_SIGNER_TYPE=gcp-kms")
 		}
 		kmsCtx, kmsCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer kmsCancel()
@@ -275,7 +304,7 @@ func initSigner(logger log.Logger, signerType, privateKey, gcpKMSKeyName string)
 		closer = kmsSigner.Close
 		signer = kmsSigner
 	default:
-		logger.Fatal("unsupported CLEARNODE_SIGNER_TYPE", "type", signerType)
+		logger.Fatal("unsupported NITRONODE_SIGNER_TYPE", "type", signerType)
 	}
 
 	return signer, closer
@@ -289,7 +318,7 @@ func initBlockchainRPCs(logger log.Logger, memoryStore memory.MemoryStore) map[u
 
 	blockchainRPCs := make(map[uint64]string)
 	for _, bc := range blockchains {
-		envVarName := "CLEARNODE_BLOCKCHAIN_RPC_" + strings.ToUpper(bc.Name)
+		envVarName := "NITRONODE_BLOCKCHAIN_RPC_" + strings.ToUpper(bc.Name)
 		rpcURL := os.Getenv(envVarName)
 		if rpcURL == "" {
 			logger.Fatal("blockchain RPC URL not set in env", "blockchainID", bc.ID, "env_var", envVarName)

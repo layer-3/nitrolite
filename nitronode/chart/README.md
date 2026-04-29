@@ -1,8 +1,8 @@
-# clearnode
+# nitronode
 
 ![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square)
 
-Clearnode Helm chart
+Nitronode Helm chart
 
 ## Prerequisites
 
@@ -14,10 +14,10 @@ Clearnode Helm chart
 
 To install the chart with the release name `my-release`:
 ```bash
-helm install my-release git+https://github.com/layer-3/nitrolite@clearnode/chart?ref=main
+helm install my-release git+https://github.com/layer-3/nitrolite@nitronode/chart?ref=main
 ```
 
-The command deploys Clearnode on the Kubernetes cluster with default configuration. The [Parameters](#parameters) section lists the parameters that can be configured during installation.
+The command deploys Nitronode on the Kubernetes cluster with default configuration. The [Parameters](#parameters) section lists the parameters that can be configured during installation.
 
 ## Uninstalling the Chart
 
@@ -31,13 +31,13 @@ helm delete my-release
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | fullnameOverride | string | `""` | Override the full name |
-| config.args | list | `["clearnode"]` | List of arguments to pass to the container |
+| config.args | list | `["nitronode"]` | List of arguments to pass to the container |
 | config.logLevel | string | `"info"` | Log level (info, debug, warn, error) |
 | config.database.driver | string | `"sqlite"` | Database driver (sqlite, postgres) |
 | config.database.path | string | `"clearnet.db?cache=shared"` | Database path (for sqlite) |
 | config.database.host | string | `""` | Database host |
 | config.database.port | int | `5432` | Database port |
-| config.database.name | string | `"clearnode"` | Database name |
+| config.database.name | string | `"nitronode"` | Database name |
 | config.database.user | string | `"changeme"` | Database user |
 | config.database.password | string | `"changeme"` | Database password |
 | config.database.sslmode | string | `"disable"` | Database SSL mode (disable, require, verify-ca, verify-full) |
@@ -49,7 +49,7 @@ helm delete my-release
 | config.assets | string | `""` | Assets configuration |
 | config.actionGateway | string | `""` | Action Gateway configuration |
 | replicaCount | int | `1` | Number of replicas |
-| image.repository | string | `"ghcr.io/layer-3/nitrolite/clearnode"` | Docker image repository |
+| image.repository | string | `"ghcr.io/layer-3/nitrolite/nitronode"` | Docker image repository |
 | image.tag | string | `"v1.0.0-rc.0"` | Docker image tag |
 | service.http.enabled | bool | `true` | Enable HTTP service |
 | service.http.port | int | `7824` | HTTP service port |
@@ -73,7 +73,7 @@ helm delete my-release
 | autoscaling.targetCPUUtilizationPercentage | int | `80` | Target CPU utilization |
 | autoscaling.targetMemoryUtilizationPercentage | int | `80` | Target memory utilization |
 | networking.tlsClusterIssuer | string | `"zerossl-prod"` | TLS cluster issuer |
-| networking.externalHostname | string | `"clearnode.example.com"` | External hostname for the gateway |
+| networking.externalHostname | string | `"nitronode.example.com"` | External hostname for the gateway |
 | networking.gateway.enabled | bool | `true` | Enable API gateway |
 | networking.gateway.className | string | `"envoy-gateway"` | Gateway class name |
 | networking.gateway.ipAddressName | string | `""` | GKE static IP address name (GKE only) |
@@ -119,5 +119,5 @@ By default, the chart creates an API Gateway and configures it to use TLS via ce
 For more detailed debugging, check the application logs:
 
 ```bash
-kubectl logs -l app=clearnode
+kubectl logs -l app=nitronode
 ```

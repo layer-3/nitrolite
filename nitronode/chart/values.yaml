@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 config:
   # -- List of arguments to pass to the container
-  args: ["clearnode"]
+  args: ["nitronode"]
   # -- Log level (info, debug, warn, error)
   logLevel: info
   database:
@@ -16,7 +16,7 @@ config:
     # -- Database port
     port: 5432
     # -- Database name
-    name: clearnode
+    name: nitronode
     # -- Database user
     user: changeme
     # -- Database password
@@ -45,7 +45,7 @@ replicaCount: 1
 
 image:
   # -- Docker image repository
-  repository: ghcr.io/layer-3/nitrolite/clearnode
+  repository: ghcr.io/layer-3/nitrolite/nitronode
   # -- Docker image tag
   tag: v1.0.0-rc.0
 
@@ -118,7 +118,7 @@ networking:
   # -- TLS cluster issuer
   tlsClusterIssuer: zerossl-prod
   # -- External hostname for the gateway
-  externalHostname: clearnode.example.com
+  externalHostname: nitronode.example.com
 
   gateway:
     # -- Enable API gateway
@@ -194,7 +194,7 @@ stressTest:
     # - name: transfers
     #   specs:
     #     - "transfer-roundtrip:10:4:usdc"
-    #   wsURL: "wss://external-clearnode.example.com/ws"
+    #   wsURL: "wss://external-nitronode.example.com/ws"
     #   privateKey: ""
     #   connections: 20
     #   timeout: "30m"

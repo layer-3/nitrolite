@@ -2,9 +2,9 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: {{ include "clearnode.common.fullname" . }}
+  name: {{ include "nitronode.common.fullname" . }}
   labels:
-    {{- include "clearnode.common.labels" . | nindent 4 }}
+    {{- include "nitronode.common.labels" . | nindent 4 }}
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.networking.tlsClusterIssuer }}
     # FIXME: This annotation doesn't work

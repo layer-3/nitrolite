@@ -1,5 +1,5 @@
 {{- if .Values.stressTest.enabled }}
-{{- $fullname := include "clearnode.common.fullname" . -}}
+{{- $fullname := include "nitronode.common.fullname" . -}}
 {{- $defaults := .Values.stressTest -}}
 {{- $defaultWsURL := $defaults.wsURL | default (printf "ws://%s:%d/ws" $fullname (.Values.service.http.port | int)) -}}
 {{- $podCount := len .Values.stressTest.pods -}}
@@ -19,7 +19,7 @@ kind: ConfigMap
 metadata:
   name: {{ $fullname }}-stress-config
   labels:
-    {{- include "clearnode.common.labels" $ | nindent 4 }}
+    {{- include "nitronode.common.labels" $ | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -44,7 +44,7 @@ kind: Secret
 metadata:
   name: {{ $fullname }}-stress-secret
   labels:
-    {{- include "clearnode.common.labels" $ | nindent 4 }}
+    {{- include "nitronode.common.labels" $ | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -66,7 +66,7 @@ kind: Job
 metadata:
   name: {{ $fullname }}-stress-test
   labels:
-    {{- include "clearnode.common.labels" $ | nindent 4 }}
+    {{- include "nitronode.common.labels" $ | nindent 4 }}
     app.kubernetes.io/component: stress-test
   annotations:
     "helm.sh/hook": test
@@ -91,7 +91,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: stress-test
-          image: {{ include "clearnode.component.image" $.Values.image }}
+          image: {{ include "nitronode.component.image" $.Values.image }}
           command: ["sh", "-c"]
           args:
             - |
@@ -105,7 +105,7 @@ spec:
                 export STRESS_PRIVATE_KEY="$(cat /stress-secrets/private-key)"
               fi
               {{- end }}
-              exec clearnode stress-test basic $STRESS_SPECS
+              exec nitronode stress-test basic $STRESS_SPECS
           env:
             - name: JOB_COMPLETION_INDEX
               valueFrom:
@@ -129,7 +129,7 @@ spec:
           secret:
             secretName: {{ $fullname }}-stress-secret
         {{- end }}
-      {{- include "clearnode.common.imagePullSecrets" $ | nindent 6 }}
-      {{- include "clearnode.common.nodeSelectorLabels" $ | nindent 6 }}
-      {{- include "clearnode.common.tolerations" $ | nindent 6 }}
+      {{- include "nitronode.common.imagePullSecrets" $ | nindent 6 }}
+      {{- include "nitronode.common.nodeSelectorLabels" $ | nindent 6 }}
+      {{- include "nitronode.common.tolerations" $ | nindent 6 }}
 {{- end }}

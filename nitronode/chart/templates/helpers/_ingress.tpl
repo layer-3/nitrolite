@@ -3,7 +3,7 @@
 {{/*
 Returns Ingress API version depending on K8s cluster version
 */}}
-{{- define "clearnode.ingress.apiVersion" -}}
+{{- define "nitronode.ingress.apiVersion" -}}
 {{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
 networking.k8s.io/v1
 {{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.Version -}}
@@ -16,7 +16,7 @@ extensions/v1beta1
 {{/*
 Returns default Ingress annotations
 */}}
-{{- define "clearnode.ingress.annotations" -}}
+{{- define "nitronode.ingress.annotations" -}}
 kubernetes.io/ingress.class: {{ default "nginx" .Values.networking.ingress.className }}
 {{- if .Values.networking.ingress.tls.enabled }}
 kubernetes.io/tls-acme: "true"
@@ -35,7 +35,7 @@ nginx.ingress.kubernetes.io/rewrite-target: /ws
 {{/*
 Returns Ingress TLS configuration
 */}}
-{{- define "clearnode.ingress.tls" -}}
+{{- define "nitronode.ingress.tls" -}}
 {{- if .Values.networking.ingress.tls.enabled }}
 tls:
   - secretName: "{{ .Values.networking.externalHostname | replace "." "-" }}-tls"
@@ -47,14 +47,14 @@ tls:
 {{/*
 Returns Ingress host path configuration
 */}}
-{{- define "clearnode.ingress.httpPath" -}}
+{{- define "nitronode.ingress.httpPath" -}}
 {{- $http := .Values.service.http }}
 - path: {{ $http.path }}
   {{- if semverCompare ">=1.18-0" .Capabilities.KubeVersion.Version }}
   pathType: Prefix
   {{- end }}
   backend:
-    {{ $svcName := include "clearnode.common.fullname" . }}
+    {{ $svcName := include "nitronode.common.fullname" . }}
     {{ $svcPort := default $http.port $http.internalPort }}
     {{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version }}
     service:

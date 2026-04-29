@@ -1,6 +1,6 @@
-# Resource sizing profiles for the clearnode release.
+# Resource sizing profiles for the nitronode release.
 #
-# Select one inline at the top of each env's clearnode.yaml.gotmpl:
+# Select one inline at the top of each env's nitronode.yaml.gotmpl:
 #
 #     {{- $profile := "medium" -}}
 #     {{- $p := index .Values.profiles $profile -}}
@@ -12,7 +12,7 @@
 # Tuning notes — use this when authoring a new profile
 # ──────────────────────────────────────────────────────────────────────────────
 #
-#   replicaCount         Clearnode keeps signer state in-process. Running more
+#   replicaCount         Nitronode keeps signer state in-process. Running more
 #                        than one replica today is a no-op at best and a
 #                        correctness risk at worst — keep at 1 unless the
 #                        runtime has been refactored for distribution.
@@ -34,7 +34,7 @@
 #                            on bursty traffic. Must be <= maxOpenConns.
 #
 # Profiles intentionally exclude:
-#   - autoscaling: override per env when needed (requires clearnode to be
+#   - autoscaling: override per env when needed (requires nitronode to be
 #     stateless first; see replicaCount note).
 #   - podDisruptionBudget: with replicaCount=1 a PDB blocks voluntary drains.
 #   - DB conn lifetimes (CONN_MAX_LIFETIME_SEC, CONN_MAX_IDLE_TIME_SEC):

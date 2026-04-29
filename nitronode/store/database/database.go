@@ -18,23 +18,23 @@ import (
 // In order to connect to Postgresql you need to fill out all the fields.
 //
 // To connect to sqlite, you just need to specify "sqlite" driver.
-// By default it will use in-memory database. You can provide CLEARNODE_DATABASE_NAME to use the file.
+// By default it will use in-memory database. You can provide NITRONODE_DATABASE_NAME to use the file.
 type DatabaseConfig struct {
-	URL      string `env:"CLEARNODE_DATABASE_URL" env-default:""`
-	Name     string `env:"CLEARNODE_DATABASE_NAME" env-default:""`
-	Schema   string `env:"CLEARNODE_DATABASE_SCHEMA" env-default:""`
-	Driver   string `env:"CLEARNODE_DATABASE_DRIVER" env-default:"postgres"`
-	Username string `env:"CLEARNODE_DATABASE_USERNAME"  env-default:"postgres"`
-	Password string `env:"CLEARNODE_DATABASE_PASSWORD" env-default:"your-super-secret-and-long-postgres-password"`
-	Host     string `env:"CLEARNODE_DATABASE_HOST" env-default:"localhost"`
-	Port     string `env:"CLEARNODE_DATABASE_PORT" env-default:"5432"`
-	Retries  int    `env:"CLEARNODE_DATABASE_RETRIES" env-default:"5"`
+	URL      string `env:"NITRONODE_DATABASE_URL" env-default:""`
+	Name     string `env:"NITRONODE_DATABASE_NAME" env-default:""`
+	Schema   string `env:"NITRONODE_DATABASE_SCHEMA" env-default:""`
+	Driver   string `env:"NITRONODE_DATABASE_DRIVER" env-default:"postgres"`
+	Username string `env:"NITRONODE_DATABASE_USERNAME"  env-default:"postgres"`
+	Password string `env:"NITRONODE_DATABASE_PASSWORD" env-default:"your-super-secret-and-long-postgres-password"`
+	Host     string `env:"NITRONODE_DATABASE_HOST" env-default:"localhost"`
+	Port     string `env:"NITRONODE_DATABASE_PORT" env-default:"5432"`
+	Retries  int    `env:"NITRONODE_DATABASE_RETRIES" env-default:"5"`
 
 	// Connection pool settings
-	MaxOpenConns    int `env:"CLEARNODE_DATABASE_MAX_OPEN_CONNS" env-default:"100"`
-	MaxIdleConns    int `env:"CLEARNODE_DATABASE_MAX_IDLE_CONNS" env-default:"25"`
-	ConnMaxLifetime int `env:"CLEARNODE_DATABASE_CONN_MAX_LIFETIME_SEC" env-default:"300"`
-	ConnMaxIdleTime int `env:"CLEARNODE_DATABASE_CONN_MAX_IDLE_TIME_SEC" env-default:"60"`
+	MaxOpenConns    int `env:"NITRONODE_DATABASE_MAX_OPEN_CONNS" env-default:"100"`
+	MaxIdleConns    int `env:"NITRONODE_DATABASE_MAX_IDLE_CONNS" env-default:"25"`
+	ConnMaxLifetime int `env:"NITRONODE_DATABASE_CONN_MAX_LIFETIME_SEC" env-default:"300"`
+	ConnMaxIdleTime int `env:"NITRONODE_DATABASE_CONN_MAX_IDLE_TIME_SEC" env-default:"60"`
 }
 
 func ConnectToDB(cnf DatabaseConfig, embedMigrations embed.FS) (*gorm.DB, error) {

@@ -2,7 +2,7 @@
 {{/*
 Returns HorizontalPodAutoscaler API version depending on K8s cluster version
 */}}
-{{- define "clearnode.hpa.apiVersion" -}}
+{{- define "nitronode.hpa.apiVersion" -}}
 {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.Version -}}
 autoscaling/v2
 {{- else -}}
@@ -13,7 +13,7 @@ autoscaling/v2beta2
 {{/*
 Returns HorizontalPodAutoscaler resource target utilization depending on K8s cluster version
 */}}
-{{- define "clearnode.hpa.targetUtilization" -}}
+{{- define "nitronode.hpa.targetUtilization" -}}
 {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.Version -}}
 target:
   type: Utilization

@@ -19,7 +19,7 @@ func main() {
 	log.SetOutput(os.Stderr)
 
 	// Resolve config directory: explicit env > legacy "clearnode-cli" > "cerebro"
-	configDir := os.Getenv("CLEARNODE_CLI_CONFIG_DIR")
+	configDir := os.Getenv("NITRONODE_CLI_CONFIG_DIR")
 	if configDir == "" {
 		userConfDir, err := os.UserConfigDir()
 		if err != nil {

@@ -1,17 +1,17 @@
 {{- if and .Values.networking.ingress.enabled .Values.service.http.enabled }}
-apiVersion: {{ include "clearnode.ingress.apiVersion" . }}
+apiVersion: {{ include "nitronode.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
-  name: {{ include "clearnode.common.fullname" . }}
+  name: {{ include "nitronode.common.fullname" . }}
   labels:
-    {{- include "clearnode.common.labels" . | nindent 4 }}
+    {{- include "nitronode.common.labels" . | nindent 4 }}
   annotations:
-    {{- include "clearnode.ingress.annotations" . | nindent 4 }}
+    {{- include "nitronode.ingress.annotations" . | nindent 4 }}
 spec:
   rules:
     - host: {{ .Values.networking.externalHostname }}
       http:
         paths:
-          {{- include "clearnode.ingress.httpPath" . | nindent 10 }}
-  {{- include "clearnode.ingress.tls" . | nindent 2 }}
+          {{- include "nitronode.ingress.httpPath" . | nindent 10 }}
+  {{- include "nitronode.ingress.tls" . | nindent 2 }}
 {{- end }}

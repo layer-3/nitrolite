@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	// MetricNamespace is the common namespace for all ClearNode metrics.
-	MetricNamespace = "clearnode"
+	// MetricNamespace is the common namespace for all Nitronode metrics.
+	// Renamed from "clearnode" in v1.3.0 — Prometheus alerts and Grafana
+	// dashboards must be updated to reference nitronode_* metric names.
+	MetricNamespace = "nitronode"
 )
 
 var (

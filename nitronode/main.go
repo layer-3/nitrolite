@@ -223,7 +223,7 @@ func main() {
 
 func runOperatorCommand(args []string) {
 	if len(args) == 0 {
-		fmt.Println("Usage: clearnode operator <command>")
+		fmt.Println("Usage: nitronode operator <command>")
 		fmt.Println("Commands:")
 		fmt.Println("  address               Print the operator address")
 		fmt.Println("  register-validators   Register signature validators on-chain")

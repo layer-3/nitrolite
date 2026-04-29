@@ -2,6 +2,8 @@
 
 An MCP (Model Context Protocol) server that exposes the **Nitrolite SDK** knowledge base to AI coding tools — covering both the **TypeScript SDK** (`@yellow-org/sdk`) and the **Go SDK** (`github.com/layer-3/nitrolite/sdk/go`). It reads SDK source code, protocol documentation, and Go type definitions at startup, making every method, type, enum, and protocol concept discoverable by AI agents.
 
+> **Renamed in v1.3.0** — the off-chain broker was renamed from `clearnode` to `nitronode`. v1.2.0 and earlier ship as `clearnode`; v1.3.0 and later ship as `nitronode`. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md) (also exposed as the `nitrolite://migration/nitronode` MCP resource).
+
 ## Quick Start
 
 ```bash

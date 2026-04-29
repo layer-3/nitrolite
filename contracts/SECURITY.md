@@ -2,7 +2,7 @@
 
 ## Behavior
 
-These are behavior rules of the Clearnode or the logic how a user (should) operate.
+These are behavior rules of the Nitronode or the logic how a user (should) operate.
 
 1. if challenged with an older state, then checkpoint with the latest one
 
@@ -237,7 +237,7 @@ The protocol maintains clear separation between protocol concerns (ChannelHub) a
    - Session key delegation with metadata
    - Enables temporary signing authority (hot wallets, time-limited access)
    - Two-level validation: participant authorizes session key, session key signs state
-   - **Safe for user usage** (with Clearnode validation)
+   - **Safe for user usage** (with Nitronode validation)
    - **NOT safe for node usage** (no user-side validation) — see SessionKeyValidator Security Considerations below
    - `validateChallengeSignature`: **not supported** — always reverts with `ChallengeWithSessionKeyNotSupported`
 
@@ -314,13 +314,13 @@ The registration is an observable on-chain event, and with monitoring in place, 
 
 SessionKeyValidator enables delegation of signing authority to temporary session keys. The session key is authorized by a participant's signature, and metadata (expiration, scope, permissions) is hashed and included in the authorization.
 
-**Key architectural decision**: Metadata validation is performed **off-chain** by the Clearnode, not on-chain. The smart contract only validates cryptographic signatures, not the semantic meaning of the metadata.
+**Key architectural decision**: Metadata validation is performed **off-chain** by the Nitronode, not on-chain. The smart contract only validates cryptographic signatures, not the semantic meaning of the metadata.
 
 #### User Usage (Safe)
 
 When a **user** employs SessionKeyValidator:
 
-1. **Off-chain enforcement layer**: The Clearnode (node software) retrieves and validates session key metadata
+1. **Off-chain enforcement layer**: The Nitronode (node software) retrieves and validates session key metadata
    - Checks expiration timestamps
    - Enforces allowed channel IDs
    - Validates operation permissions
@@ -331,8 +331,8 @@ When a **user** employs SessionKeyValidator:
    - Node rejects suspicious or invalid activity
 
 3. **Limited blast radius**: If a user's session key is compromised:
-   - Expired keys are rejected by Clearnode
-   - Out-of-scope operations are rejected by Clearnode
+   - Expired keys are rejected by Nitronode
+   - Out-of-scope operations are rejected by Nitronode
    - Node refuses to countersign
    - Channel can be challenged and closed
    - User's main key remains secure
@@ -346,7 +346,7 @@ When a **user** employs SessionKeyValidator:
 
 When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
 
-1. **No off-chain enforcement**: The user has no equivalent to Clearnode
+1. **No off-chain enforcement**: The user has no equivalent to Nitronode
    - User cannot decode or validate node's session key metadata
    - No user-side software validates expiration or scope
 
@@ -359,13 +359,13 @@ When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
    - Session key has full node authority
    - User has no protection against misuse
 
-4. **Asymmetric security**: User-side session keys are safe (Clearnode validates), node-side session keys are unsafe (no user-side validator)
+4. **Asymmetric security**: User-side session keys are safe (Nitronode validates), node-side session keys are unsafe (no user-side validator)
 
 #### Challenge Restriction
 
 Session keys cannot be used for challenge signatures. `SessionKeyValidator.validateChallengeSignature` always reverts with `ChallengeWithSessionKeyNotSupported`.
 
-**Rationale**: A session key authorization — once signed by the user — is permanently valid on-chain because the contract only checks the cryptographic signature, not expiration or revocation. If session keys were allowed to challenge, an expired or revoked key could put any channel (where the validator is approved) into `DISPUTED` state unilaterally, bypassing Clearnode's off-chain enforcement and causing a DoS on the channel.
+**Rationale**: A session key authorization — once signed by the user — is permanently valid on-chain because the contract only checks the cryptographic signature, not expiration or revocation. If session keys were allowed to challenge, an expired or revoked key could put any channel (where the validator is approved) into `DISPUTED` state unilaterally, bypassing Nitronode's off-chain enforcement and causing a DoS on the channel.
 
 ---
 
@@ -435,7 +435,7 @@ Inbound transfer failures occur during:
 - Channel deposits (DEPOSIT intent)
 - Escrow deposit initiation (INITIATE_ESCROW_DEPOSIT on non-home chain)
 
-**Mitigation**: The Clearnode only processes operations after observing successful on-chain events. If a user signs a deposit state but the transfer fails on-chain, the state is never enforced, and the Node does not provide services based on unconfirmed deposits.
+**Mitigation**: The Nitronode only processes operations after observing successful on-chain events. If a user signs a deposit state but the transfer fails on-chain, the state is never enforced, and the Node does not provide services based on unconfirmed deposits.
 
 ---
 

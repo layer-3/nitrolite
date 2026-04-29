@@ -4,6 +4,8 @@
 
 `@yellow-org/sdk-compat` is a migration layer that preserves selected Nitrolite SDK **v0.5.3 app-facing APIs** over the **v1 runtime**.
 
+> The off-chain broker was renamed from "Clearnode" to "Nitronode" in v1.3.0. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md).
+
 - Keep supported v0.5.3-style app-facing calls in your code.
 - Run them through `@yellow-org/sdk-compat`, backed by `@yellow-org/sdk`.
 - Treat it as a migration aid, not a drop-in replacement for the full published v0.5.3 package.

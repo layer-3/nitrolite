@@ -54,7 +54,7 @@ func runStorm(args []string) int {
 func runTransferStorm(parts []string) int {
 	if len(parts) < 4 {
 		fmt.Fprintf(os.Stderr, "ERROR: transfers requires iterations, cycles, asset, and amount\n")
-		fmt.Fprintf(os.Stderr, "Usage: clearnode stress-test storm transfers:<iterations>:<cycles>:<asset>:<amount>\n")
+		fmt.Fprintf(os.Stderr, "Usage: nitronode stress-test storm transfers:<iterations>:<cycles>:<asset>:<amount>\n")
 		return 1
 	}
 
@@ -388,7 +388,7 @@ type stormNode struct {
 func runSessionStorm(parts []string) int {
 	if len(parts) < 4 {
 		fmt.Fprintf(os.Stderr, "ERROR: sessions requires iterations, cycles, asset, and amount\n")
-		fmt.Fprintf(os.Stderr, "Usage: clearnode stress-test storm sessions:<iterations>:<cycles>:<asset>:<amount>\n")
+		fmt.Fprintf(os.Stderr, "Usage: nitronode stress-test storm sessions:<iterations>:<cycles>:<asset>:<amount>\n")
 		return 1
 	}
 
@@ -1014,7 +1014,7 @@ func skipResults(results []Result, from int, cause error) {
 }
 
 func printStormUsage() {
-	fmt.Println("Usage: clearnode stress-test storm <method>:<params...>")
+	fmt.Println("Usage: nitronode stress-test storm <method>:<params...>")
 	fmt.Println()
 	fmt.Println("Available methods:")
 	fmt.Println()
@@ -1023,7 +1023,7 @@ func printStormUsage() {
 	fmt.Println("    After iterations, plateau cycles bounce last-layer transfers back and forth.")
 	fmt.Println("    Origin wallet needs amount * 2^iterations of the asset.")
 	fmt.Println()
-	fmt.Println("    Example: clearnode stress-test storm transfers:3:2:usdc:1")
+	fmt.Println("    Example: nitronode stress-test storm transfers:3:2:usdc:1")
 	fmt.Println("      Iteration 1: A -> B (4 usdc)")
 	fmt.Println("      Iteration 2: A -> C (2), B -> D (2)")
 	fmt.Println("      Iteration 3: A -> E (1), B -> F (1), C -> G (1), D -> H (1)")
@@ -1038,7 +1038,7 @@ func printStormUsage() {
 	fmt.Println("    After iterations, plateau cycles bounce last-layer sessions back and forth.")
 	fmt.Println("    Origin wallet needs amount * 3^iterations of the asset.")
 	fmt.Println()
-	fmt.Println("    Example: clearnode stress-test storm sessions:2:2:usdc:1")
+	fmt.Println("    Example: nitronode stress-test storm sessions:2:2:usdc:1")
 	fmt.Println("      Iteration 1: session(A,B,C) — A deposits 6, reallocates 3 to B, 3 to C")
 	fmt.Println("      Iteration 2: session(A,D,E), session(B,F,G), session(C,H,I) — each deposits 2, reallocates 1 each")
 	fmt.Println("      Plateau 1 back:  D,E -> A; F,G -> B; H,I -> C")

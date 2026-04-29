@@ -9,7 +9,7 @@ import (
 	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
 
-// CreateClientPool opens up to n WebSocket connections to the clearnode.
+// CreateClientPool opens up to n WebSocket connections to the nitronode.
 // It tolerates individual connection failures and returns whatever connections
 // succeeded. Returns an error only if zero connections could be established.
 func CreateClientPool(wsURL, privateKey string, n int) ([]*sdk.Client, error) {

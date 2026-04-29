@@ -1,10 +1,10 @@
-# Clearnode
+# Nitronode
 
-Clearnode is the off-chain node implementation for the Nitrolite protocol. It manages state channels, processes off-chain transactions, and coordinates state updates between users and applications to enable fast, low-cost payment channels and complex application sessions.
+Nitronode (formerly Clearnode) is the off-chain node implementation for the Nitrolite protocol. It manages state channels, processes off-chain transactions, and coordinates state updates between users and applications to enable fast, low-cost payment channels and complex application sessions.
 
 ## Overview
 
-Clearnode provides a WebSocket-based RPC service that allows users and applications to:
+Nitronode provides a WebSocket-based RPC service that allows users and applications to:
 - Create and manage home and escrow channels on multiple blockchains
 - Perform instant off-chain transfers between users
 - Execute multi-party application sessions with arbitrary logic
@@ -16,7 +16,7 @@ The node monitors blockchain events, validates state transitions using a monoton
 
 ## Architecture
 
-Clearnode is built with a modular architecture:
+Nitronode is built with a modular architecture:
 
 - **RPC Server**: WebSocket-based JSON-RPC server handling client requests.
 - **Blockchain Listeners**: Monitors on-chain events from Nitrolite `ChannelHub` contracts across multiple chains.
@@ -40,7 +40,7 @@ For detailed API specifications, see [../docs/api.yaml](../docs/api.yaml).
 
 ## Configuration
 
-Clearnode uses YAML files for core configuration and environment variables for sensitive data and runtime overrides.
+Nitronode uses YAML files for core configuration and environment variables for sensitive data and runtime overrides.
 
 ### Blockchain Configuration
 
@@ -83,13 +83,13 @@ assets:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CLEARNODE_SIGNER_KEY` | Private key for signing node state updates | (Required) |
-| `CLEARNODE_DATABASE_DRIVER` | `sqlite` or `postgres` | `sqlite` |
-| `CLEARNODE_DATABASE_URL` | Connection string or file path | `clearnode.db` |
-| `CLEARNODE_LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
-| `CLEARNODE_BLOCKCHAIN_RPC_<NAME>` | RPC endpoint for a specific blockchain | (Required) |
+| `NITRONODE_SIGNER_KEY` | Private key for signing node state updates | (Required) |
+| `NITRONODE_DATABASE_DRIVER` | `sqlite` or `postgres` | `sqlite` |
+| `NITRONODE_DATABASE_URL` | Connection string or file path | `nitronode.db` |
+| `NITRONODE_LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
+| `NITRONODE_BLOCKCHAIN_RPC_<NAME>` | RPC endpoint for a specific blockchain | (Required) |
 
-## Running Clearnode
+## Running Nitronode
 
 ### Prerequisites
 
@@ -101,8 +101,8 @@ assets:
 1. Set up your configuration files in a `./config` directory.
 2. Set the required environment variables:
    ```bash
-   export CLEARNODE_SIGNER_KEY=0x...
-   export CLEARNODE_BLOCKCHAIN_RPC_POLYGON_AMOY=https://...
+   export NITRONODE_SIGNER_KEY=0x...
+   export NITRONODE_BLOCKCHAIN_RPC_POLYGON_AMOY=https://...
    ```
 3. Run the node:
    ```bash
@@ -114,8 +114,8 @@ The node will be available at `ws://localhost:7824/ws`.
 ### Docker
 
 ```bash
-docker build -t clearnode .
-docker run -p 7824:7824 -e CLEARNODE_SIGNER_KEY=... clearnode
+docker build -t nitronode .
+docker run -p 7824:7824 -e NITRONODE_SIGNER_KEY=... nitronode
 ```
 
 ## Development
@@ -123,7 +123,7 @@ docker run -p 7824:7824 -e CLEARNODE_SIGNER_KEY=... clearnode
 ### Project Structure
 
 ```
-clearnode/
+nitronode/
 ├── api/             # JSON-RPC request handlers
 ├── config/          # Default configurations and migrations
 ├── event_handlers/  # Logic for reacting to blockchain events

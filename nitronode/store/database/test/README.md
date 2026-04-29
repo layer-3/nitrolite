@@ -29,7 +29,7 @@ Apply the migration schema to your test database:
 
 ```bash
 # Navigate to migrations directory
-cd clearnode/config/migrations/postgres
+cd nitronode/config/migrations/postgres
 
 # Apply the migration manually
 psql -U postgres -d nitrolite_test -f 20251222000000_initial_schema.sql
@@ -38,7 +38,7 @@ psql -U postgres -d nitrolite_test -f 20251222000000_initial_schema.sql
 Or use a migration tool like goose:
 
 ```bash
-goose -dir clearnode/config/migrations/postgres postgres "user=postgres dbname=nitrolite_test sslmode=disable" up
+goose -dir nitronode/config/migrations/postgres postgres "user=postgres dbname=nitrolite_test sslmode=disable" up
 ```
 
 ## Running the Tests
@@ -50,13 +50,13 @@ Set the `POSTGRES_DSN` environment variable and run the tests:
 export POSTGRES_DSN="host=localhost user=postgres password=postgres dbname=nitrolite_test port=5432 sslmode=disable"
 
 # Run all integration tests
-go test ./clearnode/store/database/test -v
+go test ./nitronode/store/database/test -v
 
 # Run specific test
-go test ./clearnode/store/database/test -v -run TestPostgres_ChannelOperations
+go test ./nitronode/store/database/test -v -run TestPostgres_ChannelOperations
 
 # Run tests with cleanup instructions
-go test ./clearnode/store/database/test -v -run TestPostgres_PrintCleanupSQL
+go test ./nitronode/store/database/test -v -run TestPostgres_PrintCleanupSQL
 ```
 
 ## Tests Included
@@ -102,7 +102,7 @@ After running the tests, you can clean up the test data using the SQL commands p
 
 ```bash
 # Run the cleanup test to see the SQL commands
-go test ./clearnode/store/database/test -v -run TestPostgres_PrintCleanupSQL
+go test ./nitronode/store/database/test -v -run TestPostgres_PrintCleanupSQL
 ```
 
 Or manually clean up:

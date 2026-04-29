@@ -13,7 +13,7 @@ Users exchange signed state updates off-chain with Nodes that act as a hub. Any 
 ### System Roles
 
 - **User** — Opens channels, signs state updates, holds assets within the protocol
-- **Node (Clearnode)** — Facilitates off-chain state advancement, manages channels, syncs with blockchain
+- **Node (Nitronode, formerly Clearnode)** — Facilitates off-chain state advancement, manages channels, syncs with blockchain
 - **Blockchain** — On-chain storage/execution layer that validates states, stores checkpoints, resolves disputes
 
 ### Design Goals
@@ -140,7 +140,7 @@ For the full list of protocol and smart contract invariants, see `contracts/SECU
 
 ---
 
-## 7. Clearnode V1 RPC Methods
+## 7. Nitronode V1 RPC Methods
 
 Canonical reference: `docs/api.yaml`. Methods are grouped by domain with `v1` versioning.
 
@@ -210,7 +210,7 @@ import { Client, createSigners, withBlockchainRPC } from '@yellow-org/sdk';
 
 const { stateSigner, txSigner } = createSigners(privateKey);
 const client = await Client.create(
-  clearnodeUrl,
+  nitronodeUrl,
   stateSigner,
   txSigner,
   withBlockchainRPC(chainId, rpcUrl),
@@ -228,7 +228,7 @@ const client = await Client.create(
 | `approveToken(chainId, asset, amount: Decimal)` | Approve token spending (ERC-20 only) |
 | `getChannels(wallet, options?)` | List channels for a wallet |
 | `getBalances(wallet)` | Get account balances |
-| `getConfig()` | Get clearnode configuration |
+| `getConfig()` | Get nitronode configuration |
 | `createAppSession(definition, sessionData, quorumSigs)` | Create app session |
 | `submitAppState(appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
 | `submitAppSessionDeposit(appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
@@ -273,7 +273,7 @@ import (
 stateSigner, _ := sign.NewEthereumMsgSigner(privateKey)
 txSigner, _ := sign.NewEthereumRawSigner(privateKey)
 
-client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+client, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner,
     sdk.WithBlockchainRPC(chainID, rpcURL),
 )
 defer client.Close()
@@ -290,7 +290,7 @@ defer client.Close()
 | `ApproveToken(ctx, chainID, asset, amount)` | Approve token spending (ERC-20 only) |
 | `GetChannels(ctx, wallet, options)` | List channels for a wallet |
 | `GetBalances(ctx, wallet)` | Get balances |
-| `GetConfig(ctx)` | Get clearnode config |
+| `GetConfig(ctx)` | Get nitronode config |
 | `CreateAppSession(ctx, def, sessionData, quorumSigs)` | Create app session |
 | `SubmitAppState(ctx, appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
 | `SubmitAppSessionDeposit(ctx, appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
@@ -345,7 +345,7 @@ cd contracts && forge fmt      # Format
 | Directory | Description | Language |
 |-----------|-------------|----------|
 | `contracts/` | Solidity smart contracts (Foundry) | Solidity |
-| `clearnode/` | Off-chain broker: WebSocket JSON-RPC | Go |
+| `nitronode/` | Off-chain broker: WebSocket JSON-RPC | Go |
 | `sdk/ts/` | TypeScript SDK (`@yellow-org/sdk`) | TypeScript |
 | `sdk/ts-compat/` | Compat layer for v0.5.3 migration | TypeScript |
 | `sdk/go/` | Go SDK | Go |

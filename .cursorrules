@@ -2,20 +2,20 @@
 
 ## What This Project Is
 
-Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain instant transactions with on-chain security. The repo contains: Solidity contracts (Foundry), a Go clearnode broker, TypeScript + Go SDKs, and MCP servers for AI tooling.
+Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain instant transactions with on-chain security. The repo contains: Solidity contracts (Foundry), a Go nitronode broker (renamed from clearnode), TypeScript + Go SDKs, and MCP servers for AI tooling.
 
 ## Architecture
 
 - **Channels**: State containers between a User and a Node. Hold asset allocations, support off-chain state updates.
 - **States**: Versioned allocations. Each new state = previous version + 1. Mutually signed states are enforceable on-chain.
-- **Clearnode**: Off-chain broker. WebSocket JSON-RPC. Wire format: `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`
+- **Nitronode** (formerly Clearnode): Off-chain broker. WebSocket JSON-RPC. Wire format: `{ "req": [REQUEST_ID, METHOD, PARAMS, TIMESTAMP], "sig": ["SIGNATURE"] }`
 - **App Sessions**: Multi-party extensions on channels with quorum-based governance (weight + threshold voting).
 
 ## TypeScript SDK Conventions
 
 - `@yellow-org/sdk` = v1 protocol SDK (use for all new code)
 - `@yellow-org/sdk-compat` = bridges 0.5.x API surface to v1 runtime (migration only, wraps Client with NitroliteClient)
-- V1 API source of truth: `docs/api.yaml`. Do NOT reference `clearnode/docs/API.md` for v1 methods (it has 0.5.x names)
+- V1 API source of truth: `docs/api.yaml`. Do NOT reference `docs/legacy/API.md` for v1 methods (it has 0.5.x names)
 - Use `const` by default, `let` only when reassignment is needed. No `var`.
 - Prefer `viem` over `ethers.js` for Ethereum interactions.
 - All public API functions exported through barrel `index.ts`.
@@ -62,7 +62,7 @@ Nitrolite is a state channel protocol for Ethereum/EVM blockchains. Off-chain in
 - Protocol description: `protocol-description.md`
 - Smart contract invariants: `contracts/SECURITY.md`
 - Main SC entrypoint: `contracts/src/ChannelHub.sol` (design: `contracts/suggested-contract-design.md`)
-- Clearnode logic: `clearnode/readme.md`, `clearnode/docs/`
+- Nitronode logic: `nitronode/README.md`, `docs/legacy/`
 - Advanced protocol docs: `docs/protocol/`
 
 ## Commit Convention

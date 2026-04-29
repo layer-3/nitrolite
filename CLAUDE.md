@@ -7,7 +7,7 @@ Nitrolite is a state channel framework for Ethereum and EVM-compatible blockchai
 | Directory | Description | Language |
 |-----------|-------------|----------|
 | `contracts/` | Solidity smart contracts (ChannelHub, ChannelEngine) | Solidity (Foundry) |
-| `clearnode/` | Off-chain broker: ledger services, WebSocket JSON-RPC | Go |
+| `nitronode/` | Off-chain broker: ledger services, WebSocket JSON-RPC | Go |
 | `sdk/ts/` | TypeScript SDK (`@yellow-org/sdk`) | TypeScript |
 | `sdk/ts-compat/` | Compat layer (`@yellow-org/sdk-compat`) bridging v0.5.3 API to v1.0.0+ | TypeScript |
 | `sdk/go/` | Go SDK for backend integrations | Go |
@@ -15,7 +15,7 @@ Nitrolite is a state channel framework for Ethereum and EVM-compatible blockchai
 | `cerebro/` | Interactive CLI for channel/asset management | Go |
 | `pkg/` | Shared Go packages (core, sign, rpc, app, blockchain, log) | Go |
 | `docs/` | Protocol specifications, architecture docs | Markdown |
-| `test/integration/` | Integration tests against a live clearnode | TypeScript |
+| `test/integration/` | Integration tests against a live nitronode | TypeScript |
 
 See stack-specific `CLAUDE.md` files in `sdk/ts/`, `sdk/ts-compat/`, and `sdk/go/` for detailed conventions.
 
@@ -42,7 +42,7 @@ cd sdk/ts-compat && npm run typecheck    # Type check only
 ```bash
 go test ./sdk/go/... -v                  # SDK tests only (from repo root)
 go build ./sdk/go/...                    # Build SDK
-go test ./...                            # ALL Go tests (clearnode + pkg + sdk + cerebro)
+go test ./...                            # ALL Go tests (nitronode + pkg + sdk + cerebro)
 go vet ./...                             # Lint all Go code
 ```
 
@@ -55,7 +55,7 @@ cd contracts && forge fmt                # Format
 
 ### Integration Tests
 ```bash
-cd test/integration && npm test          # Requires a running clearnode
+cd test/integration && npm test          # Requires a running nitronode
 ```
 
 ## Important Notes
@@ -73,9 +73,9 @@ cd test/integration && npm test          # Requires a running clearnode
 - **Protocol spec**: `docs/protocol/` — state channels, transitions, enforcement, security
 - **Contract invariants**: `contracts/SECURITY.md`
 - **Contract design**: `contracts/suggested-contract-design.md`, entrypoint `contracts/src/ChannelHub.sol`
-- **Clearnode docs**: `clearnode/readme.md`, `clearnode/docs/`
+- **Nitronode docs**: `nitronode/README.md`, `docs/legacy/`
 
-**Do NOT use `clearnode/docs/API.md` as v1 reference** — it documents the 0.5.x compat-layer method names (e.g., `transfer`, `create_channel`, `auth_request`). The v1 methods use grouped names (e.g., `channels.v1.submit_state`, `app_sessions.v1.create_app_session`).
+**Do NOT use `docs/legacy/API.md` as v1 reference** — it documents the 0.5.x compat-layer method names (e.g., `transfer`, `create_channel`, `auth_request`). The v1 methods use grouped names (e.g., `channels.v1.submit_state`, `app_sessions.v1.create_app_session`).
 
 ### SDK vs Compat
 

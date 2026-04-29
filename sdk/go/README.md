@@ -2,6 +2,8 @@
 
 # Nitronode Go SDK
 
+> Renamed from "Clearnode" in v1.3.0. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md) for image / env-var / DNS changes.
+
 Go SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `Deposit`, `Withdraw`, `Transfer`, `CloseHomeChannel`, `Acknowledge` - build and co-sign states off-chain
 - **Blockchain Settlement**: `Checkpoint` - the single entry point for all on-chain transactions

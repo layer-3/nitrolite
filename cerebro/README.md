@@ -130,7 +130,7 @@ If a legacy `clearnode-cli` directory exists, it will be used with a warning sug
 Override with environment variable:
 
 ```bash
-export CLEARNODE_CLI_CONFIG_DIR=/custom/path
+export NITRONODE_CLI_CONFIG_DIR=/custom/path
 ```
 
 ## Wallet Setup

@@ -1096,13 +1096,13 @@ type PaginationMetadata struct {
 	PageCount  uint32 `json:"page_count"`  // Total number of pages
 }
 
-// NodeConfig represents the configuration of a Clearnode instance.
+// NodeConfig represents the configuration of a Nitronode instance.
 // It includes the node's identity, version, and supported blockchain networks.
 type NodeConfig struct {
-	// NodeAddress is the Ethereum address of the clearnode operator
+	// NodeAddress is the Ethereum address of the nitronode operator
 	NodeAddress string
 
-	// NodeVersion is the software version of the clearnode instance
+	// NodeVersion is the software version of the nitronode instance
 	NodeVersion string
 
 	// SupportedSigValidators is the list of supported signature validator types

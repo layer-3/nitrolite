@@ -6,7 +6,7 @@ This directory contains the V1 API handlers for app session management, implemen
 ## Architecture
 
 
-### API Layer (`clearnode/api/app_session_v1`)
+### API Layer (`nitronode/api/app_session_v1`)
 - **Thin RPC handlers** that parse requests and format responses
 - Delegates all business logic to `pkg/app`
 - **Separate file per endpoint** (following channel_v1 pattern):
@@ -754,7 +754,7 @@ ORDER BY created_at DESC;
 
 ### Files
 
-**API Layer** (`clearnode/api/app_session_v1/`):
+**API Layer** (`nitronode/api/app_session_v1/`):
 - `handler.go` - Handler struct with signature validators and signer
 - `create_app_session.go` - Create app session endpoint handler
 - `submit_deposit_state.go` - Submit deposit state endpoint handler
@@ -1005,7 +1005,7 @@ The implementation includes comprehensive test coverage:
 
 ```bash
 # Run all tests
-cd clearnode/api/app_session_v1
+cd nitronode/api/app_session_v1
 go test -v
 
 # Run specific test suites
@@ -1023,4 +1023,4 @@ go test -v -run TestCreateAppSession_.*   # All create_app_session tests
 - RPC Types: `pkg/rpc/`
 - Application Types: `pkg/app/`
 - Core Package: `pkg/core/`
-- Channel V1 Reference: `clearnode/api/channel_v1/`
+- Channel V1 Reference: `nitronode/api/channel_v1/`

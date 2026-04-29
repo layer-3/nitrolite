@@ -3,6 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/@yellow-org/sdk.svg)](https://www.npmjs.com/package/@yellow-org/sdk)
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
+> The off-chain broker was renamed from "Clearnode" to "Nitronode" in v1.3.0. The default WebSocket sandbox URL is now `wss://nitronode-sandbox.yellow.org/v1/ws`. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md).
+
 TypeScript SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `deposit()`, `withdraw()`, `transfer()`, `closeHomeChannel()`, `acknowledge()` - build and co-sign states off-chain
 - **Blockchain Settlement**: `checkpoint()` - the single entry point for all on-chain transactions

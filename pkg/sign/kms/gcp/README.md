@@ -10,7 +10,7 @@ This package provides a `sign.Signer` implementation backed by Google Cloud KMS.
 # Set your project and location
 PROJECT_ID="your-project-id"
 LOCATION="us-east1"
-KEY_RING="clearnode"
+KEY_RING="nitronode"
 KEY_NAME="signer"
 
 # Create key ring
@@ -54,12 +54,12 @@ gcloud kms keys versions get-public-key 1 \
   --output-file /tmp/kms-pub.pem
 
 # The Ethereum address can be derived from the public key using standard tools.
-# Clearnode will log the address on startup.
+# Nitronode will log the address on startup.
 ```
 
 ## IAM Permissions
 
-The service account running clearnode needs these permissions on the KMS key:
+The service account running nitronode needs these permissions on the KMS key:
 
 - `cloudkms.cryptoKeyVersions.useToSign` — to sign data
 - `cloudkms.cryptoKeyVersions.viewPublicKey` — to fetch the public key at startup
@@ -67,7 +67,7 @@ The service account running clearnode needs these permissions on the KMS key:
 You can grant these with the predefined role:
 
 ```bash
-SERVICE_ACCOUNT="clearnode-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+SERVICE_ACCOUNT="nitronode-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 
 gcloud kms keys add-iam-policy-binding $KEY_NAME \
   --keyring $KEY_RING \
@@ -77,7 +77,7 @@ gcloud kms keys add-iam-policy-binding $KEY_NAME \
   --role "roles/cloudkms.signerVerifier"
 ```
 
-## Clearnode Configuration
+## Nitronode Configuration
 
 Set these environment variables:
 
@@ -86,7 +86,7 @@ Set these environment variables:
 CLEARNODE_SIGNER_TYPE=gcp-kms
 
 # Full key version resource name
-CLEARNODE_GCP_KMS_KEY_NAME=projects/my-project/locations/us-east1/keyRings/clearnode/cryptoKeys/signer/cryptoKeyVersions/1
+NITRONODE_GCP_KMS_KEY_NAME=projects/my-project/locations/us-east1/keyRings/nitronode/cryptoKeys/signer/cryptoKeyVersions/1
 ```
 
 When running on GKE with Workload Identity, no additional credential configuration is needed. For other environments, set `GOOGLE_APPLICATION_CREDENTIALS` to point to a service account key file.
@@ -97,7 +97,7 @@ When running on GKE with Workload Identity, no additional credential configurati
 config:
   extraEnvs:
     CLEARNODE_SIGNER_TYPE: gcp-kms
-    CLEARNODE_GCP_KMS_KEY_NAME: projects/my-project/locations/us-east1/keyRings/clearnode/cryptoKeys/signer/cryptoKeyVersions/1
+    NITRONODE_GCP_KMS_KEY_NAME: projects/my-project/locations/us-east1/keyRings/nitronode/cryptoKeys/signer/cryptoKeyVersions/1
 ```
 
 ## Key Requirements

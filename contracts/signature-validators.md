@@ -198,13 +198,13 @@ Both use EIP-191 first, then raw ECDSA if that fails.
 
 ### Metadata
 
-Application-defined data encoding expiration, allowed channels, and permissions. **Validated off-chain by Clearnode, not on-chain.**
+Application-defined data encoding expiration, allowed channels, and permissions. **Validated off-chain by Nitronode, not on-chain.**
 
 ### Challenge Signatures
 
 `validateChallengeSignature` is **not supported** and always reverts with `ChallengeWithSessionKeyNotSupported`.
 
-This is to prevent a vulnerability: since session key authorizations are permanently valid on-chain (expiration is opaque in metadataHash), allowing session keys to challenge would let any expired or revoked key put channels into `DISPUTED` state unilaterally, bypassing Clearnode's off-chain enforcement and causing a DoS on the channel.
+This is to prevent a vulnerability: since session key authorizations are permanently valid on-chain (expiration is opaque in metadataHash), allowing session keys to challenge would let any expired or revoked key put channels into `DISPUTED` state unilaterally, bypassing Nitronode's off-chain enforcement and causing a DoS on the channel.
 
 ---
 
@@ -218,9 +218,9 @@ This is to prevent a vulnerability: since session key authorizations are permane
 
 It is safe for users because:
 
-- Clearnode validates metadata (expiration, scope, permissions)
+- Nitronode validates metadata (expiration, scope, permissions)
 - Node must countersign (provides protection)
-- Limited damage if compromised (Clearnode rejects invalid requests)
+- Limited damage if compromised (Nitronode rejects invalid requests)
 - Revocable (switch to main key anytime)
 
 ### Nodes: Unsafe ⚠️

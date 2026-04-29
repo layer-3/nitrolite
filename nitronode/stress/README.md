@@ -1,6 +1,6 @@
-# Clearnode Stress Testing Tool
+# Nitronode Stress Testing Tool
 
-Built-in stress testing tool for validating clearnode performance, correctness, and stability under load.
+Built-in stress testing tool for validating nitronode performance, correctness, and stability under load.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ clearnode stress-test storm transfers:3:3:usdc:1
 
 ## Architecture
 
-The stress tool is compiled into the clearnode binary and invoked via the `stress-test` subcommand. It connects to a running clearnode instance over WebSocket using the Go SDK.
+The stress tool is compiled into the nitronode binary and invoked via the `stress-test` subcommand. It connects to a running nitronode instance over WebSocket using the Go SDK.
 
 ```
 clearnode stress-test <strategy> [args...]
@@ -55,7 +55,7 @@ All configuration is via environment variables.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `STRESS_WS_URL` | Yes | - | WebSocket URL of the target clearnode |
+| `STRESS_WS_URL` | Yes | - | WebSocket URL of the target nitronode |
 | `STRESS_PRIVATE_KEY` | No | ephemeral | Hex-encoded ECDSA private key |
 | `STRESS_CONNECTIONS` | No | `10` | Default parallel connections per test |
 | `STRESS_TIMEOUT` | No | `10m` | Overall test timeout |
@@ -357,7 +357,7 @@ Errors
 
 ## Helm Integration
 
-The stress tool is integrated as a Helm test. When enabled, `helm test` creates a Pod that runs the stress spec against the in-cluster clearnode service.
+The stress tool is integrated as a Helm test. When enabled, `helm test` creates a Pod that runs the stress spec against the in-cluster nitronode service.
 
 **values.yaml:**
 
@@ -378,7 +378,7 @@ stressTest:
 helm test <release-name>
 ```
 
-The WebSocket URL defaults to the in-cluster service (`ws://<release>-clearnode:7824/ws`). Override with `stressTest.wsURL` for external targets.
+The WebSocket URL defaults to the in-cluster service (`ws://<release>-nitronode:7824/ws`). Override with `stressTest.wsURL` for external targets.
 
 ## Testing Strategy
 

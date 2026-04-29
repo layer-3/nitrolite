@@ -5,6 +5,9 @@
  * Exposes the Nitrolite SDK API surface to AI agents and IDEs via the
  * Model Context Protocol. Reads SDK source at startup to build structured
  * knowledge of methods, types, enums, and examples.
+ *
+ * Naming note: the off-chain broker was named "clearnode" through v1.2.0
+ * and renamed to "nitronode" in v1.3.0. See `nitrolite://migration/nitronode`.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -1166,6 +1169,14 @@ server.resource('migration-overview', 'nitrolite://migration/overview', async ()
     const content = readFile(resolve(COMPAT_ROOT, 'docs/migration-overview.md'));
     const text = content || '# Migration Overview\n\nNo migration docs found. Check sdk/ts-compat/docs/.';
     return { contents: [{ uri: 'nitrolite://migration/overview', text, mimeType: 'text/markdown' }] };
+});
+
+server.resource('migration-nitronode', 'nitrolite://migration/nitronode', async () => {
+    const content = readFile(resolve(REPO_ROOT, 'MIGRATION-NITRONODE.md'));
+    const text =
+        content ||
+        '# Clearnode -> Nitronode rename\n\nThe `clearnode` service was renamed to `nitronode` after v1.2.0. See MIGRATION-NITRONODE.md at the repo root for the full mapping (image names, env vars, metric prefixes, default URLs).';
+    return { contents: [{ uri: 'nitrolite://migration/nitronode', text, mimeType: 'text/markdown' }] };
 });
 
 // ========================== PROTOCOL RESOURCES ==============================

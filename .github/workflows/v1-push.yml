@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  test-clearnode:
+  test-nitronode:
     name: Test (Clearnode)
     uses: ./.github/workflows/test-go.yml
 
@@ -32,7 +32,7 @@ jobs:
   
   auto-tag:
     name: Auto-Tag
-    needs: test-clearnode
+    needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,7 +51,7 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "github-actions@github.com"
 
-          ./clearnode/scripts/auto_tag.sh v1.0.0
+          ./nitronode/scripts/auto_tag.sh v1.0.0
 
       - name: Store the new tag
         id: tagger
@@ -59,7 +59,7 @@ jobs:
           NEW_TAG=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*-rc.[0-9]*" --abbrev=0)
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-  build-and-publish-clearnode:
+  build-and-publish-nitronode:
     name: Build and Publish (Clearnode)
     needs: auto-tag
     runs-on: ubuntu-latest
@@ -94,11 +94,11 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ needs.auto-tag.outputs.image-tag }}
-            ghcr.io/${{ github.repository }}/clearnode:latest-rc
+            ghcr.io/${{ github.repository }}/nitronode:${{ needs.auto-tag.outputs.image-tag }}
+            ghcr.io/${{ github.repository }}/nitronode:latest-rc
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -107,7 +107,7 @@ jobs:
 
   # deploy-prod:
   #   name: Deploy to Prod
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: prod
   #   secrets:
@@ -116,7 +116,7 @@ jobs:
 
   # deploy-sandbox:
   #   name: Deploy to Sandbox
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: sandbox
   #   secrets:
@@ -125,11 +125,11 @@ jobs:
 
   # deploy-uat:
   #   name: Deploy to UAT
-  #   needs: build-and-publish-clearnode
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   needs: build-and-publish-nitronode
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: uat
-  #     image-tag: ${{ needs.build-and-publish-clearnode.outputs.image-tag }}
+  #     image-tag: ${{ needs.build-and-publish-nitronode.outputs.image-tag }}
   #   secrets:
   #     gke-project: ${{ secrets.GKE_PROJECT }}
   #     gke-sa-key: ${{ secrets.GKE_UAT_SA_KEY }}

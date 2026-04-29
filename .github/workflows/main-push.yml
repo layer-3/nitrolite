@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  test-clearnode:
+  test-nitronode:
     name: Test (Clearnode)
     uses: ./.github/workflows/test-go.yml
 
@@ -30,9 +30,9 @@ jobs:
   #   secrets:
   #     npm-token: ${{ secrets.NPM_TOKEN }}
 
-  build-and-publish-clearnode:
+  build-and-publish-nitronode:
     name: Build and Publish (Clearnode)
-    needs: test-clearnode
+    needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,17 +64,17 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ steps.sha.outputs.short_sha }}
-            ghcr.io/${{ github.repository }}/clearnode:latest-main
+            ghcr.io/${{ github.repository }}/nitronode:${{ steps.sha.outputs.short_sha }}
+            ghcr.io/${{ github.repository }}/nitronode:latest-main
           cache-from: type=gha
           cache-to: type=gha,mode=max
   
   # deploy-prod:
   #   name: Deploy to Prod
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: prod
   #   secrets:
@@ -83,7 +83,7 @@ jobs:
 
   # deploy-sandbox:
   #   name: Deploy to Sandbox
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: sandbox
   #   secrets:

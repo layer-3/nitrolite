@@ -7,7 +7,7 @@ on:
     #     description: 'Path to the Go project directory'
     #     required: false
     #     type: string
-    #     default: 'clearnode'
+    #     default: 'nitronode'
     #   project-name:
     #     description: 'Human-readable name for the project'
     #     required: false

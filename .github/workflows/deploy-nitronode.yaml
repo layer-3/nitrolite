@@ -1,4 +1,4 @@
-name: Deploy Clearnode
+name: Deploy Nitronode
 
 on:
   workflow_call:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Clearnode
+    name: Deploy Nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
       GKE_BASTION_NAME: gke-uat-bastion
       GKE_BASTION_ZONE: europe-central2-a
       HELM_NAMESPACE: 'clearnet-${{ inputs.target-env }}'
-      HELM_RELEASE: clearnode
+      HELM_RELEASE: nitronode
       HELM_CONFIG_ENV: '${{ inputs.target-env }}'
       KUBECONFIG: kubeconfig.conf
 
@@ -88,10 +88,10 @@ jobs:
           exit 1
         fi
 
-        helm upgrade -i ${HELM_RELEASE} clearnode/chart \
+        helm upgrade -i ${HELM_RELEASE} nitronode/chart \
           -n ${HELM_NAMESPACE} \
           --reuse-values \
           --set image.tag=${IMAGE_TAG} \
-          -f clearnode/chart/config/${HELM_CONFIG_ENV}/clearnode.yaml \
-          --set-file=config.blockchains=clearnode/chart/config/${HELM_CONFIG_ENV}/blockchains.yaml \
-          --set-file=config.assets=clearnode/chart/config/${HELM_CONFIG_ENV}/assets.yaml
+          -f nitronode/chart/config/${HELM_CONFIG_ENV}/nitronode.yaml \
+          --set-file=config.blockchains=nitronode/chart/config/${HELM_CONFIG_ENV}/blockchains.yaml \
+          --set-file=config.assets=nitronode/chart/config/${HELM_CONFIG_ENV}/assets.yaml

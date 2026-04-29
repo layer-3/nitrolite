@@ -38,7 +38,7 @@ import { packCreateAppSessionRequestV1, packAppStateUpdateV1, packAppSessionKeyS
 
 async function main() {
   // Replace with a real deployment url
-  const wsURL = 'wss://clearnode-sandbox.yellow.org/v1/ws';
+  const wsURL = 'wss://nitronode-sandbox.yellow.org/v1/ws';
 
   // --- 0. Setup Wallets ---
   // Replace these strings with your actual hex private keys

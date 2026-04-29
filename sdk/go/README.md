@@ -1,8 +1,8 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/layer-3/nitrolite/sdk/go.svg)](https://pkg.go.dev/github.com/layer-3/nitrolite/sdk/go)
 
-# Clearnode Go SDK
+# Nitronode Go SDK
 
-Go SDK for Clearnode payment channels providing both high-level and low-level operations in a unified client:
+Go SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `Deposit`, `Withdraw`, `Transfer`, `CloseHomeChannel`, `Acknowledge` - build and co-sign states off-chain
 - **Blockchain Settlement**: `Checkpoint` - the single entry point for all on-chain transactions
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
@@ -110,7 +110,7 @@ func main() {
 
     // Create unified client
     client, _ := sdk.NewClient(
-        "wss://clearnode-sandbox.yellow.org/v1/ws",
+        "wss://nitronode-sandbox.yellow.org/v1/ws",
         stateSigner,
         txSigner,
         sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),
@@ -713,7 +713,7 @@ For understanding how operations work under the hood:
 ## Requirements
 
 - Go 1.21+
-- Running Clearnode instance
+- Running Nitronode instance
 - Blockchain RPC endpoint (for Checkpoint settlement)
 
 ## License

@@ -1,7 +1,7 @@
 === Compat Layer Comprehensive Lifecycle ===
 
 Wallet: 0x<YOUR_WALLET_ADDRESS>
-Clearnode: wss://clearnode-sandbox.yellow.org/v1/ws
+Nitronode: wss://nitronode-sandbox.yellow.org/v1/ws
 Chain: 11155111
 
 -- 1. Client Initialization --

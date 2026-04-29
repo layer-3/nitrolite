@@ -283,7 +283,7 @@ export interface AppLogic<T = bigint> {
 }
 
 // =============================================================================
-// Clearnode response types (previously in appstore/src/store/types.ts)
+// Nitronode response types (previously in appstore/src/store/types.ts)
 // =============================================================================
 
 export interface AccountInfo {

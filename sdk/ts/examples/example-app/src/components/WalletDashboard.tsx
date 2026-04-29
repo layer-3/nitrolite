@@ -263,7 +263,7 @@ export default function WalletDashboard({
       const sig = await client.signChannelSessionKeyState(state);
       state.user_sig = sig;
 
-      // Submit to clearnode
+      // Submit to nitronode
       await client.submitChannelSessionKeyState(state);
 
       // Compute metadata hash for the session key signer

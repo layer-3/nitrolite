@@ -37,7 +37,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	wsURL := "wss://clearnode-sandbox.yellow.org/v1/ws"
+	wsURL := "wss://nitronode-sandbox.yellow.org/v1/ws"
 
 	// --- 0. Setup Wallets ---
 	// Replace these strings with your actual hex private keys

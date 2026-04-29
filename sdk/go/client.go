@@ -17,7 +17,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Client provides a unified interface for interacting with Clearnode.
+// Client provides a unified interface for interacting with Nitronode.
 // It combines state-building operations (Deposit, Withdraw, Transfer) with a single
 // Checkpoint method for blockchain settlement, plus low-level RPC access for advanced use cases.
 //
@@ -30,7 +30,7 @@ import (
 //	stateSigner, _ := sign.NewEthereumMsgSigner(privateKeyHex)
 //	txSigner, _ := sign.NewEthereumRawSigner(privateKeyHex)
 //	client, _ := sdk.NewClient(
-//	    "wss://clearnode-sandbox.yellow.org/v1/ws",
+//	    "wss://nitronode-sandbox.yellow.org/v1/ws",
 //	    stateSigner,
 //	    txSigner,
 //	    sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),
@@ -62,11 +62,11 @@ type Client struct {
 	assetStore               *clientAssetStore
 }
 
-// NewClient creates a new Clearnode client with both high-level and low-level methods.
+// NewClient creates a new Nitronode client with both high-level and low-level methods.
 // This is the recommended constructor for most use cases.
 //
 // Parameters:
-//   - wsURL: WebSocket URL of the Clearnode server (e.g., "wss://clearnode-sandbox.yellow.org/v1/ws")
+//   - wsURL: WebSocket URL of the Nitronode server (e.g., "wss://nitronode-sandbox.yellow.org/v1/ws")
 //   - stateSigner: core.ChannelSigner for signing channel states (use sign.NewEthereumMsgSigner)
 //   - txSigner: sign.Signer for signing blockchain transactions (use sign.NewEthereumRawSigner)
 //   - opts: Optional configuration (WithBlockchainRPC, WithHandshakeTimeout, etc.)
@@ -80,7 +80,7 @@ type Client struct {
 //	stateSigner, _ := sign.NewEthereumMsgSigner(privateKeyHex)
 //	txSigner, _ := sign.NewEthereumRawSigner(privateKeyHex)
 //	client, err := sdk.NewClient(
-//	    "wss://clearnode-sandbox.yellow.org/v1/ws",
+//	    "wss://nitronode-sandbox.yellow.org/v1/ws",
 //	    stateSigner,
 //	    txSigner,
 //	    sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),

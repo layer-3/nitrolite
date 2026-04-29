@@ -9,7 +9,7 @@ import (
 )
 
 // TODO: refactor by not using client as a dependency as this creates a circular usage.
-// clientAssetStore implements core.AssetStore by fetching data from the Clearnode API.
+// clientAssetStore implements core.AssetStore by fetching data from the Nitronode API.
 type clientAssetStore struct {
 	client *Client
 	cache  map[string]core.Asset // lowercase asset symbol -> Asset
@@ -40,7 +40,7 @@ func (s *clientAssetStore) populateCache() error {
 	return nil
 }
 
-// GetAssetDecimals returns the decimals for an asset as stored in Clearnode.
+// GetAssetDecimals returns the decimals for an asset as stored in Nitronode.
 func (s *clientAssetStore) GetAssetDecimals(asset string) (uint8, error) {
 	key := strings.ToLower(asset)
 

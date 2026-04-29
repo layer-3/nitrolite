@@ -277,7 +277,7 @@ function loadGoSdkMethods(): void {
     goMethods.push({
         name: 'NewClient',
         signature: 'func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Signer, opts ...Option) (*Client, error)',
-        comment: 'Creates a new Nitrolite SDK client connected to a clearnode',
+        comment: 'Creates a new Nitrolite SDK client connected to a nitronode',
         category: 'Connection',
     });
 
@@ -562,7 +562,7 @@ import (
 
 func main() {
     privateKey := os.Getenv("PRIVATE_KEY")
-    clearnodeURL := os.Getenv("CLEARNODE_URL")
+    nitronodeURL := os.Getenv("NITRONODE_URL")
     rpcURL := os.Getenv("RPC_URL")
     recipient := os.Getenv("RECIPIENT")
     var chainID uint64 = 11155111 // Sepolia
@@ -572,7 +572,7 @@ func main() {
     txSigner, err := sign.NewEthereumRawSigner(privateKey)
     if err != nil { log.Fatal(err) }
 
-    client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+    client, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner,
         sdk.WithBlockchainRPC(chainID, rpcURL),
     )
     if err != nil { log.Fatal(err) }
@@ -612,7 +612,7 @@ func main() {
 ## Environment Variables
 
 - \`PRIVATE_KEY\` — Hex private key (without 0x prefix)
-- \`CLEARNODE_URL\` — WebSocket URL
+- \`NITRONODE_URL\` — WebSocket URL
 - \`RPC_URL\` — Ethereum RPC endpoint
 - \`RECIPIENT\` — Recipient address
 `;
@@ -637,7 +637,7 @@ import (
 
 func main() {
     privateKey := os.Getenv("PRIVATE_KEY")
-    clearnodeURL := os.Getenv("CLEARNODE_URL")
+    nitronodeURL := os.Getenv("NITRONODE_URL")
     rpcURL := os.Getenv("RPC_URL")
     peerAddr := os.Getenv("PEER_ADDRESS")
     var chainID uint64 = 11155111
@@ -647,7 +647,7 @@ func main() {
     txSigner, err := sign.NewEthereumRawSigner(privateKey)
     if err != nil { log.Fatal(err) }
 
-    client, err := sdk.NewClient(clearnodeURL, stateSigner, txSigner,
+    client, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner,
         sdk.WithBlockchainRPC(chainID, rpcURL),
     )
     if err != nil { log.Fatal(err) }
@@ -739,7 +739,7 @@ func main() {
 \ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
 \tif err != nil { log.Fatal(err) }
 
-\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\tclient, err := sdk.NewClient(os.Getenv("NITRONODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
 \t)
 \tif err != nil { log.Fatal(err) }
@@ -781,7 +781,7 @@ func main() {
 \ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("PRIVATE_KEY"))
 \tif err != nil { log.Fatal(err) }
 
-\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\tclient, err := sdk.NewClient(os.Getenv("NITRONODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
 \t)
 \tif err != nil { log.Fatal(err) }
@@ -870,7 +870,7 @@ func main() {
 \ttxSigner, err := sign.NewEthereumRawSigner(os.Getenv("AGENT_PRIVATE_KEY"))
 \tif err != nil { log.Fatal(err) }
 
-\tclient, err := sdk.NewClient(os.Getenv("CLEARNODE_URL"), stateSigner, txSigner,
+\tclient, err := sdk.NewClient(os.Getenv("NITRONODE_URL"), stateSigner, txSigner,
 \t\tsdk.WithBlockchainRPC(11155111, os.Getenv("RPC_URL")),
 \t)
 \tif err != nil { log.Fatal(err) }
@@ -981,7 +981,7 @@ import Decimal from 'decimal.js';
 
 const { stateSigner, txSigner } = createSigners('0xYourPrivateKey...');
 const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, 'https://rpc.amoy.polygon.technology'),
@@ -1033,7 +1033,7 @@ console.log('Transfer tx ID:', state.transition.txId);
 import { NitroliteClient } from '@yellow-org/sdk-compat';
 
 const client = await NitroliteClient.create({
-    wsURL: 'wss://clearnode.example.com/ws',
+    wsURL: 'wss://nitronode.example.com/ws',
     walletClient,
     chainId: 11155111,
     blockchainRPCs: { 11155111: 'https://rpc.sepolia.org' },
@@ -1418,7 +1418,7 @@ import { Client, createSigners, withBlockchainRPC } from '@yellow-org/sdk';
 const { stateSigner, txSigner } = createSigners(AGENT_PRIVATE_KEY);
 
 const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(chainId, RPC_URL),
@@ -1428,7 +1428,7 @@ const client = await Client.create(
 ## Agent-to-Agent Payments
 
 Two AI agents can transact directly through state channels:
-1. Both agents open channels with the same clearnode
+1. Both agents open channels with the same nitronode
 2. Agent A calls \`client.transfer(agentB_address, 'usdc', new Decimal('0.01'))\`
 3. Agent B receives the transfer instantly
 4. No on-chain transactions needed
@@ -1459,7 +1459,7 @@ The SDK works with any agent framework (LangChain, AutoGPT, CrewAI, etc.):
 ## yao.com Proxy Pattern
 
 For agents that need a unified interface, yao.com provides a proxy layer:
-- Agents connect to yao.com instead of directly to a clearnode
+- Agents connect to yao.com instead of directly to a nitronode
 - yao.com handles channel management and routing
 - Agents focus on their application logic
 `;
@@ -1471,7 +1471,7 @@ For agents that need a unified interface, yao.com provides a proxy layer:
 server.resource('examples-full-transfer', 'nitrolite://examples/full-transfer-script', async () => {
     const text = `# Complete Transfer Script
 
-A fully working TypeScript script that connects to a clearnode, opens a channel, deposits funds, transfers tokens, and closes the channel.
+A fully working TypeScript script that connects to a nitronode, opens a channel, deposits funds, transfers tokens, and closes the channel.
 
 \`\`\`typescript
 import { Client, createSigners, withBlockchainRPC } from '@yellow-org/sdk';
@@ -1479,7 +1479,7 @@ import Decimal from 'decimal.js';
 
 // --- Configuration ---
 const PRIVATE_KEY = process.env.PRIVATE_KEY as \`0x\${string}\`;
-const CLEARNODE_URL = process.env.CLEARNODE_URL || 'wss://clearnode.example.com/ws';
+const NITRONODE_URL = process.env.NITRONODE_URL || 'wss://nitronode.example.com/ws';
 const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 const CHAIN_ID = 80002n; // Polygon Amoy
 const RECIPIENT = process.env.RECIPIENT as \`0x\${string}\`;
@@ -1490,7 +1490,7 @@ async function main() {
 
     // 2. Create SDK client — connects WebSocket + authenticates
     const client = await Client.create(
-        CLEARNODE_URL,
+        NITRONODE_URL,
         stateSigner,
         txSigner,
         withBlockchainRPC(CHAIN_ID, RPC_URL),
@@ -1527,7 +1527,7 @@ main().catch(console.error);
 ## Environment Variables
 
 - \`PRIVATE_KEY\` — Your wallet private key (hex with 0x prefix)
-- \`CLEARNODE_URL\` — WebSocket URL of the clearnode
+- \`NITRONODE_URL\` — WebSocket URL of the nitronode
 - \`RPC_URL\` — Ethereum RPC endpoint for the target chain
 - \`RECIPIENT\` — Address to transfer tokens to
 
@@ -1555,7 +1555,7 @@ import Decimal from 'decimal.js';
 
 // --- Configuration ---
 const PRIVATE_KEY = process.env.PRIVATE_KEY as \`0x\${string}\`;
-const CLEARNODE_URL = process.env.CLEARNODE_URL || 'wss://clearnode.example.com/ws';
+const NITRONODE_URL = process.env.NITRONODE_URL || 'wss://nitronode.example.com/ws';
 const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 const CHAIN_ID = 80002n;
 const PEER_ADDRESS = process.env.PEER_ADDRESS as \`0x\${string}\`;
@@ -1565,7 +1565,7 @@ async function main() {
     const myAddress = stateSigner.address;
 
     const client = await Client.create(
-        CLEARNODE_URL,
+        NITRONODE_URL,
         stateSigner,
         txSigner,
         withBlockchainRPC(CHAIN_ID, RPC_URL),
@@ -1893,7 +1893,7 @@ server.tool(
 server.tool(
     'explain_concept',
     'Plain-English explanation of a Nitrolite protocol concept (e.g. "state channel", "app session", "challenge period")',
-    { concept: z.string().describe('Concept name (e.g. "state channel", "app session", "challenge period", "clearnode", "vault")') },
+    { concept: z.string().describe('Concept name (e.g. "state channel", "app session", "challenge period", "nitronode", "vault")') },
     async ({ concept }) => {
         const query = concept.toLowerCase().trim();
 
@@ -1981,7 +1981,7 @@ server.tool(
             const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\t${GO_MODULE_PATH} ${GO_MODULE_VERSION}\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
             const envKey = template === 'go-ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY';
             const envExtra = template === 'go-transfer-app' ? '\nRECIPIENT=your_recipient_address' : template === 'go-app-session' ? '\nPEER_ADDRESS=peer_wallet_address' : '';
-            const text = `# Scaffold: ${template}\n\n## go.mod\n\`\`\`\n${goMod}\n\`\`\`\n\n## main.go\n\`\`\`go\n${goTemplateMap[template]}\`\`\`\n\n## .env.example\n\`\`\`\n${envKey}=your_hex_key\nCLEARNODE_URL=wss://clearnode.example.com/ws\nRPC_URL=https://rpc.sepolia.org${envExtra}\n\`\`\`\n\n## Setup\n\`\`\`bash\ngo mod tidy\ngo run .\n\`\`\``;
+            const text = `# Scaffold: ${template}\n\n## go.mod\n\`\`\`\n${goMod}\n\`\`\`\n\n## main.go\n\`\`\`go\n${goTemplateMap[template]}\`\`\`\n\n## .env.example\n\`\`\`\n${envKey}=your_hex_key\nNITRONODE_URL=wss://nitronode.example.com/ws\nRPC_URL=https://rpc.sepolia.org${envExtra}\n\`\`\`\n\n## Setup\n\`\`\`bash\ngo mod tidy\ngo run .\n\`\`\``;
             return { content: [{ type: 'text' as const, text }] };
         }
         const packageJson = {
@@ -2011,15 +2011,15 @@ server.tool(
 import Decimal from 'decimal.js';
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as \`0x\$\{string}\`;
-const CLEARNODE_URL = process.env.CLEARNODE_URL || 'wss://clearnode.example.com/ws';
+const NITRONODE_URL = process.env.NITRONODE_URL || 'wss://nitronode.example.com/ws';
 const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 const CHAIN_ID = 80002n;
 
 async function main() {
     const { stateSigner, txSigner } = createSigners(PRIVATE_KEY);
 
-    const client = await Client.create(CLEARNODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
-    console.log('Connected to clearnode');
+    const client = await Client.create(NITRONODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
+    console.log('Connected to nitronode');
 
     // Deposit funds
     await client.deposit(CHAIN_ID, 'usdc', new Decimal(10));
@@ -2038,7 +2038,7 @@ main().catch(console.error);
 import Decimal from 'decimal.js';
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as \`0x\$\{string}\`;
-const CLEARNODE_URL = process.env.CLEARNODE_URL || 'wss://clearnode.example.com/ws';
+const NITRONODE_URL = process.env.NITRONODE_URL || 'wss://nitronode.example.com/ws';
 const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 const CHAIN_ID = 80002n;
 const PEER = process.env.PEER_ADDRESS as \`0x\$\{string}\`;
@@ -2047,7 +2047,7 @@ async function main() {
     const { stateSigner, txSigner } = createSigners(PRIVATE_KEY);
     const myAddress = stateSigner.address;
 
-    const client = await Client.create(CLEARNODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
+    const client = await Client.create(NITRONODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
 
     // Fund the home channel before moving funds into the app session
     await client.deposit(CHAIN_ID, 'usdc', new Decimal(20));
@@ -2107,13 +2107,13 @@ main().catch(console.error);
 import Decimal from 'decimal.js';
 
 const AGENT_KEY = process.env.AGENT_PRIVATE_KEY as \`0x\$\{string}\`;
-const CLEARNODE_URL = process.env.CLEARNODE_URL || 'wss://clearnode.example.com/ws';
+const NITRONODE_URL = process.env.NITRONODE_URL || 'wss://nitronode.example.com/ws';
 const RPC_URL = process.env.RPC_URL || 'https://rpc.sepolia.org';
 const CHAIN_ID = 80002n;
 
 async function createAgentClient() {
     const { stateSigner, txSigner } = createSigners(AGENT_KEY);
-    return Client.create(CLEARNODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
+    return Client.create(NITRONODE_URL, stateSigner, txSigner, withBlockchainRPC(CHAIN_ID, RPC_URL));
 }
 
 async function payForService(client: Awaited<ReturnType<typeof createAgentClient>>, recipient: \`0x\$\{string}\`, amount: Decimal) {
@@ -2124,7 +2124,7 @@ async function payForService(client: Awaited<ReturnType<typeof createAgentClient
 
 async function main() {
     const client = await createAgentClient();
-    console.log('Agent connected to clearnode');
+    console.log('Agent connected to nitronode');
 
     // Ensure the agent has funds
     await client.deposit(CHAIN_ID, 'usdc', new Decimal(50));
@@ -2148,7 +2148,7 @@ main().catch(console.error);
         };
 
         const envExample = `${template === 'ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY'}=0x...
-CLEARNODE_URL=wss://clearnode.example.com/ws
+NITRONODE_URL=wss://nitronode.example.com/ws
 RPC_URL=https://rpc.sepolia.org
 ${template === 'transfer-app' ? 'RECIPIENT=0x...' : ''}${template === 'app-session' ? 'PEER_ADDRESS=0x...' : ''}`;
 
@@ -2198,7 +2198,7 @@ server.prompt(
                 text: `Guide me through building a Nitrolite state channel application. Cover:
 
 1. **Setup** — Install dependencies (@yellow-org/sdk, viem), create Client with config
-2. **Authentication** — Connect wallet, establish WebSocket, authenticate with clearnode
+2. **Authentication** — Connect wallet, establish WebSocket, authenticate with nitronode
 3. **Channel Lifecycle** — Deposit (auto-creates channel), query channels, close channel
 4. **Transfers** — Send tokens to another participant via state channels
 5. **App Sessions** — Fund the home channel with deposit + checkpoint, then create sessions, fund them with submitAppSessionDeposit, submit state, close

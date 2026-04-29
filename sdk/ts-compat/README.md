@@ -65,7 +65,7 @@ Replace `new Client(ws, signer)` with `NitroliteClient.create()`:
 import { NitroliteClient, blockchainRPCsFromEnv } from '@yellow-org/sdk-compat';
 
 const client = await NitroliteClient.create({
-  wsURL: 'wss://clearnode.example.com/ws',
+  wsURL: 'wss://nitronode.example.com/ws',
   walletClient,          // viem WalletClient with account
   chainId: 11155111,     // Sepolia
   blockchainRPCs: blockchainRPCsFromEnv(),
@@ -218,7 +218,7 @@ await client.close();
 | `ping()` | Health check |
 | `close()` | Close the WebSocket connection |
 | `waitForClose()` | Returns a promise that resolves when the connection is closed |
-| `refreshAssets()` | Re-fetch the asset map from the clearnode |
+| `refreshAssets()` | Re-fetch the asset map from the nitronode |
 
 ### Accessing the v1 SDK Directly
 
@@ -235,7 +235,7 @@ await v1Client.getHomeChannel(wallet, 'usdc');
 
 ```typescript
 interface NitroliteClientConfig {
-  wsURL: string;                           // Clearnode WebSocket URL
+  wsURL: string;                           // Nitronode WebSocket URL
   walletClient: WalletClient;              // viem WalletClient with account
   chainId: number;                         // Chain ID (e.g. 11155111 for Sepolia)
   blockchainRPCs?: Record<number, string>; // Optional chain ID → RPC URL map
@@ -458,7 +458,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 - `State` — Channel state (channelId, version, data, allocations)
 - `AppLogic<T>` — Interface for custom app logic implementations
 
-### Clearnode Response Types
+### Nitronode Response Types
 
 - `AccountInfo` — `{ balances: LedgerBalance[], channelCount: bigint }`
 - `LedgerChannel` — Full ledger channel record (id, participant, status, token, amount, chain_id, etc.)
@@ -477,7 +477,7 @@ Converts a `CompatClientConfig` into v1 `Option[]` values passed to `Client.crea
 import { buildClientOptions, type CompatClientConfig } from '@yellow-org/sdk-compat';
 
 const opts = buildClientOptions({
-  wsURL: 'wss://clearnode.example.com/ws',
+  wsURL: 'wss://nitronode.example.com/ws',
   blockchainRPCs: { 11155111: 'https://rpc.sepolia.io' },
 });
 ```

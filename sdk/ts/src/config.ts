@@ -21,8 +21,8 @@ export interface Config {
   pingInterval?: number;
 
   /**
-   * Advisory origin tag sent to the clearnode as the "app_id" WebSocket query
-   * parameter. The clearnode stamps this value on records produced by requests
+   * Advisory origin tag sent to the nitronode as the "app_id" WebSocket query
+   * parameter. The nitronode stamps this value on records produced by requests
    * from this client. Empty / undefined means no tag is sent.
    */
   applicationID?: string;
@@ -78,7 +78,7 @@ export function withErrorHandler(handler: (error: Error) => void): Option {
 export const APPLICATION_ID_QUERY_PARAM = 'app_id';
 
 /**
- * withApplicationID sets the application ID sent to the clearnode as the
+ * withApplicationID sets the application ID sent to the nitronode as the
  * `app_id` WebSocket query parameter. Advisory origin tag only.
  */
 export function withApplicationID(appID: string): Option {

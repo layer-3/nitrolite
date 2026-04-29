@@ -14,7 +14,7 @@ export interface NetworkConfig {
   rpcUrl: string;
 }
 
-export interface ClearnodeConfig {
+export interface NitronodeConfig {
   name: string;
   url: string;
 }

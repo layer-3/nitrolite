@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-publish-nitronode:
-    name: Build and Publish (Clearnode)
+    name: Build and Publish (Nitronode)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,7 +87,7 @@ jobs:
   #         SLACK_USERNAME: CI/CD Bot
   #         SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
   #         SLACK_ICON_EMOJI: ${{ contains(needs.*.result, 'failure') && ':x:' || contains(needs.*.result, 'cancelled') && ':warning:' || ':white_check_mark:' }}
-  #         SLACK_TITLE: 'Nitrolite Clearnode Production Release'
+  #         SLACK_TITLE: 'Nitrolite Nitronode Production Release'
   #         SLACK_MESSAGE_ON_SUCCESS: |
   #           ✅ Stable build and deployment completed successfully!
   #           ${{github.event.head_commit.message}}

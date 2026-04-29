@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   test-nitronode:
-    name: Test (Clearnode)
+    name: Test (Nitronode)
     uses: ./.github/workflows/test-go.yml
 
   test-forge:
@@ -60,7 +60,7 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
   build-and-publish-nitronode:
-    name: Build and Publish (Clearnode)
+    name: Build and Publish (Nitronode)
     needs: auto-tag
     runs-on: ubuntu-latest
     permissions:
@@ -149,7 +149,7 @@ jobs:
   #         SLACK_USERNAME: CI/CD Bot
   #         SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
   #         SLACK_ICON_EMOJI: ${{ contains(needs.*.result, 'failure') && ':x:' || contains(needs.*.result, 'cancelled') && ':warning:' || ':white_check_mark:' }}
-  #         SLACK_TITLE: 'Nitrolite Clearnode Release Candidate'
+  #         SLACK_TITLE: 'Nitrolite Nitronode Release Candidate'
   #         SLACK_MESSAGE_ON_SUCCESS: |
   #           ✅ RC build and deployment completed successfully!
   #           ${{github.event.head_commit.message}}

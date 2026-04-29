@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   test-nitronode:
-    name: Test (Clearnode)
+    name: Test (Nitronode)
     uses: ./.github/workflows/test-go.yml
 
   test-forge:
@@ -24,7 +24,7 @@ jobs:
   #     project-name: 'SDK'
 
   build-and-publish-nitronode:
-    name: Build and Publish (Clearnode)
+    name: Build and Publish (Nitronode)
     needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:

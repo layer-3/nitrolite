@@ -19,7 +19,7 @@ go install github.com/layer-3/nitrolite/cerebro@latest
 
 ```bash
 # Connect to node (a wallet is auto-generated on first run)
-./cerebro wss://clearnode.example.com/ws
+./cerebro wss://nitronode.example.com/ws
 
 # Import an existing wallet (or use the auto-generated one)
 cerebro> config wallet import
@@ -51,7 +51,7 @@ config wallet generate                                       Generate new wallet
 config wallet export <path>                                  Export private key to file
 config rpc import <chain_id> <url>                           Configure blockchain RPC endpoint
 config node                                                  Show node info
-config node set-ws-url <url>                                 Set clearnode WebSocket URL
+config node set-ws-url <url>                                 Set nitronode WebSocket URL
 config node set-home-blockchain <asset> <chain_id>           Set home blockchain for channels
 config session-key                                           Show current session key info
 config session-key generate                                  Generate new session key
@@ -176,7 +176,7 @@ Assets, application IDs, and session IDs are passed as comma-separated values wi
 ### Initial Setup
 
 ```bash
-./cerebro wss://testnet.clearnode.example.com/ws
+./cerebro wss://testnet.nitronode.example.com/ws
 cerebro> config wallet import
 cerebro> config rpc import 80002 https://polygon-amoy.g.alchemy.com/v2/KEY
 cerebro> config

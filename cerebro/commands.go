@@ -46,7 +46,7 @@ CONFIGURATION
   config wallet export <path>                                  Export private key to file
   config rpc import <chain_id> <url>                           Configure blockchain RPC endpoint
   config node                                                  Show node info
-  config node set-ws-url <url>                                 Set clearnode WebSocket URL
+  config node set-ws-url <url>                                 Set nitronode WebSocket URL
   config node set-home-blockchain <asset> <chain_id>           Set home blockchain for channels
   config session-key                                           Show current session key info
   config session-key generate                                  Generate new session key
@@ -934,7 +934,7 @@ func (o *Operator) storeSessionKey(privateKeyHex string) {
 	fmt.Println("SUCCESS: Session key stored locally")
 	fmt.Printf("  Address: %s\n", address)
 	fmt.Println()
-	fmt.Println("Next step: Register it on the clearnode with:")
+	fmt.Println("Next step: Register it on the nitronode with:")
 	fmt.Printf("  config session-key register-channel-key %s <expires_hours> <assets>\n", address)
 }
 
@@ -956,7 +956,7 @@ func (o *Operator) showSessionKey() {
 		fmt.Println("Session Key Configuration")
 		fmt.Println("=========================")
 		fmt.Printf("Address: %s\n", signer.PublicKey().Address().String())
-		fmt.Println("Status:  Stored locally (not yet registered on clearnode)")
+		fmt.Println("Status:  Stored locally (not yet registered on nitronode)")
 		fmt.Println()
 		fmt.Println("Next step: Register it with:")
 		fmt.Printf("  config session-key register-channel-key %s <expires_hours> <assets>\n", signer.PublicKey().Address().String())

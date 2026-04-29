@@ -261,7 +261,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 				}
 			case "node":
 				return []prompt.Suggest{
-					{Text: "set-ws-url", Description: "Set clearnode WebSocket URL"},
+					{Text: "set-ws-url", Description: "Set nitronode WebSocket URL"},
 					{Text: "set-home-blockchain", Description: "Set home blockchain for channels"},
 				}
 			case "session-key":

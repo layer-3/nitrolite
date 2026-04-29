@@ -135,7 +135,7 @@ func NewClient(wsURL string, stateSigner core.ChannelSigner, rawSigner sign.Sign
 	// Establish connection
 	err = rpcClient.Start(context.Background(), dialURL, handleError)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to clearnode: %w", err)
+		return nil, fmt.Errorf("failed to connect to nitronode: %w", err)
 	}
 
 	return client, nil

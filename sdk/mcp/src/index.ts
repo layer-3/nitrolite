@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Nitrolite SDK MCP Server
+ * Yellow SDK MCP Server
  *
  * Exposes the Nitrolite SDK API surface to AI agents and IDEs via the
  * Model Context Protocol. Reads SDK source at startup to build structured
- * knowledge of methods, types, enums, and examples.
+ * knowledge of methods, types, enums, examples, and protocol docs. Falls back
+ * to the packaged release snapshot when the monorepo is unavailable.
  *
  * Naming note: the off-chain broker was named "clearnode" through v1.2.0
  * and renamed to "nitronode" in v1.3.0. See `nitrolite://migration/nitronode`.
@@ -14,10 +15,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = resolve(__dirname, '..');
+const CONTENT_ROOT = resolve(PACKAGE_ROOT, 'content');
 const SDK_ROOT = resolve(__dirname, '../../ts');
 const COMPAT_ROOT = resolve(__dirname, '../../ts-compat');
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -26,15 +29,60 @@ const API_YAML = resolve(REPO_ROOT, 'docs/api.yaml');
 const GO_SDK_ROOT = resolve(REPO_ROOT, 'sdk/go');
 const PKG_ROOT = resolve(REPO_ROOT, 'pkg');
 const GO_MODULE_PATH = 'github.com/layer-3/nitrolite';
-const GO_MODULE_VERSION = 'v1.2.0';
+const GO_MODULE_VERSION = 'v1.2.1';
+const SERVER_NAME = 'yellow-sdk-mcp';
+
+const SOURCE_ROOTS: Array<{ root: string; contentPrefix: string }> = [
+    { root: SDK_ROOT, contentPrefix: 'sdk/ts' },
+    { root: COMPAT_ROOT, contentPrefix: 'sdk/ts-compat' },
+    { root: PROTOCOL_DOCS, contentPrefix: 'docs/protocol' },
+    { root: GO_SDK_ROOT, contentPrefix: 'sdk/go' },
+    { root: PKG_ROOT, contentPrefix: 'pkg' },
+    { root: REPO_ROOT, contentPrefix: '' },
+];
+const MONOREPO_SOURCE_AVAILABLE = existsSync(resolve(SDK_ROOT, 'src/client.ts'));
 
 // ---------------------------------------------------------------------------
 // Helpers — read SDK sources at startup
 // ---------------------------------------------------------------------------
 
+function isWithin(root: string, path: string): boolean {
+    const rel = relative(root, path);
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function fallbackContentPath(path: string): string | undefined {
+    for (const { root, contentPrefix } of SOURCE_ROOTS) {
+        const rel = relative(root, path);
+        if (!isWithin(root, path)) continue;
+        if (rel === '') continue;
+        return resolve(CONTENT_ROOT, contentPrefix, rel);
+    }
+    return undefined;
+}
+
 function readFile(path: string): string {
-    if (!existsSync(path)) return '';
-    return readFileSync(path, 'utf-8');
+    if (existsSync(path) && (MONOREPO_SOURCE_AVAILABLE || isWithin(PACKAGE_ROOT, path))) {
+        return readFileSync(path, 'utf-8');
+    }
+
+    const packagedPath = fallbackContentPath(path);
+    if (packagedPath && existsSync(packagedPath)) {
+        return readFileSync(packagedPath, 'utf-8');
+    }
+
+    return '';
+}
+
+function readPackageVersion(path: string): string | undefined {
+    const content = readFile(path);
+    if (!content) return undefined;
+    try {
+        const parsed = JSON.parse(content) as { version?: unknown };
+        return typeof parsed.version === 'string' ? parsed.version : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Extract named exports from a barrel file */
@@ -927,9 +975,13 @@ loadGoSdkMethods();
 // MCP Server
 // ---------------------------------------------------------------------------
 
+const serverVersion = readPackageVersion(resolve(PACKAGE_ROOT, 'package.json')) ?? '1.2.1';
+const sdkVersion = readPackageVersion(resolve(SDK_ROOT, 'package.json')) ?? 'unknown';
+const compatVersion = readPackageVersion(resolve(COMPAT_ROOT, 'package.json')) ?? 'unknown';
+
 const server = new McpServer({
-    name: 'nitrolite-sdk',
-    version: '0.1.0',
+    name: SERVER_NAME,
+    version: serverVersion,
 });
 
 // ========================== RESOURCES ======================================
@@ -1546,7 +1598,7 @@ main().catch(console.error);
 
 \`\`\`json
 {
-  "@yellow-org/sdk": "^1.2.0",
+  "@yellow-org/sdk": "^1.2.1",
   "decimal.js": "^10.4.0",
   "viem": "^2.46.0"
 }
@@ -1655,7 +1707,7 @@ main().catch(console.error);
 
 \`\`\`json
 {
-  "@yellow-org/sdk": "^1.2.0",
+  "@yellow-org/sdk": "^1.2.1",
   "viem": "^2.46.0",
   "decimal.js": "^10.6.0"
 }
@@ -1703,6 +1755,30 @@ server.resource('protocol-auth-flow', 'nitrolite://protocol/auth-flow', async ()
 
 
 // ========================== TOOLS ==========================================
+
+server.tool(
+    'server_info',
+    'Return Yellow SDK MCP package, SDK, compat, and indexed content version information for debugging and support.',
+    {},
+    async () => ({
+        content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+                name: SERVER_NAME,
+                version: serverVersion,
+                sdkPackage: '@yellow-org/sdk',
+                sdkVersion,
+                compatPackage: '@yellow-org/sdk-compat',
+                compatVersion,
+                goModule: GO_MODULE_PATH,
+                goModuleVersion: GO_MODULE_VERSION,
+                protocolVersion: 'v1',
+                transport: 'stdio',
+                contentMode: MONOREPO_SOURCE_AVAILABLE ? 'source-tree' : 'packaged-snapshot',
+            }, null, 2),
+        }],
+    }),
+);
 
 server.tool(
     'lookup_method',
@@ -2002,7 +2078,7 @@ server.tool(
             type: 'module',
             scripts: { start: 'npx tsx src/index.ts', build: 'tsc', typecheck: 'tsc --noEmit' },
             dependencies: {
-                '@yellow-org/sdk': '^1.2.0',
+                '@yellow-org/sdk': '^1.2.1',
                 'decimal.js': '^10.4.0',
                 viem: '^2.46.0',
             },
@@ -2314,7 +2390,7 @@ Use context.Context for timeouts. Use decimal.Decimal for amounts. Follow standa
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('Nitrolite SDK MCP server running on stdio');
+    console.error('Yellow SDK MCP server running on stdio');
 }
 
 main().catch((err) => {

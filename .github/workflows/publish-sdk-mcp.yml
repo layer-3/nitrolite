@@ -1,0 +1,177 @@
+name: Publish SDK MCP
+
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @yellow-org/sdk-mcp
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.7.6
+      MCP_PUBLISHER_SHA256_LINUX_AMD64: bcc96ca630cae4cf503b4550bd4a17462d42ad4819273bee56f4385bb059ddee
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: 'sdk/mcp/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./sdk/mcp
+        run: npm ci
+
+      - name: Build package
+        working-directory: ./sdk/mcp
+        run: npm run build
+
+      - name: Pack and verify package contents
+        id: pack
+        working-directory: ./sdk/mcp
+        run: |
+          PACK_JSON=$(npm pack --json)
+          printf '%s\n' "$PACK_JSON" > pack.json
+          TARBALL=$(node -e "const pack = require('./pack.json')[0]; console.log(pack.filename)")
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+          node - <<'NODE'
+          const pack = require('./pack.json')[0];
+          const paths = new Set(pack.files.map((file) => file.path));
+          const required = [
+            'dist/index.js',
+            'dist/index.d.ts',
+            'content/docs/api.yaml',
+            'content/docs/protocol/overview.md',
+            'content/sdk/ts/package.json',
+            'content/sdk/ts/src/client.ts',
+            'content/sdk/ts-compat/package.json',
+            'content/sdk/ts-compat/src/client.ts',
+            'content/sdk/go/client.go',
+            'README.md',
+            'package.json',
+            'server.json',
+          ];
+
+          for (const path of required) {
+            if (!paths.has(path)) throw new Error(`missing package file: ${path}`);
+          }
+
+          for (const path of paths) {
+            if (path.startsWith('src/') || path.startsWith('scripts/')) {
+              throw new Error(`source-only file leaked into package: ${path}`);
+            }
+            if (path.endsWith('.test.ts') || path.endsWith('.spec.ts') || path.endsWith('_test.go')) {
+              throw new Error(`test file leaked into package: ${path}`);
+            }
+          }
+          NODE
+
+      - name: Smoke test packed MCP server
+        working-directory: ./sdk/mcp
+        run: |
+          set -euo pipefail
+          TMPDIR=$(mktemp -d)
+          mkdir "$TMPDIR/app"
+          EXPECTED_VERSION=$(node -p "require('./package.json').version")
+          npm --prefix "$TMPDIR/app" install "./${{ steps.pack.outputs.tarball }}"
+          BIN="$TMPDIR/app/node_modules/.bin/yellow-sdk-mcp"
+          cd "$TMPDIR/app"
+          BIN="$BIN" EXPECTED_VERSION="$EXPECTED_VERSION" node --input-type=module <<'NODE'
+          import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+          import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+          const transport = new StdioClientTransport({ command: process.env.BIN, args: [] });
+          const client = new Client({ name: 'sdk-mcp-smoke', version: '0.0.0' });
+          await client.connect(transport);
+
+          const tools = await client.listTools();
+          if (!tools.tools.some((tool) => tool.name === 'server_info')) {
+            throw new Error('server_info tool missing');
+          }
+
+          const infoResult = await client.callTool({ name: 'server_info', arguments: {} });
+          const info = JSON.parse(infoResult.content[0].text);
+          if (info.version !== process.env.EXPECTED_VERSION) {
+            throw new Error(`unexpected server version ${info.version}`);
+          }
+          if (info.sdkVersion !== process.env.EXPECTED_VERSION) {
+            throw new Error(`unexpected sdk version ${info.sdkVersion}`);
+          }
+          if (info.contentMode !== 'packaged-snapshot') {
+            throw new Error(`expected packaged-snapshot mode, got ${info.contentMode}`);
+          }
+
+          const methodResult = await client.callTool({
+            name: 'lookup_method',
+            arguments: { name: 'deposit', language: 'typescript' },
+          });
+          if (!methodResult.content[0].text.includes('deposit')) {
+            throw new Error('lookup_method did not return packaged TypeScript SDK content');
+          }
+
+          const rpcResult = await client.callTool({
+            name: 'lookup_rpc_method',
+            arguments: { method: 'channels.v1.get_home_channel' },
+          });
+          if (!rpcResult.content[0].text.includes('channels.v1.get_home_channel')) {
+            throw new Error('lookup_rpc_method did not return packaged API docs content');
+          }
+
+          await client.close();
+          NODE
+
+      - name: Validate MCP registry metadata
+        working-directory: ./sdk/mcp
+        run: |
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const server = require('./server.json');
+          const npmPackage = server.packages.find((entry) => entry.registryType === 'npm');
+
+          if (server.name !== pkg.mcpName) {
+            throw new Error(`server.json name ${server.name} does not match package.json mcpName ${pkg.mcpName}`);
+          }
+          if (!npmPackage) {
+            throw new Error('server.json is missing an npm package entry');
+          }
+          if (npmPackage.identifier !== pkg.name) {
+            throw new Error(`server.json package ${npmPackage.identifier} does not match package.json name ${pkg.name}`);
+          }
+          if (server.version !== pkg.version || npmPackage.version !== pkg.version) {
+            throw new Error('server.json versions must match package.json version');
+          }
+          NODE
+
+      - name: Publish package
+        working-directory: ./sdk/mcp
+        run: npm publish "./${{ steps.pack.outputs.tarball }}" --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install MCP publisher
+        working-directory: ./sdk/mcp
+        run: |
+          ASSET="mcp-publisher_linux_amd64.tar.gz"
+          curl -fL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${ASSET}" -o "$ASSET"
+          echo "${MCP_PUBLISHER_SHA256_LINUX_AMD64}  ${ASSET}" | sha256sum -c -
+          tar xzf "$ASSET" mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        working-directory: ./sdk/mcp
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish MCP registry metadata
+        working-directory: ./sdk/mcp
+        run: ./mcp-publisher publish

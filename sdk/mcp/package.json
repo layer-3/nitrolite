@@ -1,16 +1,26 @@
 {
   "name": "@yellow-org/sdk-mcp",
-  "version": "0.1.0",
-  "description": "Unified MCP server for Nitrolite — TypeScript and Go SDK context for AI agents and IDEs",
+  "version": "1.2.1",
+  "description": "Unified MCP server for Yellow SDK and Nitrolite protocol context for AI agents and IDEs",
   "type": "module",
-  "main": "src/index.ts",
+  "mcpName": "io.github.layer-3/yellow-sdk-mcp",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "nitrolite-sdk-mcp": "src/index.ts"
+    "yellow-sdk-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "content",
+    "README.md",
+    "server.json"
+  ],
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "prepare-content": "node scripts/prepare-package-content.mjs",
+    "build": "npm run prepare-content && tsc && chmod +x dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
@@ -24,5 +34,23 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/layer-3/nitrolite.git",
+    "directory": "sdk/mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "yellow",
+    "yellow-org",
+    "nitrolite",
+    "state-channels",
+    "sdk"
+  ],
+  "author": "Nitro Team",
   "license": "MIT"
 }

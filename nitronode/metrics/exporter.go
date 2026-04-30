@@ -43,7 +43,7 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 			Namespace: MetricNamespace,
 			Name:      "app_sessions_total",
 			Help:      "Current total number of app sessions",
-		}, []string{"application", "status"}),
+		}, []string{"application_id", "status"}),
 		channelsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "channels_total",
@@ -58,7 +58,7 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 			Namespace: MetricNamespace,
 			Name:      "app_sessions_active",
 			Help:      "Current total active app sessions",
-		}, []string{"application", "timespan"}),
+		}, []string{"application_id", "timespan"}),
 		totalValueLocked: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "total_value_locked",
@@ -106,7 +106,7 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 }
 
 func (m *storeMetricExporter) SetAppSessions(applicationID string, status app.AppSessionStatus, count uint64) {
-	m.appSessionsTotal.WithLabelValues(applicationID, status.String()).Set(float64(count))
+	m.appSessionsTotal.WithLabelValues(getApplicationIDLabelValue(applicationID), status.String()).Set(float64(count))
 }
 
 func (m *storeMetricExporter) SetChannels(asset string, status core.ChannelStatus, count uint64) {
@@ -118,7 +118,7 @@ func (m *storeMetricExporter) SetActiveUsers(asset, timeSpanLabel string, count 
 }
 
 func (m *storeMetricExporter) SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64) {
-	m.appSessionsActive.WithLabelValues(applicationID, timeSpanLabel).Set(float64(count))
+	m.appSessionsActive.WithLabelValues(getApplicationIDLabelValue(applicationID), timeSpanLabel).Set(float64(count))
 }
 
 func (m *storeMetricExporter) SetTotalValueLocked(domain, asset string, value float64) {
@@ -219,20 +219,20 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 		// api/rpc_router
 		rpcMessagesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
-			Name:      "rpc_messages_total",
-			Help:      "Total number of RPC messages",
+			Name:      "rpc_messages_emitted_total",
+			Help:      "Total number of RPC messages emitted (request + response). Counter increments twice per request — once for the request msg and once for the response — so rate(...) over this is roughly 2× the QPS. For real RPC throughput use rpc_requests_total.",
 		}, []string{"msg_type", "method"}),
 		rpcRequestsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_requests_total",
 			Help:      "Total number of RPC requests",
-		}, []string{"method", "path", "status"}),
+		}, []string{"method", "path", "result"}),
 		rpcRequestDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_request_duration_seconds",
 			Help:      "Duration of RPC requests in seconds",
 			Buckets:   []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-		}, []string{"method", "path", "status"}),
+		}, []string{"method", "path", "result"}),
 		rpcConnectionsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_connections_active",
@@ -251,12 +251,12 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Namespace: MetricNamespace,
 			Name:      "app_state_updates_total",
 			Help:      "Total number of app state updates",
-		}, []string{"application"}),
+		}, []string{"application_id"}),
 		appSessionUpdateSigValidationsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_session_update_sig_validations_total",
 			Help:      "Total number of app session update signature validations",
-		}, []string{"application", "sig_type", "result"}),
+		}, []string{"application_id", "sig_type", "result"}),
 
 		// Blockchain Worker
 		blockchainActionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -270,7 +270,7 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Namespace: MetricNamespace,
 			Name:      "blockchain_events_total",
 			Help:      "Total number of blockchain events processed",
-		}, []string{"blockchain_id", "process_result"}),
+		}, []string{"blockchain_id", "result"}),
 
 		// store/database
 		dbQueryDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -366,7 +366,7 @@ func (m *runtimeMetricExporter) ObserveDBQueryDuration(queryKind string, duratio
 
 // api/app_session_v1
 func (m *runtimeMetricExporter) IncAppStateUpdate(applicationID string) {
-	m.appStateUpdates.WithLabelValues(applicationID).Inc()
+	m.appStateUpdates.WithLabelValues(getApplicationIDLabelValue(applicationID)).Inc()
 }
 
 func (m *runtimeMetricExporter) IncAppSessionUpdateSigValidation(applicationID string, signerType app.AppSessionSignerTypeV1, result bool) {
@@ -374,7 +374,7 @@ func (m *runtimeMetricExporter) IncAppSessionUpdateSigValidation(applicationID s
 	if result {
 		res = ActionResultSuccess
 	}
-	m.appSessionUpdateSigValidationsTotal.WithLabelValues(applicationID, signerType.String(), res.String()).Inc()
+	m.appSessionUpdateSigValidationsTotal.WithLabelValues(getApplicationIDLabelValue(applicationID), signerType.String(), res.String()).Inc()
 }
 
 func (m *runtimeMetricExporter) IncChannelStateSigValidation(sigType core.ChannelSignerType, result bool) {

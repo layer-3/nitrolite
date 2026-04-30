@@ -336,6 +336,9 @@ export interface LedgerEntry {
     created_at: string;
 }
 
+/** @deprecated Legacy name from the Clearnode era. Kept for backwards
+ *  compatibility with v0.5.3 callers; new code should use the v1 SDK's
+ *  `core.Asset` instead. */
 export interface ClearNodeAsset {
     token: Address;
     chainId: number;

@@ -629,6 +629,9 @@ export class NitroliteClient {
         return this._lastAppSessionsListError;
     }
 
+    /** @deprecated Returns the legacy ClearNodeAsset shape. Kept for
+     *  backwards compatibility with v0.5.3 callers; new code should
+     *  call the v1 Client's `getAssets()` directly. */
     async getAssetsList(): Promise<ClearNodeAsset[]> {
         const assets = await this.innerClient.getAssets();
         const result: ClearNodeAsset[] = [];

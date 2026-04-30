@@ -9,14 +9,14 @@ Built-in stress testing tool for validating nitronode performance, correctness, 
 export STRESS_WS_URL=ws://localhost:7824/ws
 
 # Read-only test (no wallet needed)
-clearnode stress-test basic ping:1000:10
+nitronode stress-test basic ping:1000:10
 
 # State-mutating test (funded wallet required)
 export STRESS_PRIVATE_KEY=<hex-encoded-private-key>
-clearnode stress-test basic transfer-roundtrip:10:20:usdc
+nitronode stress-test basic transfer-roundtrip:10:20:usdc
 
 # Storm test (cascading load patterns)
-clearnode stress-test storm transfers:3:3:usdc:1
+nitronode stress-test storm transfers:3:3:usdc:1
 ```
 
 ## Architecture
@@ -24,7 +24,7 @@ clearnode stress-test storm transfers:3:3:usdc:1
 The stress tool is compiled into the nitronode binary and invoked via the `stress-test` subcommand. It connects to a running nitronode instance over WebSocket using the Go SDK.
 
 ```
-clearnode stress-test <strategy> [args...]
+nitronode stress-test <strategy> [args...]
         │
         ├── basic ──► Individual method stress tests
         │     │
@@ -70,7 +70,7 @@ Individual method stress tests targeting specific API endpoints.
 ### Spec Format
 
 ```
-clearnode stress-test basic method:total_requests[:connections[:extra_params...]]
+nitronode stress-test basic method:total_requests[:connections[:extra_params...]]
 ```
 
 - `method` — test method name
@@ -101,19 +101,19 @@ These methods test read path performance. They use a shared connection pool and 
 
 ```bash
 # 1000 pings over 10 connections
-clearnode stress-test basic ping:1000:10
+nitronode stress-test basic ping:1000:10
 
 # 500 config fetches over 5 connections
-clearnode stress-test basic get-config:500:5
+nitronode stress-test basic get-config:500:5
 
 # 2000 balance queries over 20 connections
-clearnode stress-test basic get-balances:2000:20:0x1234...
+nitronode stress-test basic get-balances:2000:20:0x1234...
 
 # 1000 home channel lookups
-clearnode stress-test basic get-home-channel:1000:10:usdc
+nitronode stress-test basic get-home-channel:1000:10:usdc
 
 # Asset queries filtered by chain ID
-clearnode stress-test basic get-assets:500:5:84532
+nitronode stress-test basic get-assets:500:5:84532
 ```
 
 ### State-Mutating Methods
@@ -145,10 +145,10 @@ Total measured operations = `wallets * rounds` (phase 2 only).
 
 ```bash
 # 10 rounds, 20 wallets (10 pairs), usdc, default amount
-clearnode stress-test basic transfer-roundtrip:10:20:usdc
+nitronode stress-test basic transfer-roundtrip:10:20:usdc
 
 # 50 rounds, 100 wallets (50 pairs), custom amount
-clearnode stress-test basic transfer-roundtrip:50:100:usdc:0.0001
+nitronode stress-test basic transfer-roundtrip:50:100:usdc:0.0001
 ```
 
 #### `app-session-lifecycle`
@@ -180,10 +180,10 @@ Total measured operations = `sessions * (operates + 3)`.
 
 ```bash
 # 10 sessions, 5 participants each, 3 operates per session
-clearnode stress-test basic app-session-lifecycle:10:5:3:usdc
+nitronode stress-test basic app-session-lifecycle:10:5:3:usdc
 
 # 50 sessions, 3 participants, 10 operates, custom amount
-clearnode stress-test basic app-session-lifecycle:50:3:10:usdc:0.000005
+nitronode stress-test basic app-session-lifecycle:50:3:10:usdc:0.000005
 ```
 
 ## Strategy: storm
@@ -194,7 +194,7 @@ Cascading tree-based stress patterns that simulate realistic fund distribution a
 
 Binary-tree transfer cascade. Each iteration doubles the number of active wallets via parallel transfers. After the tree is fully built, an optional plateau phase bounces last-layer transfers back and forth for sustained load at maximum parallelism.
 
-Spec: `clearnode stress-test storm transfers:<iterations>:<cycles>:<asset>:<amount>`
+Spec: `nitronode stress-test storm transfers:<iterations>:<cycles>:<asset>:<amount>`
 
 | Param | Description |
 |---|---|
@@ -236,20 +236,20 @@ Within each iteration/cycle, all transfers run in parallel. Stops immediately on
 
 ```bash
 # 3 iterations, no plateau (8 wallets, 14 transfers)
-clearnode stress-test storm transfers:3:0:usdc:1
+nitronode stress-test storm transfers:3:0:usdc:1
 
 # 3 iterations, 5 plateau cycles (8 wallets, 54 transfers)
-clearnode stress-test storm transfers:3:5:usdc:1
+nitronode stress-test storm transfers:3:5:usdc:1
 
 # 5 iterations, 10 plateau cycles (32 wallets, 382 transfers)
-clearnode stress-test storm transfers:5:10:usdc:0.001
+nitronode stress-test storm transfers:5:10:usdc:0.001
 ```
 
 ### `sessions`
 
 Ternary-growth app session cascade. Each iteration triples the number of active wallets via 3-participant app sessions. After the tree is fully built, an optional plateau phase bounces last-layer sessions back and forth for sustained load.
 
-Spec: `clearnode stress-test storm sessions:<iterations>:<cycles>:<asset>:<amount>`
+Spec: `nitronode stress-test storm sessions:<iterations>:<cycles>:<asset>:<amount>`
 
 | Param | Description |
 |---|---|
@@ -312,13 +312,13 @@ Within each iteration/cycle, all sessions run in parallel. Stops immediately on 
 
 ```bash
 # 2 iterations, no plateau (9 wallets)
-clearnode stress-test storm sessions:2:0:usdc:1
+nitronode stress-test storm sessions:2:0:usdc:1
 
 # 2 iterations, 5 plateau cycles (9 wallets)
-clearnode stress-test storm sessions:2:5:usdc:1
+nitronode stress-test storm sessions:2:5:usdc:1
 
 # 3 iterations, 10 plateau cycles (27 wallets)
-clearnode stress-test storm sessions:3:10:usdc:0.001
+nitronode stress-test storm sessions:3:10:usdc:0.001
 ```
 
 ## Report Output
@@ -390,13 +390,13 @@ Validate read performance under increasing load. No funded wallet needed.
 export STRESS_WS_URL=ws://target:7824/ws
 
 # Baseline latency
-clearnode stress-test basic ping:100:1
-clearnode stress-test basic get-config:100:1
+nitronode stress-test basic ping:100:1
+nitronode stress-test basic get-config:100:1
 
 # Scale connections
-clearnode stress-test basic ping:10000:10
-clearnode stress-test basic ping:100000:100
-clearnode stress-test basic get-balances:10000:50:0xWALLET
+nitronode stress-test basic ping:10000:10
+nitronode stress-test basic ping:100000:100
+nitronode stress-test basic get-balances:10000:50:0xWALLET
 ```
 
 ### Phase 2: Write Path Stress
@@ -407,10 +407,10 @@ Test state mutation throughput. Requires funded wallet.
 export STRESS_PRIVATE_KEY=<key>
 
 # Small scale
-clearnode stress-test basic transfer-roundtrip:5:4:usdc
+nitronode stress-test basic transfer-roundtrip:5:4:usdc
 
 # Production scale
-clearnode stress-test basic transfer-roundtrip:50:100:usdc:0.0001
+nitronode stress-test basic transfer-roundtrip:50:100:usdc:0.0001
 ```
 
 ### Phase 3: App Session Lifecycle
@@ -419,10 +419,10 @@ Test multi-participant coordination.
 
 ```bash
 # Small scale
-clearnode stress-test basic app-session-lifecycle:5:3:3:usdc
+nitronode stress-test basic app-session-lifecycle:5:3:3:usdc
 
 # Production scale
-clearnode stress-test basic app-session-lifecycle:50:5:10:usdc:0.000005
+nitronode stress-test basic app-session-lifecycle:50:5:10:usdc:0.000005
 ```
 
 ### Phase 4: Storm Tests
@@ -431,16 +431,16 @@ Test cascading fund distribution and collection under realistic multi-wallet sce
 
 ```bash
 # Transfer cascade — 3 levels, no plateau
-clearnode stress-test storm transfers:3:0:usdc:1
+nitronode stress-test storm transfers:3:0:usdc:1
 
 # Transfer cascade — 3 levels, 10 plateau cycles for sustained load
-clearnode stress-test storm transfers:3:10:usdc:1
+nitronode stress-test storm transfers:3:10:usdc:1
 
 # App session cascade — 2 levels, no plateau
-clearnode stress-test storm sessions:2:0:usdc:1
+nitronode stress-test storm sessions:2:0:usdc:1
 
 # App session cascade — 2 levels, 5 plateau cycles
-clearnode stress-test storm sessions:2:5:usdc:1
+nitronode stress-test storm sessions:2:5:usdc:1
 ```
 
 ### Phase 5: Sustained Load
@@ -449,10 +449,10 @@ Run extended tests to detect resource leaks and degradation.
 
 ```bash
 # High volume read
-clearnode stress-test basic ping:1000000:100
+nitronode stress-test basic ping:1000000:100
 
 # Extended write
-clearnode stress-test basic transfer-roundtrip:500:100:usdc:0.000001
+nitronode stress-test basic transfer-roundtrip:500:100:usdc:0.000001
 ```
 
 ## Troubleshooting
@@ -460,7 +460,7 @@ clearnode stress-test basic transfer-roundtrip:500:100:usdc:0.000001
 | Symptom | Cause | Fix |
 |---|---|---|
 | `STRESS_WS_URL is required` | Missing environment variable | Set `STRESS_WS_URL` |
-| `failed to open any connections` | Target unreachable or refusing connections | Verify URL and that clearnode is running |
+| `failed to open any connections` | Target unreachable or refusing connections | Verify URL and that nitronode is running |
 | `WARNING: Only N/M connections established` | Server under load or connection limits | Reduce connection count or check server capacity |
 | `STRESS_PRIVATE_KEY is required` | State-mutating method without key | Set `STRESS_PRIVATE_KEY` with a funded wallet |
 | `fund wallet X: insufficient balance` | Sender wallet not funded | Transfer funds to the wallet address printed at startup |

@@ -36,9 +36,6 @@ deployments, image references and environment variables.
   `nitronode` only; there is no dual-publish window.
 * **Prometheus metrics** — there is no automatic alias. Dashboards and alert
   rules that reference `clearnode_*` must be updated to `nitronode_*`.
-* **Old Helm configs** — historical environment overrides (`sandbox-v1`,
-  `stress-v1`, `v1-rc`) are kept under `nitronode/chart/config/old/` for
-  reference and are no longer wired into any helmfile.
 
 ## Steps for operators
 

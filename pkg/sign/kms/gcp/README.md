@@ -83,7 +83,7 @@ Set these environment variables:
 
 ```bash
 # Use GCP KMS instead of a raw private key
-CLEARNODE_SIGNER_TYPE=gcp-kms
+NITRONODE_SIGNER_TYPE=gcp-kms
 
 # Full key version resource name
 NITRONODE_GCP_KMS_KEY_NAME=projects/my-project/locations/us-east1/keyRings/nitronode/cryptoKeys/signer/cryptoKeyVersions/1
@@ -96,7 +96,7 @@ When running on GKE with Workload Identity, no additional credential configurati
 ```yaml
 config:
   extraEnvs:
-    CLEARNODE_SIGNER_TYPE: gcp-kms
+    NITRONODE_SIGNER_TYPE: gcp-kms
     NITRONODE_GCP_KMS_KEY_NAME: projects/my-project/locations/us-east1/keyRings/nitronode/cryptoKeys/signer/cryptoKeyVersions/1
 ```
 

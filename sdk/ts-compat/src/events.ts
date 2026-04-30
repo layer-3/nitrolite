@@ -4,6 +4,9 @@ import type { LedgerChannel, LedgerBalance, ClearNodeAsset } from './types.js';
 export interface EventPollerCallbacks {
     onChannelUpdate?: (channels: LedgerChannel[]) => void;
     onBalanceUpdate?: (balances: LedgerBalance[]) => void;
+    /** @deprecated Receives the legacy ClearNodeAsset shape. Kept for
+     *  backwards compatibility with v0.5.3 callers; new code should
+     *  poll the v1 SDK's `core.Asset` surface directly. */
     onAssetsUpdate?: (assets: ClearNodeAsset[]) => void;
     onError?: (error: Error) => void;
 }

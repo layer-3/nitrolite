@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -45,10 +46,17 @@ func RegisterMetricsCallbacks(db *gorm.DB, obs QueryDurationObserver) error {
 
 	for _, kind := range queryKinds {
 		kind := kind // pin for closures
+		// Explicit case per kind + default that errors out, so adding a new
+		// entry to queryKinds without an arm here trips at runtime instead
+		// of silently hooking the wrong gorm processor. (Type of `chain` is
+		// gorm's unexported *callbacks.processor; inferred from the dummy
+		// init so the compile-time variable type lines up.)
 		chain := db.Callback().Query()
 		switch kind {
 		case "create":
 			chain = db.Callback().Create()
+		case "query":
+			chain = db.Callback().Query()
 		case "update":
 			chain = db.Callback().Update()
 		case "delete":
@@ -57,14 +65,20 @@ func RegisterMetricsCallbacks(db *gorm.DB, obs QueryDurationObserver) error {
 			chain = db.Callback().Row()
 		case "raw":
 			chain = db.Callback().Raw()
+		default:
+			return fmt.Errorf("database: unknown query kind %q", kind)
 		}
 
-		if err := chain.Before("*").Register(callbackName+":before:"+kind, func(tx *gorm.DB) {
+		// Use Replace, not Register: Replace is idempotent on the callback
+		// name, so calling RegisterMetricsCallbacks twice on the same gorm.DB
+		// (test helpers, DI restart) doesn't double-fire the after callback
+		// and double-count duration into the histogram.
+		if err := chain.Before("*").Replace(callbackName+":before:"+kind, func(tx *gorm.DB) {
 			tx.Set(metricsStartKey, time.Now())
 		}); err != nil {
 			return err
 		}
-		if err := chain.After("*").Register(callbackName+":after:"+kind, func(tx *gorm.DB) {
+		if err := chain.After("*").Replace(callbackName+":after:"+kind, func(tx *gorm.DB) {
 			v, ok := tx.Get(metricsStartKey)
 			if !ok {
 				return

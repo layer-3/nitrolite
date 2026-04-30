@@ -12,7 +12,6 @@ const (
 	ChannelsV1GetEscrowChannelMethod      Method = "channels.v1.get_escrow_channel"
 	ChannelsV1GetChannelsMethod           Method = "channels.v1.get_channels"
 	ChannelsV1GetLatestStateMethod        Method = "channels.v1.get_latest_state"
-	ChannelsV1GetStatesMethod             Method = "channels.v1.get_states"
 	ChannelsV1RequestCreationMethod       Method = "channels.v1.request_creation"
 	ChannelsV1SubmitStateMethod           Method = "channels.v1.submit_state"
 	ChannelsV1SubmitSessionKeyStateMethod Method = "channels.v1.submit_session_key_state"

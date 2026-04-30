@@ -5,18 +5,21 @@ on:
     inputs:
       project-path:
         description: 'Path to the SDK project directory'
-        required: false
+        required: true
         type: string
-        default: 'sdk'
       project-name:
         description: 'Human-readable name for the project'
+        required: true
+        type: string
+      bootstrap-project-path:
+        description: 'Optional SDK project that must be built before validating the target project'
         required: false
         type: string
-        default: 'SDK'
+        default: ''
 
 jobs:
   test:
-    name: Test ${{ inputs.project-name }}
+    name: Validate ${{ inputs.project-name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,12 +31,32 @@ jobs:
         with:
           node-version-file: '${{ inputs.project-path }}/package.json'
           cache: 'npm'
-          cache-dependency-path: '${{ inputs.project-path }}/package-lock.json'
+          cache-dependency-path: |
+            ${{ inputs.project-path }}/package-lock.json
+            ${{ inputs.bootstrap-project-path != '' && format('{0}/package-lock.json', inputs.bootstrap-project-path) || '' }}
+
+      - name: Install bootstrap dependencies
+        if: ${{ inputs.bootstrap-project-path != '' }}
+        run: npm ci
+        working-directory: ${{ inputs.bootstrap-project-path }}
+
+      - name: Build bootstrap project
+        if: ${{ inputs.bootstrap-project-path != '' }}
+        run: npm run build:ci
+        working-directory: ${{ inputs.bootstrap-project-path }}
 
       - name: Install dependencies
         run: npm ci
         working-directory: ${{ inputs.project-path }}
 
-      - name: Run tests
+      - name: Test
         run: npm test
+        working-directory: ${{ inputs.project-path }}
+
+      - name: Lint
+        run: npm run lint
+        working-directory: ${{ inputs.project-path }}
+
+      - name: Build
+        run: npm run build:ci
         working-directory: ${{ inputs.project-path }}

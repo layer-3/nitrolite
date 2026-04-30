@@ -12,6 +12,7 @@
     ],
     "scripts": {
         "build": "tsc",
+        "build:ci": "tsc",
         "build:prod": "tsc -p tsconfig.prod.json",
         "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs",
         "lint": "eslint src test",

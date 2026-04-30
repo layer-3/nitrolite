@@ -154,6 +154,7 @@ type runtimeMetricExporter struct {
 	rpcRequestsTotal          *prometheus.CounterVec
 	rpcRequestDurationSeconds *prometheus.HistogramVec
 	rpcConnectionsTotal       *prometheus.GaugeVec
+	rpcInflight               *prometheus.GaugeVec
 
 	// api/app_session_v1
 	appStateUpdates                     *prometheus.CounterVec
@@ -168,6 +169,9 @@ type runtimeMetricExporter struct {
 	// Metric Worker
 	channelSessionKeysTotal prometheus.Counter
 	appSessionKeysTotal     prometheus.Counter
+
+	// store/database (instrumented via gorm callbacks)
+	dbQueryDurationSeconds *prometheus.HistogramVec
 }
 
 // RuntimeMetricExporter exposes metrics related to runtime operations, such as API requests, channel state validations, and blockchain interactions.
@@ -234,6 +238,13 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Name:      "rpc_connections_active",
 			Help:      "Current number of active RPC connections",
 		}, []string{"region", "origin"}),
+		rpcInflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "rpc_inflight",
+			Help: "Currently in-flight RPC requests, labelled by method. Incremented at " +
+				"middleware entry and decremented on exit. Saturation signal — pair with " +
+				"rpc_request_duration_seconds for queueing-style diagnosis.",
+		}, []string{"method"}),
 
 		// api/app_session_v1
 		appStateUpdates: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -260,6 +271,21 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Name:      "blockchain_events_total",
 			Help:      "Total number of blockchain events processed",
 		}, []string{"blockchain_id", "process_result"}),
+
+		// store/database
+		dbQueryDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: MetricNamespace,
+			Name:      "db_query_duration_seconds",
+			Help: "Application-side database query duration. Observed via gorm " +
+				"callbacks, so the value is round-trip time from the app to the DB " +
+				"through pgbouncer (when used). Pair with go_sql_wait_duration_" +
+				"seconds_total / go_sql_wait_count_total (emitted by the DB-stats " +
+				"collector registered alongside) to separate pool-acquire latency " +
+				"from in-DB execution.\n\n" +
+				"  query_kind  — gorm operation: create, query, update, delete, " +
+				"row, raw.",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		}, []string{"query_kind"}),
 	}
 
 	if reg != nil {
@@ -272,12 +298,14 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			m.rpcRequestsTotal,
 			m.rpcRequestDurationSeconds,
 			m.rpcConnectionsTotal,
+			m.rpcInflight,
 			m.appStateUpdates,
 			m.appSessionUpdateSigValidationsTotal,
 			m.blockchainActionsTotal,
 			m.blockchainEventsTotal,
 			m.channelSessionKeysTotal,
 			m.appSessionKeysTotal,
+			m.dbQueryDurationSeconds,
 		)
 	} else {
 		return nil, fmt.Errorf("prometheus registerer not provided")
@@ -321,6 +349,19 @@ func (m *runtimeMetricExporter) ObserveRPCDuration(method, path string, success 
 
 func (m *runtimeMetricExporter) SetRPCConnections(region, origin string, count uint32) {
 	m.rpcConnectionsTotal.WithLabelValues(region, origin).Set(float64(count))
+}
+
+func (m *runtimeMetricExporter) IncRPCInflight(method string) {
+	m.rpcInflight.WithLabelValues(method).Inc()
+}
+
+func (m *runtimeMetricExporter) DecRPCInflight(method string) {
+	m.rpcInflight.WithLabelValues(method).Dec()
+}
+
+// store/database
+func (m *runtimeMetricExporter) ObserveDBQueryDuration(queryKind string, duration time.Duration) {
+	m.dbQueryDurationSeconds.WithLabelValues(queryKind).Observe(duration.Seconds())
 }
 
 // api/app_session_v1

@@ -160,6 +160,9 @@ func (r *RPCRouter) ObservabilityMiddleware(c *rpc.Context) {
 	startTime := time.Now()
 	methodPath := getMethodPath(c)
 
+	r.runtimeMetrics.IncRPCInflight(c.Request.Method)
+	defer r.runtimeMetrics.DecRPCInflight(c.Request.Method)
+
 	c.Next()
 
 	reqDuration := time.Since(startTime)

@@ -1,7 +1,0 @@
-blockchains:
-- name: "ethereum_sepolia"
-  id: 11155111
-  channel_hub_address: "0x09ffB9eA86F42e3e3B5E34650311d7E595dFB769"
-  channel_hub_sig_validators:
-    1: "0xae5f5f520d0edb5c2ead31381f6d1d1fc2a7c36b"
-  locking_contract_address: "0x89A969AE9D7e695DF948Ba744e72A97769C5C1ef"

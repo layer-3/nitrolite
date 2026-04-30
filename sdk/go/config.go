@@ -9,9 +9,9 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
-// Config holds the configuration options for the Clearnode client.
+// Config holds the configuration options for the Nitronode client.
 type Config struct {
-	// URL is the WebSocket URL of the clearnode server
+	// URL is the WebSocket URL of the nitronode server
 	URL string
 
 	// HandshakeTimeout is the maximum time to wait for initial connection
@@ -28,8 +28,8 @@ type Config struct {
 	// Used by SDKClient for on-chain operations
 	BlockchainRPCs map[uint64]string
 
-	// ApplicationID is an advisory origin tag the client sends to the clearnode as
-	// the "app_id" WebSocket query parameter. The clearnode stamps this value on
+	// ApplicationID is an advisory origin tag the client sends to the nitronode as
+	// the "app_id" WebSocket query parameter. The nitronode stamps this value on
 	// records produced by requests from this client. Empty means no tag.
 	ApplicationID string
 }
@@ -64,7 +64,7 @@ func appendApplicationIDQueryParam(wsURL, applicationID string) (string, error) 
 // defaultErrorHandler logs errors to stderr.
 func defaultErrorHandler(err error) {
 	if err != nil {
-		log.New(os.Stderr, "[clearnode] ", log.LstdFlags).Printf("connection error: %v", err)
+		log.New(os.Stderr, "[nitronode] ", log.LstdFlags).Printf("connection error: %v", err)
 	}
 }
 
@@ -82,8 +82,8 @@ func WithPingTimeout(d time.Duration) Option {
 	}
 }
 
-// WithApplicationID sets the application ID sent to the clearnode as the
-// "app_id" WebSocket query parameter. The clearnode treats this as an advisory
+// WithApplicationID sets the application ID sent to the nitronode as the
+// "app_id" WebSocket query parameter. The nitronode treats this as an advisory
 // origin tag on records produced by requests from this connection.
 func WithApplicationID(appID string) Option {
 	return func(c *Config) {

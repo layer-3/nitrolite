@@ -30,7 +30,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	wsURL := "wss://clearnode-sandbox.yellow.org/v1/ws"
+	wsURL := "wss://nitronode-sandbox.yellow.org/v1/ws"
 	privateKeyHex := "0x7d6..."
 	chainID := uint64(11155111)
 	rpcUrl := "https://sepolia.drpc.org"

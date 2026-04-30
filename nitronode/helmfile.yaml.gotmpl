@@ -1,0 +1,30 @@
+environments:
+  sandbox-v1:
+    values:
+      - chart/config/profiles.yaml
+  stress-v1:
+    values:
+      - chart/config/profiles.yaml
+  v1-rc:
+    values:
+      - chart/config/profiles.yaml
+
+---
+
+releases:
+  - name: nitronode
+    namespace: nitronode-{{ .Environment.Name }}
+    chart: ./chart
+    installed: true
+    secrets:
+      - chart/config/secrets.yaml
+      - chart/config/{{ .Environment.Name }}/secrets.yaml
+    values:
+      - chart/config/{{ .Environment.Name }}/nitronode.yaml.gotmpl
+    set:
+      - name: image.tag
+        value: '{{ requiredEnv "IMAGE_TAG" }}'
+      - name: config.blockchains
+        file: chart/config/{{ .Environment.Name }}/blockchains.yaml
+      - name: config.assets
+        file: chart/config/{{ .Environment.Name }}/assets.yaml

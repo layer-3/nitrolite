@@ -6,11 +6,11 @@ import { mainnet } from 'viem/chains';
 import { WalletStateSigner, WalletTransactionSigner } from './walletSigners';
 import WalletDashboard from './components/WalletDashboard';
 import StatusBar from './components/StatusBar';
-import type { AppState, ClearnodeConfig, NetworkConfig, SessionKeyState, StatusMessage } from './types';
+import type { AppState, NitronodeConfig, NetworkConfig, SessionKeyState, StatusMessage } from './types';
 import { formatAddress } from './utils';
 
-const CLEARNODES: ClearnodeConfig[] = [
-  { name: 'YN Testnet', url: 'wss://clearnode-sandbox.yellow.org/v1/ws' },
+const NITRONODES: NitronodeConfig[] = [
+  { name: 'YN Testnet', url: 'wss://nitronode-sandbox.yellow.org/v1/ws' },
 ];
 
 const NETWORKS: NetworkConfig[] = [
@@ -29,7 +29,7 @@ function App() {
       client: null,
       address: null,
       connected: false,
-      nodeUrl: CLEARNODES[0].url,
+      nodeUrl: NITRONODES[0].url,
       selectedChainId: NETWORKS[0].chainId,
       selectedAsset: '',
       sessionKey,
@@ -130,7 +130,7 @@ function App() {
               if (raw) storedSk = JSON.parse(raw);
             } catch { /* ignore */ }
 
-            const sdkClient = await buildClient(wc, CLEARNODES[0].url, storedSk, address);
+            const sdkClient = await buildClient(wc, NITRONODES[0].url, storedSk, address);
             if (storedSk && !(storedSk.active && storedSk.metadataHash && storedSk.authSig)) {
               storedSk = { ...storedSk, active: false };
             }
@@ -209,8 +209,8 @@ function App() {
         const sdkClient = await buildClient(wc, appState.nodeUrl, appState.sessionKey, address);
         setAppState(prev => ({ ...prev, address, client: sdkClient, connected: true }));
         await fetchAssets(sdkClient);
-        const node = CLEARNODES.find(c => c.url === appState.nodeUrl);
-        showStatus('success', `Connected to ${node?.name || 'Clearnode'}`);
+        const node = NITRONODES.find(c => c.url === appState.nodeUrl);
+        showStatus('success', `Connected to ${node?.name || 'Nitronode'}`);
       } catch (nodeError) {
         console.error('Node connection failed:', nodeError);
         setAppState(prev => ({ ...prev, address, connected: false }));
@@ -385,7 +385,7 @@ function App() {
                 Connection Failed
               </h2>
               <p className="text-xs text-muted-foreground mb-6">
-                Wallet connected as <code className="font-mono">{formatAddress(appState.address)}</code> but the clearnode is unreachable.
+                Wallet connected as <code className="font-mono">{formatAddress(appState.address)}</code> but the nitronode is unreachable.
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button

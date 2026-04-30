@@ -48,7 +48,7 @@ function toSigningData(SessionKeyAuthorization memory skAuth) pure returns (byte
  * Where signature is a standard 65-byte EIP-191 or raw ECDSA signature of the packed state.
  *
  * Security Model:
- * - Off-chain enforcement (Clearnode) should validate session key expiration and usage limits
+ * - Off-chain enforcement (the Node) should validate session key expiration and usage limits
  * - On-chain validation only checks cryptographic validity
  * - Participants are responsible for session key management
  */

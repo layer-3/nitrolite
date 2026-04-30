@@ -54,7 +54,7 @@ const channels = await client.getChannels();
 | WebSocket | App creates and manages `WebSocket` | Managed internally by the client |
 | Signing | App passes `signer.sign` into every message | Internal — client uses `WalletClient` |
 | Amounts | Raw `BigInt` everywhere | Compat keeps raw-unit app-facing inputs and handles the v1 bridge internally |
-| Contract addresses | Manual config | Fetched from clearnode `get_config` |
+| Contract addresses | Manual config | Fetched from nitronode `get_config` |
 | Channel creation | Explicit `createChannel()` | Implicit on first `deposit()` |
 
 ## 7. Quick Start Example
@@ -64,7 +64,7 @@ import { NitroliteClient, WalletStateSigner, blockchainRPCsFromEnv } from '@yell
 
 // Create client (replaces new Client(ws, signer))
 const client = await NitroliteClient.create({
-  wsURL: 'wss://clearnode.example.com/ws',
+  wsURL: 'wss://nitronode.example.com/ws',
   walletClient,          // viem WalletClient with account
   chainId: 11155111,    // Sepolia
   blockchainRPCs: blockchainRPCsFromEnv(),

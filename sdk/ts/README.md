@@ -3,7 +3,9 @@
 [![npm version](https://img.shields.io/npm/v/@yellow-org/sdk.svg)](https://www.npmjs.com/package/@yellow-org/sdk)
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
-TypeScript SDK for Clearnode payment channels providing both high-level and low-level operations in a unified client:
+> The off-chain broker was renamed from "Clearnode" to "Nitronode" in v1.3.0. The default WebSocket sandbox URL is now `wss://nitronode-sandbox.yellow.org/v1/ws`. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md).
+
+TypeScript SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `deposit()`, `withdraw()`, `transfer()`, `closeHomeChannel()`, `acknowledge()` - build and co-sign states off-chain
 - **Blockchain Settlement**: `checkpoint()` - the single entry point for all on-chain transactions
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
@@ -123,7 +125,7 @@ async function main() {
 
   // Create unified client
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, 'https://polygon-amoy.alchemy.com/v2/KEY')
@@ -688,7 +690,7 @@ async function basicExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.RPC_URL!)
@@ -737,7 +739,7 @@ async function multiChainExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.POLYGON_RPC!), // Polygon Amoy
@@ -775,7 +777,7 @@ import { Client, createSigners } from '@yellow-org/sdk';
 async function queryTransactions() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner
   );
@@ -821,7 +823,7 @@ import Decimal from 'decimal.js';
 async function appSessionExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.RPC_URL!)
@@ -902,7 +904,7 @@ async function monitorConnection() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withPingInterval(3000),
@@ -1073,7 +1075,7 @@ For understanding how operations work under the hood:
 
 - **Node.js**: 20.0.0 or later
 - **TypeScript**: 5.3.0 or later (for development)
-- **Running Clearnode instance** or access to public node
+- **Running Nitronode instance** or access to public node
 - **Blockchain RPC endpoint** (for on-chain operations via `checkpoint()`)
 
 ## License

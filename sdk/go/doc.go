@@ -1,6 +1,6 @@
-// Package sdk provides the official Go client for the Nitrolite Clearnode API.
+// Package sdk provides the official Go client for the Nitrolite Nitronode API.
 //
-// The SDK offers a unified interface for interacting with Clearnode payment channels,
+// The SDK offers a unified interface for interacting with Nitronode payment channels,
 // supporting both high-level state operations and low-level RPC access. It simplifies
 // the process of managing channel states, performing off-chain transactions, and
 // settling on-chain when necessary.
@@ -12,14 +12,14 @@
 //     to build and co-sign channel states off-chain.
 //   - Blockchain Settlement: A single `Checkpoint` method to settle the latest state on-chain
 //     (creating channels, depositing, withdrawing, or finalizing).
-//   - Low-Level Access: Direct access to Clearnode RPC methods for advanced use cases
+//   - Low-Level Access: Direct access to Nitronode RPC methods for advanced use cases
 //     (e.g., querying node config, balances, channel info).
 //   - App Sessions: Comprehensive support for creating and managing application sessions.
 //   - Session Keys: Support for registering and using session keys for delegated signing.
 //
 // # Usage
 //
-// To use the SDK, create a `Client` instance with your Clearnode WebSocket URL and signers.
+// To use the SDK, create a `Client` instance with your Nitronode WebSocket URL and signers.
 // You can configure blockchain RPCs for on-chain operations.
 //
 //	package main
@@ -48,7 +48,7 @@
 //
 //		// Create Client
 //		client, err := sdk.NewClient(
-//			"wss://clearnode-sandbox.yellow.org/v1/ws",
+//			"wss://nitronode-sandbox.yellow.org/v1/ws",
 //			stateSigner,
 //			txSigner,
 //			sdk.WithBlockchainRPC(80002, "https://rpc-endpoint.example.com"),
@@ -99,5 +99,5 @@
 //
 // The SDK methods return standard Go errors. Common errors to check for include connection issues,
 // insufficient balances, or invalid state transitions. Errors from RPC calls often contain
-// detailed messages from the Clearnode server.
+// detailed messages from the Nitronode server.
 package sdk

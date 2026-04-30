@@ -1,6 +1,6 @@
 # Core Package
 
-The `core` package defines the fundamental domain models, interfaces, and cryptographic utilities for the Clearnode protocol. It serves as the single source of truth for shared data structures between the node, client, and smart contract interactions.
+The `core` package defines the fundamental domain models, interfaces, and cryptographic utilities for the Nitronode protocol. It serves as the single source of truth for shared data structures between the node, client, and smart contract interactions.
 
 ## Overview
 

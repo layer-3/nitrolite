@@ -1,19 +1,19 @@
 # Nitrolite Copilot Instructions
 
-Nitrolite is a state channel protocol for Ethereum/EVM blockchains — off-chain instant transactions with on-chain security. Repo contains: Solidity contracts (Foundry), Go clearnode broker, TypeScript + Go SDKs.
+Nitrolite is a state channel protocol for Ethereum/EVM blockchains — off-chain instant transactions with on-chain security. Repo contains: Solidity contracts (Foundry), Go nitronode broker (renamed from clearnode), TypeScript + Go SDKs.
 
 ## Architecture
 
 - Channels: state containers between User and Node, hold asset allocations
 - States: versioned allocations, each version = previous + 1, mutually signed = enforceable on-chain
-- Clearnode: off-chain broker, WebSocket JSON-RPC wire format
+- Nitronode (formerly Clearnode): off-chain broker, WebSocket JSON-RPC wire format
 - App Sessions: multi-party extensions with quorum-based governance
 
 ## TypeScript SDK (`@yellow-org/sdk`)
 
 - `@yellow-org/sdk` = v1 protocol SDK. Use for all new code.
 - `@yellow-org/sdk-compat` = bridges 0.5.x API to v1 runtime. Migration only. Wraps Client with NitroliteClient.
-- V1 API source of truth: `docs/api.yaml`. `clearnode/docs/API.md` has 0.5.x method names.
+- V1 API source of truth: `docs/api.yaml`. `docs/legacy/API.md` has 0.5.x method names.
 - Use `const` by default, `viem` over `ethers.js`, strict TypeScript (no `any`)
 - All public API through barrel `index.ts`, async/await preferred
 - Tests: `.test.ts`, Jest. Run: `cd sdk/ts && npm test`
@@ -47,7 +47,7 @@ Deposit, Transfer, Checkpoint (required after deposit/withdraw/close), CloseHome
 - Protocol description: `protocol-description.md`
 - Smart contract invariants: `contracts/SECURITY.md`
 - Main SC entrypoint: `contracts/src/ChannelHub.sol` (design: `contracts/suggested-contract-design.md`)
-- Clearnode logic: `clearnode/readme.md`, `clearnode/docs/`
+- Nitronode logic: `nitronode/README.md`, `docs/legacy/`
 - Advanced protocol docs: `docs/protocol/`
 
 ## Commits

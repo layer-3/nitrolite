@@ -114,7 +114,7 @@ The process of scaling chain-specific asset amounts to the asset's configured de
 NormalizedAmount = Amount * 10^(18 - ChainDecimals)
 ```
 
-Each unified asset defines a canonical decimal precision (e.g. 6 for USDC) that is used during User <> Clearnode interactions (e.g. on-chain deposit, on-chain state submission requests, transfers, app session operations etc.). The maximum supported decimal precision is 18.
+Each unified asset defines a canonical decimal precision (e.g. 6 for USDC) that is used during User <> Nitronode interactions (e.g. on-chain deposit, on-chain state submission requests, transfers, app session operations etc.). The maximum supported decimal precision is 18.
 
 ## State Signing Categories
 

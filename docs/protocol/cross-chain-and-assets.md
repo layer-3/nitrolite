@@ -35,7 +35,7 @@ Assets on different blockchains MAY have different decimal precisions (e.g. USDC
 NormalizedAmount = Amount * 10^(18 - ChainDecimals)
 ```
 
-Each unified asset defines a canonical decimal precision (e.g. 6 for USDC) that is used during User <> Clearnode interactions (e.g. on-chain deposit, on-chain state submission requests, transfers, app session operations etc.).
+Each unified asset defines a canonical decimal precision (e.g. 6 for USDC) that is used during User <> Nitronode interactions (e.g. on-chain deposit, on-chain state submission requests, transfers, app session operations etc.).
 
 Rules:
 

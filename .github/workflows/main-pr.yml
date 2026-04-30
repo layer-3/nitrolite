@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  test-clearnode:
-    name: Test (Clearnode)
+  test-nitronode:
+    name: Test (Nitronode)
     uses: ./.github/workflows/test-go.yml
 
   test-forge:
@@ -23,9 +23,9 @@ jobs:
   #     project-path: 'sdk'
   #     project-name: 'SDK'
 
-  build-and-publish-clearnode:
-    name: Build and Publish (Clearnode)
-    needs: test-clearnode
+  build-and-publish-nitronode:
+    name: Build and Publish (Nitronode)
+    needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,10 +49,10 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ steps.sha.outputs.short_sha }}
+            ghcr.io/${{ github.repository }}/nitronode:${{ steps.sha.outputs.short_sha }}
           cache-from: type=gha
           build-args: |
             VERSION=${{ steps.sha.outputs.short_sha }}

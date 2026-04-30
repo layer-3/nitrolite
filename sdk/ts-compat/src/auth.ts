@@ -1,7 +1,7 @@
 /**
  * Auth functions -- real implementations matching v0.5.3 SDK behavior.
  *
- * These create properly formatted RPC messages for the clearnode's
+ * These create properly formatted RPC messages for the nitronode's
  * auth_request / auth_verify flow over WebSocket.
  */
 

@@ -23,7 +23,7 @@ npm install @layer-3/nitrolite viem decimal.js
 
 ## Core Concepts
 
-The SDK connects to a **clearnode** (a state channel server) over WebSocket. All operations (deposits, withdrawals, transfers) happen off-chain as signed state updates. You can **checkpoint** at any time to sync state on-chain.
+The SDK connects to a **nitronode** (a state channel server) over WebSocket. All operations (deposits, withdrawals, transfers) happen off-chain as signed state updates. You can **checkpoint** at any time to sync state on-chain.
 
 The client needs two signers:
 
@@ -102,7 +102,7 @@ const txSigner = new WalletTransactionSigner(walletClient);
 
 // Connect
 const client = await Client.create(
-  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  'wss://nitronode-sandbox.yellow.org/v1/ws',
   stateSigner,
   txSigner,
   withBlockchainRPC(11155111n, 'https://ethereum-sepolia-rpc.publicnode.com'),
@@ -224,7 +224,7 @@ await client.close();
 
 ## Session Keys (Auto-Sign)
 
-Session keys let your app sign state updates automatically without wallet popups on every operation. A temporary key is generated in the browser, registered with the clearnode, and used for a limited time.
+Session keys let your app sign state updates automatically without wallet popups on every operation. A temporary key is generated in the browser, registered with the nitronode, and used for a limited time.
 
 ### Enable
 
@@ -276,7 +276,7 @@ const sessionSigner = new ChannelSessionKeyStateSigner(
 const txSigner = new WalletTransactionSigner(walletClient);
 
 const sessionClient = await Client.create(
-  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  'wss://nitronode-sandbox.yellow.org/v1/ws',
   sessionSigner,
   txSigner,
   withBlockchainRPC(11155111n, 'https://ethereum-sepolia-rpc.publicnode.com'),

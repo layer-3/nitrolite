@@ -94,7 +94,7 @@ The off-chain protocol is responsible for:
      * or fire alerts for operator intervention.
    * The Node must not co-sign states that would require locking more vault funds than are currently available, as such states would fail on-chain enforcement.
 
-   > **NOTE:** Node liquidity monitoring is not yet enforced in the Clearnode implementation but will be introduced in the near future.
+   > **NOTE:** Node liquidity monitoring is not yet enforced in the Nitronode implementation but will be introduced in the near future.
 
    If Node liquidity monitoring is absent or fails, **no user funds are at risk**. On-chain enforcement always relies on the latest mutually signed state, and the previous on-chain state remains valid and enforceable at all times. The practical consequence is operational: a co-signed state that requires Node vault funds may fail when submitted on-chain if the vault has been depleted in the interim. In such cases, the Node simply replenishes its vault and resubmits. Users retain full access to their funds through challenge and closure paths based on the last successfully enforced state.
 

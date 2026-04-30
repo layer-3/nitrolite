@@ -12,14 +12,14 @@ import (
 )
 
 func main() {
-	const defaultWSURL = "wss://clearnode-sandbox.yellow.org/v1/ws"
+	const defaultWSURL = "wss://nitronode-sandbox.yellow.org/v1/ws"
 
 	log.SetFlags(0)
 	log.SetPrefix("cerebro: ")
 	log.SetOutput(os.Stderr)
 
 	// Resolve config directory: explicit env > legacy "clearnode-cli" > "cerebro"
-	configDir := os.Getenv("CLEARNODE_CLI_CONFIG_DIR")
+	configDir := os.Getenv("NITRONODE_CLI_CONFIG_DIR")
 	if configDir == "" {
 		userConfDir, err := os.UserConfigDir()
 		if err != nil {

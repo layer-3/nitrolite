@@ -10,7 +10,7 @@ go test ./sdk/go/... -v      # Test SDK only
 go build ./sdk/go/...         # Build SDK only
 go vet ./sdk/go/...           # Lint SDK only
 
-go test ./...                 # Test EVERYTHING (clearnode, pkg, sdk, cerebro)
+go test ./...                 # Test EVERYTHING (nitronode, pkg, sdk, cerebro)
 ```
 
 **Important:** This is NOT a separate Go module. It shares the root `go.mod` (`github.com/layer-3/nitrolite`, Go 1.25).
@@ -31,8 +31,8 @@ go test ./...                 # Test EVERYTHING (clearnode, pkg, sdk, cerebro)
 
 - Uses **functional options pattern** for configuration (see `config.go`)
 - Key dependency: `github.com/ethereum/go-ethereum` for Ethereum interactions
-- Shared packages in `pkg/` (sign, core, rpc, app, blockchain, log) are used by both this SDK and `clearnode/`
-- WebSocket-based communication with clearnode via JSON-RPC
+- Shared packages in `pkg/` (sign, core, rpc, app, blockchain, log) are used by both this SDK and `nitronode/`
+- WebSocket-based communication with nitronode via JSON-RPC
 
 ## Conventions
 

@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  test-clearnode:
-    name: Test (Clearnode)
+  test-nitronode:
+    name: Test (Nitronode)
     uses: ./.github/workflows/test-go.yml
 
   test-forge:
@@ -32,7 +32,7 @@ jobs:
   
   auto-tag:
     name: Auto-Tag
-    needs: test-clearnode
+    needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,7 +51,7 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "github-actions@github.com"
 
-          ./clearnode/scripts/auto_tag.sh v1.0.0
+          ./nitronode/scripts/auto_tag.sh v1.0.0
 
       - name: Store the new tag
         id: tagger
@@ -59,8 +59,8 @@ jobs:
           NEW_TAG=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*-rc.[0-9]*" --abbrev=0)
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-  build-and-publish-clearnode:
-    name: Build and Publish (Clearnode)
+  build-and-publish-nitronode:
+    name: Build and Publish (Nitronode)
     needs: auto-tag
     runs-on: ubuntu-latest
     permissions:
@@ -94,11 +94,11 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ needs.auto-tag.outputs.image-tag }}
-            ghcr.io/${{ github.repository }}/clearnode:latest-rc
+            ghcr.io/${{ github.repository }}/nitronode:${{ needs.auto-tag.outputs.image-tag }}
+            ghcr.io/${{ github.repository }}/nitronode:latest-rc
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -107,7 +107,7 @@ jobs:
 
   # deploy-prod:
   #   name: Deploy to Prod
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: prod
   #   secrets:
@@ -116,7 +116,7 @@ jobs:
 
   # deploy-sandbox:
   #   name: Deploy to Sandbox
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: sandbox
   #   secrets:
@@ -125,11 +125,11 @@ jobs:
 
   # deploy-uat:
   #   name: Deploy to UAT
-  #   needs: build-and-publish-clearnode
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   needs: build-and-publish-nitronode
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: uat
-  #     image-tag: ${{ needs.build-and-publish-clearnode.outputs.image-tag }}
+  #     image-tag: ${{ needs.build-and-publish-nitronode.outputs.image-tag }}
   #   secrets:
   #     gke-project: ${{ secrets.GKE_PROJECT }}
   #     gke-sa-key: ${{ secrets.GKE_UAT_SA_KEY }}
@@ -149,7 +149,7 @@ jobs:
   #         SLACK_USERNAME: CI/CD Bot
   #         SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
   #         SLACK_ICON_EMOJI: ${{ contains(needs.*.result, 'failure') && ':x:' || contains(needs.*.result, 'cancelled') && ':warning:' || ':white_check_mark:' }}
-  #         SLACK_TITLE: 'Nitrolite Clearnode Release Candidate'
+  #         SLACK_TITLE: 'Nitrolite Nitronode Release Candidate'
   #         SLACK_MESSAGE_ON_SUCCESS: |
   #           ✅ RC build and deployment completed successfully!
   #           ${{github.event.head_commit.message}}

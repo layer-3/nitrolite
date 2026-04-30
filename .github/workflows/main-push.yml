@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  test-clearnode:
-    name: Test (Clearnode)
+  test-nitronode:
+    name: Test (Nitronode)
     uses: ./.github/workflows/test-go.yml
 
   test-forge:
@@ -30,9 +30,9 @@ jobs:
   #   secrets:
   #     npm-token: ${{ secrets.NPM_TOKEN }}
 
-  build-and-publish-clearnode:
-    name: Build and Publish (Clearnode)
-    needs: test-clearnode
+  build-and-publish-nitronode:
+    name: Build and Publish (Nitronode)
+    needs: test-nitronode
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,17 +64,17 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ steps.sha.outputs.short_sha }}
-            ghcr.io/${{ github.repository }}/clearnode:latest-main
+            ghcr.io/${{ github.repository }}/nitronode:${{ steps.sha.outputs.short_sha }}
+            ghcr.io/${{ github.repository }}/nitronode:latest-main
           cache-from: type=gha
           cache-to: type=gha,mode=max
   
   # deploy-prod:
   #   name: Deploy to Prod
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: prod
   #   secrets:
@@ -83,7 +83,7 @@ jobs:
 
   # deploy-sandbox:
   #   name: Deploy to Sandbox
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: sandbox
   #   secrets:
@@ -105,7 +105,7 @@ jobs:
   #         SLACK_USERNAME: CI/CD Bot
   #         SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
   #         SLACK_ICON_EMOJI: ${{ contains(needs.*.result, 'failure') && ':x:' || contains(needs.*.result, 'cancelled') && ':warning:' || ':white_check_mark:' }}
-  #         SLACK_TITLE: 'Nitrolite Clearnode Release Candidate'
+  #         SLACK_TITLE: 'Nitrolite Nitronode Release Candidate'
   #         SLACK_MESSAGE_ON_SUCCESS: |
   #           ✅ RC build and deployment completed successfully!
   #           ${{github.event.head_commit.message}}

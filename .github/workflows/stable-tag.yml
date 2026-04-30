@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  build-and-publish-clearnode:
-    name: Build and Publish (Clearnode)
+  build-and-publish-nitronode:
+    name: Build and Publish (Nitronode)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,32 +42,32 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./clearnode/Dockerfile
+          file: ./nitronode/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/clearnode:${{ steps.tagger.outputs.tag }}
-            ghcr.io/${{ github.repository }}/clearnode:latest
+            ghcr.io/${{ github.repository }}/nitronode:${{ steps.tagger.outputs.tag }}
+            ghcr.io/${{ github.repository }}/nitronode:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # deploy-sandbox:
   #   name: Deploy to Sandbox
-  #   needs: build-and-publish-clearnode
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   needs: build-and-publish-nitronode
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: sandbox
-  #     image-tag: ${{ needs.build-and-publish-clearnode.outputs.image-tag }}
+  #     image-tag: ${{ needs.build-and-publish-nitronode.outputs.image-tag }}
   #   secrets:
   #     gke-project: ${{ secrets.GKE_PROJECT }}
   #     gke-sa-key: ${{ secrets.GKE_SANDBOX_SA_KEY }}
 
   # deploy-prod:
   #   name: Deploy to Production
-  #   needs: build-and-publish-clearnode
-  #   uses: ./.github/workflows/deploy-clearnode.yaml
+  #   needs: build-and-publish-nitronode
+  #   uses: ./.github/workflows/deploy-nitronode.yaml
   #   with:
   #     target-env: prod
-  #     image-tag: ${{ needs.build-and-publish-clearnode.outputs.image-tag }}
+  #     image-tag: ${{ needs.build-and-publish-nitronode.outputs.image-tag }}
   #   secrets:
   #     gke-project: ${{ secrets.GKE_PROJECT }}
   #     gke-sa-key: ${{ secrets.GKE_PROD_SA_KEY }}
@@ -75,7 +75,7 @@ jobs:
   # notify-slack:
   #   name: Notify Slack
   #   runs-on: ubuntu-latest
-  #   needs: [build-and-publish-clearnode, deploy-sandbox, deploy-prod]
+  #   needs: [build-and-publish-nitronode, deploy-sandbox, deploy-prod]
   #   if: always()
 
   #   steps:
@@ -87,7 +87,7 @@ jobs:
   #         SLACK_USERNAME: CI/CD Bot
   #         SLACK_COLOR: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
   #         SLACK_ICON_EMOJI: ${{ contains(needs.*.result, 'failure') && ':x:' || contains(needs.*.result, 'cancelled') && ':warning:' || ':white_check_mark:' }}
-  #         SLACK_TITLE: 'Nitrolite Clearnode Production Release'
+  #         SLACK_TITLE: 'Nitrolite Nitronode Production Release'
   #         SLACK_MESSAGE_ON_SUCCESS: |
   #           ✅ Stable build and deployment completed successfully!
   #           ${{github.event.head_commit.message}}

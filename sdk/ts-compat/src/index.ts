@@ -110,7 +110,7 @@ export {
     type LedgerAccountType,
 } from './types.js';
 
-// --- Clearnode response types (used by consuming apps' stores) ---
+// --- Nitronode response types (used by consuming apps' stores) ---
 export type {
     AccountInfo,
     LedgerChannel,

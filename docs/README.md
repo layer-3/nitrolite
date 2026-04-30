@@ -1,6 +1,6 @@
-# Nitrolite V1 Clearnode Specifications
+# Nitrolite V1 Nitronode Specifications
 
-This directory contains Clearnode architecture, models and communication flows that facilitate communication between user, SDK client, Node and Blockchains — the core off-chain engine for the Nitrolite V1 Protocol.
+This directory contains Nitronode architecture, models and communication flows that facilitate communication between user, SDK client, Node and Blockchains — the core off-chain engine for the Nitrolite V1 Protocol.
 
 ## Contents
 
@@ -31,7 +31,7 @@ The following communication flows are not yet documented:
 
 ```text
 cerebro/                    # Cerebro Testing Client
-clearnode/
+nitronode/
     action_gateway/         # Rate limiting via gated actions
     api/
         app_session_v1/     # App session endpoints (create, deposit, operate, withdraw, close)

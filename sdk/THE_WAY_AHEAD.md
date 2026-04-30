@@ -9,7 +9,7 @@ This document is the roadmap for taking our MCP servers from "works if you clone
 | What we have | Status |
 |---|---|
 | Unified MCP server (`sdk/mcp/`) | Works locally, 30 resources, 8 tools, 3 prompts — covers TypeScript and Go SDKs |
-| Protocol docs, clearnode API, SDK source | Indexed at startup by the MCP server |
+| Protocol docs, nitronode API, SDK source | Indexed at startup by the MCP server |
 
 **The problem:** The server reads files from the repo at runtime (`docs/protocol/`, `docs/api.yaml`, `sdk/ts/src/`, `sdk/go/`). If you don't have the full repo cloned, it doesn't work. No external developer can use it.
 

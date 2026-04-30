@@ -137,7 +137,7 @@ export class Client {
    * Create a new Nitrolite client with both high-level and low-level methods.
    * This is the recommended constructor for most use cases.
    *
-   * @param wsURL - WebSocket URL of the Nitrolite server (e.g., "wss://clearnode-sandbox.yellow.org/v1/ws")
+   * @param wsURL - WebSocket URL of the Nitrolite server (e.g., "wss://nitronode-sandbox.yellow.org/v1/ws")
    * @param stateSigner - Signer for signing channel states (EthereumMsgSigner)
    * @param txSigner - Signer for blockchain transactions (EthereumRawSigner)
    * @param opts - Optional configuration (withBlockchainRPC, withHandshakeTimeout, etc.)

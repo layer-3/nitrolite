@@ -746,7 +746,7 @@ func (c *BlockchainClient) EnsureSigValidatorRegistered(validatorID uint8, valid
 	}
 
 	if checkOnly {
-		return errors.Errorf("validator ID %d with address %s is not registered; run 'clearnode operator register-validator' to register", validatorID, validatorAddress)
+		return errors.Errorf("validator ID %d with address %s is not registered; run 'nitronode operator register-validator' to register", validatorID, validatorAddress)
 	}
 
 	if err := c.checkFeeFn(context.Background(), c.transactOpts.From); err != nil {

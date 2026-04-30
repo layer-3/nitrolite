@@ -90,4 +90,4 @@ const addresses = {
 };
 ```
 
-**After (compat):** Fetched from clearnode `get_config` — no manual setup. The `addresses` field in config is deprecated and ignored.
+**After (compat):** Fetched from nitronode `get_config` — no manual setup. The `addresses` field in config is deprecated and ignored.

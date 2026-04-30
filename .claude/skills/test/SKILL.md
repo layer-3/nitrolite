@@ -16,7 +16,7 @@ Route to the correct test runner:
 - **sdk/ts-compat/** -> `cd sdk/ts-compat && npm test`
 - **sdk/go/** or Go files under sdk/go/ -> `go test ./sdk/go/... -v` (from repo root)
 - **contracts/** or .sol files -> `cd contracts && forge test`
-- **clearnode/** -> `go test ./clearnode/... -v` (from repo root)
+- **nitronode/** -> `go test ./nitronode/... -v` (from repo root)
 - **test/integration/** -> `cd test/integration && npm test`
 - **Repo root with no argument** -> run `go test ./...` (Go packages only — does NOT cover `sdk/ts`, `sdk/ts-compat`, `contracts`, or `test/integration`). Ask the user to specify a target for non-Go tests.
 

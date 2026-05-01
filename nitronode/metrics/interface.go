@@ -38,6 +38,8 @@ type RuntimeMetricExporter interface {
 	IncRPCRequest(method, path string, success bool)
 	ObserveRPCDuration(method, path string, success bool, duration time.Duration)
 	SetRPCConnections(region, origin string, count uint32)
+	IncRPCInflight(method string)
+	DecRPCInflight(method string)
 
 	// api/app_session_v1
 	IncAppStateUpdate(applicationID string)
@@ -48,6 +50,9 @@ type RuntimeMetricExporter interface {
 
 	// Event Listener
 	IncBlockchainEvent(blockchainID uint64, handledSuccessfully bool)
+
+	// store/database (instrumented via gorm callbacks; see metrics.RegisterDBCallbacks)
+	ObserveDBQueryDuration(queryKind string, duration time.Duration)
 }
 
 // noopRuntimeMetricExporter is a no-op implementation for use in tests.
@@ -69,7 +74,10 @@ func (noopRuntimeMetricExporter) IncAppSessionUpdateSigValidation(string, app.Ap
 }
 func (noopRuntimeMetricExporter) IncBlockchainAction(string, uint64, string, bool) {
 }
-func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool) {}
+func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool)            {}
+func (noopRuntimeMetricExporter) IncRPCInflight(string)                      {}
+func (noopRuntimeMetricExporter) DecRPCInflight(string)                      {}
+func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration) {}
 
 // StoreMetricExporter defines the interface for setting metrics that are stored and updated by a separate metric worker.
 type StoreMetricExporter interface {

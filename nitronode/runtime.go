@@ -181,6 +181,16 @@ func InitBackbone() *Backbone {
 		logger.Fatal("failed to initialize store metric exporter", "error", err)
 	}
 
+	// Wire DB instrumentation now that both gorm.DB and the runtime exporter
+	// exist: per-query histograms via gorm callbacks, plus the standard
+	// go_sql_* pool-stats collector.
+	if err := database.RegisterMetricsCallbacks(db, runtimeMetrics); err != nil {
+		logger.Fatal("failed to register database metric callbacks", "error", err)
+	}
+	if err := database.RegisterDBStatsCollector(db, prometheus.DefaultRegisterer); err != nil {
+		logger.Fatal("failed to register database stats collector", "error", err)
+	}
+
 	// ------------------------------------------------
 	// RPC Node
 	// ------------------------------------------------

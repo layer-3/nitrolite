@@ -42,47 +42,71 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 		appSessionsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_sessions_total",
-			Help:      "Current total number of app sessions",
-		}, []string{"application", "status"}),
+			Help: "Current count of app sessions, refreshed by the periodic store " +
+				"ticker (~1 min). Labels: application_id (self-declared by clients, " +
+				"empty becomes \"_DEFAULT\"), status ∈ {\"\" (void), open, closed}. " +
+				"Note: void renders as empty-string label value — sum by (status) " +
+				"will produce a series with status=\"\".",
+		}, []string{"application_id", "status"}),
 		channelsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "channels_total",
-			Help:      "Current total number of channels",
+			Help: "Current count of payment channels, refreshed by the periodic store " +
+				"ticker (~1 min). Labels: asset (e.g. usdc, eth), " +
+				"status ∈ {void, open, challenged, closed}.",
 		}, []string{"asset", "status"}),
 		usersActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "users_active",
-			Help:      "Current total active users",
+			Help: "Active users per asset over a rolling time window. Labels: asset, " +
+				"timespan ∈ {day, week, month}. Each window is computed independently " +
+				"from the store; values are not strictly nested (a user active in the " +
+				"day window also counts in week + month).",
 		}, []string{"asset", "timespan"}),
 		appSessionsActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_sessions_active",
-			Help:      "Current total active app sessions",
-		}, []string{"application", "timespan"}),
+			Help: "Active app sessions per application over a rolling time window. " +
+				"Labels: application_id, timespan ∈ {day, week, month}.",
+		}, []string{"application_id", "timespan"}),
 		totalValueLocked: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "total_value_locked",
-			Help:      "Total value locked by domain and asset",
+			Help: "Total value locked across all channels and app-sessions, in the " +
+				"asset's native units. Labels: domain (business unit), asset. Sum " +
+				"across assets is meaningless without a price feed.",
 		}, []string{"domain", "asset"}),
 		nodeBalance: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "node_balance",
-			Help:      "Node's available on-chain balance by blockchain and asset",
+			Help: "Operator's on-chain balance per (blockchain, asset). This is the " +
+				"liquidity pool the node owns directly — separate from channel " +
+				"balances held by users (see user_balance_total). Native asset units.",
 		}, []string{"blockchain_id", "asset"}),
 		userBalanceTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "user_balance_total",
-			Help:      "Total user balance obligations by blockchain and asset",
+			Help: "Sum of user channel balances per (blockchain, asset). These funds " +
+				"live off-chain in user channels — they are NOT a subset of " +
+				"node_balance, the two are parallel pools. Native asset units.",
 		}, []string{"blockchain_id", "asset"}),
 		userBalanceUnderfunded: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "user_balance_underfunded",
-			Help:      "User balance exceeding on-chain locked amount by blockchain and asset",
+			Help: "Worst-case potential outflow from node_balance per (blockchain, " +
+				"asset): if every underfunded channel checkpointed simultaneously " +
+				"with its latest state, this much would move from on-chain (node) to " +
+				"user channels. Liquidity health: compare against node_balance per " +
+				"pool — sustained underfunded > node_balance is paging-grade. Native " +
+				"asset units.",
 		}, []string{"blockchain_id", "asset"}),
 		userBalanceReleasable: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "user_balance_releasable",
-			Help:      "On-chain locked amount exceeding user balance by blockchain and asset",
+			Help: "Worst-case potential inflow to node_balance per (blockchain, " +
+				"asset): if every releasable channel checkpointed simultaneously, " +
+				"this much would move from user channels back into on-chain. " +
+				"Native asset units.",
 		}, []string{"blockchain_id", "asset"}),
 	}
 
@@ -106,7 +130,7 @@ func NewStoreMetricExporter(reg prometheus.Registerer) (StoreMetricExporter, err
 }
 
 func (m *storeMetricExporter) SetAppSessions(applicationID string, status app.AppSessionStatus, count uint64) {
-	m.appSessionsTotal.WithLabelValues(applicationID, status.String()).Set(float64(count))
+	m.appSessionsTotal.WithLabelValues(getApplicationIDLabelValue(applicationID), status.String()).Set(float64(count))
 }
 
 func (m *storeMetricExporter) SetChannels(asset string, status core.ChannelStatus, count uint64) {
@@ -118,7 +142,7 @@ func (m *storeMetricExporter) SetActiveUsers(asset, timeSpanLabel string, count 
 }
 
 func (m *storeMetricExporter) SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64) {
-	m.appSessionsActive.WithLabelValues(applicationID, timeSpanLabel).Set(float64(count))
+	m.appSessionsActive.WithLabelValues(getApplicationIDLabelValue(applicationID), timeSpanLabel).Set(float64(count))
 }
 
 func (m *storeMetricExporter) SetTotalValueLocked(domain, asset string, value float64) {
@@ -154,6 +178,7 @@ type runtimeMetricExporter struct {
 	rpcRequestsTotal          *prometheus.CounterVec
 	rpcRequestDurationSeconds *prometheus.HistogramVec
 	rpcConnectionsTotal       *prometheus.GaugeVec
+	rpcInflight               *prometheus.GaugeVec
 
 	// api/app_session_v1
 	appStateUpdates                     *prometheus.CounterVec
@@ -168,6 +193,9 @@ type runtimeMetricExporter struct {
 	// Metric Worker
 	channelSessionKeysTotal prometheus.Counter
 	appSessionKeysTotal     prometheus.Counter
+
+	// store/database (instrumented via gorm callbacks)
+	dbQueryDurationSeconds *prometheus.HistogramVec
 }
 
 // RuntimeMetricExporter exposes metrics related to runtime operations, such as API requests, channel state validations, and blockchain interactions.
@@ -184,82 +212,145 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 		userStatesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "user_states_total",
-			Help:      "Total number of user states",
+			Help: "Total state transitions recorded for users. Labels: asset, " +
+				"home_blockchain_id (uint64 stringified), transition (state " +
+				"transition kind, see core.TransitionType — void / acknowledgement " +
+				"/ transfer_send / transfer_receive / commit / release / " +
+				"home_deposit / home_withdrawal / mutual_lock / escrow_deposit / " +
+				"escrow_lock / escrow_withdraw / migrate / finalize), " +
+				"application_id (\"_DEFAULT\" when client did not supply one).",
 		}, []string{"asset", "home_blockchain_id", "transition", "application_id"}),
 		transactionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_total",
-			Help:      "Total number of transactions",
+			Help: "Total transactions recorded. Labels: asset, tx_type (see " +
+				"core.TransactionType — transfer / release / commit / home_deposit " +
+				"/ home_withdrawal / mutual_lock / escrow_deposit / escrow_lock / " +
+				"escrow_withdraw / migrate / rebalance / finalize), application_id. " +
+				"Pair with transactions_amount_total for value-weighted views.",
 		}, []string{"asset", "tx_type", "application_id"}),
 		transactionsAmountTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "transactions_amount_total",
-			Help:      "Total amount of transactions processed",
+			Help: "Cumulative transaction amounts in native asset units. Same labels " +
+				"as transactions_total. Note: amounts are aggregated via " +
+				"decimal.Decimal.InexactFloat64() — for very large or very precise " +
+				"values this is lossy. For accounting accuracy query the database " +
+				"directly; this metric is for dashboards and alerts only.",
 		}, []string{"asset", "tx_type", "application_id"}),
 		channelSessionKeysTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "channel_session_keys_total",
-			Help:      "Total number of channel session keys issued",
+			Help: "Total channel session keys issued by the node. Unlabelled. Use " +
+				"rate(channel_session_keys_total[5m]) for issuance rate.",
 		}),
 		appSessionKeysTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_session_keys_total",
-			Help:      "Total number of app session keys issued",
+			Help: "Total app session keys issued by the node. Unlabelled. Use " +
+				"rate(app_session_keys_total[5m]) for issuance rate.",
 		}),
 		channelStateSigValidationsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "channel_state_sig_validations_total",
-			Help:      "Total number of channel state signature validations",
+			Help: "Channel-state signature validations attempted. Labels: " +
+				"sig_type ∈ {default (wallet-signed), session_key}, " +
+				"result ∈ {success, failed}. " +
+				"For error rate compute " +
+				"rate(...{result=\"failed\"}[5m]) / rate(...[5m]); failed includes " +
+				"both forgery attempts and operational bugs.",
 		}, []string{"sig_type", "result"}),
 
 		// api/rpc_router
 		rpcMessagesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
-			Name:      "rpc_messages_total",
-			Help:      "Total number of RPC messages",
+			Name:      "rpc_messages_emitted_total",
+			Help:      "Total number of RPC messages emitted (request + response). Counter increments twice per request — once for the request msg and once for the response — so rate(...) over this is roughly 2× the QPS. For real RPC throughput use rpc_requests_total.",
 		}, []string{"msg_type", "method"}),
 		rpcRequestsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_requests_total",
-			Help:      "Total number of RPC requests",
-		}, []string{"method", "path", "status"}),
+			Help: "Total top-level RPC requests handled. Increments once per " +
+				"method invocation (not per WebSocket message). Labels: " +
+				"method (RPC method name), path (request path / group), " +
+				"result ∈ {success, failed}. " +
+				"\"success\" = response message type is Resp; everything else " +
+				"(RespErr, Event, no response) maps to failed.",
+		}, []string{"method", "path", "result"}),
 		rpcRequestDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_request_duration_seconds",
-			Help:      "Duration of RPC requests in seconds",
-			Buckets:   []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-		}, []string{"method", "path", "status"}),
+			Help: "RPC request duration in seconds. Same labels as " +
+				"rpc_requests_total. Use histogram_quantile for P50/P95/P99 " +
+				"latency; pair with rpc_inflight to distinguish slow handlers " +
+				"from queued contention.",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		}, []string{"method", "path", "result"}),
 		rpcConnectionsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_connections_active",
-			Help:      "Current number of active RPC connections",
+			Help: "Active RPC (WebSocket) connections. Labels: region, origin " +
+				"(both sourced from request headers / client metadata at connect " +
+				"time). Operator-decided values — bounded only by the set of " +
+				"connecting clients.",
 		}, []string{"region", "origin"}),
+		rpcInflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricNamespace,
+			Name:      "rpc_inflight",
+			Help: "Currently in-flight RPC requests, labelled by method. Incremented at " +
+				"middleware entry and decremented on exit. Saturation signal — pair with " +
+				"rpc_request_duration_seconds for queueing-style diagnosis.",
+		}, []string{"method"}),
 
 		// api/app_session_v1
 		appStateUpdates: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_state_updates_total",
-			Help:      "Total number of app state updates",
-		}, []string{"application"}),
+			Help: "Total app-session state updates accepted. Label: " +
+				"application_id (\"_DEFAULT\" when client did not supply one).",
+		}, []string{"application_id"}),
 		appSessionUpdateSigValidationsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "app_session_update_sig_validations_total",
-			Help:      "Total number of app session update signature validations",
-		}, []string{"application", "sig_type", "result"}),
+			Help: "App-session update signature validations attempted. Labels: " +
+				"application_id, sig_type ∈ {wallet, session_key}, " +
+				"result ∈ {success, failed}.",
+		}, []string{"application_id", "sig_type", "result"}),
 
 		// Blockchain Worker
 		blockchainActionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "blockchain_actions_total",
-			Help:      "Total number of blockchain actions",
+			Help: "Blockchain actions dispatched by the node (deposits, withdrawals, " +
+				"escrow ops, etc.). Labels: asset, blockchain_id (uint64 stringified), " +
+				"action_type (uses core.TransitionType.String()), " +
+				"result ∈ {success, failed}.",
 		}, []string{"asset", "blockchain_id", "action_type", "result"}),
 
 		// Event Listener
 		blockchainEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: MetricNamespace,
 			Name:      "blockchain_events_total",
-			Help:      "Total number of blockchain events processed",
-		}, []string{"blockchain_id", "process_result"}),
+			Help: "On-chain events received and processed by the listener. Labels: " +
+				"blockchain_id (uint64 stringified), result ∈ {success, failed}. " +
+				"A flat / zero rate per chain may indicate a stalled chain " +
+				"connection — pair with chain-side liveness checks.",
+		}, []string{"blockchain_id", "result"}),
+
+		// store/database
+		dbQueryDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: MetricNamespace,
+			Name:      "db_query_duration_seconds",
+			Help: "Application-side database query duration. Observed via gorm " +
+				"callbacks, so the value is round-trip time from the app to the DB " +
+				"through pgbouncer (when used). Pair with go_sql_wait_duration_" +
+				"seconds_total / go_sql_wait_count_total (emitted by the DB-stats " +
+				"collector registered alongside) to separate pool-acquire latency " +
+				"from in-DB execution.\n\n" +
+				"  query_kind  — gorm operation: create, query, update, delete, " +
+				"row, raw.",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		}, []string{"query_kind"}),
 	}
 
 	if reg != nil {
@@ -272,12 +363,14 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			m.rpcRequestsTotal,
 			m.rpcRequestDurationSeconds,
 			m.rpcConnectionsTotal,
+			m.rpcInflight,
 			m.appStateUpdates,
 			m.appSessionUpdateSigValidationsTotal,
 			m.blockchainActionsTotal,
 			m.blockchainEventsTotal,
 			m.channelSessionKeysTotal,
 			m.appSessionKeysTotal,
+			m.dbQueryDurationSeconds,
 		)
 	} else {
 		return nil, fmt.Errorf("prometheus registerer not provided")
@@ -323,9 +416,22 @@ func (m *runtimeMetricExporter) SetRPCConnections(region, origin string, count u
 	m.rpcConnectionsTotal.WithLabelValues(region, origin).Set(float64(count))
 }
 
+func (m *runtimeMetricExporter) IncRPCInflight(method string) {
+	m.rpcInflight.WithLabelValues(method).Inc()
+}
+
+func (m *runtimeMetricExporter) DecRPCInflight(method string) {
+	m.rpcInflight.WithLabelValues(method).Dec()
+}
+
+// store/database
+func (m *runtimeMetricExporter) ObserveDBQueryDuration(queryKind string, duration time.Duration) {
+	m.dbQueryDurationSeconds.WithLabelValues(queryKind).Observe(duration.Seconds())
+}
+
 // api/app_session_v1
 func (m *runtimeMetricExporter) IncAppStateUpdate(applicationID string) {
-	m.appStateUpdates.WithLabelValues(applicationID).Inc()
+	m.appStateUpdates.WithLabelValues(getApplicationIDLabelValue(applicationID)).Inc()
 }
 
 func (m *runtimeMetricExporter) IncAppSessionUpdateSigValidation(applicationID string, signerType app.AppSessionSignerTypeV1, result bool) {
@@ -333,7 +439,7 @@ func (m *runtimeMetricExporter) IncAppSessionUpdateSigValidation(applicationID s
 	if result {
 		res = ActionResultSuccess
 	}
-	m.appSessionUpdateSigValidationsTotal.WithLabelValues(applicationID, signerType.String(), res.String()).Inc()
+	m.appSessionUpdateSigValidationsTotal.WithLabelValues(getApplicationIDLabelValue(applicationID), signerType.String(), res.String()).Inc()
 }
 
 func (m *runtimeMetricExporter) IncChannelStateSigValidation(sigType core.ChannelSignerType, result bool) {

@@ -115,11 +115,13 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 }
 
 // HandleHomeChannelChallenged processes the HomeChannelChallenged event emitted when a potentially
-// stale state is submitted on-chain. Automatic challenge response is intentionally disabled: the
-// latest signed state may carry an intent (e.g. CLOSE, escrow initiate/finalize, migration) that
-// cannot be resolved via ScheduleCheckpoint, and silently queueing an impossible transaction
-// risks letting the challenge expire on a stale state. Instead, this handler emits a warning so
-// operators are alerted and can submit the appropriate on-chain action manually before expiry.
+// stale state is submitted on-chain. It marks the channel as Challenged and persists the challenge
+// expiry so subsequent state-submission paths (CheckOpenChannel, RefreshUserEnforcedBalance) stop
+// treating the channel as open. Automatic challenge response is intentionally disabled: the latest
+// signed state may carry an intent (e.g. CLOSE, escrow initiate/finalize, migration) that cannot
+// be resolved via ScheduleCheckpoint, and silently queueing an impossible transaction risks
+// letting the challenge expire on a stale state. A warning is emitted so operators submit the
+// appropriate on-chain action manually before expiry.
 func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelChallengedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -136,13 +138,33 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return nil
 	}
 
+	if event.StateVersion < channel.StateVersion {
+		// Per protocol the challenged version cannot be lower than the last known on-chain version.
+		// Treat as an anomaly (replay, indexer mis-order, contract bug): warn and skip persistence.
+		logger.Warn("challenged state version is less than current channel state version, ignoring", "channelId", chanID, "currentStateVersion", channel.StateVersion, "challengedStateVersion", event.StateVersion)
+		return nil
+	}
+
+	channel.StateVersion = event.StateVersion
+	channel.Status = core.ChannelStatusChallenged
+	expirationTime := time.Unix(int64(event.ChallengeExpiry), 0)
+	channel.ChallengeExpiresAt = &expirationTime
+
+	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	logger.Warn("home channel challenged",
 		"channelId", chanID,
 		"userWallet", channel.UserWallet,
 		"blockchainID", channel.BlockchainID,
 		"asset", channel.Asset,
 		"challengedStateVersion", event.StateVersion,
-		"challengeExpiry", time.Unix(int64(event.ChallengeExpiry), 0),
+		"challengeExpiry", expirationTime,
 	)
 	return nil
 }

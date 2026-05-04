@@ -100,11 +100,11 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleHomeChannelChallenged_LogsOnly(t *testing.T) {
-	// Automatic challenge response was removed because non-checkpointable intents (CLOSE,
-	// escrow initiate/finalize, migration) cannot be resolved via ScheduleCheckpoint. The
-	// handler must only fetch the channel for context and emit a warning — no state mutation,
-	// no scheduled action, no enforced-balance refresh.
+func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
+	// Channel must be marked Challenged with the challenge expiry so CheckOpenChannel and
+	// RefreshUserEnforcedBalance stop treating it as open. Auto-checkpoint stays disabled:
+	// non-checkpointable intents (CLOSE, escrow initiate/finalize, migration) cannot be
+	// resolved via ScheduleCheckpoint, so operator action is required.
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
@@ -130,14 +130,56 @@ func TestHandleHomeChannelChallenged_LogsOnly(t *testing.T) {
 	}
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusChallenged &&
+			ch.StateVersion == 4 &&
+			ch.ChallengeExpiresAt != nil &&
+			ch.ChallengeExpiresAt.Unix() == int64(challengeExpiry)
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleCheckpoint", mock.Anything, mock.Anything)
+}
+
+func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
+	// Per protocol the challenged version cannot be lower than the last known on-chain version.
+	// Anomalies (replay, indexer mis-order) must not regress channel state.
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 5,
+	}
+
+	event := &core.HomeChannelChallengedEvent{
+		ChannelID:       channelID,
+		StateVersion:    3,
+		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
-	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "ScheduleCheckpoint", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 }
 

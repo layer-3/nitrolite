@@ -96,15 +96,6 @@ func (c *Client) ChannelsV1GetLatestState(ctx context.Context, req ChannelsV1Get
 	return resp, nil
 }
 
-// ChannelsV1GetStates retrieves state history for a user with optional filtering.
-func (c *Client) ChannelsV1GetStates(ctx context.Context, req ChannelsV1GetStatesRequest) (ChannelsV1GetStatesResponse, error) {
-	var resp ChannelsV1GetStatesResponse
-	if err := c.call(ctx, ChannelsV1GetStatesMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
 // ChannelsV1RequestCreation requests the creation of a channel from Node.
 func (c *Client) ChannelsV1RequestCreation(ctx context.Context, req ChannelsV1RequestCreationRequest) (ChannelsV1RequestCreationResponse, error) {
 	var resp ChannelsV1RequestCreationResponse

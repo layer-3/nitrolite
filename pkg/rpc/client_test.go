@@ -245,35 +245,6 @@ func TestClientV1_ChannelsV1GetLatestState(t *testing.T) {
 	assert.Equal(t, testAssetV1, resp.State.Asset)
 }
 
-func TestClientV1_ChannelsV1GetStates(t *testing.T) {
-	t.Parallel()
-
-	client, dialer := setupClient()
-
-	states := rpc.ChannelsV1GetStatesResponse{
-		States: []rpc.StateV1{
-			{ID: "state1", Version: "1", Asset: testAssetV1},
-			{ID: "state2", Version: "2", Asset: testAssetV1},
-		},
-		Metadata: rpc.PaginationMetadataV1{
-			Page:       1,
-			PerPage:    10,
-			TotalCount: 2,
-			PageCount:  1,
-		},
-	}
-
-	registerSimpleHandlerV1(dialer, "channels.v1.get_states", states)
-
-	resp, err := client.ChannelsV1GetStates(testCtxV1, rpc.ChannelsV1GetStatesRequest{
-		Wallet:     testWalletV1,
-		Asset:      testAssetV1,
-		OnlySigned: false,
-	})
-	require.NoError(t, err)
-	assert.Len(t, resp.States, 2)
-}
-
 func TestClientV1_ChannelsV1RequestCreation(t *testing.T) {
 	t.Parallel()
 

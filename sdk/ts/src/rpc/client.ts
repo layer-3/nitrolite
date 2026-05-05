@@ -88,13 +88,6 @@ export class RPCClient {
     return this.call(Methods.ChannelsV1GetLatestStateMethod, req, signal);
   }
 
-  async channelsV1GetStates(
-    req: API.ChannelsV1GetStatesRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetStatesResponse> {
-    return this.call(Methods.ChannelsV1GetStatesMethod, req, signal);
-  }
-
   async channelsV1RequestCreation(
     req: API.ChannelsV1RequestCreationRequest,
     signal?: AbortSignal

@@ -77,30 +77,6 @@ type ChannelsV1GetLatestStateResponse struct {
 	State StateV1 `json:"state"`
 }
 
-// ChannelsV1GetStatesRequest retrieves state history for a user with optional filtering.
-type ChannelsV1GetStatesRequest struct {
-	// Wallet is the user's wallet address
-	Wallet string `json:"wallet"`
-	// Asset filters by asset symbol
-	Asset string `json:"asset"`
-	// Epoch filters by user epoch index
-	Epoch *string `json:"epoch,omitempty"`
-	// ChannelID filters by Home/Escrow Channel ID
-	ChannelID *string `json:"channel_id,omitempty"`
-	// OnlySigned returns only signed states
-	OnlySigned bool `json:"only_signed"`
-	// Pagination contains pagination parameters (offset, limit, sort)
-	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
-}
-
-// ChannelsV1GetStatesResponse returns the list of states.
-type ChannelsV1GetStatesResponse struct {
-	// States is the list of states
-	States []StateV1 `json:"states"`
-	// Metadata contains pagination information
-	Metadata PaginationMetadataV1 `json:"metadata"`
-}
-
 // ChannelsV1RequestCreationRequest requests the creation of a channel from Node.
 type ChannelsV1RequestCreationRequest struct {
 	// State is the state to be submitted

@@ -18,7 +18,6 @@ export const ChannelsV1GetHomeChannelMethod: Method = 'channels.v1.get_home_chan
 export const ChannelsV1GetEscrowChannelMethod: Method = 'channels.v1.get_escrow_channel';
 export const ChannelsV1GetChannelsMethod: Method = 'channels.v1.get_channels';
 export const ChannelsV1GetLatestStateMethod: Method = 'channels.v1.get_latest_state';
-export const ChannelsV1GetStatesMethod: Method = 'channels.v1.get_states';
 export const ChannelsV1RequestCreationMethod: Method = 'channels.v1.request_creation';
 export const ChannelsV1SubmitStateMethod: Method = 'channels.v1.submit_state';
 

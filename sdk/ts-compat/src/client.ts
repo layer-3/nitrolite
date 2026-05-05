@@ -551,29 +551,38 @@ export class NitroliteClient {
     }
 
     async getAppSessionsList(wallet?: Address, status?: string): Promise<AppSession[]> {
-        const mapSessions = (sessions: any[]) => sessions.map((s) => ({
-            app_session_id: s.appSessionId,
-            nonce: Number(s.nonce ?? 0),
-            participants: s.participants.map((p: any) => p.walletAddress),
-            protocol: '',
-            quorum: s.quorum,
-            status: s.isClosed ? 'closed' : 'open',
-            version: Number(s.version ?? 0),
-            weights: s.participants.map((p: any) => p.signatureWeight),
-            allocations: s.allocations?.map((a: any) => {
-                const info = this.assetsBySymbol.get(a.asset?.toLowerCase?.() ?? '');
-                const dec = info?.decimals ?? 6;
-                const rawAmount = a.amount
-                    ? a.amount.mul(new Decimal(10).pow(dec)).toFixed(0)
-                    : '0';
-                return {
-                    participant: a.participant as Address,
-                    asset: a.asset,
-                    amount: rawAmount,
-                };
-            }) ?? [],
-            sessionData: s.sessionData ?? '',
-        }));
+        const mapSessions = (sessions: any[]) => sessions.map((s) => {
+            const definition = s.appDefinition ?? {
+                participants: s.participants ?? [],
+                quorum: s.quorum,
+                nonce: s.nonce,
+            };
+            const participants = definition.participants ?? [];
+
+            return {
+                app_session_id: s.appSessionId,
+                nonce: Number(definition.nonce ?? 0),
+                participants: participants.map((p: any) => p.walletAddress),
+                protocol: '',
+                quorum: definition.quorum ?? 0,
+                status: s.isClosed ? 'closed' : 'open',
+                version: Number(s.version ?? 0),
+                weights: participants.map((p: any) => p.signatureWeight),
+                allocations: s.allocations?.map((a: any) => {
+                    const info = this.assetsBySymbol.get(a.asset?.toLowerCase?.() ?? '');
+                    const dec = info?.decimals ?? 6;
+                    const rawAmount = a.amount
+                        ? a.amount.mul(new Decimal(10).pow(dec)).toFixed(0)
+                        : '0';
+                    return {
+                        participant: a.participant as Address,
+                        asset: a.asset,
+                        amount: rawAmount,
+                    };
+                }) ?? [],
+                sessionData: s.sessionData ?? '',
+            };
+        });
 
         const participant = (wallet ?? this.userAddress).toLowerCase() as Address;
         const normalizedStatus = status?.toLowerCase();

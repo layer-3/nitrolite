@@ -14,6 +14,7 @@ module.exports = {
                     module: 'Node16',
                     moduleResolution: 'Node16',
                     types: ['node', 'jest'],
+                    rootDir: '.',
                 },
             },
         ],

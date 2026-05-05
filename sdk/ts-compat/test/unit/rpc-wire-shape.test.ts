@@ -57,10 +57,12 @@ describe('compat RPC helper wire shapes', () => {
             999,
         ]);
         expect(parsed.sig).toBe('');
+        expect(signer).not.toHaveBeenCalled();
 
         await expect(createGetChannelsMessage(signer, undefined, 'open')).rejects.toThrow(
             'createGetChannelsMessage requires participant',
         );
+        expect(signer).not.toHaveBeenCalled();
     });
 
     it('requires wallet/account for getLedgerBalances and signs the request', async () => {
@@ -79,6 +81,7 @@ describe('compat RPC helper wire shapes', () => {
         await expect(createGetLedgerBalancesMessage(signer)).rejects.toThrow(
             'createGetLedgerBalancesMessage requires accountId',
         );
+        expect(signer).toHaveBeenCalledTimes(1);
     });
 
     it('maps app-session query helpers to live v1 methods', async () => {
@@ -95,6 +98,7 @@ describe('compat RPC helper wire shapes', () => {
             req: [14, 'app_sessions.v1.get_app_definition', { app_session_id: 'session-1' }, 778],
             sig: '',
         });
+        expect(signer).not.toHaveBeenCalled();
     });
 
     it('creates a signed v1 create_app_session request and encodes legacy allocations into session_data', async () => {
@@ -121,6 +125,8 @@ describe('compat RPC helper wire shapes', () => {
 
         const parsed = parseCompatRequest(raw);
         expect(parsed.sig).toBe('0xsigned');
+        expect(signer).toHaveBeenCalledTimes(1);
+        expect(parsed.req[0]).toBe(15);
         expect(parsed.req[1]).toBe('app_sessions.v1.create_app_session');
         expect(parsed.req[2]).toEqual({
             definition: {
@@ -140,6 +146,7 @@ describe('compat RPC helper wire shapes', () => {
                 ],
             }),
         });
+        expect(parsed.req[3]).toBe(779);
     });
 
     it('requires explicit version for submit/close app-state mappings and emits submit_app_state', async () => {
@@ -157,6 +164,8 @@ describe('compat RPC helper wire shapes', () => {
             780,
         );
         const submitReq = parseCompatRequest(submitRaw);
+        expect(submitReq.sig).toBe('0xsigned');
+        expect(signer).toHaveBeenCalledTimes(1);
         expect(submitReq.req).toEqual([
             16,
             'app_sessions.v1.submit_app_state',
@@ -185,6 +194,8 @@ describe('compat RPC helper wire shapes', () => {
             781,
         );
         const closeReq = parseCompatRequest(closeRaw);
+        expect(closeReq.sig).toBe('0xsigned');
+        expect(signer).toHaveBeenCalledTimes(2);
         expect(closeReq.req).toEqual([
             17,
             'app_sessions.v1.submit_app_state',
@@ -207,6 +218,7 @@ describe('compat RPC helper wire shapes', () => {
                 allocations: [{ participant, asset: 'yusd', amount: '0.01' }],
             }),
         ).rejects.toThrow('createSubmitAppStateMessage requires params.version');
+        expect(signer).toHaveBeenCalledTimes(2);
 
         await expect(
             createCloseAppSessionMessage(signer, {
@@ -215,6 +227,7 @@ describe('compat RPC helper wire shapes', () => {
                 quorum_sigs: [],
             }),
         ).rejects.toThrow('createCloseAppSessionMessage requires params.version');
+        expect(signer).toHaveBeenCalledTimes(2);
     });
 
     it('fails fast for legacy workflow helpers that do not map to a single v1 RPC', async () => {

@@ -54,7 +54,7 @@ function legacyJSONReplacer(key: string, value: unknown): unknown {
     return value;
 }
 
-function parseEnvelope(raw: string): LegacyRPCEnvelope | unknown {
+function parseEnvelope(raw: string): unknown {
     return JSON.parse(raw);
 }
 

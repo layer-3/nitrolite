@@ -399,14 +399,16 @@ export class NitroliteClient {
         );
     }
 
-    private async getReadClientForChain(chainId: bigint): Promise<PublicClient> {
+    private getReadClientForChain(chainId: bigint): PublicClient {
         const key = Number(chainId);
         const cached = this._publicClients.get(key);
         if (cached) {
             return cached;
         }
 
+        const walletChain = this.walletClient.chain;
         const client = createPublicClient({
+            ...(walletChain && Number(walletChain.id) === key ? { chain: walletChain } : {}),
             transport: http(this.getRPCUrl(key)),
         });
         this._publicClients.set(key, client);
@@ -546,7 +548,7 @@ export class NitroliteClient {
 
     async getOpenChannels(): Promise<string[]> {
         const blockchain = await this.getBlockchainById(this._chainId);
-        const client = await this.getReadClientForChain(this._chainId);
+        const client = this.getReadClientForChain(this._chainId);
         const channelIds = await client.readContract({
             address: blockchain.channelHubAddress,
             abi: ChannelHubCompatAbi,
@@ -559,7 +561,7 @@ export class NitroliteClient {
 
     async getAccountBalance(_tokenAddress: Address | Address[]): Promise<never> {
         throw new Error(
-            '[compat] getAccountBalance is not supported as a direct v0.5.3 parity method. Use getBalances() for clearnode ledger balances or getTokenBalance(tokenAddress) for on-chain wallet balances.',
+            '[compat] getAccountBalance is not supported as a direct v0.5.3 parity method. Use getBalances() for nitronode ledger balances or getTokenBalance(tokenAddress) for on-chain wallet balances.',
         );
     }
 
@@ -577,7 +579,7 @@ export class NitroliteClient {
 
     async getTokenAllowance(tokenAddress: Address): Promise<bigint> {
         const info = await this.resolveToken(tokenAddress);
-        return this.innerClient.checkTokenAllowance(info.chainId, tokenAddress, this.userAddress);
+        return this.innerClient.checkTokenAllowance(info.chainId, info.tokenAddress, this.userAddress);
     }
 
     async getTokenBalance(tokenAddress: Address): Promise<bigint> {
@@ -703,7 +705,7 @@ export class NitroliteClient {
     }
 
     /**
-     * Returns clearnode ledger balances encoded with asset-level decimals.
+     * Returns nitronode ledger balances encoded with asset-level decimals.
      *
      * @remarks
      * The raw string amounts returned here are not guaranteed to match the raw
@@ -1123,7 +1125,7 @@ export class NitroliteClient {
     /** Transfers are executed sequentially per allocation and are not atomic; a mid-loop failure leaves prior transfers committed. */
     async transfer(destination: Address, allocations: TransferAllocation[]): Promise<void> {
         for (const alloc of allocations) {
-            const decimals = await this.getTokenDecimalsForAsset(alloc.asset);
+            const decimals = await this.getAssetDecimalsForAsset(alloc.asset);
             const humanAmount = new Decimal(alloc.amount).div(new Decimal(10).pow(decimals));
             await this.innerClient.transfer(destination, alloc.asset, humanAmount);
         }

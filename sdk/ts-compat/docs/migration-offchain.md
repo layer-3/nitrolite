@@ -90,5 +90,5 @@ For new code, prefer `NitroliteClient` methods directly.
 
 ### Amount conventions
 
-- `TransferAllocation.amount` remains a raw smallest-unit string such as `'5000000'` for 5 USDC.
+- `TransferAllocation.amount` remains a raw asset-unit string such as `'5000000'` for 5 USDC when USDC has 6 asset decimals.
 - App-session allocation amounts in `createAppSession`, `closeAppSession`, and `submitAppState` remain human-readable decimal strings such as `'0.01'`.

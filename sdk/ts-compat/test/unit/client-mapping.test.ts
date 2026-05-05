@@ -218,13 +218,13 @@ describe('NitroliteClient compat mappings', () => {
         expect(innerClient.submitAppState.mock.calls[1][0].allocations[0].amount.toString()).toBe('0.25');
     });
 
-    it('uses token decimals for raw-unit transfer/approval/balance helpers', async () => {
+    it('uses asset decimals for transfers and token decimals for token-facing helpers', async () => {
         const { client, innerClient } = makeCompatClient();
 
         await client.refreshAssets();
 
         await client.transfer('0x00000000000000000000000000000000000000d1', [
-            { asset: 'yusd', amount: '500000000' },
+            { asset: 'yusd', amount: '5000000' },
         ]);
         expect(innerClient.transfer).toHaveBeenCalledWith(
             '0x00000000000000000000000000000000000000d1',
@@ -291,7 +291,7 @@ describe('NitroliteClient compat mappings', () => {
     it('keeps unsupported legacy methods honest and getOpenChannels delegates to the current chain hub', async () => {
         const { client } = makeCompatClient();
         const readContract = jest.fn().mockResolvedValue(['0xabc', '0xdef']);
-        (client as unknown as Record<string, unknown>).getReadClientForChain = jest.fn().mockResolvedValue({ readContract });
+        (client as unknown as Record<string, unknown>).getReadClientForChain = jest.fn().mockReturnValue({ readContract });
 
         await expect(client.getOpenChannels()).resolves.toEqual(['0xabc', '0xdef']);
 

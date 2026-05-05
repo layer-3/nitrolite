@@ -97,10 +97,10 @@ const assets   = await client.getAssetsList();
 
 ### 4. Transfer off-chain
 
-The compat `transfer(destination, allocations)` preserves the v0.5.3-style array-of-allocations signature. Each `TransferAllocation.amount` is a **raw-unit string** (smallest denomination). The compat layer divides by token decimals before delegating to the v1 SDK's `transfer(wallet, asset, Decimal)`:
+The compat `transfer(destination, allocations)` preserves the v0.5.3-style array-of-allocations signature. Each `TransferAllocation.amount` is a **raw asset-unit string** using the asset's canonical decimals. The compat layer divides by asset decimals before delegating to the v1 SDK's `transfer(wallet, asset, Decimal)`:
 
 ```typescript
-// 5 USDC = 5_000_000 raw units (6 decimals)
+// 5 USDC = 5_000_000 raw asset units when USDC has 6 asset decimals
 await client.transfer(recipientAddress, [
   { asset: 'usdc', amount: '5000000' },
 ]);
@@ -193,7 +193,7 @@ App-session allocation strings remain **human-readable decimal strings** such as
 |---|---|
 | `transfer(destination, allocations)` | Off-chain transfer to another participant |
 
-`TransferAllocation.amount` remains a **raw-unit string** in the smallest token denomination, for example `'5000000'` for 5 USDC.
+`TransferAllocation.amount` remains a **raw asset-unit string** using the asset's canonical decimals, for example `'5000000'` for 5 USDC when USDC has 6 asset decimals.
 
 ### Asset Resolution
 
@@ -406,7 +406,7 @@ The compat layer keeps the old amount conventions explicit instead of flattening
 | Method group | Input type | Example: 100 tokens (18 decimals) |
 |---|---|---|
 | `deposit`, `withdrawal`, `lockSecurityTokens`, `approveSecurityToken`, `getLockedBalance` | Raw `bigint` | `100_000_000_000_000_000_000n` |
-| `transfer` | Raw string via `TransferAllocation.amount` | `'100000000000000000000'` |
+| `transfer` | Raw asset-unit string via `TransferAllocation.amount` | `'100000000000000000000'` |
 | `createAppSession`, `closeAppSession`, `submitAppState` allocations | Human-readable decimal string | `'100.0'` |
 
 > For direct access to the v1 SDK's human-readable `Decimal` API, use `client.innerClient`.

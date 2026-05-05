@@ -74,8 +74,8 @@ describe('NitroliteClient getAppSessionsList compat mapping', () => {
                 version: 7,
                 weights: [1, 2],
                 allocations: [
-                    { participant: wallet, asset: 'YUSD', amount: '1250000' },
-                    { participant: friend, asset: 'YELLOW', amount: '2000000000000000000' },
+                    { participant: wallet, asset: 'YUSD', amount: '1.25' },
+                    { participant: friend, asset: 'YELLOW', amount: '2' },
                 ],
                 sessionData: '{"intent":"purchase"}',
             },

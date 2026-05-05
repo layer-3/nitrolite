@@ -171,7 +171,7 @@ export interface ResizeChannelRequestParams {
 
 export interface TransferAllocation {
     asset: string;
-    /** Raw token units in the smallest denomination (for example 5 USDC = "5000000"). */
+    /** Raw asset units using the asset's canonical decimals (for example 5 USDC = "5000000" when USDC has 6 asset decimals). */
     amount: string;
 }
 

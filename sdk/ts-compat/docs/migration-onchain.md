@@ -65,7 +65,7 @@ const amount = 11_000_000n; // 11 USDC (6 decimals)
 // Manual conversion for display: formatUnits(amount, 6)
 ```
 
-**After (compat):** App-facing methods still accept raw token amounts, and the compat layer handles the conversion needed to call the v1 SDK correctly
+**After (compat):** On-chain app-facing methods still accept raw token amounts, and the compat layer handles the conversion needed to call the v1 SDK correctly
 
 ```typescript
 // Raw BigInt still works
@@ -76,7 +76,7 @@ const formatted = client.formatAmount(tokenAddress, 11_000_000n); // "11.0"
 const parsed = client.parseAmount(tokenAddress, "11.0");         // 11_000_000n
 ```
 
-Transfer allocations still use raw smallest-unit strings, for example `{ asset: 'usdc', amount: '5000000' }` for 5 USDC.
+Transfer allocations still use raw asset-unit strings, for example `{ asset: 'usdc', amount: '5000000' }` for 5 USDC when USDC has 6 asset decimals.
 
 App-session allocations are different: those remain human-readable decimal strings such as `{ asset: 'usdc', amount: '5.0' }`.
 

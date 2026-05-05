@@ -73,7 +73,7 @@ describe('TS RPC drift guards', () => {
 
     it('keeps the TS raw RPC method surface aligned with live router registrations', () => {
         const routerMethods = extractRouterHandlers(
-            fs.readFileSync(path.join(repoRoot, 'clearnode/api/rpc_router.go'), 'utf8')
+            fs.readFileSync(path.join(repoRoot, 'nitronode/api/rpc_router.go'), 'utf8')
         );
         const tsMethods = extractTsMethodLiterals(
             fs.readFileSync(path.join(repoRoot, 'sdk/ts/src/rpc/methods.ts'), 'utf8')

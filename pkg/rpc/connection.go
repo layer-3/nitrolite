@@ -389,7 +389,7 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 			continue // Skip empty messages
 		}
 
-		if !conn.frameRateLimiter.Allow(time.Now(), len(messageBytes)) {
+		if !conn.frameRateLimiter.Admit(time.Now(), len(messageBytes)) {
 			conn.logger.Warn("frame rate limit exceeded; closing connection",
 				"origin", conn.origin,
 				"frame_bytes", len(messageBytes),

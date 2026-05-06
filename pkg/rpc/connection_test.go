@@ -184,7 +184,7 @@ type stubLimiter struct {
 	calls    int
 }
 
-func (s *stubLimiter) Allow(_ time.Time, _ int) bool {
+func (s *stubLimiter) Admit(_ time.Time, _ int) bool {
 	s.calls++
 	return s.calls < s.rejectAt
 }

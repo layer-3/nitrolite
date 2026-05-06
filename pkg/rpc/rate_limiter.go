@@ -9,23 +9,23 @@ import "time"
 //
 // Returning false causes the connection to close.
 //
-// Allocation note: Allow runs after the frame has been read off the wire and
+// Allocation note: Admit runs after the frame has been read off the wire and
 // allocated on the Go heap. Per-frame size is bounded by SetReadLimit (see
 // WebsocketConnectionConfig.MaxMessageSize), but a burst of N back-to-back
 // max-sized frames can briefly hold up to N * MaxMessageSize bytes per
 // connection before this hook closes it. Burst capacity should be sized with
 // that ceiling in mind.
 type FrameRateLimiter interface {
-	// Allow reports whether a frame of size bytes is permitted at now.
-	Allow(now time.Time, size int) bool
+	// Admit reports whether a frame of size bytes is permitted at now.
+	Admit(now time.Time, size int) bool
 }
 
 // NoopFrameRateLimiter accepts every frame. Default when no limiter is
 // configured; useful for tests and dev environments.
 type NoopFrameRateLimiter struct{}
 
-// Allow always returns true.
-func (NoopFrameRateLimiter) Allow(time.Time, int) bool { return true }
+// Admit always returns true.
+func (NoopFrameRateLimiter) Admit(time.Time, int) bool { return true }
 
 // ByteTokenBucket is a token bucket on bytes read. One bucket per connection.
 // Not safe for concurrent use; the connection's read goroutine is the sole
@@ -50,9 +50,9 @@ func NewByteTokenBucket(bytesPerSec, burst float64) *ByteTokenBucket {
 	}
 }
 
-// Allow refills tokens for elapsed time, caps at burst, then debits size.
+// Admit refills tokens for elapsed time, caps at burst, then debits size.
 // Returns false if size exceeds available tokens.
-func (b *ByteTokenBucket) Allow(now time.Time, size int) bool {
+func (b *ByteTokenBucket) Admit(now time.Time, size int) bool {
 	if !b.last.IsZero() {
 		b.tokens += now.Sub(b.last).Seconds() * b.bytesPerSec
 		if b.tokens > b.burst {

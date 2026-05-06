@@ -109,10 +109,9 @@ func TestWebsocketConnection_Serve_AppliesReadLimit(t *testing.T) {
 
 	conn.Serve(ctx, func(error) {})
 
-	// Read limit must be set before any read happens.
-	require.Eventually(t, func() bool {
-		return wsConnMock.getReadLimit() == 64*1024
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	// Serve calls SetReadLimit synchronously before spawning any goroutine, so
+	// the limit is observable immediately on return — no polling needed.
+	require.Equal(t, int64(64*1024), wsConnMock.getReadLimit())
 }
 
 // TestWebsocketConnection_LocalReadLimit_GracefulClose simulates the local

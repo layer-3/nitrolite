@@ -83,8 +83,10 @@ networking:
       nginx.ingress.kubernetes.io/limit-connections: "50"        # concurrent / IP
       nginx.ingress.kubernetes.io/limit-rps: "20"                # new conns/s / IP
       nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
-      # Belt-and-braces: ingress-level body cap. App enforces frame size too.
-      nginx.ingress.kubernetes.io/proxy-body-size: "256k"
+      # Note: nginx proxy-body-size applies to HTTP request bodies only. After
+      # the WebSocket upgrade, ingress-nginx proxies the TCP stream transparently
+      # and cannot enforce a per-frame size limit. The frame cap is enforced at
+      # the application layer via NITRONODE_WS_MAX_MESSAGE_SIZE / SetReadLimit.
 
 stressTest:
   enabled: false

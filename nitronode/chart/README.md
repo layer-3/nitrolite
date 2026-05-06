@@ -127,8 +127,13 @@ The env templates already wire these annotations on the WebSocket Ingress:
 nginx.ingress.kubernetes.io/limit-connections:      "50"   # concurrent / IP
 nginx.ingress.kubernetes.io/limit-rps:              "20"   # new conns/s / IP
 nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
-nginx.ingress.kubernetes.io/proxy-body-size:        "256k"
 ```
+
+> Note: `proxy-body-size` (nginx `client_max_body_size`) intentionally not set.
+> It applies to HTTP request bodies only; after the WebSocket upgrade the
+> ingress proxies the TCP stream transparently and cannot enforce a per-frame
+> size limit. Frame size is capped at the application layer
+> (`NITRONODE_WS_MAX_MESSAGE_SIZE` → `SetReadLimit`).
 
 **Real-IP requirement.** ingress-nginx must see the client IP, not the CF
 edge IP or LB pod IP. Cluster-wide ConfigMap (one-time, ops-owned):

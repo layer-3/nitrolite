@@ -205,6 +205,26 @@ func InitBackbone() *Backbone {
 
 	bytesPerSec := conf.WsBytesPerSec
 	bytesBurst := conf.WsBytesBurst
+	// When the per-connection byte budget is enabled, the burst must be at least
+	// the max message size; otherwise every legitimate frame that passes
+	// SetReadLimit would still be rejected by the bucket on arrival, taking the
+	// node out via config alone. Fail fast at startup.
+	if bytesPerSec > 0 {
+		if bytesBurst <= 0 {
+			logger.Fatal(
+				"NITRONODE_WS_BYTES_BURST must be > 0 when NITRONODE_WS_BYTES_PER_SEC is enabled",
+				"ws_bytes_burst", bytesBurst,
+				"ws_bytes_per_sec", bytesPerSec,
+			)
+		}
+		if conf.WsMaxMessageSize > 0 && bytesBurst < float64(conf.WsMaxMessageSize) {
+			logger.Fatal(
+				"NITRONODE_WS_BYTES_BURST must be >= NITRONODE_WS_MAX_MESSAGE_SIZE when byte limiting is enabled",
+				"ws_bytes_burst", bytesBurst,
+				"ws_max_message_size", conf.WsMaxMessageSize,
+			)
+		}
+	}
 	rpcNode, err := rpc.NewWebsocketNode(rpc.WebsocketNodeConfig{
 		Logger:                  logger,
 		ObserveConnections:      runtimeMetrics.SetRPCConnections,

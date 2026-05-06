@@ -115,7 +115,11 @@ func TestWebsocketConnection_Serve_AppliesReadLimit(t *testing.T) {
 	}, 200*time.Millisecond, 5*time.Millisecond)
 }
 
-func TestWebsocketConnection_OversizedFrame_GracefulClose(t *testing.T) {
+// TestWebsocketConnection_LocalReadLimit_GracefulClose simulates the local
+// SetReadLimit hitting on an inbound frame. Gorilla returns ErrReadLimit to
+// the application (and best-effort sends close 1009 to the peer over the wire).
+// The connection must treat this as a graceful close, not an abnormal error.
+func TestWebsocketConnection_LocalReadLimit_GracefulClose(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -123,7 +127,7 @@ func TestWebsocketConnection_OversizedFrame_GracefulClose(t *testing.T) {
 
 	wsConnMock := newGorillaWsConnMock(ctx)
 	cfg := rpc.WebsocketConnectionConfig{
-		ConnectionID:  "conn-oversize",
+		ConnectionID:  "conn-readlimit",
 		WebsocketConn: wsConnMock,
 	}
 	conn, err := rpc.NewWebsocketConnection(cfg)
@@ -132,17 +136,46 @@ func TestWebsocketConnection_OversizedFrame_GracefulClose(t *testing.T) {
 	closureCh := make(chan error, 1)
 	conn.Serve(ctx, func(err error) { closureCh <- err })
 
-	// Simulate gorilla returning CloseMessageTooBig from ReadMessage.
+	wsConnMock.readErrCh <- websocket.ErrReadLimit
+
+	select {
+	case err := <-closureCh:
+		require.NoError(t, err, "ErrReadLimit must close gracefully, not as abnormal error")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("connection did not close after local read-limit hit")
+	}
+}
+
+// TestWebsocketConnection_PeerInitiated1009_GracefulClose covers the symmetric
+// case: the peer initiates a close with code 1009 (their read limit hit).
+// Gorilla surfaces a *CloseError{1009} on ReadMessage in that case.
+func TestWebsocketConnection_PeerInitiated1009_GracefulClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:  "conn-peer1009",
+		WebsocketConn: wsConnMock,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	closureCh := make(chan error, 1)
+	conn.Serve(ctx, func(err error) { closureCh <- err })
+
 	wsConnMock.readErrCh <- &websocket.CloseError{
 		Code: websocket.CloseMessageTooBig,
-		Text: "read limit exceeded",
+		Text: "peer-side read limit exceeded",
 	}
 
 	select {
 	case err := <-closureCh:
-		require.NoError(t, err, "1009 must close gracefully, not as abnormal error")
+		require.NoError(t, err, "peer-sent 1009 must close gracefully, not as abnormal error")
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("connection did not close after oversized frame")
+		t.Fatal("connection did not close after peer-initiated 1009")
 	}
 }
 

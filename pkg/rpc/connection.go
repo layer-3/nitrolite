@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -356,10 +357,13 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 		_, messageBytes, err := conn.websocketConn.ReadMessage()
 		if err != nil {
 			switch {
-			case websocket.IsCloseError(err, websocket.CloseMessageTooBig):
-				// Expected attacker / misconfigured-client path. Frame exceeded
-				// SetReadLimit; gorilla already sent close 1009. Treat as
-				// graceful close, not abnormal termination.
+			case errors.Is(err, websocket.ErrReadLimit),
+				websocket.IsCloseError(err, websocket.CloseMessageTooBig):
+				// Expected attacker / misconfigured-client path. Local read limit
+				// exceeded → gorilla returns ErrReadLimit to us and best-effort
+				// sends close 1009 to the peer. The IsCloseError branch covers
+				// the symmetric case where the peer initiated a 1009 close.
+				// Treat both as graceful close, not abnormal termination.
 				conn.logger.Warn("inbound frame exceeded MaxMessageSize; closing connection",
 					"error", err,
 					"origin", conn.origin,

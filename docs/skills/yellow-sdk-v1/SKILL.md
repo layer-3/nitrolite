@@ -1,150 +1,133 @@
 ---
 name: yellow-sdk-v1
 description: |
-  The `@yellow-org/sdk` v1.x TypeScript SDK — the active upstream SDK for Yellow Network / Clearnode payment channels. Replaces the frozen `@erc7824/nitrolite@0.5.3`. Built around a single unified `Client` class (created via `Client.create(wsURL, stateSigner, txSigner, ...opts)`) that owns both the WebSocket and the blockchain RPC, plus two signer classes (`EthereumMsgSigner` for state, `EthereumRawSigner` for tx) and a `createSigners(privateKey)` convenience helper. Use when: starting a new integration against mainnet, migrating a v0.5.3 dApp to v1 (directly or via `@yellow-org/sdk-compat`), or deciding which of the v1 method namespaces (`channels.v1.*`, `app_sessions.v1.*`, `apps.v1.*`, `user.v1.*`, `node.v1.*`) covers your call.
-version: 2.0.0
+  Reference for the active @yellow-org/sdk v1 TypeScript SDK in this monorepo. Covers Client.create, signer setup, option factories, high-level channel/app-session/user/node methods, and the canonical v1 RPC namespaces from docs/api.yaml and sdk/ts/src/rpc/methods.ts. Use when building new integrations or verifying SDK usage against the current v1 API.
+version: 3.0.0
 sdk_version: "@yellow-org/sdk@^1.2.0"
 network: mainnet
-last_verified: 2026-04-26
+last_verified: 2026-05-06
 user-invocable: true
 source_urls:
   - https://www.npmjs.com/package/@yellow-org/sdk
   - https://github.com/layer-3/nitrolite/blob/main/docs/api.yaml
-  - https://docs.yellow.org/docs/0.5.x/build/quick-start
-  - https://docs.yellow.org/docs/0.5.x/guides/migration-guide
+  - https://github.com/layer-3/nitrolite/blob/main/sdk/ts/src/client.ts
+  - https://github.com/layer-3/nitrolite/blob/main/sdk/ts/src/rpc/methods.ts
 ---
 
 # Yellow SDK v1 (`@yellow-org/sdk`)
 
-**Status**: Active, current mainnet SDK · **Version**: 1.2.0
-**Supersedes**: `@erc7824/nitrolite@0.5.3` (frozen)
-**Runtime**: Node.js ≥ 20; deps: `viem`, `decimal.js`, `zod`, `abitype`
+`@yellow-org/sdk` is the active TypeScript SDK for Nitrolite v1. It exposes a single async `Client.create(...)` factory, signer helpers, high-level channel operations, app-session operations, and typed access to the v1 RPC namespace.
 
 ## Install
 
 ```bash
-npm install @yellow-org/sdk viem
+npm install @yellow-org/sdk viem decimal.js
 ```
 
-## Why v1 (vs v0.5.3)
+## Create a Client
 
-v0.5.3 was bring-your-own-socket: you dialled the WebSocket, signed every
-`createXxxMessage`, parsed every response. v1 collapses this into a single
-`Client` that owns the socket, the state-signer, and the on-chain tx-signer.
-Roughly 14 dimensions of wire format, auth, units, and asset resolution
-changed — direct migration touches many files, which is why
-`@yellow-org/sdk-compat` exists (many helpers are **noop stubs**, so don't
-assume compat is a drop-in).
-
-## Quickstart — `Client.create()`
-
-```typescript
-import { Client, createSigners, withBlockchainRPC, withHandshakeTimeout }
-  from '@yellow-org/sdk';
+```ts
+import { Client, createSigners, withBlockchainRPC, withHandshakeTimeout } from '@yellow-org/sdk';
 
 const { stateSigner, txSigner } = createSigners(
   process.env.PRIVATE_KEY as `0x${string}`,
 );
 
 const client = await Client.create(
-  'wss://clearnode.yellow.com/ws',
-  stateSigner,        // signs channel states (EIP-191 prefixed)
-  txSigner,           // signs on-chain transactions
-  withBlockchainRPC(1n, process.env.MAINNET_RPC!),
+  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  stateSigner,
+  txSigner,
+  withBlockchainRPC(80002n, process.env.POLYGON_AMOY_RPC!),
   withHandshakeTimeout(10_000),
 );
 ```
 
-There is **no `new Client(...)`** — only the async factory. `Client.create`
-does the WebSocket handshake and auth in one call.
+There is no public `new Client(...)` constructor. `Client.create` establishes the WebSocket connection and returns a ready client.
 
-## v1 method namespaces (dotted, versioned)
+## Signers
 
-All RPC methods in v1 use dotted namespaces:
+`createSigners(privateKey)` returns both signer roles expected by the v1 client:
 
-| Namespace | Example methods |
-|---|---|
-| `channels.v1.*` | `get_home_channel`, `request_creation`, `submit_state` |
-| `app_sessions.v1.*` | `submit_deposit_state`, `submit_session_key_state` |
-| `apps.v1.*` | `get_apps`, `submit_app_version` |
-| `user.v1.*` | `get_balances`, `get_transactions`, `get_action_allowances` |
-| `node.v1.*` | `ping`, `get_config`, `get_assets` |
+- `stateSigner` — signs channel and app-session state messages.
+- `txSigner` — signs and sends on-chain transactions.
 
-Don't mix v0 (flat `get_balances`) and v1 (`user.v1.get_balances`) method
-names in the same client — the wire format is incompatible.
+The package also exports signer classes such as `EthereumMsgSigner`, `EthereumRawSigner`, `ChannelDefaultSigner`, `ChannelSessionKeyStateSigner`, `AppSessionWalletSignerV1`, and `AppSessionKeySignerV1` for advanced flows.
 
-## Common operations
+## Option Factories
 
-v1 takes **positional args** (not object params) and amounts are `Decimal`
-from `decimal.js`:
+The package root exports these client option factories from `sdk/ts/src/config.ts`:
+
+- `withHandshakeTimeout(ms: number)`
+- `withErrorHandler(handler: (error: Error) => void)`
+- `withBlockchainRPC(chainId: bigint, rpcUrl: string)`
+- `withApplicationID(applicationId: string)`
+
+Use `withBlockchainRPC` before calling methods that need chain access, such as deposits, withdrawals, approvals, checkpoints, and challenges.
+
+## Common Operations
+
+The v1 `Client` takes positional arguments. Amounts are `Decimal` human amounts, not raw smallest-unit integers.
 
 ```ts
 import Decimal from 'decimal.js';
 
-// Deposits → unified balance — (blockchainId, asset, amount)
-await client.deposit(137n, '0xUSDCAddress', new Decimal('100'));
-
-// Transfers — (recipientWallet, asset, amount)
-await client.transfer('0xRecipient', 'usdc', new Decimal('50'));
-
-// App session — (definition, sessionData, quorumSigs, opts?)
-const { appSessionId } = await client.createAppSession(definition, sessionData, [sig]);
-
-// Channel lifecycle — single-arg forms
+await client.deposit(80002n, 'usdc', new Decimal('100'));
+await client.withdraw(80002n, 'usdc', new Decimal('25'));
+await client.transfer('0xRecipient...', 'usdc', new Decimal('50'));
+await client.acknowledge('usdc');
 await client.closeHomeChannel('usdc');
-await client.challenge(state);
 await client.checkpoint('usdc');
-
-// Queries
-await client.ping();
-const balances = await client.getBalances(ownerAddress);
 ```
 
-See `reference.md` for the full method catalogue (Client + signers + options
-+ every v1 namespace).
+`checkpoint(asset)` is the on-chain settlement entrypoint used after off-chain state changes when the state needs to be submitted to `ChannelHub`.
 
-## Signers
+## Query Methods
 
-- **`EthereumMsgSigner`** — signs channel states (EIP-191-prefixed personal sign)
-- **`EthereumRawSigner`** — signs raw on-chain transaction hashes
+High-level query methods include:
 
-`createSigners(privateKey)` returns both. Don't share keys across signers
-other than via this helper — v1 expects the two to agree on the wallet
-identity.
+- `ping()`
+- `getConfig()`
+- `getBlockchains()`
+- `getAssets(blockchainId?)`
+- `getBalances(wallet)`
+- `getTransactions(wallet, options?)`
+- `getActionAllowances(wallet)`
+- `getChannels(wallet, options?)`
+- `getHomeChannel(wallet, asset)`
+- `getEscrowChannel(escrowChannelId)`
+- `getLatestState(wallet, asset, onlySigned)`
 
-## App-session prefix bytes (v1-specific)
+## App Sessions
 
-Quorum signatures in v1 app sessions carry a 1-byte type prefix:
+High-level app-session methods include:
 
-- `0xA1` = `AppSessionWalletSignerV1`
-- `0xA2` = `AppSessionKeySignerV1`
+- `getAppSessions({ appSessionId?, wallet?, status?, page?, pageSize? })`
+- `getAppDefinition(appSessionId)`
+- `createAppSession(definition, sessionData, quorumSigs, opts?)`
+- `submitAppSessionDeposit(update, quorumSigs, asset, depositAmount)`
+- `submitAppState(update, quorumSigs)`
+- `rebalanceAppSessions(signedUpdates)`
 
-Raw 65-byte sigs without the prefix are rejected. v0.5.3 sigs have no
-prefix → v0.5.3 and v1 quorum payloads are wire-incompatible.
+There is no dedicated v1 close-session RPC method. Closing an app session is represented as an app-state submission with the close intent, per the `app_state_update.intent` schema in `docs/api.yaml`.
 
-## Notifications → polling
+## v1 RPC Namespaces
 
-v1 **removes** push notifications (`bu`/`cu`/`tr`/`asu`). Poll `get*`
-methods instead, or use `@yellow-org/sdk-compat`'s `EventPoller` shim that
-re-synthesizes the v0.5.3 push shape.
+The canonical v1 RPC method names are in `sdk/ts/src/rpc/methods.ts` and schemas are in `docs/api.yaml`.
 
-## Navigation Guide
+| Namespace | Method constants |
+|---|---|
+| `channels.v1.*` | `ChannelsV1GetHomeChannelMethod`, `ChannelsV1RequestCreationMethod`, `ChannelsV1SubmitStateMethod`, plus channel query/session-key methods |
+| `app_sessions.v1.*` | `AppSessionsV1CreateAppSessionMethod`, `AppSessionsV1SubmitAppStateMethod`, `AppSessionsV1GetAppSessionsMethod`, plus deposit/rebalance/session-key methods |
+| `apps.v1.*` | `AppsV1GetAppsMethod`, `AppsV1SubmitAppVersionMethod` |
+| `user.v1.*` | `UserV1GetBalancesMethod`, `UserV1GetTransactionsMethod`, `UserV1GetActionAllowancesMethod` |
+| `node.v1.*` | `NodeV1PingMethod`, `NodeV1GetConfigMethod`, `NodeV1GetAssetsMethod` |
 
-### When to read supporting files
+Do not mix these with legacy flat RPC names in new integrations.
 
-**reference.md** — read when you need:
+## On-Chain Boundary
 
-- Full `Client.create()` signature + every option factory
-- Complete method catalogue by v1 namespace (channels / app_sessions / apps / user / node)
-- Module layout (`./client`, `./signers`, `./config`, `./asset_store`, `./utils`, `./core`, `./app`, `./blockchain`, `./rpc`)
-- Signer class internals (`StateSigner` / `TransactionSigner` interfaces)
-- Core enums (`ChannelStatus`, `TransitionType`, `INTENT_*` constants)
-- `@yellow-org/sdk-compat` behaviour table (wired vs noop helpers)
-- Configuration options (handshake timeout, error handler, per-chain RPC)
+The v1 on-chain entrypoint in this repository is `contracts/src/ChannelHub.sol`. SDK operations produce signed states; `checkpoint(asset)` and `challenge(state)` are the high-level methods that cross the on-chain boundary.
 
-## Related
+## Compatibility Note
 
-- `yellow-nitro-rpc` — wire format v1 hides
-- `yellow-clearnode-auth` — the auth Client.create runs internally
-- `yellow-state-channels` — on-chain security layer
-- `yellow-sdk-api` — legacy v0.5.3 SDK (reference only)
+`sdk/ts-compat` exists for older application code that still uses legacy API shapes. Treat it as a migration aid, not as the v1 protocol source of truth.

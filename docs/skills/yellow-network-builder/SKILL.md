@@ -1,144 +1,114 @@
 ---
 name: yellow-network-builder
 description: |
-  Getting-started guide for Yellow Network on mainnet. Covers what Yellow solves, three-layer architecture (on-chain Custody + off-chain Nitro RPC + P2P YNP), $YELLOW token, running a ClearNode locally, fund flow, key concepts, and a suite index pointing to every specialist skill. Use when: starting a new Yellow Network integration, understanding the protocol, setting up environments, or deciding which specialist skill covers your current task.
-version: 4.0.0
+  Getting-started guide for building against the current Nitrolite v1 protocol and @yellow-org/sdk. Covers the repo-local sources of truth, architecture layers, ChannelHub on-chain entrypoint, v1 RPC namespaces, setup commands, and when to use the TypeScript SDK. Use when starting a new Nitrolite integration or checking whether documentation matches the v1 monorepo surface.
+version: 5.0.0
 sdk_version: "@yellow-org/sdk@^1.2.0"
 network: mainnet
-last_verified: 2026-04-26
+last_verified: 2026-05-06
 user-invocable: true
 source_urls:
-  - https://docs.yellow.org
-  - https://docs.yellow.org/whitepaper
-  - https://docs.yellow.org/docs/0.5.x/guides/manuals/running-clearnode-locally
+  - https://github.com/layer-3/nitrolite/blob/main/docs/api.yaml
+  - https://github.com/layer-3/nitrolite/blob/main/sdk/ts/src/rpc/methods.ts
+  - https://github.com/layer-3/nitrolite/blob/main/contracts/src/ChannelHub.sol
 ---
 
-# Yellow Network Builder Guide
+# Nitrolite Builder Guide
 
-**Protocol**: NitroRPC/0.4 (wire) + VirtualApp:Custody v0.3.0 (on-chain)
-**Active SDK**: `@yellow-org/sdk@^1.2.0` (legacy: `@erc7824/nitrolite@^0.5.3`, frozen)
+Nitrolite is a state channel framework for Ethereum and EVM-compatible chains. It lets applications move most interaction off-chain while preserving an on-chain recovery path through signed states and the `ChannelHub` contract.
 
-Yellow Network is a Layer-3 overlay for decentralised clearing and
-settlement across EVM chains. Lock funds on-chain once; transact unlimited
-times off-chain via signed state updates; settle on-chain once. Finality
-< 1 second, zero gas per operation, funds always recoverable via the
-Custody contract.
+## Sources of Truth
 
-## "Brokers" — clarifying a confusing term
+For v1 integrations, verify behavior against the repository itself:
 
-Yellow's docs call ClearNode operators "brokers" because they hold and
-update ledger state. They are **not** market-makers. There is no public
-broker registry, no broker matching engine, no `submit_order` /
-`get_quote` RPC. Order books, quotes, matching — all of it lives in the
-**application layer** that you build.
+- `docs/api.yaml` — canonical v1 RPC methods, request schemas, response schemas, and protocol types.
+- `sdk/ts/src/rpc/methods.ts` — TypeScript constants for v1 method names.
+- `sdk/ts/src/client.ts` — high-level `Client` API exposed by `@yellow-org/sdk`.
+- `contracts/src/ChannelHub.sol` — v1 on-chain entrypoint for channel settlement and challenges.
+- `contracts/src/interfaces/Types.sol` — on-chain structs, statuses, intents, and channel definitions.
 
-Public ClearNodes (sandbox + mainnet) are reachable by anyone — no
-partnership, no whitelisting. Running your own ClearNode requires locking
-**250,000 $YELLOW** as operator collateral; using one does not.
+Do not use legacy flat RPC method names as v1 references. They belong to older compatibility surfaces, not the canonical v1 API.
 
-For asset exchange (swaps), see `yellow-swap-design`.
+## Architecture
 
-## Yellow Network repo map (github.com/layer-3)
-
-| Repo | What it is | Use for |
+| Layer | Main components | Use for |
 |---|---|---|
-| [`nitrolite`](https://github.com/layer-3/nitrolite) | Protocol + Go/TS SDK + ClearNode + smart contracts | Default starting point; everything builders need |
-| [`docs`](https://github.com/layer-3/docs) | Source of `docs.yellow.org` | Cite the docs site, not the repo, for stable URLs |
-| [`clearsync`](https://github.com/layer-3/clearsync) | B2B inter-exchange clearing protocol (Solidity + Go) | Algo-trading firms / exchanges, not retail apps |
-| [`broker-contracts`](https://github.com/layer-3/broker-contracts) | Early broker token + LiteVault primitives | Reference only; dormant since 2025 |
-| [`cosign-demo`](https://github.com/layer-3/cosign-demo) | Shared-approval demo on Nitrolite | Learn app sessions by example |
+| Application | Your app and `@yellow-org/sdk` client | Product logic and UX |
+| Off-chain | Clearnode WebSocket JSON-RPC | Fast state negotiation and reads |
+| On-chain | `ChannelHub`, engines, validators | Deposits, checkpoints, challenges, closes |
 
-`yellow.pro` is a Yellow-built consumer **trading product** (UI). It is
-**not** publicly callable infrastructure — don't try to integrate against
-it as a backend.
+The normal app path is: create a `Client`, produce off-chain states with high-level SDK methods, and submit on-chain checkpoints or challenges only when settlement or recovery is needed.
 
-## Three-layer architecture
+## Current TypeScript SDK
 
-| Layer | Components | Speed | Cost |
-|---|---|---|---|
-| **Application** | Your business logic | Instant | Zero |
-| **Off-Chain** | ClearNode + Nitro RPC (WebSocket) | < 1 s | Zero gas |
-| **On-Chain** | Custody + Adjudicator contracts | Block time | Gas fees |
-
-The blockchain is touched only when: opening a channel, funding/resizing,
-cooperative close, or dispute. Everything else — transfers, app-session
-state updates, queries — is off-chain.
-
-## Environments
-
-| Environment | WebSocket | Faucet | Assets |
-|---|---|---|---|
-| Sandbox | `wss://clearnet-sandbox.yellow.com/ws` | Yes | `ytest.usd` |
-| Mainnet | `wss://clearnet.yellow.com/ws` | No | USDC, YELLOW, ETH, etc. |
-
-$YELLOW token (Ethereum mainnet): `0x236eb848c95b231299b4aa9f56c73d6893462720`
-— 10 B fixed supply, ERC-20, deploy 2026-03-05. Used for fees, tier staking,
-governance. Full tokenomics in `reference.md`.
-
-## Quick start
+Install the active SDK:
 
 ```bash
-npm install @yellow-org/sdk viem
+npm install @yellow-org/sdk viem decimal.js
 ```
+
+Create a client with the async factory:
 
 ```ts
-import { Client, createSigners } from '@yellow-org/sdk';
+import Decimal from 'decimal.js';
+import { Client, createSigners, withBlockchainRPC } from '@yellow-org/sdk';
 
-const { stateSigner, txSigner } = createSigners(PRIVATE_KEY);
-const client = await Client.create(
-  'wss://clearnet.yellow.com/ws',
-  stateSigner, txSigner,
+const { stateSigner, txSigner } = createSigners(
+  process.env.PRIVATE_KEY as `0x${string}`,
 );
 
-// v1 Client methods are positional. blockchainId is bigint, amount is Decimal.
-import Decimal from 'decimal.js';
-await client.deposit(137n, 'usdc', new Decimal('100'));
-await client.transfer('0x…', 'usdc', new Decimal('50'));
+const client = await Client.create(
+  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  stateSigner,
+  txSigner,
+  withBlockchainRPC(80002n, process.env.POLYGON_AMOY_RPC!),
+);
+
+await client.deposit(80002n, 'usdc', new Decimal('100'));
+await client.checkpoint('usdc');
+await client.transfer('0xRecipient...', 'usdc', new Decimal('50'));
 ```
 
-See `yellow-sdk-v1` for the full Client API.
+Amounts are `Decimal` human amounts in the v1 SDK. The high-level SDK handles state construction and signing; call `checkpoint(asset)` when the latest off-chain state needs to be submitted on-chain.
 
-## Builder suite index
+## v1 RPC Namespaces
 
-Drop into the right specialist skill for the task:
+The v1 wire API uses dotted namespaces. Confirm exact method names in `sdk/ts/src/rpc/methods.ts` and schemas in `docs/api.yaml`.
 
-**Protocol foundations**
-- `yellow-nitro-rpc` — wire format `{req, sig}` envelope, signatures, timestamps
-- `yellow-clearnode-auth` — 3-step auth + EIP-712 Policy + JWT reuse
-- `yellow-session-keys` — hot-wallet delegation, allowances, rotation
-- `yellow-errors` — descriptive-string error model + recovery
+| Namespace | Examples |
+|---|---|
+| `channels.v1.*` | `channels.v1.get_home_channel`, `channels.v1.request_creation`, `channels.v1.submit_state` |
+| `app_sessions.v1.*` | `app_sessions.v1.create_app_session`, `app_sessions.v1.submit_app_state`, `app_sessions.v1.get_app_sessions` |
+| `apps.v1.*` | `apps.v1.get_apps`, `apps.v1.submit_app_version` |
+| `user.v1.*` | `user.v1.get_balances`, `user.v1.get_transactions`, `user.v1.get_action_allowances` |
+| `node.v1.*` | `node.v1.ping`, `node.v1.get_config`, `node.v1.get_assets` |
 
-**Operational primitives**
-- `yellow-transfers` — instant P2P transfers over unified balance
-- `yellow-app-sessions` — multi-party escrow / stake / game sessions
-- `yellow-state-channels` — channel lifecycle (off-chain + on-chain)
-- `yellow-deposits-withdrawals` — on-chain funding in/out
-- `yellow-queries` — 12 read-only RPC methods
-- `yellow-swap-design` — three patterns for off-chain asset exchange when there's no native swap protocol
-- `yellow-notifications` — `bu`/`cu`/`tr`/`asu` server-push
+Prefer the high-level `Client` methods for application code. Use low-level RPC names when implementing SDK internals, debugging wire behavior, or cross-checking generated API docs.
 
-**On-chain**
-- `yellow-custody-contract` — Solidity ABI, events, structs
+## Repo Map
 
-**SDKs**
-- `yellow-sdk-v1` — `@yellow-org/sdk@1.x` (**active**)
-- `yellow-sdk-api` — legacy `@erc7824/nitrolite@0.5.3` (frozen)
+| Path | Purpose |
+|---|---|
+| `sdk/ts` | Active TypeScript SDK package, published as `@yellow-org/sdk` |
+| `sdk/ts-compat` | Compatibility package for older API shapes; not the v1 source of truth |
+| `contracts` | Solidity contracts, including `ChannelHub` and supporting engines |
+| `clearnode` | Off-chain broker/node implementation |
+| `pkg` | Shared Go protocol, RPC, signing, and app packages |
+| `docs` | Protocol and API documentation |
 
-## Navigation Guide
+## Local Development
 
-### When to read supporting files
+Common commands from the repository root:
 
-**reference.md** — read when you need:
-
-- Full `$YELLOW` tokenomics (allocation table, vesting, uses)
-- **Run-a-ClearNode-locally recipe** (docker compose steps, ports table, env vars)
-- Full architecture breakdown (what's each layer's responsibility)
-- Supported chains list with chain IDs
-- Deeper quick-start with raw Nitro RPC (the legacy / no-SDK path)
-- Fund-flow diagrams across layers
-- Glossary of terms (unified balance, app session, challenge window, etc.)
+```bash
+cd sdk/ts && npm install
+cd sdk/ts && npm test
+cd sdk/ts && npm run build
+cd contracts && forge build
+cd contracts && forge test
+go test ./...
+```
 
 ## Related
 
-Start with `yellow-sdk-v1` for the active SDK, then follow the suite
-index above for specialist topics.
+- `yellow-sdk-v1` — detailed quick reference for `@yellow-org/sdk` v1.

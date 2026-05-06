@@ -22,6 +22,7 @@ jobs:
     with:
       project-path: 'sdk/ts'
       project-name: 'TS SDK'
+      forge-build: true
 
   test-sdk-compat:
     name: Test (TS SDK Compat)
@@ -30,6 +31,99 @@ jobs:
       project-path: 'sdk/ts-compat'
       project-name: 'TS SDK Compat'
       bootstrap-project-path: 'sdk/ts'
+
+  test-protocol-drift-static:
+    name: Test (Protocol Drift Static)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Build contract artifacts
+        run: forge build
+        working-directory: contracts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: sdk/ts/package.json
+          cache: npm
+          cache-dependency-path: |
+            sdk/ts/package-lock.json
+            sdk/ts-compat/package-lock.json
+
+      - name: Install TS SDK dependencies
+        run: npm ci
+        working-directory: sdk/ts
+
+      - name: Build TS SDK for compat file dependency
+        run: npm run build:ci
+        working-directory: sdk/ts
+
+      - name: Install TS SDK Compat dependencies
+        run: npm ci
+        working-directory: sdk/ts-compat
+
+      - name: Run static protocol drift checks
+        run: ./scripts/check-protocol-drift.sh --static
+
+  test-protocol-drift-runtime:
+    name: Test (Protocol Drift Runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: sdk/ts/package.json
+          cache: npm
+          cache-dependency-path: |
+            sdk/ts/package-lock.json
+            sdk/ts-compat/package-lock.json
+
+      - name: Install TS SDK dependencies
+        run: npm ci
+        working-directory: sdk/ts
+
+      - name: Build TS SDK for compat file dependency
+        run: npm run build:ci
+        working-directory: sdk/ts
+
+      - name: Install TS SDK Compat dependencies
+        run: npm ci
+        working-directory: sdk/ts-compat
+
+      - name: Run runtime protocol drift smoke
+        run: ./scripts/check-protocol-drift.sh --runtime
+        env:
+          NITRONODE_RUNTIME_SMOKE_LOG_DIR: runtime-smoke-logs
+
+      - name: Upload runtime smoke logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protocol-drift-runtime-smoke-logs
+          path: runtime-smoke-logs
+          if-no-files-found: ignore
 
   build-and-publish-nitronode:
     name: Build and Publish (Nitronode)

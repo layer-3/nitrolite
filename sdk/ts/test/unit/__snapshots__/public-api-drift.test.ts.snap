@@ -321,6 +321,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "AppSessionsV1GetLastKeyStatesRequest",
     "properties": [
+      "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
     ],
@@ -330,6 +331,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "AppSessionsV1GetLastKeyStatesResponse",
     "properties": [
+      "metadata: PaginationMetadataV1",
       "states: AppSessionKeyStateV1[]",
     ],
     "signatures": [],
@@ -883,6 +885,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "ChannelsV1GetLastKeyStatesRequest",
     "properties": [
+      "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
     ],
@@ -892,6 +895,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "ChannelsV1GetLastKeyStatesResponse",
     "properties": [
+      "metadata: PaginationMetadataV1",
       "states: ChannelSessionKeyStateV1[]",
     ],
     "signatures": [],

@@ -134,11 +134,15 @@ export interface ChannelsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /** Pagination parameters */
+  pagination?: PaginationParamsV1;
 }
 
 export interface ChannelsV1GetLastKeyStatesResponse {
   /** List of active channel session key states for the user */
   states: ChannelSessionKeyStateV1[];
+  /** Pagination metadata */
+  metadata: PaginationMetadataV1;
 }
 
 // ============================================================================
@@ -242,11 +246,15 @@ export interface AppSessionsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /** Pagination parameters */
+  pagination?: PaginationParamsV1;
 }
 
 export interface AppSessionsV1GetLastKeyStatesResponse {
   /** List of active session key states for the user */
   states: AppSessionKeyStateV1[];
+  /** Pagination metadata */
+  metadata: PaginationMetadataV1;
 }
 
 // ============================================================================

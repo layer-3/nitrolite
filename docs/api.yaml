@@ -639,7 +639,7 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: user_address
                   type: string
@@ -648,12 +648,19 @@ api:
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit, sort). Default limit 10, max 10.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
                     type: app_session_key_state
                   description: List of active session key states for the user
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found
@@ -827,7 +834,7 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: wallet
                   type: string
@@ -836,12 +843,19 @@ api:
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit, sort). Default limit 10, max 10.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
                     type: app_session_key_state
                   description: List of active session key states for the user
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found

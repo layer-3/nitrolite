@@ -45,7 +45,7 @@ type Store interface {
 	// App Session key state operations
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
 
 	// Channel Session key state operations

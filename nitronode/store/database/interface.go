@@ -175,8 +175,9 @@ type DatabaseStore interface {
 	// Returns nil if no state exists.
 	GetLastAppSessionKeyState(wallet, sessionKey string) (*app.AppSessionKeyStateV1, error)
 
-	// GetLastKeyStates retrieves the latest session key states for a user with optional filtering.
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
+	// GetLastAppSessionKeyStates retrieves the latest session key states for a user with optional
+	// filtering. Results are paginated; totalCount is the unpaginated total matching the filter.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 
 	// --- Channel Session Key State Operations ---
 
@@ -188,8 +189,9 @@ type DatabaseStore interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error)
+	// optionally filtered by session key. Results are paginated; totalCount is the unpaginated
+	// total matching the filter.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

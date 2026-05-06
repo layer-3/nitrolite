@@ -100,8 +100,9 @@ func (s *DBStore) StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error 
 }
 
 // GetLastAppSessionKeyStates retrieves the latest session key states for a user with optional filtering.
-// Returns only the highest-version row per session key that has not expired.
-func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error) {
+// Returns only the highest-version row per session key. Results are paginated; totalCount is the
+// unpaginated total of matching session keys.
+func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error) {
 	wallet = strings.ToLower(wallet)
 
 	subQuery := s.db.Model(&AppSessionKeyStateV1{}).
@@ -113,18 +114,27 @@ func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string) 
 		subQuery = subQuery.Where("session_key = ?", strings.ToLower(*sessionKey))
 	}
 
-	query := s.db.
-		Joins("JOIN (?) AS latest ON app_session_key_states_v1.user_address = latest.user_address AND app_session_key_states_v1.session_key = latest.session_key AND app_session_key_states_v1.version = latest.max_version", subQuery).
+	baseQuery := s.db.Model(&AppSessionKeyStateV1{}).
+		Joins("JOIN (?) AS latest ON app_session_key_states_v1.user_address = latest.user_address AND app_session_key_states_v1.session_key = latest.session_key AND app_session_key_states_v1.version = latest.max_version", subQuery)
+
+	var totalCount int64
+	if err := baseQuery.Count(&totalCount).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count session key states: %w", err)
+	}
+
+	query := baseQuery.
 		Preload("ApplicationIDs").
 		Preload("AppSessionIDs").
-		Order("app_session_key_states_v1.created_at DESC")
+		Order("app_session_key_states_v1.created_at DESC, app_session_key_states_v1.id ASC").
+		Limit(int(limit)).
+		Offset(int(offset))
 
 	var dbStates []AppSessionKeyStateV1
 	if err := query.Find(&dbStates).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return []app.AppSessionKeyStateV1{}, nil
+			return []app.AppSessionKeyStateV1{}, uint32(totalCount), nil
 		}
-		return nil, fmt.Errorf("failed to get session key states: %w", err)
+		return nil, 0, fmt.Errorf("failed to get session key states: %w", err)
 	}
 
 	states := make([]app.AppSessionKeyStateV1, len(dbStates))
@@ -132,7 +142,7 @@ func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string) 
 		states[i] = dbSessionKeyStateToCore(&dbState)
 	}
 
-	return states, nil
+	return states, uint32(totalCount), nil
 }
 
 // GetLastAppSessionKeyVersion returns the latest version of a session key state for a user.

@@ -82,8 +82,9 @@ func (s *DBStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV
 }
 
 // GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user with optional filtering.
-// Returns only the highest-version row per session key that has not expired.
-func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error) {
+// Returns only the highest-version row per session key. Results are paginated; totalCount is the
+// unpaginated total of matching session keys.
+func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
 	wallet = strings.ToLower(wallet)
 
 	subQuery := s.db.Model(&ChannelSessionKeyStateV1{}).
@@ -95,17 +96,26 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 		subQuery = subQuery.Where("session_key = ?", strings.ToLower(*sessionKey))
 	}
 
-	query := s.db.
-		Joins("JOIN (?) AS latest ON channel_session_key_states_v1.user_address = latest.user_address AND channel_session_key_states_v1.session_key = latest.session_key AND channel_session_key_states_v1.version = latest.max_version", subQuery).
+	baseQuery := s.db.Model(&ChannelSessionKeyStateV1{}).
+		Joins("JOIN (?) AS latest ON channel_session_key_states_v1.user_address = latest.user_address AND channel_session_key_states_v1.session_key = latest.session_key AND channel_session_key_states_v1.version = latest.max_version", subQuery)
+
+	var totalCount int64
+	if err := baseQuery.Count(&totalCount).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count channel session key states: %w", err)
+	}
+
+	query := baseQuery.
 		Preload("Assets").
-		Order("channel_session_key_states_v1.created_at DESC")
+		Order("channel_session_key_states_v1.created_at DESC, channel_session_key_states_v1.id ASC").
+		Limit(int(limit)).
+		Offset(int(offset))
 
 	var dbStates []ChannelSessionKeyStateV1
 	if err := query.Find(&dbStates).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return []core.ChannelSessionKeyStateV1{}, nil
+			return []core.ChannelSessionKeyStateV1{}, uint32(totalCount), nil
 		}
-		return nil, fmt.Errorf("failed to get channel session key states: %w", err)
+		return nil, 0, fmt.Errorf("failed to get channel session key states: %w", err)
 	}
 
 	states := make([]core.ChannelSessionKeyStateV1, len(dbStates))
@@ -113,7 +123,7 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 		states[i] = dbChannelSessionKeyStateToCore(&dbState)
 	}
 
-	return states, nil
+	return states, uint32(totalCount), nil
 }
 
 // GetLastChannelSessionKeyVersion returns the latest version of a channel session key state.

@@ -44,7 +44,7 @@ func TestDBStore_StoreChannelSessionKeyState(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify via GetLastChannelSessionKeyStates
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 
@@ -75,7 +75,7 @@ func TestDBStore_StoreChannelSessionKeyState(t *testing.T) {
 		err := store.StoreChannelSessionKeyState(state)
 		require.NoError(t, err)
 
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		assert.Empty(t, results[0].Assets)
@@ -100,7 +100,7 @@ func TestDBStore_StoreChannelSessionKeyState(t *testing.T) {
 		require.NoError(t, err)
 
 		// Query with mixed case - should still find it
-		results, err := store.GetLastChannelSessionKeyStates("0xAbCdEf1234567890AbCdEf1234567890AbCdEf12", nil)
+		results, _, err := store.GetLastChannelSessionKeyStates("0xAbCdEf1234567890AbCdEf1234567890AbCdEf12", nil, 100, 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		assert.Equal(t, "0xabcdef1234567890abcdef1234567890abcdef12", results[0].UserAddress)
@@ -157,7 +157,7 @@ func TestDBStore_StoreChannelSessionKeyState(t *testing.T) {
 		require.NoError(t, store.StoreChannelSessionKeyState(state2))
 
 		// Should return only the latest version
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		assert.Equal(t, uint64(2), results[0].Version)
@@ -223,7 +223,7 @@ func TestDBStore_GetLastChannelSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreChannelSessionKeyState(stateB1))
 
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 
@@ -272,7 +272,7 @@ func TestDBStore_GetLastChannelSessionKeyStates(t *testing.T) {
 		require.NoError(t, store.StoreChannelSessionKeyState(stateB))
 
 		sessionKey := testKeyA
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, &sessionKey)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, &sessionKey, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
@@ -305,7 +305,7 @@ func TestDBStore_GetLastChannelSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreChannelSessionKeyState(stateB))
 
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 
 		// Both keys returned — caller is responsible for checking expiration
@@ -318,7 +318,7 @@ func TestDBStore_GetLastChannelSessionKeyStates(t *testing.T) {
 
 		store := NewDBStore(db)
 
-		results, err := store.GetLastChannelSessionKeyStates("0x0000000000000000000000000000000000000099", nil)
+		results, _, err := store.GetLastChannelSessionKeyStates("0x0000000000000000000000000000000000000099", nil, 100, 0)
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
@@ -347,12 +347,70 @@ func TestDBStore_GetLastChannelSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreChannelSessionKeyState(state2))
 
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
 		assert.Equal(t, testUser1, results[0].UserAddress)
 	})
+
+	t.Run("Pagination - limit and offset bound results, totalCount reflects unpaginated total", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		// Insert 5 distinct session keys for testUser1
+		const numKeys = 5
+		for i := 0; i < numKeys; i++ {
+			state := core.ChannelSessionKeyStateV1{
+				UserAddress: testUser1,
+				SessionKey:  fakeSessionKey(i),
+				Version:     1,
+				ExpiresAt:   time.Now().Add(24 * time.Hour),
+				UserSig:     "0xsig",
+			}
+			require.NoError(t, store.StoreChannelSessionKeyState(state))
+		}
+
+		// First page: 2 of 5
+		page1, total, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 2, 0)
+		require.NoError(t, err)
+		assert.Len(t, page1, 2)
+		assert.Equal(t, uint32(numKeys), total)
+
+		// Second page: 2 of 5
+		page2, total, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 2, 2)
+		require.NoError(t, err)
+		assert.Len(t, page2, 2)
+		assert.Equal(t, uint32(numKeys), total)
+
+		// Third page: 1 of 5
+		page3, total, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 2, 4)
+		require.NoError(t, err)
+		assert.Len(t, page3, 1)
+		assert.Equal(t, uint32(numKeys), total)
+
+		// Pages must not overlap
+		seen := map[string]struct{}{}
+		for _, s := range page1 {
+			seen[s.SessionKey] = struct{}{}
+		}
+		for _, s := range page2 {
+			_, dup := seen[s.SessionKey]
+			assert.False(t, dup, "page2 overlaps page1 for %s", s.SessionKey)
+			seen[s.SessionKey] = struct{}{}
+		}
+		for _, s := range page3 {
+			_, dup := seen[s.SessionKey]
+			assert.False(t, dup, "page3 overlaps earlier page for %s", s.SessionKey)
+		}
+	})
+}
+
+// fakeSessionKey returns a deterministic 20-byte hex address for the given index.
+func fakeSessionKey(i int) string {
+	return strings.ToLower("0x" + strings.Repeat("0", 38) + string("0123456789abcdef"[i%16]) + string("0123456789abcdef"[(i/16)%16]))
 }
 
 func TestDBStore_GetLastChannelSessionKeyVersion(t *testing.T) {
@@ -802,7 +860,7 @@ func TestDBStore_ChannelSessionKeyState_ForeignRelations(t *testing.T) {
 		require.NoError(t, store.StoreChannelSessionKeyState(stateB))
 
 		// GetLastChannelSessionKeyStates returns both — verify preloaded relations are correct
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 
@@ -854,7 +912,7 @@ func TestDBStore_ChannelSessionKeyState_ForeignRelations(t *testing.T) {
 		}
 		require.NoError(t, store.StoreChannelSessionKeyState(stateB))
 
-		results, err := store.GetLastChannelSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastChannelSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 

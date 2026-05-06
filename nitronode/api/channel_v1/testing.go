@@ -104,12 +104,12 @@ func (m *MockStore) GetLastChannelSessionKeyVersion(wallet, sessionKey string) (
 	return args.Get(0).(uint64), args.Error(1)
 }
 
-func (m *MockStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error) {
-	args := m.Called(wallet, sessionKey)
+func (m *MockStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
+	args := m.Called(wallet, sessionKey, limit, offset)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, uint32(args.Int(1)), args.Error(2)
 	}
-	return args.Get(0).([]core.ChannelSessionKeyStateV1), args.Error(1)
+	return args.Get(0).([]core.ChannelSessionKeyStateV1), uint32(args.Int(1)), args.Error(2)
 }
 
 func (m *MockStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error) {

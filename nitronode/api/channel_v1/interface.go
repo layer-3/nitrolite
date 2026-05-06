@@ -76,8 +76,8 @@ type Store interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error)
+	// optionally filtered by session key. Results are paginated.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

@@ -203,6 +203,16 @@ func InitBackbone() *Backbone {
 	// RPC Node
 	// ------------------------------------------------
 
+	// MF-C01 requires a hard frame-size cap; refuse to start without one even if
+	// the operator zeroed the env. The library would substitute its own default,
+	// but we want the misconfiguration surfaced rather than papered over.
+	if conf.WsMaxMessageSize <= 0 {
+		logger.Fatal(
+			"NITRONODE_WS_MAX_MESSAGE_SIZE must be > 0; the WebSocket frame cap cannot be disabled",
+			"ws_max_message_size", conf.WsMaxMessageSize,
+		)
+	}
+
 	bytesPerSec := conf.WsBytesPerSec
 	bytesBurst := conf.WsBytesBurst
 	// When the per-connection byte budget is enabled, the burst must be at least
@@ -217,7 +227,7 @@ func InitBackbone() *Backbone {
 				"ws_bytes_per_sec", bytesPerSec,
 			)
 		}
-		if conf.WsMaxMessageSize > 0 && bytesBurst < float64(conf.WsMaxMessageSize) {
+		if bytesBurst < float64(conf.WsMaxMessageSize) {
 			logger.Fatal(
 				"NITRONODE_WS_BYTES_BURST must be >= NITRONODE_WS_MAX_MESSAGE_SIZE when byte limiting is enabled",
 				"ws_bytes_burst", bytesBurst,

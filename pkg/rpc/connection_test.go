@@ -92,6 +92,111 @@ func TestWebsocketConnection_Serve(t *testing.T) {
 	require.Equal(t, 2, wsConnMock.getCalledCloseCount())
 }
 
+func TestWebsocketConnection_Serve_AppliesReadLimit(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:   "conn-readlimit",
+		WebsocketConn:  wsConnMock,
+		MaxMessageSize: 64 * 1024,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	conn.Serve(ctx, func(error) {})
+
+	// Read limit must be set before any read happens.
+	require.Eventually(t, func() bool {
+		return wsConnMock.getReadLimit() == 64*1024
+	}, 200*time.Millisecond, 5*time.Millisecond)
+}
+
+func TestWebsocketConnection_OversizedFrame_GracefulClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:  "conn-oversize",
+		WebsocketConn: wsConnMock,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	closureCh := make(chan error, 1)
+	conn.Serve(ctx, func(err error) { closureCh <- err })
+
+	// Simulate gorilla returning CloseMessageTooBig from ReadMessage.
+	wsConnMock.readErrCh <- &websocket.CloseError{
+		Code: websocket.CloseMessageTooBig,
+		Text: "read limit exceeded",
+	}
+
+	select {
+	case err := <-closureCh:
+		require.NoError(t, err, "1009 must close gracefully, not as abnormal error")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("connection did not close after oversized frame")
+	}
+}
+
+// stubLimiter rejects after the Nth call. Records every call for assertions.
+type stubLimiter struct {
+	rejectAt int
+	calls    int
+}
+
+func (s *stubLimiter) Allow(_ time.Time, _ int) bool {
+	s.calls++
+	return s.calls < s.rejectAt
+}
+
+func TestWebsocketConnection_RateLimitedFrame_ClosesConnection(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+	limiter := &stubLimiter{rejectAt: 2} // first frame admits, second rejects
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:     "conn-ratelimit",
+		WebsocketConn:    wsConnMock,
+		FrameRateLimiter: limiter,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	closureCh := make(chan error, 1)
+	conn.Serve(ctx, func(err error) { closureCh <- err })
+
+	// First frame admitted, drained by reader.
+	wsConnMock.addMessageToRead("ok")
+	select {
+	case got := <-conn.RawRequests():
+		require.Equal(t, "ok", string(got))
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("first frame not delivered")
+	}
+
+	// Second frame rejected by limiter → connection should close.
+	wsConnMock.addMessageToRead("blocked")
+
+	select {
+	case err := <-closureCh:
+		require.NoError(t, err, "rate-limit close is graceful")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("connection did not close after rate-limited frame")
+	}
+	require.Equal(t, 2, limiter.calls, "limiter was consulted for both frames")
+}
+
 func TestWebsocketConnection_ConnectionID(t *testing.T) {
 	t.Parallel()
 
@@ -125,8 +230,10 @@ func TestWebsocketConnection_WriteRawResponse(t *testing.T) {
 type gorillaWsConnMock struct {
 	ctx                context.Context
 	messageToReadCh    chan []byte
+	readErrCh          chan error
 	lastWrittenMessage []byte
 	calledCloseCount   int
+	readLimit          int64
 
 	mu sync.Mutex
 }
@@ -135,6 +242,7 @@ func newGorillaWsConnMock(ctx context.Context) *gorillaWsConnMock {
 	return &gorillaWsConnMock{
 		ctx:             ctx,
 		messageToReadCh: make(chan []byte, 1),
+		readErrCh:       make(chan error, 1),
 	}
 }
 
@@ -145,6 +253,8 @@ func (m *gorillaWsConnMock) ReadMessage() (messageType int, p []byte, err error)
 			Code: websocket.CloseNormalClosure,
 			Text: "context cancelled",
 		}
+	case err := <-m.readErrCh:
+		return 0, nil, err
 	case msg := <-m.messageToReadCh:
 		// Simulate reading a message
 		return websocket.TextMessage, msg, nil
@@ -201,4 +311,18 @@ func (m *gorillaWsConnMock) SetPongHandler(h func(appData string) error) {
 func (m *gorillaWsConnMock) SetReadDeadline(t time.Time) error {
 	// No-op for mock
 	return nil
+}
+
+func (m *gorillaWsConnMock) SetReadLimit(limit int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.readLimit = limit
+}
+
+func (m *gorillaWsConnMock) getReadLimit() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.readLimit
 }

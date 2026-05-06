@@ -26,6 +26,9 @@ var (
 	// defaultWsConnPongTimeout is the default timeout for receiving pong responses from clients.
 	// If no pong is received within this duration after a ping, the connection is considered dead.
 	defaultWsConnPongTimeout = 10 * time.Second
+	// defaultWsConnMaxMessageSize is the default cap on inbound WebSocket frame size in bytes.
+	// Frames exceeding this trigger close 1009 (Message Too Big) before allocation.
+	defaultWsConnMaxMessageSize int64 = 128 * 1024
 )
 
 // Connection represents an active RPC connection that handles bidirectional communication.
@@ -75,6 +78,10 @@ type GorillaWsConnectionAdapter interface {
 	// SetReadDeadline sets the deadline for future Read calls.
 	// A zero value means reads will not time out.
 	SetReadDeadline(t time.Time) error
+	// SetReadLimit sets the maximum size in bytes for a single inbound message.
+	// Frames exceeding the limit cause ReadMessage to return a *CloseError with
+	// code 1009 (CloseMessageTooBig) and the connection sends a close frame.
+	SetReadLimit(limit int64)
 }
 
 // WebsocketConnection implements the Connection interface using WebSocket transport.
@@ -104,6 +111,10 @@ type WebsocketConnection struct {
 	pingInterval time.Duration
 	// pongTimeout is the maximum duration to wait for a pong response from the client
 	pongTimeout time.Duration
+	// maxMessageSize caps inbound frame size in bytes. Zero or negative disables.
+	maxMessageSize int64
+	// frameRateLimiter decides whether each inbound frame is admitted.
+	frameRateLimiter FrameRateLimiter
 
 	// logger is used for logging events related to this connection
 	logger log.Logger
@@ -141,6 +152,13 @@ type WebsocketConnectionConfig struct {
 	// PongTimeout is the maximum duration to wait for a pong response from the client (default: 10s).
 	// If no pong is received within this duration, the connection is considered dead.
 	PongTimeout time.Duration
+	// MaxMessageSize caps inbound frame size in bytes (default: 128 KiB).
+	// Frames larger than this are rejected with WebSocket close code 1009
+	// before any allocation grows past the limit. Set <0 to disable (not recommended).
+	MaxMessageSize int64
+	// FrameRateLimiter is consulted for every inbound frame; returning false closes
+	// the connection. nil → NoopFrameRateLimiter (no enforcement).
+	FrameRateLimiter FrameRateLimiter
 	// Logger for connection events (default: no-op logger)
 	Logger log.Logger
 	// OnMessageSentHandler is called after a message is successfully sent (optional)
@@ -178,17 +196,25 @@ func NewWebsocketConnection(config WebsocketConnectionConfig) (*WebsocketConnect
 	if config.PongTimeout <= 0 {
 		config.PongTimeout = defaultWsConnPongTimeout
 	}
+	if config.MaxMessageSize == 0 {
+		config.MaxMessageSize = defaultWsConnMaxMessageSize
+	}
+	if config.FrameRateLimiter == nil {
+		config.FrameRateLimiter = NoopFrameRateLimiter{}
+	}
 	if config.OnMessageSentHandler == nil {
 		config.OnMessageSentHandler = func([]byte) {}
 	}
 
 	return &WebsocketConnection{
-		connectionID:  config.ConnectionID,
-		origin:        config.Origin,
-		websocketConn: config.WebsocketConn,
-		writeTimeout:  config.WriteTimeout,
-		pingInterval:  config.PingInterval,
-		pongTimeout:   config.PongTimeout,
+		connectionID:     config.ConnectionID,
+		origin:           config.Origin,
+		websocketConn:    config.WebsocketConn,
+		writeTimeout:     config.WriteTimeout,
+		pingInterval:     config.PingInterval,
+		pongTimeout:      config.PongTimeout,
+		maxMessageSize:   config.MaxMessageSize,
+		frameRateLimiter: config.FrameRateLimiter,
 
 		logger:               config.Logger.WithKV("connectionID", config.ConnectionID),
 		onMessageSentHandler: config.OnMessageSentHandler,
@@ -218,6 +244,13 @@ func (conn *WebsocketConnection) Serve(parentCtx context.Context, handleClosure 
 	}
 	conn.ctx = parentCtx
 	conn.mu.Unlock()
+
+	// Cap inbound frame size before any read takes place. Exceeding the limit
+	// causes the next ReadMessage to return *CloseError{Code: 1009} and the
+	// underlying connection sends a close frame to the client.
+	if conn.maxMessageSize > 0 {
+		conn.websocketConn.SetReadLimit(conn.maxMessageSize)
+	}
 
 	// Set up pong handler to refresh read deadline when pong is received from client.
 	// This enables detection of dead connections - if no pong arrives within the timeout
@@ -322,10 +355,24 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 	for {
 		_, messageBytes, err := conn.websocketConn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
+			switch {
+			case websocket.IsCloseError(err, websocket.CloseMessageTooBig):
+				// Expected attacker / misconfigured-client path. Frame exceeded
+				// SetReadLimit; gorilla already sent close 1009. Treat as
+				// graceful close, not abnormal termination.
+				conn.logger.Warn("inbound frame exceeded MaxMessageSize; closing connection",
+					"error", err,
+					"origin", conn.origin,
+					"max_message_size", conn.maxMessageSize,
+				)
+				handleClosure(nil)
+			case websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+				websocket.CloseNormalClosure):
 				conn.logger.Error("WebSocket connection closed with unexpected reason", "error", err)
 				handleClosure(err)
-			} else {
+			default:
 				handleClosure(nil) // Normal closure
 			}
 			return
@@ -334,6 +381,19 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 		if len(messageBytes) == 0 {
 			conn.logger.Debug("received empty message, skipping")
 			continue // Skip empty messages
+		}
+
+		if !conn.frameRateLimiter.Allow(time.Now(), len(messageBytes)) {
+			conn.logger.Warn("frame rate limit exceeded; closing connection",
+				"origin", conn.origin,
+				"frame_bytes", len(messageBytes),
+			)
+			select {
+			case conn.closeConnCh <- struct{}{}:
+			default:
+			}
+			handleClosure(nil)
+			return
 		}
 
 		select {
@@ -348,6 +408,7 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 			case conn.closeConnCh <- struct{}{}:
 			default:
 			}
+			handleClosure(nil)
 			return
 		}
 	}

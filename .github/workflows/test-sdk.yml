@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: ''
+      forge-build:
+        description: 'Build Foundry artifacts before validating this SDK project'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -25,6 +30,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: ${{ inputs.forge-build && 'recursive' || 'false' }}
+
+      - name: Install Foundry
+        if: ${{ inputs.forge-build }}
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Build contract artifacts
+        if: ${{ inputs.forge-build }}
+        run: forge build
+        working-directory: contracts
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

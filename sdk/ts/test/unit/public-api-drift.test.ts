@@ -63,7 +63,7 @@ function signaturesForType(
 }
 
 function isPrivateOrProtected(declaration: ts.Declaration): boolean {
-    const flags = ts.getCombinedModifierFlags(declaration as ts.Declaration);
+    const flags = ts.getCombinedModifierFlags(declaration);
     return Boolean(flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected));
 }
 
@@ -187,11 +187,8 @@ describe('SDK public runtime API drift guard', () => {
         expect(serializePublicApi()).toMatchSnapshot();
     });
 
-    it('proves adversarial public export removal is observable', () => {
-        const exports = new Set(Object.keys(publicApi));
-        exports.delete('Client');
-
-        expect(exports.has('Client')).toBe(false);
+    it('keeps Client exported', () => {
+        expect(Object.keys(publicApi)).toContain('Client');
     });
 
     it('proves adversarial public signature changes are observable', () => {

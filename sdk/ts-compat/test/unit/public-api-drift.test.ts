@@ -63,7 +63,7 @@ function signaturesForType(
 }
 
 function isPrivateOrProtected(declaration: ts.Declaration): boolean {
-    const flags = ts.getCombinedModifierFlags(declaration as ts.Declaration);
+    const flags = ts.getCombinedModifierFlags(declaration);
     return Boolean(flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected));
 }
 
@@ -209,11 +209,8 @@ describe('compat public runtime API drift guard', () => {
         expect(helper?.signatures?.[0]).toContain('signature: Hex | string');
     });
 
-    it('proves adversarial public export removal is observable', () => {
-        const exports = new Set(Object.keys(publicApi));
-        exports.delete('NitroliteClient');
-
-        expect(exports.has('NitroliteClient')).toBe(false);
+    it('keeps NitroliteClient exported', () => {
+        expect(Object.keys(publicApi)).toContain('NitroliteClient');
     });
 
     it('proves adversarial public signature changes are observable', () => {

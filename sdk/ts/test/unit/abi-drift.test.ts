@@ -37,7 +37,8 @@ function canonicalType(param: AbiParam): string {
 function signature(entry: AbiEntry): string {
     const inputs = (entry.inputs ?? []).map(canonicalType).join(',');
     const outputs = (entry.outputs ?? []).map(canonicalType).join(',');
-    return `${entry.name}(${inputs}) -> (${outputs}) ${entry.stateMutability ?? ''}`;
+    const mutability = entry.stateMutability ? ` ${entry.stateMutability}` : '';
+    return `${entry.name}(${inputs}) -> (${outputs})${mutability}`;
 }
 
 function functionSignatures(abi: readonly AbiEntry[]): Map<string, string> {
@@ -57,8 +58,16 @@ function functionSignatures(abi: readonly AbiEntry[]): Map<string, string> {
 }
 
 function loadArtifact(relativePath: string): readonly AbiEntry[] {
-    const artifact = JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'));
+    const artifactPath = path.join(repoRoot, relativePath);
+    if (!fs.existsSync(artifactPath)) {
+        throw new Error(`ABI artifact not found: ${relativePath}. Run: cd contracts && forge build`);
+    }
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
     return artifact.abi;
+}
+
+function sortedSignatureEntries(signatures: ReadonlyMap<string, string>): [string, string][] {
+    return [...signatures].sort(([left], [right]) => left.localeCompare(right));
 }
 
 function diffConsumedFunctions(
@@ -107,7 +116,7 @@ describe('contract ABI drift guards', () => {
         );
         const sdkSigs = functionSignatures(ChannelHubAbi as readonly AbiEntry[]);
 
-        expect([...sdkSigs]).toEqual([...artifactSigs]);
+        expect(sortedSignatureEntries(sdkSigs)).toEqual(sortedSignatureEntries(artifactSigs));
     });
 
     it('keeps SDK-consumed ChannelHub functions aligned with Foundry artifact', () => {
@@ -153,7 +162,7 @@ describe('contract ABI drift guards', () => {
         expect(
             diffConsumedFunctions(
                 'ERC20',
-                loadArtifact('contracts/out/ERC20.sol/ERC20.json'),
+                loadArtifact('contracts/out/ERC20.sol/ERC20.default.json'),
                 Erc20Abi as readonly AbiEntry[],
                 consumedFunctions
             )

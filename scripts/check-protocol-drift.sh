@@ -8,12 +8,12 @@ usage() {
 Usage: scripts/check-protocol-drift.sh [--static|--runtime]
 
   --static   Run deterministic protocol/SDK/compat drift checks.
-  --runtime  Run runtime smoke checks against an ephemeral/local Clearnode.
+  --runtime  Run runtime smoke checks against an ephemeral/local Nitronode.
 
-Runtime smoke starts an isolated local Clearnode with a temporary config by
-default. Set CLEARNODE_RUNTIME_SMOKE_EXTERNAL=1 and CLEARNODE_RUNTIME_SMOKE_WS_URL
-to run the same lightweight compatibility smoke against an existing node. This is
-not a load or stress test.
+Runtime smoke starts an isolated local Nitronode with a temporary config by
+default. Set NITRONODE_RUNTIME_SMOKE_EXTERNAL=1, NITRONODE_RUNTIME_SMOKE_WS_URL,
+and NITRONODE_RUNTIME_SMOKE_PRIVATE_KEY to run the same lightweight compatibility
+smoke against an existing node. This is not a load or stress test.
 USAGE
 }
 

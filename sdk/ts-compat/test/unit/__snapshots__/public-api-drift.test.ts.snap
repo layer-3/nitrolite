@@ -235,9 +235,11 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
     "signatures": [],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createAppSessionMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(signer: MessageSigner, params: CreateAppSessionRequestParams, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
     "kind": "interface",
@@ -283,19 +285,25 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
     "signatures": [],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createCloseAppSessionMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(signer: MessageSigner, params: CloseAppSessionRequestParams, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createCloseChannelMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, _channelId: string, _fundDestination: Address, _requestId?: number, _timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createCreateChannelMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, _params: unknown, _requestId?: number, _timestamp?: number): Promise<string>",
+    ],
   },
   {
     "kind": "function",
@@ -312,44 +320,60 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
     ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createGetAppDefinitionMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, appSessionId: string, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createGetAppSessionsMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, participant: Address, status?: RPCChannelStatus, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createGetChannelsMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, participant?: Address, status?: RPCChannelStatus, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createGetLedgerBalancesMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(signer: MessageSigner, accountId?: string, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createPingMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createResizeChannelMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, _params: unknown, _requestId?: number, _timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createSubmitAppStateMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(signer: MessageSigner, params: SubmitAppStateRequestParams, requestId?: number, timestamp?: number): Promise<string>",
+    ],
   },
   {
-    "kind": "const",
+    "kind": "function",
     "name": "createTransferMessage",
-    "type": "(..._args: any[]) => Promise<string>",
+    "signatures": [
+      "(_signer: MessageSigner, _params: unknown, _requestId?: number, _timestamp?: number): Promise<string>",
+    ],
   },
   {
     "kind": "const",
@@ -488,25 +512,28 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
   },
   {
     "constructors": [
-      "(client: Client, userAddress: Address, chainId: number, blockchainRPCs?: Record<number, string>): NitroliteClient",
+      "(client: Client, userAddress: Address, chainId: number, walletClient: WalletClient, blockchainRPCs?: Record<number, string>): NitroliteClient",
     ],
     "kind": "class",
     "name": "NitroliteClient",
     "properties": [
       "acknowledge: (tokenAddress: Address): Promise<void>",
       "approveSecurityToken: (chainId: number, amount: bigint): Promise<string>",
+      "approveTokens: (tokenAddress: Address, amount: bigint): Promise<string>",
       "cancelSecurityTokensWithdrawal: (chainId: number): Promise<string>",
       "challengeChannel: (params: { state: any; }): Promise<any>",
       "checkTokenAllowance: (chainId: number, tokenAddress: Address): Promise<bigint>",
+      "checkpointChannel: (_params: unknown): Promise<never>",
       "close: (): Promise<void>",
       "closeAppSession: (appSessionIdOrParams: string | CloseAppSessionRequestParams, allocations?: RPCAppSessionAllocation[], quorumSigs?: string[]): Promise<{ appSessionId: string; }>",
       "closeChannel: (params?: { tokenAddress?: Address | string; } | any): Promise<any>",
       "createAppSession: (definitionOrParams: RPCAppDefinition | CreateAppSessionRequestParams, allocations?: RPCAppSessionAllocation[], quorumSigs?: string[], opts?: { ownerSig?: string; }): Promise<{ appSessionId: string; version: string; status: string; }>",
-      "createChannel: (_respParams?: any): Promise<any>",
+      "createChannel: (_respParams?: any): Promise<never>",
       "deposit: (tokenAddress: Address, amount: bigint): Promise<any>",
       "depositAndCreateChannel: (tokenAddress: Address, amount: bigint, _respParams?: any): Promise<any>",
       "findOpenChannel: (tokenAddress: Address | string, chainId?: number): LedgerChannel | null",
       "formatAmount: (tokenAddress: Address | string, rawAmount: bigint): Promise<string>",
+      "getAccountBalance: (_tokenAddress: Address | Address[]): Promise<never>",
       "getAccountInfo: (): Promise<AccountInfo>",
       "getActionAllowances: (wallet?: Address): Promise<core.ActionAllowance[]>",
       "getAppDefinition: (appSessionId: string): Promise<GetAppDefinitionResponseParams>",
@@ -515,6 +542,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
       "getAssetsList: (): Promise<ClearNodeAsset[]>",
       "getBalances: (wallet?: Address): Promise<LedgerBalance[]>",
       "getBlockchains: (): Promise<core.Blockchain[]>",
+      "getChannelBalance: (_channelId: string, _tokenAddress: Address | Address[]): Promise<never>",
       "getChannelData: (_channelId: string): Promise<any>",
       "getChannels: (): Promise<LedgerChannel[]>",
       "getConfig: (): Promise<any>",
@@ -524,6 +552,9 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
       "getLastKeyStates: (userAddress: string, sessionKey?: string): Promise<AppSessionKeyStateV1[]>",
       "getLedgerEntries: (wallet?: Address): Promise<LedgerEntry[]>",
       "getLockedBalance: (chainId: number, wallet?: Address): Promise<bigint>",
+      "getOpenChannels: (): Promise<string[]>",
+      "getTokenAllowance: (tokenAddress: Address): Promise<bigint>",
+      "getTokenBalance: (tokenAddress: Address): Promise<bigint>",
       "getTokenDecimals: (tokenAddress: Address | string): Promise<number>",
       "initiateSecurityTokensWithdrawal: (chainId: number): Promise<string>",
       "innerClient: Client",
@@ -640,7 +671,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
   {
     "kind": "const",
     "name": "parseCloseAppSessionResponse",
-    "type": "(raw: string) => { params: { appSessionId: any; }; }",
+    "type": "(raw: string) => { params: any; }",
   },
   {
     "kind": "const",
@@ -650,7 +681,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
   {
     "kind": "const",
     "name": "parseCreateAppSessionResponse",
-    "type": "(raw: string) => { params: { appSessionId: any; }; }",
+    "type": "(raw: string) => { params: { appSessionId: string; version: string | number; status: string; }; }",
   },
   {
     "kind": "const",
@@ -660,27 +691,27 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
   {
     "kind": "const",
     "name": "parseGetAppDefinitionResponse",
-    "type": "(raw: string) => { params: any; }",
+    "type": "(raw: string) => { params: Record<string, unknown>; }",
   },
   {
     "kind": "const",
     "name": "parseGetAppSessionsResponse",
-    "type": "(raw: string) => { params: { appSessions: any; }; }",
+    "type": "(raw: string) => { params: { appSessions: Array<any>; }; }",
   },
   {
     "kind": "const",
     "name": "parseGetChannelsResponse",
-    "type": "(raw: string) => { params: { channels: any; }; }",
+    "type": "(raw: string) => { params: { channels: Array<any>; }; }",
   },
   {
     "kind": "const",
     "name": "parseGetLedgerBalancesResponse",
-    "type": "(raw: string) => { params: { ledgerBalances: any; }; }",
+    "type": "(raw: string) => { params: { ledgerBalances: Array<any>; }; }",
   },
   {
     "kind": "const",
     "name": "parseGetLedgerEntriesResponse",
-    "type": "(raw: string) => { params: { ledgerEntries: any; }; }",
+    "type": "(raw: string) => { params: { ledgerEntries: Array<any>; }; }",
   },
   {
     "kind": "const",
@@ -690,7 +721,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
   {
     "kind": "const",
     "name": "parseSubmitAppStateResponse",
-    "type": "(raw: string) => { params: { appSessionId: any; version: any; status: any; }; }",
+    "type": "(raw: string) => { params: any; }",
   },
   {
     "declaration": "number",
@@ -759,6 +790,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
       "Operate = 'operate'",
       "Deposit = 'deposit'",
       "Withdraw = 'withdraw'",
+      "Close = 'close'",
     ],
     "name": "RPCAppStateIntent",
   },

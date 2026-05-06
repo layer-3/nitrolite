@@ -2,7 +2,7 @@ import type { AppSessionKeyStateV1 } from './app/types.js';
 import type { ChannelSessionKeyStateV1 } from './rpc/types.js';
 
 function asRecord(raw: unknown, context: string): Record<string, unknown> {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error(`Invalid ${context}: expected object`);
   }
   return raw as Record<string, unknown>;

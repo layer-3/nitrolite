@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,13 +14,14 @@ import { NitroliteClient } from '../../sdk/ts-compat/dist/index.js';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '../..');
-const wsURL = process.env.CLEARNODE_RUNTIME_SMOKE_WS_URL ?? 'ws://127.0.0.1:7824/ws';
-const readyTimeoutMs = Number(process.env.CLEARNODE_RUNTIME_SMOKE_READY_TIMEOUT_MS ?? 15000);
-const adversarialMode = process.env.CLEARNODE_RUNTIME_SMOKE_ADVERSARIAL ?? '';
-const externalLogDirInput = process.env.CLEARNODE_RUNTIME_SMOKE_LOG_DIR ?? '';
-const externalLogDir = externalLogDirInput ? path.resolve(repoRoot, externalLogDirInput) : '';
-const useExternalNode = process.env.CLEARNODE_RUNTIME_SMOKE_EXTERNAL === '1';
-const privateKey =
+const sdkRequire = createRequire(path.join(repoRoot, 'sdk/ts/package.json'));
+const WebSocketCtor = globalThis.WebSocket ?? sdkRequire('ws');
+const wsURL = process.env.NITRONODE_RUNTIME_SMOKE_WS_URL ?? 'ws://127.0.0.1:7824/ws';
+const readyTimeoutMs = Number(process.env.NITRONODE_RUNTIME_SMOKE_READY_TIMEOUT_MS ?? 15000);
+const adversarialMode = process.env.NITRONODE_RUNTIME_SMOKE_ADVERSARIAL ?? '';
+const externalLogDirInput = process.env.NITRONODE_RUNTIME_SMOKE_LOG_DIR ?? '';
+const useExternalNode = process.env.NITRONODE_RUNTIME_SMOKE_EXTERNAL === '1';
+const anvilPrivateKey =
   '0x59c6995e998f97a5a0044966f094538f0d0921e301baca6a9ae52cd7834c90b9';
 
 class SmokeError extends Error {
@@ -37,9 +39,50 @@ function assertSmoke(condition, category, message) {
   }
 }
 
+function resolveRepoChildPath(input, label) {
+  const resolved = path.resolve(repoRoot, input);
+  const relative = path.relative(repoRoot, resolved);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new SmokeError('setup', `${label} must resolve inside the repository`);
+  }
+  return resolved;
+}
+
+function privateKeyForMode() {
+  const configuredPrivateKey = process.env.NITRONODE_RUNTIME_SMOKE_PRIVATE_KEY;
+  if (useExternalNode) {
+    if (!configuredPrivateKey) {
+      throw new SmokeError(
+        'setup',
+        'NITRONODE_RUNTIME_SMOKE_PRIVATE_KEY is required when NITRONODE_RUNTIME_SMOKE_EXTERNAL=1'
+      );
+    }
+    return configuredPrivateKey;
+  }
+
+  // Well-known Anvil/Hardhat test account #2, used only for isolated local smoke.
+  return configuredPrivateKey ?? anvilPrivateKey;
+}
+
+function childEnv(configDir) {
+  const env = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    TMPDIR: process.env.TMPDIR,
+    NITRONODE_CONFIG_DIR_PATH: configDir,
+  };
+
+  return Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined));
+}
+
 function logStep(message) {
   console.log(`[runtime-smoke] ${message}`);
 }
+
+const externalLogDir = externalLogDirInput
+  ? resolveRepoChildPath(externalLogDirInput, 'NITRONODE_RUNTIME_SMOKE_LOG_DIR')
+  : '';
+const privateKey = privateKeyForMode();
 
 async function withTimeout(label, promise, timeoutMs = 5000) {
   const timeout = sleep(timeoutMs).then(() => {
@@ -50,7 +93,7 @@ async function withTimeout(label, promise, timeoutMs = 5000) {
 
 function openWebSocket(url, timeoutMs = 500) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
+    const ws = new WebSocketCtor(url);
     let settled = false;
 
     const finish = (err) => {
@@ -81,7 +124,7 @@ async function waitForWebSocket(url, child = null, timeoutMs = 15000) {
     if (child && child.exitCode !== null) {
       throw new SmokeError(
         'startup',
-        `Clearnode exited before readiness with code ${child.exitCode}`
+        `Nitronode exited before readiness with code ${child.exitCode}`
       );
     }
 
@@ -96,7 +139,7 @@ async function waitForWebSocket(url, child = null, timeoutMs = 15000) {
 
   throw new SmokeError(
     'connection',
-    `Clearnode did not accept WebSocket connections at ${url}`,
+    `Nitronode did not accept WebSocket connections at ${url}`,
     lastError
   );
 }
@@ -160,10 +203,10 @@ async function writeConfig(configDir) {
   await writeFile(
     path.join(configDir, '.env'),
     [
-      'CLEARNODE_DATABASE_DRIVER=sqlite',
-      'CLEARNODE_SIGNER_TYPE=key',
-      `CLEARNODE_SIGNER_KEY=${privateKey}`,
-      'CLEARNODE_LOG_LEVEL=error',
+      'NITRONODE_DATABASE_DRIVER=sqlite',
+      'NITRONODE_SIGNER_TYPE=key',
+      `NITRONODE_SIGNER_KEY=${privateKey}`,
+      'NITRONODE_LOG_LEVEL=error',
       '',
     ].join('\n')
   );
@@ -186,19 +229,20 @@ async function writeFailureLogs(paths, stdout, stderr, summary) {
 
   await mkdir(externalLogDir, { recursive: true });
   await writeFile(path.join(externalLogDir, 'summary.txt'), summary);
-  await writeFile(path.join(externalLogDir, 'clearnode.stdout.log'), stdout);
-  await writeFile(path.join(externalLogDir, 'clearnode.stderr.log'), stderr);
+  await writeFile(path.join(externalLogDir, 'nitronode.stdout.log'), stdout);
+  await writeFile(path.join(externalLogDir, 'nitronode.stderr.log'), stderr);
 }
 
 async function runSmoke() {
   const configDir = await mkdtemp(path.join(tmpdir(), 'nitrolite-runtime-smoke-'));
-  const binaryPath = path.join(configDir, 'clearnode-smoke');
-  const stdoutPath = path.join(configDir, 'clearnode.stdout.log');
-  const stderrPath = path.join(configDir, 'clearnode.stderr.log');
+  const binaryPath = path.join(configDir, 'nitronode-smoke');
+  const stdoutPath = path.join(configDir, 'nitronode.stdout.log');
+  const stderrPath = path.join(configDir, 'nitronode.stderr.log');
   let stdout = '';
   let stderr = '';
   let client = null;
   let child = null;
+  let compatLogLines = [];
 
   const logs = () => [
     `stdout (${stdoutPath}):`,
@@ -209,20 +253,17 @@ async function runSmoke() {
 
   try {
     if (useExternalNode) {
-      logStep(`using external Clearnode at ${wsURL}`);
+      logStep(`using external Nitronode at ${wsURL}`);
     } else {
       logStep(`writing isolated config in ${configDir}`);
       await writeConfig(configDir);
-      logStep('building temporary Clearnode binary');
-      await runCommand('go', ['build', '-o', binaryPath, './clearnode'], { cwd: repoRoot }, 'setup');
+      logStep('building temporary Nitronode binary');
+      await runCommand('go', ['build', '-o', binaryPath, './nitronode'], { cwd: repoRoot }, 'setup');
 
-      logStep(`starting Clearnode and waiting for ${wsURL}`);
+      logStep(`starting Nitronode and waiting for ${wsURL}`);
       child = spawn(binaryPath, {
         cwd: repoRoot,
-        env: {
-          ...process.env,
-          CLEARNODE_CONFIG_DIR_PATH: configDir,
-        },
+        env: childEnv(configDir),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
@@ -306,8 +347,9 @@ async function runSmoke() {
     const originalWarn = console.warn;
     let compatSessions;
     try {
-      console.info = () => {};
-      console.warn = () => {};
+      compatLogLines = [];
+      console.info = (...args) => compatLogLines.push(['info', ...args].join(' '));
+      console.warn = (...args) => compatLogLines.push(['warn', ...args].join(' '));
       compatSessions = await withTimeout(
         'compat.getAppSessionsList',
         compatClient.getAppSessionsList()
@@ -327,8 +369,14 @@ async function runSmoke() {
     logStep('runtime smoke passed');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await writeFailureLogs({ stdoutPath, stderrPath }, stdout, stderr, message);
+    const summary = compatLogLines.length > 0
+      ? `${message}\n\ncompat logs:\n${compatLogLines.join('\n')}`
+      : message;
+    await writeFailureLogs({ stdoutPath, stderrPath }, stdout, stderr, summary);
     console.error(message);
+    if (compatLogLines.length > 0) {
+      console.error(`compat logs:\n${compatLogLines.join('\n')}`);
+    }
     if (err instanceof SmokeError) {
       console.error(logs());
     }
@@ -338,7 +386,7 @@ async function runSmoke() {
       await closeClient(client);
     } finally {
       if (child) {
-        logStep('stopping Clearnode');
+        logStep('stopping Nitronode');
         await stopProcess(child);
       }
       if (process.exitCode) {

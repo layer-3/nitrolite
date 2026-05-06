@@ -7,14 +7,18 @@ This repo has deterministic drift checks for protocol, `@yellow-org/sdk`, and `@
 Run all implemented static checks from the repo root:
 
 ```bash
+(cd contracts && forge build)
 ./scripts/check-protocol-drift.sh --static
 ```
+
+`forge build` is required because ABI drift tests compare checked-in SDK ABIs
+against generated Foundry artifacts in `contracts/out`.
 
 Run package checks directly:
 
 ```bash
-cd sdk/ts && npm run drift:check
-cd sdk/ts-compat && npm run drift:check
+(cd sdk/ts && npm run drift:check)
+(cd sdk/ts-compat && npm run drift:check)
 ```
 
 Run the lightweight runtime smoke from the repo root:
@@ -23,30 +27,31 @@ Run the lightweight runtime smoke from the repo root:
 ./scripts/check-protocol-drift.sh --runtime
 ```
 
-The runtime smoke builds the TS SDK, builds TS compat, builds a temporary local Clearnode binary, starts it with isolated SQLite config, and connects to `ws://127.0.0.1:7824/ws`. It checks `ping`, `getConfig`, `getAssets`, `getAppSessions`, key-state reads, and compat mapping over the live SDK app-session result.
+The runtime smoke builds the TS SDK, builds TS compat, builds a temporary local Nitronode binary, starts it with isolated SQLite config, and connects to `ws://127.0.0.1:7824/ws`. It checks `ping`, `getConfig`, `getAssets`, `getAppSessions`, key-state reads, and compat mapping over the live SDK app-session result.
 
-This is not a load test. It uses empty local `blockchains` and `assets` config so PR CI does not depend on external RPC endpoints, wallets, or shared Clearnode deployments.
+This is not a load test. It uses empty local `blockchains` and `assets` config so PR CI does not depend on external RPC endpoints, wallets, or shared Nitronode deployments.
 
-To run the same lightweight compatibility smoke against an existing Clearnode, use external-node mode:
+To run the same lightweight compatibility smoke against an existing Nitronode, use external-node mode:
 
 ```bash
-CLEARNODE_RUNTIME_SMOKE_EXTERNAL=1 \
-CLEARNODE_RUNTIME_SMOKE_WS_URL=<wss-or-ws-clearnode-url> \
+NITRONODE_RUNTIME_SMOKE_EXTERNAL=1 \
+NITRONODE_RUNTIME_SMOKE_WS_URL=<wss-or-ws-nitronode-url> \
+NITRONODE_RUNTIME_SMOKE_PRIVATE_KEY=<0x-private-key> \
 ./scripts/check-protocol-drift.sh --runtime
 ```
 
-External-node mode does not start a local Clearnode and does not assert local-only empty config. It still checks `ping`, `getConfig`, `getAssets`, `getAppSessions`, key-state reads, and compat mapping.
+External-node mode does not start a local Nitronode and does not assert local-only empty config. It still checks `ping`, `getConfig`, `getAssets`, `getAppSessions`, key-state reads, and compat mapping.
 
 ## Guard Layers
 
-- RPC method drift: compares Go RPC method literals, Clearnode router registrations, TS method constants, and public TS client wrappers.
+- RPC method drift: compares Go RPC method literals, Nitronode router registrations, TS method constants, and public TS client wrappers.
 - RPC DTO drift: compares Go JSON-tagged DTO structs against TS request/response interfaces for required fields, optional fields, and scalar/container shape.
 - Public API drift: snapshots root runtime exports and compiler-derived TypeScript signatures for `@yellow-org/sdk` and `@yellow-org/sdk-compat`, including type-only exports, interfaces, functions, classes, public class methods, enums, constants, and type aliases.
 - ABI drift: compares checked-in `ChannelHub` functions against the current Foundry artifact, checks SDK-consumed ERC20 functions against the ERC20 artifact, and guards the manually checked-in AppRegistry ABI against an explicit consumed-function manifest until that contract artifact exists in this repo.
 - Signing drift: compares TS app-session and session-key packers against Go-generated canonical vectors for create, deposit, withdraw, operate, fractional decimal, and uint64 boundary cases.
-- Transform drift: checks raw Clearnode response fixtures for app sessions, node config, assets, and strict failure on unsupported required shapes.
+- Transform drift: checks raw Nitronode response fixtures for app sessions, node config, assets, and strict failure on unsupported required shapes.
 - Compat drift: checks current v1 app-session shape, legacy flat fallback shape, and asset decimal conversion in `NitroliteClient.getAppSessionsList()`.
-- Runtime smoke drift: starts an isolated local Clearnode and verifies live SDK/compat calls against the current runtime response shape.
+- Runtime smoke drift: starts an isolated local Nitronode and verifies live SDK/compat calls against the current runtime response shape.
 
 ## Intentional Updates
 
@@ -89,19 +94,19 @@ Each guard includes at least one negative test or mutation-style check that prov
 - Public API snapshot drift: treat the diff as an SDK API change. If intentional, update snapshots with `npm run drift:check -- -u` in the affected package and document the API change in the PR body.
 - ABI drift: regenerate Foundry artifacts and SDK ABI files with `cd contracts && forge build` and `cd ../sdk/ts && npm run codegen-abi`. If AppRegistry changes, remember it is currently manifest-guarded because the matching artifact is not in this repo.
 - Signing hash mismatch: regenerate Go source-of-truth vectors with `go run ./scripts/drift/generate-app-signing-vectors.go`, then inspect whether the change is field order, enum value, amount formatting, nonce/version encoding, or exact session-data bytes.
-- Transform fixture failure: update or add raw Clearnode fixtures only for wire shapes the SDK intentionally supports. Do not silently accept missing required fields that would later crash consumers.
+- Transform fixture failure: update or add raw Nitronode fixtures only for wire shapes the SDK intentionally supports. Do not silently accept missing required fields that would later crash consumers.
 - Compat mapping failure: current v1 SDK shapes are primary. Legacy fallbacks must stay explicit in tests; do not add broad best-effort mappers without fixture coverage.
-- Runtime setup/startup failure: inspect `runtime-smoke-logs` in CI or the preserved temp log directory locally. `[setup]` points to build/setup, `[startup]` to local Clearnode process exit, `[connection]` to WebSocket readiness, and `[transform]` or `[compat mapping]` to SDK response handling.
+- Runtime setup/startup failure: inspect `runtime-smoke-logs` in CI or the preserved temp log directory locally. `[setup]` points to build/setup, `[startup]` to local Nitronode process exit, `[connection]` to WebSocket readiness, and `[transform]` or `[compat mapping]` to SDK response handling.
 - External smoke failure: rerun the manual workflow or local external-node command to confirm it is not shared-environment state. External smoke is release/demo signal, not a PR blocker.
 
 ## CI Policy
 
-`Test (Protocol Drift Static)` runs on PRs and main pushes. It is deterministic and does not call shared Clearnode deployments.
+`Test (Protocol Drift Static)` runs on PRs and main pushes. It is deterministic and does not call shared Nitronode deployments.
 
-`Test (Protocol Drift Runtime)` also runs on PRs and main pushes. It starts an isolated local Clearnode inside the GitHub Actions job and does not use shared external or sandbox endpoints.
+`Test (Protocol Drift Runtime)` also runs on PRs and main pushes. It starts an isolated local Nitronode inside the GitHub Actions job and does not use shared external or sandbox endpoints.
 
 If runtime smoke fails in CI, inspect the `protocol-drift-runtime-smoke-logs` artifact. The smoke command categorizes failures as setup, startup, connection, timeout, transform, or compat mapping failures.
 
-The runtime job uses read-only repository permissions and no secrets. It builds Clearnode locally instead of pulling or publishing an image, so ordinary PRs do not need package-write permissions. If organization policy restricts forked PR workflows, a maintainer can rerun the same command locally or through an allowed CI rerun.
+The runtime job uses read-only repository permissions and no secrets. It builds Nitronode locally instead of pulling or publishing an image, so ordinary PRs do not need package-write permissions. If organization policy restricts forked PR workflows, a maintainer can rerun the same command locally or through an allowed CI rerun.
 
-External Clearnode checks are manual only through the `Protocol Drift External Smoke` workflow. The workflow requires the caller to provide the WebSocket URL, is not PR-blocking, and is not scheduled by default. Team-owned temporary environments can still be useful for release confidence, but they must not become default PR blockers unless their availability and data contract are owned.
+External Nitronode checks are manual only through the `Protocol Drift External Smoke` workflow. The workflow requires the caller to provide the WebSocket URL and the repository secret `NITRONODE_RUNTIME_SMOKE_PRIVATE_KEY`, is not PR-blocking, and is not scheduled by default. Team-owned temporary environments can still be useful for release confidence, but they must not become default PR blockers unless their availability and data contract are owned.

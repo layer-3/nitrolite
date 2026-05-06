@@ -355,7 +355,11 @@ export function transformSignedAppStateUpdateToRPC(signed: SignedAppStateUpdateV
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
-  const allocations = raw.allocations || [];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid app session: expected object payload');
+  }
+
+  const allocations = raw.allocations;
   if (!Array.isArray(allocations)) {
     throw new Error('Invalid app session allocations: expected allocations to be an array');
   }
@@ -394,16 +398,38 @@ function transformAppAllocationFromRPC(raw: any, index: number) {
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppDefinitionFromRPC(raw: any): AppDefinitionV1 {
-  if (!raw || !raw.application_id || raw.nonce === undefined || raw.nonce === null) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
   }
+  if (!raw.application_id || raw.nonce === undefined || raw.nonce === null) {
+    throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
+  }
+  if (!Array.isArray(raw.participants)) {
+    throw new Error('Invalid app definition: expected participants to be an array');
+  }
+  if (raw.quorum === undefined || raw.quorum === null) {
+    throw new Error('Invalid app definition: missing required field quorum');
+  }
+
   return {
     applicationId: raw.application_id,
-    participants: (raw.participants || []).map((p: any) => ({
-      walletAddress: p.wallet_address as Address,
-      signatureWeight: p.signature_weight,
-    })),
+    participants: raw.participants.map(transformAppParticipantFromRPC),
     quorum: raw.quorum,
     nonce: BigInt(raw.nonce),
+  };
+}
+
+function transformAppParticipantFromRPC(raw: any, index: number) {
+  const context = `app definition participant[${index}]`;
+  if (!raw || typeof raw.wallet_address !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field wallet_address`);
+  }
+  if (typeof raw.signature_weight !== 'number') {
+    throw new Error(`Invalid ${context}: missing required numeric field signature_weight`);
+  }
+
+  return {
+    walletAddress: raw.wallet_address as Address,
+    signatureWeight: raw.signature_weight,
   };
 }

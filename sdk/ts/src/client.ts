@@ -1705,6 +1705,9 @@ export class Client {
       session_key: sessionKey,
     };
     const resp = await this.rpcClient.channelsV1GetLastKeyStates(req);
+    if (!Array.isArray(resp.states)) {
+      throw new Error('Invalid channel key states response: expected states to be an array');
+    }
     return resp.states.map((state, index) =>
       transformChannelSessionKeyState(state, `channel session key state[${index}]`)
     );
@@ -1757,6 +1760,9 @@ export class Client {
       session_key: sessionKey,
     };
     const resp = await this.rpcClient.appSessionsV1GetLastKeyStates(req);
+    if (!Array.isArray(resp.states)) {
+      throw new Error('Invalid app key states response: expected states to be an array');
+    }
     return resp.states.map((state, index) =>
       transformAppSessionKeyState(state, `app session key state[${index}]`)
     );

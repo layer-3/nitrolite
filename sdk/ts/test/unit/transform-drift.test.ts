@@ -63,7 +63,7 @@ const appSessionKeyStateRaw = {
     user_sig: '0xdef456',
 };
 
-describe('Clearnode response transform drift guards', () => {
+describe('Nitronode response transform drift guards', () => {
     it('maps current get_app_sessions app_definition shape to SDK appDefinition', () => {
         const session = transformAppSessionInfo(appSessionRaw);
 
@@ -107,6 +107,36 @@ describe('Clearnode response transform drift guards', () => {
                 allocations: [],
             })
         ).toThrow('Invalid app definition: missing required fields');
+    });
+
+    it('rejects malformed top-level app session and definition payloads', () => {
+        expect(() => transformAppSessionInfo(null)).toThrow(
+            'Invalid app session: expected object payload'
+        );
+        expect(() =>
+            transformAppSessionInfo({
+                ...appSessionRaw,
+                allocations: undefined,
+            })
+        ).toThrow('Invalid app session allocations: expected allocations to be an array');
+        expect(() =>
+            transformAppSessionInfo({
+                ...appSessionRaw,
+                app_definition: {
+                    ...appSessionRaw.app_definition,
+                    participants: undefined,
+                },
+            })
+        ).toThrow('Invalid app definition: expected participants to be an array');
+        expect(() =>
+            transformAppSessionInfo({
+                ...appSessionRaw,
+                app_definition: {
+                    ...appSessionRaw.app_definition,
+                    quorum: undefined,
+                },
+            })
+        ).toThrow('Invalid app definition: missing required field quorum');
     });
 
     it('rejects app sessions missing required allocation fields', () => {
@@ -228,6 +258,10 @@ describe('Clearnode response transform drift guards', () => {
                 'app session key state[0]'
             )
         ).toThrow('Invalid app session key state[0]: expected application_ids to be string[]');
+
+        expect(() => transformAppSessionKeyState([], 'app session key state[0]')).toThrow(
+            'Invalid app session key state[0]: expected object'
+        );
     });
 
     it('maps high-level client app-session and key-state responses through transform paths', async () => {
@@ -282,6 +316,26 @@ describe('Clearnode response transform drift guards', () => {
                 limit: 10,
             },
         });
+    });
+
+    it('rejects malformed key-state response containers before mapping', async () => {
+        const clientLike = {
+            rpcClient: {
+                channelsV1GetLastKeyStates: jest.fn(async () => ({
+                    states: null,
+                })),
+                appSessionsV1GetLastKeyStates: jest.fn(async () => ({
+                    states: {},
+                })),
+            },
+        };
+
+        await expect(
+            (Client.prototype.getLastChannelKeyStates as any).call(clientLike, userAddress)
+        ).rejects.toThrow('Invalid channel key states response: expected states to be an array');
+        await expect(
+            (Client.prototype.getLastKeyStates as any).call(clientLike, userAddress)
+        ).rejects.toThrow('Invalid app key states response: expected states to be an array');
     });
 
     it('maps high-level client empty app-session responses', async () => {

@@ -22,6 +22,7 @@ jobs:
     with:
       project-path: 'sdk/ts'
       project-name: 'TS SDK'
+      forge-build: true
 
   test-sdk-compat:
     name: Test (TS SDK Compat)
@@ -38,6 +39,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Build contract artifacts
+        run: forge build
+        working-directory: contracts
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

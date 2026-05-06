@@ -126,6 +126,8 @@ describe('TS RPC drift guards', () => {
         const clientMethods = extractTsClientMethods(
             fs.readFileSync(path.join(repoRoot, 'sdk/ts/src/client.ts'), 'utf8')
         );
+        // The client extractor depends on class-method indentation. Fail loudly if that parser breaks.
+        expect(clientMethods.size).toBeGreaterThan(20);
 
         const coveredMethods = new Set([
             ...publicClientMethodsByRPCMethod.keys(),

@@ -46,6 +46,13 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [],
   },
   {
+    "kind": "function",
+    "name": "appendApplicationIDQueryParam",
+    "signatures": [
+      "(wsURL: string, applicationID?: string): string",
+    ],
+  },
+  {
     "kind": "interface",
     "name": "AppInfoV1",
     "properties": [
@@ -58,6 +65,11 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "version: string",
     ],
     "signatures": [],
+  },
+  {
+    "kind": "const",
+    "name": "APPLICATION_ID_QUERY_PARAM",
+    "type": "'app_id'",
   },
   {
     "kind": "function",
@@ -1089,6 +1101,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "Config",
     "properties": [
+      "applicationID: string",
       "blockchainRPCs: Map<bigint, string>",
       "errorHandler: (error: Error) => void",
       "handshakeTimeout: number",
@@ -2441,6 +2454,13 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
   },
   {
     "kind": "function",
+    "name": "withApplicationID",
+    "signatures": [
+      "(appID: string): Option",
+    ],
+  },
+  {
+    "kind": "function",
     "name": "withBlockchainRPC",
     "signatures": [
       "(chainId: bigint, rpcUrl: string): Option",
@@ -2465,6 +2485,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
 
 exports[`SDK public runtime API drift guard keeps root runtime exports intentional 1`] = `
 [
+  "APPLICATION_ID_QUERY_PARAM",
   "AppSessionKeySignerV1",
   "AppSessionStatus",
   "AppSessionWalletSignerV1",
@@ -2544,6 +2565,7 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "WebsocketDialer",
   "appSessionStatusToString",
   "appStateUpdateIntentToString",
+  "appendApplicationIDQueryParam",
   "applyAcknowledgementTransition",
   "applyChannelCreation",
   "applyCommitTransition",
@@ -2627,6 +2649,7 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "unmarshalMessage",
   "validateDecimalPrecision",
   "validateLedger",
+  "withApplicationID",
   "withBlockchainRPC",
   "withErrorHandler",
   "withHandshakeTimeout",

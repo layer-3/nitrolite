@@ -8,6 +8,13 @@ import "time"
 // connections must be safe for concurrent use.
 //
 // Returning false causes the connection to close.
+//
+// Allocation note: Allow runs after the frame has been read off the wire and
+// allocated on the Go heap. Per-frame size is bounded by SetReadLimit (see
+// WebsocketConnectionConfig.MaxMessageSize), but a burst of N back-to-back
+// max-sized frames can briefly hold up to N * MaxMessageSize bytes per
+// connection before this hook closes it. Burst capacity should be sized with
+// that ceiling in mind.
 type FrameRateLimiter interface {
 	// Allow reports whether a frame of size bytes is permitted at now.
 	Allow(now time.Time, size int) bool

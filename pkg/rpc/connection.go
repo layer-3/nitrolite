@@ -112,7 +112,8 @@ type WebsocketConnection struct {
 	pingInterval time.Duration
 	// pongTimeout is the maximum duration to wait for a pong response from the client
 	pongTimeout time.Duration
-	// maxMessageSize caps inbound frame size in bytes. Zero or negative disables.
+	// maxMessageSize caps inbound frame size in bytes. Always positive after
+	// NewWebsocketConnection: non-positive config values fall back to the default.
 	maxMessageSize int64
 	// frameRateLimiter decides whether each inbound frame is admitted.
 	frameRateLimiter FrameRateLimiter
@@ -155,7 +156,8 @@ type WebsocketConnectionConfig struct {
 	PongTimeout time.Duration
 	// MaxMessageSize caps inbound frame size in bytes (default: 128 KiB).
 	// Frames larger than this are rejected with WebSocket close code 1009
-	// before any allocation grows past the limit. Set <0 to disable (not recommended).
+	// before any allocation grows past the limit. Non-positive values fall
+	// back to the default; the cap cannot be disabled at this layer.
 	MaxMessageSize int64
 	// FrameRateLimiter is consulted for every inbound frame; returning false closes
 	// the connection. nil → NoopFrameRateLimiter (no enforcement).
@@ -197,7 +199,7 @@ func NewWebsocketConnection(config WebsocketConnectionConfig) (*WebsocketConnect
 	if config.PongTimeout <= 0 {
 		config.PongTimeout = defaultWsConnPongTimeout
 	}
-	if config.MaxMessageSize == 0 {
+	if config.MaxMessageSize <= 0 {
 		config.MaxMessageSize = defaultWsConnMaxMessageSize
 	}
 	if config.FrameRateLimiter == nil {

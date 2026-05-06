@@ -18,13 +18,18 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "prepare-content": "node scripts/prepare-package-content.mjs",
-    "build": "npm run prepare-content && tsc && chmod +x dist/index.js",
+    "build": "npm run prepare-content && tsc && node scripts/set-executable.mjs dist/index.js",
     "typecheck": "tsc --noEmit",
+    "verify:package": "node scripts/verify-package-content.mjs",
+    "verify:release-preflight": "node scripts/verify-release-preflight.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "zod": "^3.23.0"
+  },
+  "overrides": {
+    "ip-address": "^10.2.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

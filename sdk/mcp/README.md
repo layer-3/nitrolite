@@ -116,7 +116,7 @@ Any MCP-compatible client that supports stdio servers can launch the package wit
 
 ## What's Inside
 
-- **30 resources** — API reference (TS + Go), protocol docs, security patterns, examples (TS + Go), use cases, migration
+- **31 resources** — API reference (TS + Go), protocol docs, security patterns, examples (TS + Go), use cases, migration
 - **9 tools** — server info, method lookup, type lookup, search, RPC format, import validation, concept explanation, scaffolding (TS + Go)
 - **3 prompts** — guided workflows for building apps (covers both TS and Go), migrating from v0.5.3, building AI agents
 
@@ -194,11 +194,11 @@ npm pack --dry-run
 npm publish --access public
 ```
 
-`npm run build` copies the release source/docs snapshot into `content/`, compiles to `dist/`, and makes the binary executable. The npm tarball includes only `dist`, `content`, `README.md`, `package.json`, and `server.json`.
+`npm run build` copies the release source/docs snapshot into `content/`, writes `content/release.json` and `content/manifest.json`, compiles to `dist/`, and marks the binary executable. The npm tarball includes only `dist`, `content`, `README.md`, `package.json`, and `server.json`.
 
-Release tags matching `mcp-v*` run `.github/workflows/publish-sdk-mcp.yml`, which publishes the npm package and then publishes `server.json` to the MCP Registry.
+Release tags matching `mcp-v*` run `.github/workflows/publish-sdk-mcp.yml`. The workflow validates the content manifest, smokes the packed server from a clean install, publishes the npm package, and then publishes `server.json` to the MCP Registry from a separate retryable job.
 
-Version policy: the MCP package mirrors the SDK release it documents. If `@yellow-org/sdk` is `1.2.1`, publish `@yellow-org/sdk-mcp@1.2.1` from the same release commit. Consumers can use `@^1` to track compatible v1 SDK docs, or pin an exact MCP version for audited builds.
+Version policy: the MCP package mirrors the SDK release it documents. If `@yellow-org/sdk` is `1.2.1`, publish `@yellow-org/sdk-mcp@1.2.1` only after `@yellow-org/sdk@1.2.1`, `@yellow-org/sdk-compat@1.2.1`, and the Go module tag `v1.2.1` are available. The server never fetches the latest GitHub release at runtime; scaffolds and `server_info` use the packaged release metadata. Consumers can use `@^1` to track compatible v1 SDK docs, or pin an exact MCP version for audited builds.
 
 ---
 

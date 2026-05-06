@@ -29,7 +29,6 @@ const API_YAML = resolve(REPO_ROOT, 'docs/api.yaml');
 const GO_SDK_ROOT = resolve(REPO_ROOT, 'sdk/go');
 const PKG_ROOT = resolve(REPO_ROOT, 'pkg');
 const GO_MODULE_PATH = 'github.com/layer-3/nitrolite';
-const GO_MODULE_VERSION = 'v1.2.1';
 const SERVER_NAME = 'yellow-sdk-mcp';
 
 const SOURCE_ROOTS: Array<{ root: string; contentPrefix: string }> = [
@@ -83,6 +82,42 @@ function readPackageVersion(path: string): string | undefined {
     } catch {
         return undefined;
     }
+}
+
+interface ReleaseMetadata {
+    schemaVersion: number;
+    serverPackage: string;
+    mcpName: string;
+    serverVersion: string;
+    sdkPackage: string;
+    sdkVersion: string;
+    compatPackage: string;
+    compatVersion: string;
+    goModule: string;
+    goModuleVersion: string;
+    sourceCommit: string;
+    generatedAt: string;
+    contentMode: 'packaged-snapshot';
+    versionPolicy: 'strict-mirror';
+}
+
+interface ContentManifest {
+    files?: Array<{ path: string; size: number; sha256: string }>;
+    counts?: { totalFiles?: number; byPrefix?: Record<string, number> };
+}
+
+function readJsonFile<T>(path: string): T | undefined {
+    const content = readFile(path);
+    if (!content) return undefined;
+    try {
+        return JSON.parse(content) as T;
+    } catch {
+        return undefined;
+    }
+}
+
+function deriveGoModuleVersion(version: string): string {
+    return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version) ? `v${version}` : 'unknown';
 }
 
 /** Extract named exports from a barrel file */
@@ -962,6 +997,13 @@ func main() {
 // Initialize
 // ---------------------------------------------------------------------------
 
+const releaseMetadata = readJsonFile<ReleaseMetadata>(resolve(CONTENT_ROOT, 'release.json'));
+const contentManifest = readJsonFile<ContentManifest>(resolve(CONTENT_ROOT, 'manifest.json'));
+
+if (!MONOREPO_SOURCE_AVAILABLE && !releaseMetadata) {
+    throw new Error('Packaged Yellow SDK MCP content is missing content/release.json. Reinstall @yellow-org/sdk-mcp from a published release.');
+}
+
 loadClientMethods();
 loadTypes();
 loadCompatExports();
@@ -975,9 +1017,18 @@ loadGoSdkMethods();
 // MCP Server
 // ---------------------------------------------------------------------------
 
-const serverVersion = readPackageVersion(resolve(PACKAGE_ROOT, 'package.json')) ?? '1.2.1';
-const sdkVersion = readPackageVersion(resolve(SDK_ROOT, 'package.json')) ?? 'unknown';
-const compatVersion = readPackageVersion(resolve(COMPAT_ROOT, 'package.json')) ?? 'unknown';
+const serverPackage = releaseMetadata?.serverPackage ?? '@yellow-org/sdk-mcp';
+const mcpName = releaseMetadata?.mcpName ?? 'io.github.layer-3/yellow-sdk-mcp';
+const serverVersion = readPackageVersion(resolve(PACKAGE_ROOT, 'package.json')) ?? releaseMetadata?.serverVersion ?? 'unknown';
+const sdkPackage = releaseMetadata?.sdkPackage ?? '@yellow-org/sdk';
+const sdkVersion = releaseMetadata?.sdkVersion ?? readPackageVersion(resolve(SDK_ROOT, 'package.json')) ?? 'unknown';
+const compatPackage = releaseMetadata?.compatPackage ?? '@yellow-org/sdk-compat';
+const compatVersion = releaseMetadata?.compatVersion ?? readPackageVersion(resolve(COMPAT_ROOT, 'package.json')) ?? 'unknown';
+const goModule = releaseMetadata?.goModule ?? GO_MODULE_PATH;
+const goModuleVersion = releaseMetadata?.goModuleVersion ?? deriveGoModuleVersion(serverVersion);
+const runtimeContentMode = MONOREPO_SOURCE_AVAILABLE ? 'source-tree' : releaseMetadata?.contentMode ?? 'packaged-snapshot';
+const versionPolicy = releaseMetadata?.versionPolicy ?? 'strict-mirror';
+const scaffoldSdkVersion = sdkVersion === 'unknown' ? (serverVersion === 'unknown' ? '^1' : serverVersion) : sdkVersion;
 
 const server = new McpServer({
     name: SERVER_NAME,
@@ -1598,7 +1649,7 @@ main().catch(console.error);
 
 \`\`\`json
 {
-  "@yellow-org/sdk": "^1.2.1",
+  "@yellow-org/sdk": "${scaffoldSdkVersion}",
   "decimal.js": "^10.4.0",
   "viem": "^2.46.0"
 }
@@ -1707,7 +1758,7 @@ main().catch(console.error);
 
 \`\`\`json
 {
-  "@yellow-org/sdk": "^1.2.1",
+  "@yellow-org/sdk": "${scaffoldSdkVersion}",
   "viem": "^2.46.0",
   "decimal.js": "^10.6.0"
 }
@@ -1765,16 +1816,22 @@ server.tool(
             type: 'text' as const,
             text: JSON.stringify({
                 name: SERVER_NAME,
+                serverPackage,
+                mcpName,
                 version: serverVersion,
-                sdkPackage: '@yellow-org/sdk',
+                sdkPackage,
                 sdkVersion,
-                compatPackage: '@yellow-org/sdk-compat',
+                compatPackage,
                 compatVersion,
-                goModule: GO_MODULE_PATH,
-                goModuleVersion: GO_MODULE_VERSION,
+                goModule,
+                goModuleVersion,
                 protocolVersion: 'v1',
                 transport: 'stdio',
-                contentMode: MONOREPO_SOURCE_AVAILABLE ? 'source-tree' : 'packaged-snapshot',
+                contentMode: runtimeContentMode,
+                versionPolicy,
+                sourceCommit: releaseMetadata?.sourceCommit ?? 'unknown',
+                contentGeneratedAt: releaseMetadata?.generatedAt ?? 'unknown',
+                contentManifestFiles: contentManifest?.counts?.totalFiles ?? contentManifest?.files?.length ?? 0,
             }, null, 2),
         }],
     }),
@@ -2065,7 +2122,7 @@ server.tool(
                 'go-ai-agent': GO_SCAFFOLD_AI_AGENT,
             };
             const baseName = template.replace('go-', '');
-            const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\t${GO_MODULE_PATH} ${GO_MODULE_VERSION}\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
+            const goMod = `module my-nitrolite-${baseName}\n\ngo 1.25.0\n\nrequire (\n\t${goModule} ${goModuleVersion}\n\tgithub.com/shopspring/decimal v1.4.0\n)`;
             const envKey = template === 'go-ai-agent' ? 'AGENT_PRIVATE_KEY' : 'PRIVATE_KEY';
             const envExtra = template === 'go-transfer-app' ? '\nRECIPIENT=your_recipient_address' : template === 'go-app-session' ? '\nPEER_ADDRESS=peer_wallet_address' : '';
             const text = `# Scaffold: ${template}\n\n## go.mod\n\`\`\`\n${goMod}\n\`\`\`\n\n## main.go\n\`\`\`go\n${goTemplateMap[template]}\`\`\`\n\n## .env.example\n\`\`\`\n${envKey}=your_hex_key\nNITRONODE_URL=wss://nitronode.example.com/ws\nRPC_URL=https://rpc.sepolia.org${envExtra}\n\`\`\`\n\n## Setup\n\`\`\`bash\ngo mod tidy\ngo run .\n\`\`\``;
@@ -2078,7 +2135,7 @@ server.tool(
             type: 'module',
             scripts: { start: 'npx tsx src/index.ts', build: 'tsc', typecheck: 'tsc --noEmit' },
             dependencies: {
-                '@yellow-org/sdk': '^1.2.1',
+                '@yellow-org/sdk': scaffoldSdkVersion,
                 'decimal.js': '^10.4.0',
                 viem: '^2.46.0',
             },

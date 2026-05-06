@@ -112,9 +112,6 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 
 	var dbStates []ChannelSessionKeyStateV1
 	if err := query.Find(&dbStates).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return []core.ChannelSessionKeyStateV1{}, uint32(totalCount), nil
-		}
 		return nil, 0, fmt.Errorf("failed to get channel session key states: %w", err)
 	}
 

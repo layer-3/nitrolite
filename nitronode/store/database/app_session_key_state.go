@@ -131,9 +131,6 @@ func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string, 
 
 	var dbStates []AppSessionKeyStateV1
 	if err := query.Find(&dbStates).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return []app.AppSessionKeyStateV1{}, uint32(totalCount), nil
-		}
 		return nil, 0, fmt.Errorf("failed to get session key states: %w", err)
 	}
 

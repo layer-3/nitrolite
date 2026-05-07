@@ -33,9 +33,12 @@ library Utils {
     function getEscrowId(bytes32 channelId, uint64 version) internal pure returns (bytes32 escrowId) {
         // "channelId, (state-)version" pair is unique as long as participants do not reuse versions
         // Uses the 64-byte scratch space (0x00–0x3f) to avoid a heap allocation.
+        // Mask version to 64 bits: mstore writes the full 256-bit stack word, and Solidity does
+        // not guarantee that internal call arguments are cleaned for sub-256-bit types. Without
+        // the mask, dirty high bits would produce a hash that diverges from abi.encode(channelId, version).
         assembly ("memory-safe") {
             mstore(0x00, channelId)
-            mstore(0x20, version)
+            mstore(0x20, and(version, 0xffffffffffffffff))
             escrowId := keccak256(0x00, 0x40)
         }
     }

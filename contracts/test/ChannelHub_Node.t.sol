@@ -24,6 +24,12 @@ contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
 
     // ========== Input Validation ==========
 
+    function test_reverts_whenCallerIsNotNode() public {
+        vm.prank(alice);
+        vm.expectRevert(ChannelHub.IncorrectMsgSender.selector);
+        cHub.withdrawFromNode(recipient, address(token), DEPOSIT_AMOUNT);
+    }
+
     function test_reverts_whenToIsZeroAddress() public {
         vm.prank(node);
         vm.expectRevert(ChannelHub.InvalidAddress.selector);

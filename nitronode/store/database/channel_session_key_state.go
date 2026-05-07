@@ -78,37 +78,42 @@ func (s *DBStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV
 		}
 	}
 
+	if err := upsertCurrentSessionKeyState(s.db, userAddress, sessionKey, SessionKeyKindChannel, state.Version); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user with optional filtering.
-// Returns only the highest-version row per session key. Results are paginated; totalCount is the
-// unpaginated total of matching session keys.
+// Reads filter the current_session_key_states_v1 pointer table by (user_address, kind=channel)
+// and JOIN history on (user_address, session_key, version). Per-request DB work is bounded by
+// the number of distinct session keys for the user, regardless of version churn in history.
+// Results are paginated; totalCount is the unpaginated total of matching session keys.
 func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
 	wallet = strings.ToLower(wallet)
 
-	subQuery := s.db.Model(&ChannelSessionKeyStateV1{}).
-		Select("user_address, session_key, MAX(version) as max_version").
-		Where("user_address = ?", wallet).
-		Group("user_address, session_key")
-
+	pointerQuery := s.db.Model(&CurrentSessionKeyStateV1{}).
+		Where("user_address = ? AND kind = ? AND version > 0", wallet, SessionKeyKindChannel)
 	if sessionKey != nil && *sessionKey != "" {
-		subQuery = subQuery.Where("session_key = ?", strings.ToLower(*sessionKey))
+		pointerQuery = pointerQuery.Where("session_key = ?", strings.ToLower(*sessionKey))
 	}
 
-	baseQuery := s.db.Model(&ChannelSessionKeyStateV1{}).
-		Joins("JOIN (?) AS latest ON channel_session_key_states_v1.user_address = latest.user_address AND channel_session_key_states_v1.session_key = latest.session_key AND channel_session_key_states_v1.version = latest.max_version", subQuery)
-
 	var totalCount int64
-	if err := baseQuery.Count(&totalCount).Error; err != nil {
+	if err := pointerQuery.Count(&totalCount).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count channel session key states: %w", err)
 	}
 
-	query := baseQuery.
+	query := s.db.Model(&ChannelSessionKeyStateV1{}).
+		Joins("JOIN current_session_key_states_v1 c ON c.user_address = channel_session_key_states_v1.user_address AND c.session_key = channel_session_key_states_v1.session_key AND c.version = channel_session_key_states_v1.version").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0", wallet, SessionKeyKindChannel).
 		Preload("Assets").
 		Order("channel_session_key_states_v1.created_at DESC, channel_session_key_states_v1.id ASC").
 		Limit(int(limit)).
 		Offset(int(offset))
+	if sessionKey != nil && *sessionKey != "" {
+		query = query.Where("c.session_key = ?", strings.ToLower(*sessionKey))
+	}
 
 	var dbStates []ChannelSessionKeyStateV1
 	if err := query.Find(&dbStates).Error; err != nil {
@@ -124,19 +129,16 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 }
 
 // GetLastChannelSessionKeyVersion returns the latest version of a channel session key state.
-// Returns 0 if no state exists.
+// Reads from the pointer table; returns 0 if no state exists or the pointer is at its seeded
+// value (LockSessionKeyState created the row but no submit has succeeded yet).
 func (s *DBStore) GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error) {
 	wallet = strings.ToLower(wallet)
 	sessionKey = strings.ToLower(sessionKey)
 
-	var result struct {
-		Version uint64
-	}
-	err := s.db.Model(&ChannelSessionKeyStateV1{}).
-		Select("version").
-		Where("user_address = ? AND session_key = ?", wallet, sessionKey).
-		Order("version DESC").
-		Take(&result).Error
+	var pointer CurrentSessionKeyStateV1
+	err := s.db.
+		Where("user_address = ? AND session_key = ? AND kind = ?", wallet, sessionKey, SessionKeyKindChannel).
+		Take(&pointer).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -145,7 +147,7 @@ func (s *DBStore) GetLastChannelSessionKeyVersion(wallet, sessionKey string) (ui
 		return 0, fmt.Errorf("failed to check channel session key state: %w", err)
 	}
 
-	return result.Version, nil
+	return pointer.Version, nil
 }
 
 // ValidateChannelSessionKeyForAsset checks in a single query that:
@@ -162,15 +164,12 @@ func (s *DBStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, m
 
 	now := time.Now().UTC()
 
-	maxVersionSubQ := s.db.Model(&ChannelSessionKeyStateV1{}).
-		Select("MAX(version)").
-		Where("user_address = ? AND session_key = ?", wallet, sessionKey)
-
 	var count int64
 	err := s.db.Model(&ChannelSessionKeyStateV1{}).
-		Where("user_address = ? AND session_key = ? AND expires_at > ? AND metadata_hash = ? AND version = (?)",
-			wallet, sessionKey, now, metadataHash, maxVersionSubQ).
+		Joins("JOIN current_session_key_states_v1 c ON c.user_address = channel_session_key_states_v1.user_address AND c.session_key = channel_session_key_states_v1.session_key AND c.version = channel_session_key_states_v1.version AND c.kind = ?", SessionKeyKindChannel).
 		Joins("JOIN channel_session_key_assets_v1 ON channel_session_key_assets_v1.session_key_state_id = channel_session_key_states_v1.id AND channel_session_key_assets_v1.asset = ?", asset).
+		Where("channel_session_key_states_v1.user_address = ? AND channel_session_key_states_v1.session_key = ? AND channel_session_key_states_v1.expires_at > ? AND channel_session_key_states_v1.metadata_hash = ?",
+			wallet, sessionKey, now, metadataHash).
 		Count(&count).Error
 
 	if err != nil {

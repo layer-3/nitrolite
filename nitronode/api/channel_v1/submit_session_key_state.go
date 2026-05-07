@@ -3,6 +3,7 @@ package channel_v1
 import (
 	"time"
 
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
@@ -69,10 +70,24 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 
 	// Validate version and store the session key state
 	err = h.useStoreInTx(func(tx Store) error {
-		// Check the latest version for this (user_address, session_key) pair; 0 means no state exists
-		latestVersion, err := tx.GetLastChannelSessionKeyVersion(coreState.UserAddress, coreState.SessionKey)
+		// Lock the (user, session_key, channel) pointer row for the duration of the tx so that
+		// concurrent submits for the same (user, session_key) serialize cleanly and report a
+		// proper "expected version" error rather than racing on the history UNIQUE constraint.
+		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindChannel)
 		if err != nil {
-			return rpc.Errorf("failed to check existing session key state: %v", err)
+			return rpc.Errorf("failed to lock session key state: %v", err)
+		}
+
+		// Enforce the per-user cap when registering a new session key. Existing keys (latestVersion > 0)
+		// can always be updated regardless of the cap so that legitimate rotation is never blocked.
+		if latestVersion == 0 && h.maxSessionKeysPerUser > 0 {
+			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
+			if err != nil {
+				return rpc.Errorf("failed to count session keys for user: %v", err)
+			}
+			if count >= uint32(h.maxSessionKeysPerUser) {
+				return rpc.Errorf("invalid_session_key_state: user has reached the session key limit of %d", h.maxSessionKeysPerUser)
+			}
 		}
 
 		if coreState.Version != latestVersion+1 {

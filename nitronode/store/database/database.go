@@ -231,6 +231,7 @@ func migrateSqlite(db *gorm.DB) error {
 		&AppSessionKeyAppSessionIDV1{},
 		&ChannelSessionKeyStateV1{},
 		&ChannelSessionKeyAssetV1{},
+		&CurrentSessionKeyStateV1{},
 		&UserBalance{},
 		&UserStakedV1{},
 		&ActionLogEntryV1{},

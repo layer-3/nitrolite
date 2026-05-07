@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
@@ -105,6 +106,16 @@ func (m *MockStore) StoreUserState(state core.State, applicationID string) error
 func (m *MockStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 	args := m.Called(wallet, asset)
 	return args.Error(0)
+}
+
+func (m *MockStore) LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error) {
+	args := m.Called(userAddress, sessionKey, kind)
+	return uint64(args.Int(0)), args.Error(1)
+}
+
+func (m *MockStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
+	args := m.Called(userAddress)
+	return uint32(args.Int(0)), args.Error(1)
 }
 
 func (m *MockStore) StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error {

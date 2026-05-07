@@ -160,6 +160,16 @@ type DatabaseStore interface {
 	// RecordLedgerEntry logs a movement of funds within the internal ledger.
 	RecordLedgerEntry(userWallet, accountID, asset string, amount decimal.Decimal) error
 
+	// --- Session Key State Pointer Operations ---
+
+	// LockSessionKeyState ensures the (user, session_key, kind) pointer row exists and locks
+	// it for the surrounding transaction. Returns the current version (0 if newly created).
+	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error)
+
+	// CountSessionKeysForUser returns the number of distinct session keys recorded for the
+	// wallet across both kinds. Used to enforce the per-user cap at submit time.
+	CountSessionKeysForUser(userAddress string) (uint32, error)
+
 	// --- App Session Key State Operations ---
 
 	// StoreAppSessionKeyState stores or updates a session key state.

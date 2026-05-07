@@ -25,19 +25,20 @@ import (
 
 // Handler manages app session operations and provides RPC endpoints for app session management.
 type Handler struct {
-	useStoreInTx       StoreTxProvider
-	assetStore         AssetStore
-	actionGateway      ActionGateway
-	signer             *core.ChannelDefaultSigner
-	stateAdvancer      core.StateAdvancer
-	statePacker        core.StatePacker
-	nodeAddress        string // Node's wallet address
-	appRegistryEnabled bool
-	metrics            metrics.RuntimeMetricExporter
-	maxParticipants    int
-	maxSessionData     int
-	maxSessionKeyIDs   int
-	maxSignedUpdates   int
+	useStoreInTx          StoreTxProvider
+	assetStore            AssetStore
+	actionGateway         ActionGateway
+	signer                *core.ChannelDefaultSigner
+	stateAdvancer         core.StateAdvancer
+	statePacker           core.StatePacker
+	nodeAddress           string // Node's wallet address
+	appRegistryEnabled    bool
+	metrics               metrics.RuntimeMetricExporter
+	maxParticipants       int
+	maxSessionData        int
+	maxSessionKeyIDs      int
+	maxSignedUpdates      int
+	maxSessionKeysPerUser int
 }
 
 // NewHandler creates a new Handler instance with the provided dependencies.
@@ -52,21 +53,23 @@ func NewHandler(
 	appRegistryEnabled bool,
 	m metrics.RuntimeMetricExporter,
 	maxParticipants, maxSessionData, maxSessionKeyIDs, maxSignedUpdates int,
+	maxSessionKeysPerUser int,
 ) *Handler {
 	return &Handler{
-		useStoreInTx:       useStoreInTx,
-		assetStore:         assetStore,
-		actionGateway:      actionGateway,
-		signer:             signer,
-		stateAdvancer:      stateAdvancer,
-		statePacker:        statePacker,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: appRegistryEnabled,
-		metrics:            m,
-		maxParticipants:    maxParticipants,
-		maxSessionData:     maxSessionData,
-		maxSessionKeyIDs:   maxSessionKeyIDs,
-		maxSignedUpdates:   maxSignedUpdates,
+		useStoreInTx:          useStoreInTx,
+		assetStore:            assetStore,
+		actionGateway:         actionGateway,
+		signer:                signer,
+		stateAdvancer:         stateAdvancer,
+		statePacker:           statePacker,
+		nodeAddress:           nodeAddress,
+		appRegistryEnabled:    appRegistryEnabled,
+		metrics:               m,
+		maxParticipants:       maxParticipants,
+		maxSessionData:        maxSessionData,
+		maxSessionKeyIDs:      maxSessionKeyIDs,
+		maxSignedUpdates:      maxSignedUpdates,
+		maxSessionKeysPerUser: maxSessionKeysPerUser,
 	}
 }
 

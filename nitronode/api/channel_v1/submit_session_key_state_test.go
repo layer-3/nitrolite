@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/nitronode/metrics"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 	"github.com/layer-3/nitrolite/pkg/sign"
@@ -68,7 +69,7 @@ func TestChannelSubmitSessionKeyState_Success(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner)
 
-	mockStore.On("GetLastChannelSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -146,7 +147,7 @@ func TestChannelSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner)
 
-	mockStore.On("GetLastChannelSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -295,7 +296,7 @@ func TestChannelSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	// Submit version 3 when latest is 0 (expects 1)
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, []string{}, expiresAt, userSigner)
 
-	mockStore.On("GetLastChannelSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -312,6 +313,85 @@ func TestChannelSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	require.NotNil(t, respErr)
 	assert.Contains(t, respErr.Error(), fmt.Sprintf("expected version %d, got %d", 1, 3))
 	mockStore.AssertExpectations(t)
+}
+
+func TestChannelSubmitSessionKeyState_RejectsWhenAtUserCap(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 3,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("CountSessionKeysForUser", userAddress).Return(3, nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "session key limit of 3")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "StoreChannelSessionKeyState", mock.Anything)
+}
+
+func TestChannelSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 3,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	// Existing key at version 4: submit version 5. Cap must NOT block updates.
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 5, []string{"USDC"}, expiresAt, userSigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(4, nil)
+	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
 }
 
 func TestChannelSubmitSessionKeyState_SignatureMismatch(t *testing.T) {

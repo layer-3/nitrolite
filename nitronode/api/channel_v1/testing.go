@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
 )
@@ -92,6 +93,16 @@ func (m *MockStore) GetUserChannels(wallet string, status *core.ChannelStatus, a
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]core.Channel), args.Get(1).(uint32), args.Error(2)
+}
+
+func (m *MockStore) LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error) {
+	args := m.Called(userAddress, sessionKey, kind)
+	return uint64(args.Int(0)), args.Error(1)
+}
+
+func (m *MockStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
+	args := m.Called(userAddress)
+	return uint32(args.Int(0)), args.Error(1)
 }
 
 func (m *MockStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV1) error {

@@ -11,6 +11,7 @@ import {TestUtils, SESSION_KEY_VALIDATOR_ID} from "../TestUtils.sol";
 contract ChannelHubTest_SingleChain_Lifecycle is ChannelHubTest_Base {
     function test_happyPath() public {
         // Approve SessionKeyValidator (ID 1) for user signatures by setting bit 1
+        // forge-lint: disable-next-line(incorrect-shift) -- intentional bitmask: 1 << N sets bit N
         uint256 approvedValidators = 1 << SESSION_KEY_VALIDATOR_ID; // Bit 1 = 1
 
         ChannelDefinition memory def = ChannelDefinition({

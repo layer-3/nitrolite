@@ -8,6 +8,9 @@ enum ParticipantIndex {
     NODE
 }
 
+// INVARIANT: Utils.getChannelId hashes the raw memory layout of this struct using the
+// hardcoded size 0xC0 (6 fields × 32 bytes). Adding or removing fields requires updating
+// that constant; failing to do so silently produces wrong channelIds.
 struct ChannelDefinition {
     uint32 challengeDuration;
     address user;

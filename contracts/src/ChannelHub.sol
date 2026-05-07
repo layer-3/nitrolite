@@ -1425,8 +1425,9 @@ contract ChannelHub is ReentrancyGuard {
     /// - explicit return value: decoded as uint256, non-zero treated as success.
     ///   Decoding as uint256 (not bool) avoids an abi.decode revert on non-canonical bool encodings
     ///   (e.g. a token returning 2), which would otherwise break _nonRevertingPushFunds' no-revert guarantee.
-    /// Uses assembly with retLen=32 so the EVM only expands caller memory by 32 bytes regardless of actual
-    /// returndata size, preventing memory-expansion OOG from tokens that return oversized data.
+    /// Uses assembly to write the call output directly to scratch space (0x00-0x1f).
+    /// That range is already within the memory expanded by the preceding abi.encodeCall(), so no
+    /// additional memory expansion occurs regardless of actual returndata size.
     /// The high-level `(bool, bytes memory) = addr.call(...)` form copies ALL returndata into caller memory
     /// at caller-gas expense — a malicious token returning 1 MB would exhaust gas before we reach the length check.
     function _trySafeTransfer(address token, address to, uint256 amount) internal returns (bool) {
@@ -1436,8 +1437,7 @@ contract ChannelHub is ReentrancyGuard {
         uint256 retval;
 
         assembly ("memory-safe") {
-            // retLen=32 caps caller-side memory expansion to 32 bytes; returndatasize() still reflects actual length.
-            // Output written to scratch space (0x00-0x1f), reserved by Solidity's memory layout for transient use.
+            // Output to scratch space (0x00-0x1f); returndatasize() still reflects the full returndata length.
             success := call(TRANSFER_GAS_LIMIT, token, 0, add(callData, 0x20), mload(callData), 0x00, 0x20)
             rdsize := returndatasize()
             retval := mload(0x00)

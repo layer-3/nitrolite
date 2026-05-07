@@ -204,6 +204,33 @@ contract ChannelHubTest_nonRevertingPushFunds is Test {
         _verifyBalancesNotChanged(recipient, address(oversizedToken), TRANSFER_AMOUNT);
     }
 
+    // Covers the rdsize ∈ [1, 31] branch of _trySafeTransfer.
+    // Any response shorter than 32 bytes is rejected as failure regardless of content —
+    // a valid ERC20 bool is always a full 32-byte ABI word.
+    function test_accumulatesReclaims_whenERC20ReturnsShortData() public {
+        OversizedReturnERC20 shortToken = new OversizedReturnERC20(16, 0);
+        shortToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.TransferFailed(recipient, address(shortToken), TRANSFER_AMOUNT);
+
+        cHub.exposed_nonRevertingPushFunds(recipient, address(shortToken), TRANSFER_AMOUNT);
+
+        _verifyBalancesNotChanged(recipient, address(shortToken), TRANSFER_AMOUNT);
+    }
+
+    // Covers rdsize == 32 with a non-canonical bool value (2).
+    // abi.decode(..., (bool)) reverts on value 2 — Solidity 0.8 only accepts 0 or 1.
+    // Decoding as uint256 and checking != 0 handles this correctly without reverting.
+    function test_succeeds_whenERC20ReturnsNonCanonicalBoolValue() public {
+        OversizedReturnERC20 nonCanonicalToken = new OversizedReturnERC20(32, 2);
+        nonCanonicalToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        cHub.exposed_nonRevertingPushFunds(recipient, address(nonCanonicalToken), TRANSFER_AMOUNT);
+
+        _verifyTransferSuccess(recipient, address(nonCanonicalToken), TRANSFER_AMOUNT);
+    }
+
     // ========== ERC777 Donation-Back Tests ==========
 
     function test_succeeds_whenERC777DonatesBack() public {

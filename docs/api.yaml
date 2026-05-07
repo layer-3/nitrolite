@@ -650,13 +650,13 @@ api:
                   optional: true
                 - field_name: pagination
                   type: pagination_params
-                  description: Pagination parameters (offset, limit, sort). Default limit 10, max 10.
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
                   optional: true
               response:
                 - field_name: states
                   type: array
                   items:
-                    type: app_session_key_state
+                    type: channel_session_key_state
                   description: List of active session key states for the user
                 - field_name: metadata
                   type: pagination_metadata
@@ -836,7 +836,7 @@ api:
             - name: get_last_key_states
               description: Retrieve the latest session key states for a user with optional filtering by session key. Mandatory pagination caps response size (max page size 10).
               request:
-                - field_name: wallet
+                - field_name: user_address
                   type: string
                   description: User's wallet address
                 - field_name: session_key
@@ -845,7 +845,7 @@ api:
                   optional: true
                 - field_name: pagination
                   type: pagination_params
-                  description: Pagination parameters (offset, limit, sort). Default limit 10, max 10.
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
                   optional: true
               response:
                 - field_name: states

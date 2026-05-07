@@ -10,6 +10,7 @@ import {RevertingERC20} from "./mocks/RevertingERC20.sol";
 import {GasConsumingERC20} from "./mocks/GasConsumingERC20.sol";
 import {MalformedReturningERC20} from "./mocks/MalformedReturningERC20.sol";
 import {DonatingERC20} from "./mocks/DonatingERC20.sol";
+import {OversizedReturnERC20} from "./mocks/OversizedReturnERC20.sol";
 import {RevertingEthReceiver} from "./mocks/RevertingEthReceiver.sol";
 import {GasConsumingEthReceiver} from "./mocks/GasConsumingEthReceiver.sol";
 
@@ -171,6 +172,36 @@ contract ChannelHubTest_nonRevertingPushFunds is Test {
         cHub.exposed_nonRevertingPushFunds(recipient, address(malformedToken), TRANSFER_AMOUNT);
 
         _verifyBalancesNotChanged(recipient, address(malformedToken), TRANSFER_AMOUNT);
+    }
+
+    // ========== Oversized Return Data ERC20 Tests ==========
+
+    // Covers the rdsize > 32, retval != 0 branch of _trySafeTransfer.
+    // With the old high-level (bool, bytes memory) call form, a token returning a large buffer
+    // would exhaust caller gas during returndata copy before we could inspect the length.
+    // The assembly fix caps the copy to 32 bytes, so the first word is read and the transfer succeeds.
+    function test_succeeds_whenERC20ReturnsOversizedDataWithNonzeroValue() public {
+        OversizedReturnERC20 oversizedToken = new OversizedReturnERC20(10_240, 1);
+        oversizedToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        cHub.exposed_nonRevertingPushFunds(recipient, address(oversizedToken), TRANSFER_AMOUNT);
+
+        _verifyTransferSuccess(recipient, address(oversizedToken), TRANSFER_AMOUNT);
+    }
+
+    // Covers the rdsize > 32, retval == 0 branch of _trySafeTransfer.
+    // Oversized returndata with a zero first word must be treated as failure and accumulate reclaims,
+    // not revert.
+    function test_accumulatesReclaims_whenERC20ReturnsOversizedDataWithZeroValue() public {
+        OversizedReturnERC20 oversizedToken = new OversizedReturnERC20(10_240, 0);
+        oversizedToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit ChannelHub.TransferFailed(recipient, address(oversizedToken), TRANSFER_AMOUNT);
+
+        cHub.exposed_nonRevertingPushFunds(recipient, address(oversizedToken), TRANSFER_AMOUNT);
+
+        _verifyBalancesNotChanged(recipient, address(oversizedToken), TRANSFER_AMOUNT);
     }
 
     // ========== ERC777 Donation-Back Tests ==========

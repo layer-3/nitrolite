@@ -1,6 +1,6 @@
 module github.com/layer-3/nitrolite
 
-go 1.25.7
+go 1.25.9
 
 require (
 	cloud.google.com/go/kms v1.30.0

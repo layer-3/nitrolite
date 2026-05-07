@@ -17,11 +17,12 @@ library Utils {
     error FailedToFetchDecimals();
 
     function getChannelId(ChannelDefinition memory def, uint8 version) internal pure returns (bytes32 channelId) {
-        bytes32 baseId = keccak256(abi.encode(def));
-
         assembly ("memory-safe") {
+            // ChannelDefinition has 6 static fields × 32 bytes = 192 (0xC0) bytes in memory.
+            // Memory layout is identical to abi.encode for structs with only value types, so we
+            // hash the struct pointer directly, avoiding the abi.encode allocation.
+            let baseId := keccak256(def, 0xC0)
             // Store the version in the first byte (most significant byte) of the channelId
-            // Clear the first byte of baseId, then set it to version
             channelId := or(
                 and(baseId, 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),
                 shl(248, version)
@@ -29,9 +30,14 @@ library Utils {
         }
     }
 
-    function getEscrowId(bytes32 channelId, uint64 version) internal pure returns (bytes32) {
+    function getEscrowId(bytes32 channelId, uint64 version) internal pure returns (bytes32 escrowId) {
         // "channelId, (state-)version" pair is unique as long as participants do not reuse versions
-        return keccak256(abi.encode(channelId, version));
+        // Uses the 64-byte scratch space (0x00–0x3f) to avoid a heap allocation.
+        assembly ("memory-safe") {
+            mstore(0x00, channelId)
+            mstore(0x20, version)
+            escrowId := keccak256(0x00, 0x40)
+        }
     }
 
     function getValidatorRegistrationMessage(address channelHub, uint8 validatorId, address validator)

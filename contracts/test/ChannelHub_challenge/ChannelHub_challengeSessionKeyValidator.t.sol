@@ -25,6 +25,7 @@ abstract contract ChannelHubTest_Challenge_SkApproved_Base is ChannelHubTest_Cha
             user: alice,
             node: node,
             nonce: NONCE,
+            // forge-lint: disable-next-line(incorrect-shift) -- intentional bitmask: 1 << N sets bit N
             approvedSignatureValidators: 1 << SESSION_KEY_VALIDATOR_ID,
             metadata: bytes32(0)
         });

@@ -229,6 +229,42 @@ func TestWebsocketConnection_RateLimitedFrame_ClosesConnection(t *testing.T) {
 	require.Equal(t, 2, limiter.calls, "limiter was consulted for both frames")
 }
 
+func TestWebsocketConnection_ServeQueueFullClosesCleanly(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:      "conn1",
+		WebsocketConn:     wsConnMock,
+		ProcessBufferSize: 1,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	closed := make(chan struct{})
+	conn.Serve(ctx, func(error) { close(closed) })
+
+	// First message fills processSink (no consumer reads RawRequests).
+	wsConnMock.addMessageToRead("msg1")
+	// Second message hits the queue-full branch. Without a handleClosure call,
+	// the internal wait group blocks forever and the parent closure never fires.
+	wsConnMock.addMessageToRead("msg2")
+
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("parent handleClosure not invoked after processSink overflow; goroutine leak")
+	}
+
+	require.Eventually(t, func() bool {
+		return wsConnMock.getCalledCloseCount() == 1
+	}, time.Second, 10*time.Millisecond, "underlying WebSocket Close() not called")
+}
+
 func TestWebsocketConnection_ConnectionID(t *testing.T) {
 	t.Parallel()
 

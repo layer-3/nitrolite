@@ -29,7 +29,7 @@ func (NoopFrameRateLimiter) Admit(time.Time, int) bool { return true }
 
 // ByteTokenBucket is a token bucket on bytes read. One bucket per connection.
 // Not safe for concurrent use; the connection's read goroutine is the sole
-// caller of Allow.
+// caller of Admit.
 type ByteTokenBucket struct {
 	bytesPerSec float64
 	burst       float64

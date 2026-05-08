@@ -134,7 +134,8 @@ type WebsocketNodeConfig struct {
 	WsConnProcessBufferSize int
 	// WsConnMaxMessageSize caps inbound WebSocket frame size in bytes per connection
 	// (default: 128 KiB). Frames exceeding this trigger close 1009 before allocation.
-	// Set <0 to disable (not recommended).
+	// Non-positive values fall back to the default; the cap cannot be disabled at
+	// this layer.
 	WsConnMaxMessageSize int64
 	// NewFrameRateLimiter constructs a per-connection FrameRateLimiter on each
 	// upgrade. nil → no enforcement (NoopFrameRateLimiter is used).

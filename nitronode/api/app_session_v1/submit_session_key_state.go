@@ -116,6 +116,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 
 		// Enforce the per-user cap when registering a new session key. Existing keys (latestVersion > 0)
 		// can always be updated regardless of the cap so that legitimate rotation is never blocked.
+		//
+		// TODO(MF-H01-followup): the row lock above only serializes submits for the same
+		// (user, session_key, kind), so two concurrent submits registering *different* new keys
+		// for the same user can both observe the same count and both pass the check, ending up
+		// at most maxSessionKeysPerUser + (concurrent new-key writers - 1) keys. The cap is a
+		// soft DOS bound, not a hard quota — a small over-shoot under genuine concurrency is
+		// acceptable. If a hard quota is ever required, take a per-user advisory lock here
+		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
 		if latestVersion == 0 && h.maxSessionKeysPerUser > 0 {
 			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
 			if err != nil {

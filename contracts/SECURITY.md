@@ -41,17 +41,6 @@ Invariant:
 
 ---
 
-- (NOT TRUE) only less-or-equal amount of internally-accounted funds can be withdrawn (NOT TRUE for states that include "receive" off-chain ops)
-
-The absence of the aforementioned invariant creates a huge risk of an attacker draining the Node.
-To protect from this, the Node should keep CORRECT track of off-chain user funds.
-CAUTION IS REQUIRED.
-
-P.S. This invariant still can be enforced by updating `lockedFunds` per channel meta-variable during on-chain state processing,
-e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock" Node's funds in channel) by X, and then decrease by Y.
-
----
-
 - User funds can be withdrawn only after channel is finalized (closed or challenged) or during WITHDRAW action
 - any action is valid only with a Node's signature (for now, but this condition may be loosened to improve UX by making protocol more complex)
 - a state with `version` <= `latestKnownVersion` per chain cannot be accepted as valid
@@ -182,6 +171,39 @@ no funds can be permanently locked if it does.
 
 ---
 
+## Trust Assumptions
+
+Beyond the cryptographic and on-chain guarantees listed above, correct user fund protection depends on the following trust assumptions about Node behavior.
+
+### Node as off-chain transfer intermediary
+
+When a user sends funds off-chain to another party, the protocol requires two independent state updates that the Node must countersign:
+
+1. The sender's channel state: user allocation decreases, encoding the transfer.
+2. The receiver's channel state: receiver allocation increases.
+
+A malicious Node could countersign the sender's state (making the reduction in user allocation on-chain enforceable) while withholding the receiver's credit state — pocketing the transferred funds. The on-chain contract has no visibility into independent per-channel state updates and cannot enforce atomicity between them.
+
+**Users must trust the Node to faithfully execute both legs of every off-chain transfer.** This extends the existing Node trust relationship (liquidity management, cross-chain relay) to include off-chain transfer routing. If the Node behaves maliciously, the user's recourse is to challenge the channel and close it, recovering whatever funds remain in their on-chain allocation at the last enforced state.
+
+### Node off-chain credit accounting
+
+The protocol does not bound on-chain withdrawals to the amount explicitly deposited. States that include "receive" off-chain operations can increase a user's allocation beyond what was deposited, reflecting credit extended by the Node. A Node that over-issues credits may have insufficient vault funds to honour those allocations when they are enforced on-chain.
+
+**Users must trust the Node to extend only credit that is backed by actual vault funds.** The Node is solely responsible for maintaining correct off-chain accounting of all user balances and ensuring no signed state represents an allocation the Node cannot fund.
+
+### Signature validator selection
+
+In the single-node deployment model, the ChannelHub is deployed by the Node operator, who also chooses the `defaultSigValidator`. The following trust properties apply:
+
+- **Default validator trust**: All participants using the default validator (0x00) trust the ChannelHub deployer's choice of default validator.
+- **User validator control**: Users control which additional validators (beyond the always-available default) can verify their signatures via the `approvedSignatureValidators` bitmask in `ChannelDefinition`. This prevents nodes from forging user signatures by registering malicious validators.
+- **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator), preventing unilateral changes to signature validation schemes.
+- **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. Signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
+- **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+
+---
+
 ## Signature Validation Security
 
 The Nitrolite protocol uses a pluggable signature validation system to support flexible authorization schemes. This section describes the security model and considerations for signature validators.
@@ -243,15 +265,15 @@ The protocol maintains clear separation between protocol concerns (ChannelHub) a
 
 See `signature-validators.md` for detailed documentation on each validator.
 
-### Trust Model
+### On-Chain vs Off-Chain Signature Domain Asymmetry
 
-- **Default validator trust**: All participants using the default validator (0x00) trust the ChannelHub deployer's choice of default validator.
-- **User validator control**: Users control which additional validators (beyond the always-available default) can verify signatures via the `approvedSignatureValidators` bitmask in `ChannelDefinition`. This prevents nodes from forging user signatures by registering malicious validators. Users can approve specific validators from the node's registry by setting the corresponding bits.
-- **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator). This ensures that validators are mutually agreed upon and prevents unilateral changes to signature validation schemes.
-- **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. This ensures that signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
-- **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+The default ECDSA validator (`EcdsaSignatureUtils.validateEcdsaSigner`) accepts **both EIP-191 and raw ECDSA** signatures on-chain: it first attempts EIP-191 recovery (the `"\x19Ethereum Signed Message:\n"` prefix used by `eth_sign`), then falls back to raw `keccak256(message)` recovery if EIP-191 fails.
 
----
+The Nitronode off-chain validator (`ChannelSigValidator`) uses **EIP-191 only** — no raw-ECDSA fallback.
+
+**Consequence:** A channel state signature produced with raw `keccak256` (no EIP-191 prefix) will pass on-chain validation but be rejected off-chain by the Nitronode. Under correct protocol operation this cannot occur, because the Nitronode only countersigns states it has already verified off-chain. However, implementations building custom signers or relayers must be aware of this asymmetry.
+
+**All client implementations must use EIP-191 (`eth_sign`) for channel state signatures** to ensure round-trip validity on both the off-chain (Nitronode) and on-chain (ChannelHub) validation paths. The raw-ECDSA fallback exists in the on-chain contract as a compatibility measure and should not be relied upon for new integrations.
 
 ### Bootstrap vulnerability: initial user signature at `createChannel`
 

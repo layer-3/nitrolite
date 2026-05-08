@@ -595,6 +595,8 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
     2. **Node fund lock**: User forces Node to lock large funds via escrow deposit, then blocks all recovery operations with minimal capital.
   * Combined gas limiting + reclaim pattern ensures channel operations continue regardless of transfer success.
 
+* **Node trust for off-chain transfer routing**: Off-chain transfers between parties are routed through the Node. The sender signs a state where their allocation decreases; the Node is expected to countersign it and also countersign a corresponding credit state for the receiver. The on-chain contract cannot enforce atomicity between two independent channel updates. A malicious Node could apply the sender's state while withholding the receiver's credit, effectively capturing the transferred funds. Users must trust the Node to faithfully execute both legs of every off-chain transfer.
+
 ---
 
 ## Signature validation
@@ -614,6 +616,7 @@ Since `approvedSignatureValidators` is part of the `channelId` computation, agre
 * Zero transaction overhead (no separate validator registration needed)
 * Prevents node-controlled validator forgery attacks
 * Default ECDSA validator always available as fallback
+* **Signature domain**: The default on-chain ECDSA validator accepts both EIP-191 (`eth_sign`) and raw `keccak256` signatures (this is done for extensibility), while the Nitronode off-chain validator accepts EIP-191 only. All client-produced signatures must use EIP-191 to be valid on both paths.
 
 ### Node validator registry
 

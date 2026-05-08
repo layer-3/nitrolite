@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +33,12 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf-8'));
 }
 
+function assertWithin(root, path) {
+  const rel = relative(root, path);
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) return;
+  throw new Error(`Refusing to write outside ${relative(repoRoot, root)}: ${path}`);
+}
+
 function getSourceCommit() {
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
   try {
@@ -59,6 +65,11 @@ function copyFilteredDirectory(sourceDir, targetDir, extensions) {
     if (entry === 'node_modules' || entry === 'dist') continue;
     const sourcePath = join(sourceDir, entry);
     const targetPath = join(targetDir, entry);
+    assertWithin(contentRoot, targetPath);
+    const linkStats = lstatSync(sourcePath);
+    if (linkStats.isSymbolicLink()) {
+      throw new Error(`Refusing to package symlink: ${relative(repoRoot, sourcePath)}`);
+    }
     const stats = statSync(sourcePath);
     if (stats.isDirectory()) {
       copied += copyFilteredDirectory(sourcePath, targetPath, extensions);
@@ -112,6 +123,8 @@ const copyResults = [];
 for (const spec of copySpecs) {
   const sourcePath = resolve(repoRoot, spec.from);
   const targetPath = resolve(contentRoot, spec.to);
+  assertWithin(repoRoot, sourcePath);
+  assertWithin(contentRoot, targetPath);
   if (!existsSync(sourcePath)) {
     if (spec.required) {
       throw new Error(`Missing required content source: ${relative(repoRoot, sourcePath)}`);
@@ -120,6 +133,10 @@ for (const spec of copySpecs) {
     continue;
   }
   const stats = statSync(sourcePath);
+  const linkStats = lstatSync(sourcePath);
+  if (linkStats.isSymbolicLink()) {
+    throw new Error(`Refusing to package symlink: ${relative(repoRoot, sourcePath)}`);
+  }
   let files = 0;
   if (stats.isDirectory()) {
     files = copyFilteredDirectory(sourcePath, targetPath, spec.extensions);

@@ -1807,6 +1807,10 @@ server.resource('protocol-auth-flow', 'nitrolite://protocol/auth-flow', async ()
 
 // ========================== TOOLS ==========================================
 
+function boundedToolString(description: string, max = 120) {
+    return z.string().trim().min(1).max(max).describe(description);
+}
+
 server.tool(
     'server_info',
     'Return Yellow SDK MCP package, SDK, compat, and indexed content version information for debugging and support.',
@@ -1841,7 +1845,7 @@ server.tool(
     'lookup_method',
     'Look up a specific SDK Client method by name — returns signature, params, return type, usage context',
     {
-        name: z.string().describe('Method name (e.g. "transfer", "deposit", "getChannels", "Transfer", "Deposit")'),
+        name: boundedToolString('Method name (e.g. "transfer", "deposit", "getChannels", "Transfer", "Deposit")'),
         language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
     },
     async ({ name, language }) => {
@@ -1879,7 +1883,7 @@ server.tool(
     'lookup_type',
     'Look up a type, interface, or enum by name — returns fields and source location',
     {
-        name: z.string().describe('Type name (e.g. "Channel", "State", "RPCMethod", "AppSessionV1", "ChannelStatus")'),
+        name: boundedToolString('Type name (e.g. "Channel", "State", "RPCMethod", "AppSessionV1", "ChannelStatus")'),
         language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
     },
     async ({ name, language }) => {
@@ -1922,7 +1926,7 @@ server.tool(
     'search_api',
     'Fuzzy search across all SDK methods and types',
     {
-        query: z.string().describe('Search query (e.g. "session key", "balance", "transfer", "AppSession")'),
+        query: boundedToolString('Search query (e.g. "session key", "balance", "transfer", "AppSession")', 160),
         language: z.enum(['typescript', 'go', 'both']).optional().default('typescript').describe('SDK language to search: "typescript" (default), "go", or "both"'),
     },
     async ({ query, language }) => {
@@ -1982,7 +1986,7 @@ server.tool(
 server.tool(
     'get_rpc_method',
     'Get the RPC wire format for a 0.5.x compat-layer method and its v1 equivalent. For v1 method reference, see docs/api.yaml.',
-    { method: z.string().describe('0.5.x compat method name (e.g. "get_channels", "transfer", "create_app_session")') },
+    { method: boundedToolString('0.5.x compat method name (e.g. "get_channels", "transfer", "create_app_session")') },
     async ({ method }) => {
         // NOTE: These are 0.5.x compat-layer method names mapped to their v1 wire equivalents.
         // The v1 API uses grouped methods (e.g. channels.v1.submit_state). The canonical v1
@@ -2015,7 +2019,7 @@ server.tool(
 server.tool(
     'validate_import',
     'Check if a symbol is exported from sdk-compat barrel — returns yes/no + correct import path',
-    { symbol: z.string().describe('Symbol name (e.g. "NitroliteClient", "RPCMethod", "createTransferMessage")') },
+    { symbol: boundedToolString('Symbol name (e.g. "NitroliteClient", "RPCMethod", "createTransferMessage")') },
     async ({ symbol }) => {
         const compatMatch = findNamedExport(compatExports, symbol);
         if (compatMatch.found) {
@@ -2037,7 +2041,7 @@ server.tool(
 server.tool(
     'explain_concept',
     'Plain-English explanation of a Nitrolite protocol concept (e.g. "state channel", "app session", "challenge period")',
-    { concept: z.string().describe('Concept name (e.g. "state channel", "app session", "challenge period", "nitronode", "vault")') },
+    { concept: boundedToolString('Concept name (e.g. "state channel", "app session", "challenge period", "nitronode", "vault")') },
     async ({ concept }) => {
         const query = concept.toLowerCase().trim();
 
@@ -2076,7 +2080,7 @@ server.tool(
 server.tool(
     'lookup_rpc_method',
     'Look up a v1 RPC method from docs/api.yaml — returns description, request/response fields. Methods use grouped naming: {group}.v1.{method}',
-    { method: z.string().describe('V1 RPC method name or search term (e.g. "channels.v1.get_home_channel", "submit_state", "get_balances")') },
+    { method: boundedToolString('V1 RPC method name or search term (e.g. "channels.v1.get_home_channel", "submit_state", "get_balances")') },
     async ({ method }) => {
         const query = method.toLowerCase().trim();
 

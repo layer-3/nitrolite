@@ -9,8 +9,10 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { WalletClient } from 'viem';
 import Decimal from 'decimal.js';
 import {
+  EthereumMsgSigner,
   getChannelSessionKeyAuthMetadataHashV1,
   packChannelKeyStateV1,
+  packChannelSessionKeyOwnershipV1,
 } from '@yellow-org/sdk';
 import type { Client, ChannelSessionKeyStateV1, ActionAllowance, AppInfoV1 } from '@yellow-org/sdk';
 import type { SessionKeyState, StatusMessage } from '../types';
@@ -257,11 +259,16 @@ export default function WalletDashboard({
         assets: assetList,
         expires_at: expiresAt.toString(),
         user_sig: '',
+        session_key_sig: '',
       };
 
-      // Sign using the SDK method (goes through ChannelDefaultSigner, strips prefix)
+      // Wallet's user_sig authorizes the delegation (goes through ChannelDefaultSigner, strips prefix).
       const sig = await client.signChannelSessionKeyState(state);
       state.user_sig = sig;
+
+      // Session-key holder's session_key_sig proves possession of the key being registered.
+      const sessionKeySigner = new EthereumMsgSigner(newSk.privateKey as `0x${string}`);
+      state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessionKeySigner);
 
       // Submit to nitronode
       await client.submitChannelSessionKeyState(state);
@@ -302,9 +309,13 @@ export default function WalletDashboard({
             assets: [] as string[],
             expires_at: latest.expires_at,
             user_sig: '',
+            session_key_sig: '',
           };
           const sig = await signSessionKeyStateWithWallet(walletClient, revokeState);
           revokeState.user_sig = sig;
+          // Session-key holder's session_key_sig is required on every submit, including revoke.
+          const sessionKeySigner = new EthereumMsgSigner(sessionKey.privateKey as `0x${string}`);
+          revokeState.session_key_sig = await client.signChannelSessionKeyOwnership(revokeState, sessionKeySigner);
           await client.submitChannelSessionKeyState(revokeState);
         }
       } catch (revokeErr) {
@@ -473,6 +484,22 @@ export default function WalletDashboard({
     const revokeId = `${ks.session_key}-${ks.version}`;
     try {
       setRevokingKey(revokeId);
+
+      // Revoke requires both user_sig and session_key_sig — the latter must come from the
+      // session key's private key. The example app only has that key in local state for the
+      // currently active session key; arbitrary keys cannot be revoked here without the
+      // private key and will need to expire naturally via expires_at.
+      const isCurrentlyActive =
+        sessionKey?.active && sessionKey.address.toLowerCase() === ks.session_key.toLowerCase();
+      if (!isCurrentlyActive || !sessionKey?.privateKey) {
+        showStatus(
+          'error',
+          'Revoke not supported for this key',
+          'session_key_sig requires the session key\'s private key, which is only available for the active local key. Other keys must expire via their expires_at.',
+        );
+        return;
+      }
+
       const newVersion = BigInt(ks.version) + 1n;
       const revokeState = {
         user_address: address,
@@ -481,18 +508,17 @@ export default function WalletDashboard({
         assets: [] as string[],
         expires_at: ks.expires_at,
         user_sig: '',
+        session_key_sig: '',
       };
       const sig = await signSessionKeyStateWithWallet(walletClient, revokeState);
       revokeState.user_sig = sig;
+      const sessionKeySigner = new EthereumMsgSigner(sessionKey.privateKey as `0x${string}`);
+      revokeState.session_key_sig = await client.signChannelSessionKeyOwnership(revokeState, sessionKeySigner);
       await client.submitChannelSessionKeyState(revokeState);
 
       showStatus('success', 'Session key revoked', `Key ${formatAddress(ks.session_key)}`);
 
-      // If revoked key is the currently active one, clear it
-      if (sessionKey?.active && sessionKey.address.toLowerCase() === ks.session_key.toLowerCase()) {
-        await onClearSessionKey();
-      }
-
+      await onClearSessionKey();
       await fetchKeyStates();
     } catch (error) {
       showStatus('error', 'Revoke failed', error instanceof Error ? error.message : String(error));

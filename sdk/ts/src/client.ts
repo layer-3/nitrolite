@@ -1657,9 +1657,11 @@ export class Client {
   /**
    * Sign a channel session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitChannelSessionKeyState.
+   * user_sig field before submitting via submitChannelSessionKeyState. The matching
+   * session_key_sig (see signChannelSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The channel session key state to sign (user_sig field is excluded from signing)
+   * @param state - The channel session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<Hex> {
@@ -1677,8 +1679,37 @@ export class Client {
   }
 
   /**
+   * Produce the session-key holder's ownership signature for a channel session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. The signed
+   * payload is bound to user_address, so the signature cannot be replayed under a
+   * different wallet.
+   *
+   * @param state - The channel session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - StateSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signChannelSessionKeyOwnership(
+    state: ChannelSessionKeyStateV1,
+    sessionKeySigner: StateSigner
+  ): Promise<Hex> {
+    const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      BigInt(state.version),
+      state.assets,
+      BigInt(state.expires_at)
+    );
+    const packed = core.packChannelSessionKeyOwnershipV1(
+      state.user_address as Address,
+      metadataHash
+    );
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
    * Submit a channel session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered). Submits without a valid session_key_sig are rejected.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1720,9 +1751,11 @@ export class Client {
   /**
    * Sign an app session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitSessionKeyState.
+   * user_sig field before submitting via submitSessionKeyState. The matching
+   * session_key_sig (see signAppSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The app session key state to sign (user_sig field is excluded from signing)
+   * @param state - The app session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signSessionKeyState(state: app.AppSessionKeyStateV1): Promise<Hex> {
@@ -1732,8 +1765,29 @@ export class Client {
   }
 
   /**
+   * Produce the session-key holder's ownership signature for an app session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. The packed
+   * app-session state already binds user_address, so the same packed bytes are used for
+   * both the wallet's user_sig and the session-key holder's session_key_sig.
+   *
+   * @param state - The app session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - StateSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signAppSessionKeyOwnership(
+    state: app.AppSessionKeyStateV1,
+    sessionKeySigner: StateSigner
+  ): Promise<Hex> {
+    const packed = app.packAppSessionKeyStateV1(state);
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
    * Submit an app session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered). Submits without a valid session_key_sig are rejected.
    *
    * @param state - The session key state containing delegation information
    */

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -8,6 +9,11 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// ErrSessionKeyNotAllowed is returned by LockSessionKeyState when the session key for the
+// requested kind is bound to a wallet other than the submitter. The message is intentionally
+// generic so the API does not confirm whether a given session_key is registered elsewhere.
+var ErrSessionKeyNotAllowed = errors.New("session key not allowed")
 
 // SessionKeyKind discriminates the two session-key flavors stored in
 // current_session_key_states_v1. Stored as SMALLINT in the DB.
@@ -66,55 +72,54 @@ func upsertCurrentSessionKeyState(tx *gorm.DB, userAddress, sessionKey string, k
 	return nil
 }
 
-// LockSessionKeyState ensures a pointer row exists for (user, session_key, kind) and locks it
-// for the duration of the surrounding transaction. Returns the current version (0 if newly
-// created). Mirrors LockUserState. On non-postgres dialects, falls back to read-without-lock.
+// LockSessionKeyState seeds the pointer row for (userAddress, session_key, kind) if absent
+// and locks the (session_key, kind) row for the surrounding transaction. Returns the latest
+// stored version for the caller's row, or ErrSessionKeyNotAllowed if the key is bound to a
+// different wallet for this kind.
+//
+// The (session_key, kind) unique constraint guarantees there is at most one pointer row per
+// (session_key, kind), so the SELECT ... FOR UPDATE that follows the no-op-on-conflict insert
+// always converges on the same physical row regardless of who tried to seed first. A foreign
+// wallet that races a legitimate owner ends up reading the legitimate owner back from the
+// locked row and is rejected here, without parsing constraint-violation errors at write time.
+//
+// SELECT ... FOR UPDATE is postgres-only; on sqlite the locking clause is skipped and the
+// surrounding transaction provides the necessary ordering for the in-process test setup.
 func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error) {
 	userAddress = strings.ToLower(userAddress)
 	sessionKey = strings.ToLower(sessionKey)
 
-	if s.db.Dialector.Name() == "postgres" {
-		seed := CurrentSessionKeyStateV1{
-			UserAddress: userAddress,
-			SessionKey:  sessionKey,
-			Kind:        kind,
-			Version:     0,
-			UpdatedAt:   time.Now().UTC(),
-		}
-		if err := s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&seed).Error; err != nil {
-			return 0, fmt.Errorf("failed to ensure current session key state row exists: %w", err)
-		}
-
-		var locked CurrentSessionKeyStateV1
-		err := s.db.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("user_address = ? AND session_key = ? AND kind = ?", userAddress, sessionKey, kind).
-			First(&locked).Error
-		if err != nil {
-			return 0, fmt.Errorf("failed to lock current session key state: %w", err)
-		}
-		return locked.Version, nil
+	seed := CurrentSessionKeyStateV1{
+		UserAddress: userAddress,
+		SessionKey:  sessionKey,
+		Kind:        kind,
+		Version:     0,
+		UpdatedAt:   time.Now().UTC(),
+	}
+	if err := s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&seed).Error; err != nil {
+		return 0, fmt.Errorf("failed to ensure current session key state row exists: %w", err)
 	}
 
-	var existing CurrentSessionKeyStateV1
-	err := s.db.Where("user_address = ? AND session_key = ? AND kind = ?", userAddress, sessionKey, kind).
-		First(&existing).Error
+	query := s.db.Where("session_key = ? AND kind = ?", sessionKey, kind)
+	if s.db.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+
+	var locked CurrentSessionKeyStateV1
+	err := query.First(&locked).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			seed := CurrentSessionKeyStateV1{
-				UserAddress: userAddress,
-				SessionKey:  sessionKey,
-				Kind:        kind,
-				Version:     0,
-				UpdatedAt:   time.Now().UTC(),
-			}
-			if err := s.db.Create(&seed).Error; err != nil {
-				return 0, fmt.Errorf("failed to create current session key state: %w", err)
-			}
+			// Should not happen: the seed above either inserted our row or no-op'd on an
+			// existing one. Treat as unowned for safety.
 			return 0, nil
 		}
-		return 0, fmt.Errorf("failed to read current session key state: %w", err)
+		return 0, fmt.Errorf("failed to lock current session key state: %w", err)
 	}
-	return existing.Version, nil
+
+	if !strings.EqualFold(locked.UserAddress, userAddress) {
+		return 0, ErrSessionKeyNotAllowed
+	}
+	return locked.Version, nil
 }
 
 // CountSessionKeysForUser returns the number of distinct session keys recorded for the wallet

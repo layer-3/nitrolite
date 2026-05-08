@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -71,6 +72,33 @@ func TestDBStore_LockSessionKeyState(t *testing.T) {
 		appV, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), appV)
+	})
+
+	t.Run("Foreign wallet trying to claim an already-owned (session_key, kind) is rejected", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		// User1 owns the session key for the app-session kind.
+		_, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
+		require.NoError(t, err)
+
+		// User2 attempts to lock the same (session_key, kind) — must surface the generic
+		// not-allowed sentinel without leaking that the key belongs to someone else.
+		_, err = store.LockSessionKeyState(testUser2, testSessionKey, SessionKeyKindAppSession)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrSessionKeyNotAllowed))
+	})
+
+	t.Run("Same (user, session_key) across both kinds is allowed", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		_, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindChannel)
+		require.NoError(t, err)
+		_, err = store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
+		require.NoError(t, err)
 	})
 
 	t.Run("Lowercases user_address and session_key", func(t *testing.T) {

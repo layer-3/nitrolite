@@ -218,6 +218,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "application_ids: string[]",
       "expires_at: string",
       "session_key: string",
+      "session_key_sig: string",
       "user_address: string",
       "user_sig: string",
       "version: string",
@@ -783,6 +784,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "assets: string[]",
       "expires_at: string",
       "session_key: string",
+      "session_key_sig: string",
       "user_address: string",
       "user_sig: string",
       "version: string",
@@ -1068,6 +1070,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "rebalanceAppSessions: (signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string>",
       "registerApp: (appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
+      "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: StateSigner): Promise<Hex>",
+      "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: StateSigner): Promise<Hex>",
       "signChannelSessionKeyState: (state: ChannelSessionKeyStateV1): Promise<Hex>",
       "signSessionKeyState: (state: app.AppSessionKeyStateV1): Promise<Hex>",
       "signState: (state: core.State): Promise<Hex>",
@@ -1822,6 +1826,13 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "name": "packChannelKeyStateV1",
     "signatures": [
       "(sessionKey: Address, metadataHash: \`0x\${string}\`): \`0x\${string}\`",
+    ],
+  },
+  {
+    "kind": "function",
+    "name": "packChannelSessionKeyOwnershipV1",
+    "signatures": [
+      "(userAddress: Address, metadataHash: \`0x\${string}\`): \`0x\${string}\`",
     ],
   },
   {
@@ -2627,6 +2638,7 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "packAppV1",
   "packChallengeState",
   "packChannelKeyStateV1",
+  "packChannelSessionKeyOwnershipV1",
   "packCreateAppSessionRequestV1",
   "packState",
   "payloadError",

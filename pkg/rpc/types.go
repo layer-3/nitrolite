@@ -71,6 +71,8 @@ type ChannelSessionKeyStateV1 struct {
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`
+	// SessionKeySig is the session-key holder's signature proving possession of the key being registered.
+	SessionKeySig string `json:"session_key_sig"`
 }
 
 // ============================================================================
@@ -214,6 +216,8 @@ type AppSessionKeyStateV1 struct {
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`
+	// SessionKeySig is the session-key holder's signature proving possession of the key being registered.
+	SessionKeySig string `json:"session_key_sig"`
 }
 
 // ============================================================================

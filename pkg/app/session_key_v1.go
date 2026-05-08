@@ -28,6 +28,9 @@ type AppSessionKeyStateV1 struct {
 	ExpiresAt time.Time
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string
+	// SessionKeySig is the session-key holder's signature over the same packed state.
+	// Required at submit time so that nobody can register a session key they do not control.
+	SessionKeySig string
 }
 
 // GenerateSessionKeyStateIDV1 generates a deterministic ID from user_address, session_key, and version.

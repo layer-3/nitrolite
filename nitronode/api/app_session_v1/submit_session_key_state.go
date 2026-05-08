@@ -1,6 +1,7 @@
 package app_session_v1
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -50,6 +51,11 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
+	if strings.EqualFold(coreState.UserAddress, coreState.SessionKey) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key must differ from user_address"), "")
+		return
+	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
@@ -70,8 +76,15 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
+	if coreState.SessionKeySig == "" {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+		return
+	}
 
-	// Pack the session key state for signature verification (ABI encoding)
+	// Pack the session key state for signature verification (ABI encoding). The packed state
+	// already binds user_address, so the same bytes work for both the wallet's UserSig and
+	// the session-key holder's SessionKeySig — replay across wallets is impossible because
+	// the user_address byte range differs.
 	packedState, err := app.PackAppSessionKeyStateV1(coreState)
 	if err != nil {
 		c.Fail(rpc.Errorf("invalid_session_key_state: failed to pack state: %v", err), "")
@@ -104,6 +117,24 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
+	// Validate the session-key holder's possession signature over the same packed state.
+	keySigBytes, err := hexutil.Decode(coreState.SessionKeySig)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: failed to decode session_key_sig: %v", err), "")
+		return
+	}
+
+	recoveredKey, err := ethMsgRecoverer.Recover(packedState, keySigBytes)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: failed to recover session_key_sig signer: %v", err), "")
+		return
+	}
+
+	if !strings.EqualFold(recoveredKey, coreState.SessionKey) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig does not match session_key"), "")
+		return
+	}
+
 	// Validate version and store the session key state
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, app_session) pointer row for the duration of the tx so
@@ -111,6 +142,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// a proper "expected version" error rather than racing on the history UNIQUE constraint.
 		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindAppSession)
 		if err != nil {
+			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
+				logger.Warn("session key registration collision",
+					"userAddress", coreState.UserAddress,
+					"sessionKey", coreState.SessionKey,
+					"kind", database.SessionKeyKindAppSession)
+				return rpc.Errorf("invalid_session_key_state: session_key not allowed")
+			}
 			return rpc.Errorf("failed to lock session key state: %v", err)
 		}
 

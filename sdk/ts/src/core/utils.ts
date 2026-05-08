@@ -451,3 +451,22 @@ export function packChannelKeyStateV1(
     [sessionKey, metadataHash]
   );
 }
+
+/**
+ * Packs the bytes the session-key holder signs to prove possession of the channel session
+ * key being registered. Bound to user_address so the signature cannot be replayed under a
+ * different wallet; the session_key itself is recovered from the signature and is not
+ * repeated in the payload. Matches Go SDK's PackChannelSessionKeyOwnershipV1.
+ */
+export function packChannelSessionKeyOwnershipV1(
+  userAddress: Address,
+  metadataHash: `0x${string}`
+): `0x${string}` {
+  return encodeAbiParameters(
+    [
+      { type: 'address' },  // user_address
+      { type: 'bytes32' },  // hashed metadata
+    ],
+    [userAddress, metadataHash]
+  );
+}

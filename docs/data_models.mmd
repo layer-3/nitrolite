@@ -194,6 +194,7 @@ classDiagram
         +numeric version
         +timestamptz expires_at
         +text user_sig
+        +text session_key_sig
         +timestamptz created_at
         +timestamptz updated_at
     }
@@ -216,6 +217,7 @@ classDiagram
         +char~66~ metadata_hash
         +timestamptz expires_at
         +text user_sig
+        +text session_key_sig
         +timestamptz created_at
     }
 
@@ -230,6 +232,7 @@ classDiagram
         +smallint kind PK
         +numeric version
         +timestamptz updated_at
+        UNIQUE(session_key, kind)
     }
 
     %% ===== BLOCKCHAIN TABLES =====

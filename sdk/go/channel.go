@@ -851,7 +851,9 @@ type GetLastChannelKeyStatesOptions struct {
 }
 
 // SubmitChannelSessionKeyState submits a channel session key state for registration or update.
-// The state must be signed by the user's wallet to authorize the session key delegation.
+// The state must carry both the wallet's UserSig (proving the user authorized the
+// delegation) and the session-key holder's SessionKeySig (proving possession of the key
+// being registered). Submits without a valid SessionKeySig are rejected.
 //
 // Parameters:
 //   - state: The channel session key state containing delegation information
@@ -867,8 +869,9 @@ type GetLastChannelKeyStatesOptions struct {
 //	    Version:     1,
 //	    Assets:      []string{"usdc", "weth"},
 //	    ExpiresAt:   time.Now().Add(24 * time.Hour),
-//	    UserSig:     "0x...",
 //	}
+//	state.UserSig, _ = client.SignChannelSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
 //	err := client.SubmitChannelSessionKeyState(ctx, state)
 func (c *Client) SubmitChannelSessionKeyState(ctx context.Context, state core.ChannelSessionKeyStateV1) error {
 	req := rpc.ChannelsV1SubmitSessionKeyStateRequest{
@@ -918,12 +921,13 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 	return states, nil
 }
 
-// SignChannelSessionKeyState signs a channel session key state using the client's state signer.
-// This creates a properly formatted signature that can be set on the state's UserSig field
-// before submitting via SubmitChannelSessionKeyState.
+// SignChannelSessionKeyState produces the wallet UserSig over the channel session key
+// state using the client's state signer. Set the returned hex on state.UserSig before
+// submit. The matching session-key-holder SessionKeySig must also be populated (see
+// SignChannelSessionKeyOwnership) — submits with only one of the two are rejected.
 //
 // Parameters:
-//   - state: The channel session key state to sign (UserSig field is excluded from signing)
+//   - state: The channel session key state to sign (UserSig and SessionKeySig fields are excluded from signing)
 //
 // Returns:
 //   - The hex-encoded signature string
@@ -938,8 +942,8 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 //	    Assets:      []string{"usdc"},
 //	    ExpiresAt:   time.Now().Add(24 * time.Hour),
 //	}
-//	sig, err := client.SignChannelSessionKeyState(state)
-//	state.UserSig = sig
+//	state.UserSig, _ = client.SignChannelSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
 //	err = client.SubmitChannelSessionKeyState(ctx, state)
 func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1) (string, error) {
 	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
@@ -960,6 +964,30 @@ func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1)
 	sig, err := ethMsgSigner.Sign(packed)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign channel session key state: %w", err)
+	}
+
+	return sig.String(), nil
+}
+
+// SignChannelSessionKeyOwnership produces the session-key holder's ownership signature for a
+// channel session key registration. The signer must hold the session key; the returned hex
+// string populates state.SessionKeySig before submit. The signed payload is bound to
+// user_address (via PackChannelSessionKeyOwnershipV1) so the signature cannot be replayed
+// under a different wallet.
+func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, sessionKeySigner sign.Signer) (string, error) {
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	if err != nil {
+		return "", fmt.Errorf("failed to compute metadata hash: %w", err)
+	}
+
+	packed, err := core.PackChannelSessionKeyOwnershipV1(state.UserAddress, metadataHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack channel session key ownership: %w", err)
+	}
+
+	sig, err := sessionKeySigner.Sign(packed)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign channel session key ownership: %w", err)
 	}
 
 	return sig.String(), nil

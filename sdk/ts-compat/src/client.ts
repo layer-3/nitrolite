@@ -859,6 +859,13 @@ export class NitroliteClient {
         return this.innerClient.signChannelSessionKeyState(state);
     }
 
+    async signChannelSessionKeyOwnership(
+        state: ChannelSessionKeyStateV1,
+        sessionKeySigner: StateSigner,
+    ): Promise<Hex> {
+        return this.innerClient.signChannelSessionKeyOwnership(state, sessionKeySigner);
+    }
+
     async submitChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<void> {
         await this.innerClient.submitChannelSessionKeyState(state);
     }
@@ -872,6 +879,13 @@ export class NitroliteClient {
 
     async signSessionKeyState(state: AppSessionKeyStateV1): Promise<Hex> {
         return this.innerClient.signSessionKeyState(state);
+    }
+
+    async signAppSessionKeyOwnership(
+        state: AppSessionKeyStateV1,
+        sessionKeySigner: StateSigner,
+    ): Promise<Hex> {
+        return this.innerClient.signAppSessionKeyOwnership(state, sessionKeySigner);
     }
 
     async submitSessionKeyState(state: AppSessionKeyStateV1): Promise<void> {

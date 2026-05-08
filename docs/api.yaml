@@ -380,6 +380,9 @@ types:
         - name: user_sig
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
+        - name: session_key_sig
+          type: string
+          description: Session-key holder's signature over (user_address, metadata_hash) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -409,6 +412,9 @@ types:
         - name: user_sig
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
+        - name: session_key_sig
+          type: string
+          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app:
       description: Application definition

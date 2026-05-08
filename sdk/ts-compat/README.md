@@ -178,13 +178,19 @@ App-session allocation strings remain **human-readable decimal strings** such as
 
 ### Session Key Operations
 
+Both `state.user_sig` (wallet authorization) and `state.session_key_sig` (proof of
+possession by the session-key holder) are required at submit time. The `*Ownership`
+helpers produce `session_key_sig`.
+
 | Method | Description |
 |---|---|
-| `signChannelSessionKeyState(state)` | Sign a channel session-key state payload |
-| `submitChannelSessionKeyState(state)` | Register/submit a channel session-key state |
+| `signChannelSessionKeyState(state)` | Wallet `user_sig` over channel session-key state |
+| `signChannelSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for channel state |
+| `submitChannelSessionKeyState(state)` | Register/submit a channel session-key state (both sigs required) |
 | `getLastChannelKeyStates(userAddress, sessionKey?)` | Fetch channel session-key states for wallet/key |
-| `signSessionKeyState(state)` | Sign an app-session key state payload |
-| `submitSessionKeyState(state)` | Register/submit an app-session key state |
+| `signSessionKeyState(state)` | Wallet `user_sig` over app session-key state |
+| `signAppSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for app state |
+| `submitSessionKeyState(state)` | Register/submit an app-session key state (both sigs required) |
 | `getLastKeyStates(userAddress, sessionKey?)` | Fetch app-session key states for wallet/key |
 
 ### Transfers

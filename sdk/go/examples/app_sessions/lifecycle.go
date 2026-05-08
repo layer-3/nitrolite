@@ -207,11 +207,20 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Wallet's UserSig authorizes the delegation.
 	appSessionKey3StateSig, err := wallet3Signer.Sign(packedAppSessionKey3State)
 	if err != nil {
 		log.Fatal(err)
 	}
 	appSessionKey3State.UserSig = appSessionKey3StateSig.String()
+
+	// Session-key holder's SessionKeySig proves possession of the key being registered.
+	// Both signatures are required at submit time.
+	appSessionKey3OwnershipSig, err := msgSigner3.Sign(packedAppSessionKey3State)
+	if err != nil {
+		log.Fatal(err)
+	}
+	appSessionKey3State.SessionKeySig = appSessionKey3OwnershipSig.String()
 
 	if err := wallet3Client.SubmitAppSessionKeyState(context.Background(), appSessionKey3State); err != nil {
 		log.Fatal(err)

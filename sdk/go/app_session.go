@@ -8,6 +8,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
 	"github.com/shopspring/decimal"
 )
 
@@ -281,7 +282,9 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 // ============================================================================
 
 // SubmitAppSessionKeyState submits a session key state for registration or update.
-// The state must be signed by the user's wallet to authorize the session key delegation.
+// The state must carry both the wallet's UserSig (proving the user authorized the
+// delegation) and the session-key holder's SessionKeySig (proving possession of the key
+// being registered). Submits without a valid SessionKeySig are rejected.
 //
 // Parameters:
 //   - state: The session key state containing delegation information
@@ -298,8 +301,9 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 //	    ApplicationIDs: []string{"app1"},
 //	    AppSessionIDs:  []string{},
 //	    ExpiresAt:      time.Now().Add(24 * time.Hour),
-//	    UserSig:        "0x...",
 //	}
+//	state.UserSig, _ = client.SignSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
 //	err := client.SubmitAppSessionKeyState(ctx, state)
 func (c *Client) SubmitAppSessionKeyState(ctx context.Context, state app.AppSessionKeyStateV1) error {
 	req := rpc.AppSessionsV1SubmitSessionKeyStateRequest{
@@ -355,12 +359,13 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 	return states, nil
 }
 
-// SignSessionKeyState signs a session key state using the client's state signer.
-// This creates a properly formatted signature that can be set on the state's UserSig field
-// before submitting via SubmitSessionKeyState.
+// SignSessionKeyState produces the wallet UserSig over the session key state using the
+// client's state signer. Set the returned hex on state.UserSig before submit. The matching
+// session-key-holder SessionKeySig must also be populated (see SignAppSessionKeyOwnership)
+// — submits with only one of the two are rejected.
 //
 // Parameters:
-//   - state: The session key state to sign (UserSig field is excluded from signing)
+//   - state: The session key state to sign (UserSig and SessionKeySig fields are excluded from signing)
 //
 // Returns:
 //   - The hex-encoded signature string
@@ -376,9 +381,9 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 //	    AppSessionIDs:  []string{},
 //	    ExpiresAt:      time.Now().Add(24 * time.Hour),
 //	}
-//	sig, err := client.SignSessionKeyState(state)
-//	state.UserSig = sig
-//	err = client.SubmitSessionKeyState(ctx, state)
+//	state.UserSig, _ = client.SignSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
+//	err = client.SubmitAppSessionKeyState(ctx, state)
 func (c *Client) SignSessionKeyState(state app.AppSessionKeyStateV1) (string, error) {
 	packed, err := app.PackAppSessionKeyStateV1(state)
 	if err != nil {
@@ -392,4 +397,23 @@ func (c *Client) SignSessionKeyState(state app.AppSessionKeyStateV1) (string, er
 
 	// Strip the channel signer type prefix byte; session key auth uses plain EIP-191 signatures
 	return hexutil.Encode(sig[1:]), nil
+}
+
+// SignAppSessionKeyOwnership produces the session-key holder's ownership signature over the
+// packed app-session key state. The signer must be the holder of the session key being
+// registered; the resulting hex-encoded signature is intended to populate state.SessionKeySig
+// before submitting via SubmitAppSessionKeyState. The packed state already binds user_address,
+// so replay across wallets is not possible.
+func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner sign.Signer) (string, error) {
+	packed, err := app.PackAppSessionKeyStateV1(state)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack session key state: %w", err)
+	}
+
+	sig, err := sessionKeySigner.Sign(packed)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign session key ownership: %w", err)
+	}
+
+	return hexutil.Encode(sig), nil
 }

@@ -40,9 +40,14 @@ func (m *MockStore) GetLastUserState(wallet, asset string, signed bool) (*core.S
 	return &state, args.Error(1)
 }
 
-func (m *MockStore) CheckOpenChannel(wallet, asset string) (string, bool, error) {
+func (m *MockStore) CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error) {
 	args := m.Called(wallet, asset)
-	return args.String(0), args.Bool(1), args.Error(2)
+	var status *core.ChannelStatus
+	if v := args.Get(1); v != nil {
+		s := v.(core.ChannelStatus)
+		status = &s
+	}
+	return args.String(0), status, args.Error(2)
 }
 
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {

@@ -116,7 +116,7 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 // HandleHomeChannelChallenged processes the HomeChannelChallenged event emitted when a potentially
 // stale state is submitted on-chain. It marks the channel as Challenged and persists the challenge
-// expiry so subsequent state-submission paths (CheckOpenChannel, RefreshUserEnforcedBalance) stop
+// expiry so subsequent state-submission paths (CheckActiveChannel, RefreshUserEnforcedBalance) stop
 // treating the channel as open. Automatic challenge response is intentionally disabled: the latest
 // signed state may carry an intent (e.g. CLOSE, escrow initiate/finalize, migration) that cannot
 // be resolved via ScheduleCheckpoint, and silently queueing an impossible transaction risks

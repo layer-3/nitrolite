@@ -27,9 +27,12 @@ type Store interface {
 	// Returns nil state if no matching state exists.
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
 
-	// CheckOpenChannel verifies if a user has an active channel for the given asset
-	// and returns the approved signature validators if such a channel exists.
-	CheckOpenChannel(wallet, asset string) (string, bool, error)
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 
 	// StoreUserState persists a new user state to the database.
 	// applicationID is the client-declared origin tag (rpc.ApplicationIDQueryParam);

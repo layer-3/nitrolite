@@ -337,7 +337,7 @@ contract ChannelHub is ReentrancyGuard {
     function withdrawFromNode(address to, address token, uint256 amount) external {
         require(to != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
-        require(msg.sender == NODE, IncorrectNode());
+        require(msg.sender == NODE, IncorrectMsgSender());
 
         uint256 currentBalance = _nodeBalances[token];
         require(currentBalance >= amount, InsufficientBalance());
@@ -477,8 +477,12 @@ contract ChannelHub is ReentrancyGuard {
     /**
      * @notice Register a signature validator for NODE using signature-based authorization
      * @dev Anyone can submit this transaction with a valid NODE signature, enabling relayer-friendly registration.
-     *      NODE's private key only signs the registration data, never sends transactions directly.
-     *      This allows NODE to use cold storage or HSMs without exposing keys to transaction submission.
+     *      For this function only, NODE's private key only signs the registration data and does not need to send
+     *      the transaction directly, allowing cold storage or HSM usage without exposing keys to transaction submission.
+     *      Other NODE-gated operations (withdrawFromNode, home-chain initiateEscrowDeposit, and submitting
+     *      a new INITIATE_ESCROW_DEPOSIT state via challengeChannel) still require NODE to be msg.sender
+     *      and are not relayer-compatible. Note: challenging with the same-version INITIATE_ESCROW_DEPOSIT
+     *      state (already-processed path) is open to any caller, as it only sets the DISPUTED flag.
      *      The signature includes block.chainid and address(this) to prevent cross-chain and cross-deployment replay attacks.
      * @param validatorId The validator ID (0x01-0xFF, 0x00 reserved for DEFAULT)
      * @param validator The validator contract address

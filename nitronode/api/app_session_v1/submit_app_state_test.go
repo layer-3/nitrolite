@@ -3,6 +3,7 @@ package app_session_v1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -350,7 +351,7 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	}
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
-	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
+	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
@@ -485,20 +486,9 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 		},
 	}
 
-	// Last signed state has an active escrow channel
-	escrowChannelID := "0xEscrowChannel456"
-	lastSignedState := core.State{
-		Asset:           "USDC",
-		UserWallet:      participant1,
-		Epoch:           1,
-		Version:         1,
-		HomeChannelID:   &homeChannelID,
-		EscrowChannelID: &escrowChannelID,
-	}
-
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
-	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(lastSignedState, nil)
+	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(fmt.Errorf("escrow lock is still ongoing"))
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
@@ -516,7 +506,7 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr, "Expected error when participant has active escrow lock")
-	assert.Contains(t, respErr.Error(), "last signed state is a lock with escrow channel")
+	assert.Contains(t, respErr.Error(), "escrow lock is still ongoing")
 
 	mockStore.AssertExpectations(t)
 }
@@ -638,7 +628,7 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-100)).Return(nil)
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState1, nil)
-	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil)
+	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
@@ -646,7 +636,7 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("RecordLedgerEntry", participant2, appSessionID, "USDC", decimal.NewFromInt(-50)).Return(nil)
 	mockStore.On("LockUserState", participant2, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant2, "USDC", false).Return(existingUserState2, nil)
-	mockStore.On("GetLastUserState", participant2, "USDC", true).Return(nil, nil)
+	mockStore.On("EnsureNoOngoingEscrowOperation", participant2, "USDC").Return(nil)
 
 	// Capture stored states to verify node signatures
 	var capturedStates []core.State
@@ -988,7 +978,7 @@ func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) 
 	mockStore.On("RecordLedgerEntry", participant1, appSessionID, "USDC", decimal.NewFromInt(-40)).Return(nil).Maybe()
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil).Maybe()
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(nil, nil).Maybe()
-	mockStore.On("GetLastUserState", participant1, "USDC", true).Return(nil, nil).Maybe()
+	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil).Maybe()
 	mockStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil).Maybe()
 

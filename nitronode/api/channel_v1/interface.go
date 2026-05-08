@@ -41,6 +41,11 @@ type Store interface {
 	// that would conflict with submitting a new state transition.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
 	// ScheduleInitiateEscrowWithdrawal queues a blockchain action to initiate
 	// withdrawal from an escrow channel (triggered by escrow_lock transition).
 	ScheduleInitiateEscrowWithdrawal(stateID string, chainID uint64) error

@@ -108,6 +108,11 @@ func (m *MockStore) EnsureNoOngoingStateTransitions(wallet, asset string) error 
 	return args.Error(0)
 }
 
+func (m *MockStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
+	args := m.Called(wallet, asset)
+	return args.Error(0)
+}
+
 func (m *MockStore) LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error) {
 	args := m.Called(userAddress, sessionKey, kind)
 	return uint64(args.Int(0)), args.Error(1)

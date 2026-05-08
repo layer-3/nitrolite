@@ -237,3 +237,65 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 
 	return nil
 }
+
+// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+// operation that would prevent the node from issuing receiver-side states (transfer
+// receive, app-session release).
+//
+// Validation logic by latest signed transition type:
+//   - escrow_lock / mutual_lock: always considered ongoing (no finalization yet)
+//   - escrow_deposit / escrow_withdraw: only considered ongoing when the on-chain
+//     escrow channel state version has not caught up with the signed state version
+//   - any other transition: not an escrow operation, allow
+func (s *DBStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
+	wallet = strings.ToLower(wallet)
+
+	type escrowCheck struct {
+		TransitionType       core.TransitionType
+		StateVersion         uint64
+		EscrowChannelVersion *uint64
+	}
+
+	var result escrowCheck
+	tx := s.db.Raw(`
+		SELECT
+			s.transition_type as transition_type,
+			s.version as state_version,
+			ec.state_version as escrow_channel_version
+		FROM channel_states s
+		LEFT JOIN channels ec ON ec.channel_id = s.escrow_channel_id
+		WHERE s.user_wallet = ?
+			AND s.asset = ?
+			AND s.user_sig IS NOT NULL
+			AND s.node_sig IS NOT NULL
+		ORDER BY s.epoch DESC, s.version DESC
+		LIMIT 1
+	`, wallet, asset).Scan(&result)
+
+	if tx.Error != nil {
+		return fmt.Errorf("failed to check ongoing escrow operation: %w", tx.Error)
+	}
+	if tx.RowsAffected == 0 {
+		return nil
+	}
+
+	switch result.TransitionType {
+	case core.TransitionTypeEscrowLock:
+		return fmt.Errorf("escrow lock is still ongoing")
+
+	case core.TransitionTypeMutualLock:
+		return fmt.Errorf("mutual lock is still ongoing")
+
+	case core.TransitionTypeEscrowDeposit:
+		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+			return fmt.Errorf("escrow deposit finalization is still ongoing")
+		}
+
+	case core.TransitionTypeEscrowWithdraw:
+		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+			return fmt.Errorf("escrow withdrawal finalization is still ongoing")
+		}
+	}
+
+	return nil
+}

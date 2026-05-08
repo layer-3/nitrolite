@@ -1425,16 +1425,27 @@ contract ChannelHub is ReentrancyGuard {
     /// - explicit return value: decoded as uint256, non-zero treated as success.
     ///   Decoding as uint256 (not bool) avoids an abi.decode revert on non-canonical bool encodings
     ///   (e.g. a token returning 2), which would otherwise break _nonRevertingPushFunds' no-revert guarantee.
+    /// Uses assembly to write the call output directly to scratch space (0x00-0x1f).
+    /// That range is already within the memory expanded by the preceding abi.encodeCall(), so no
+    /// additional memory expansion occurs regardless of actual returndata size.
+    /// The high-level `(bool, bytes memory) = addr.call(...)` form copies ALL returndata into caller memory
+    /// at caller-gas expense — a malicious token returning 1 MB would exhaust gas before we reach the length check.
     function _trySafeTransfer(address token, address to, uint256 amount) internal returns (bool) {
-        (bool success, bytes memory returnData) =
-            address(token).call{gas: TRANSFER_GAS_LIMIT}(abi.encodeCall(IERC20.transfer, (to, amount)));
+        bytes memory callData = abi.encodeCall(IERC20.transfer, (to, amount));
+        bool success;
+        uint256 rdsize;
+        uint256 retval;
+
+        assembly ("memory-safe") {
+            // Output to scratch space (0x00-0x1f); returndatasize() still reflects the full returndata length.
+            success := call(TRANSFER_GAS_LIMIT, token, 0, add(callData, 0x20), mload(callData), 0x00, 0x20)
+            rdsize := returndatasize()
+            retval := mload(0x00)
+        }
 
         if (!success) return false;
-        if (returnData.length == 0) return address(token).code.length > 0;
-        // Solidity 0.8's ABI decoder validates canonical bool encoding (only 0 or 1 are valid).
-        // A token returning any other non-zero value (e.g. 2, 0xff...ff) would cause abi.decode(..., (bool)) to revert
-        // — propagating out of _nonRevertingPushFunds and breaking its invariant
-        if (returnData.length >= 32) return abi.decode(returnData, (uint256)) != 0;
-        return false;
+        if (rdsize == 0) return address(token).code.length > 0;
+        if (rdsize < 32) return false;
+        return retval != 0;
     }
 }

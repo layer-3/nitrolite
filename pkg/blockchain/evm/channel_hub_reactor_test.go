@@ -85,6 +85,11 @@ func (m *mockChannelHubStore) StoreContractEvent(ev core.BlockchainEvent) error 
 	return args.Error(0)
 }
 
+func (m *mockChannelHubStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
+	args := m.Called(channelID, version, userSig)
+	return args.Error(0)
+}
+
 // mockChannelHubEventHandler captures events dispatched by the reactor.
 type mockChannelHubEventHandler struct {
 	mock.Mock
@@ -363,6 +368,46 @@ func TestChannelHubReactor_HandleHomeChannelCheckpointed(t *testing.T) {
 	})).Return(nil)
 
 	expectStoreContractEvent(store, "ChannelCheckpointed", 400, blockchainID)
+
+	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+	handler.AssertExpectations(t)
+	store.AssertExpectations(t)
+}
+
+// TestChannelHubReactor_HandleHomeChannelCheckpointed_ForwardsUserSig confirms the reactor
+// hex-encodes Candidate.UserSig from the parsed event payload and surfaces it to the handler.
+// Without this the wedge-recovery backfill in HandleHomeChannelCheckpointed has nothing to write.
+func TestChannelHubReactor_HandleHomeChannelCheckpointed_ForwardsUserSig(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	channelID := common.HexToHash("0xcc02ff")
+
+	state := makeState(7)
+	state.UserSig = []byte{0xde, 0xad, 0xbe, 0xef}
+	data := packNonIndexed(t, "ChannelCheckpointed", state)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["ChannelCheckpointed"].ID,
+			channelID,
+		},
+		Data:        data,
+		BlockNumber: 401,
+		TxHash:      common.HexToHash("0x112"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+		return ev.UserSig == hexutil.Encode([]byte{0xde, 0xad, 0xbe, 0xef})
+	})).Return(nil)
+
+	expectStoreContractEvent(store, "ChannelCheckpointed", 401, blockchainID)
 
 	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
 	err := reactor.HandleEvent(context.Background(), logEntry)

@@ -646,3 +646,178 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
+	t.Run("Backfills user_sig when null and unblocks gate", func(t *testing.T) {
+		// This is the wedge-recovery path: a node-only state was checkpointed on chain
+		// (e.g. recipient submitted a transfer_receive state directly). After the event
+		// reactor backfills user_sig, EnsureNoOngoingStateTransitions must see a fully
+		// signed row at the on-chain version and pass.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		nodeSig := "0xnodesig"
+
+		channel := core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        "0xuser123",
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      2,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+
+		// Node-only state at version 2; gate would normally skip this row and find
+		// nothing else, returning nil. To exercise the wedge, also seed an older
+		// bilateral state at version 1.
+		_, err := store.LockUserState("0xuser123", "USDC")
+		require.NoError(t, err)
+
+		bilateralUserSig := "0xprior"
+		bilateralNodeSig := "0xpriornode"
+		bilateral := core.State{
+			ID:            "state1",
+			Asset:         "USDC",
+			UserWallet:    "0xuser123",
+			Epoch:         1,
+			Version:       1,
+			HomeChannelID: &homeChannelID,
+			Transition: core.Transition{
+				Type: core.TransitionTypeHomeDeposit,
+			},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(500),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			UserSig: &bilateralUserSig,
+			NodeSig: &bilateralNodeSig,
+		}
+		require.NoError(t, store.StoreUserState(bilateral, ""))
+
+		nodeOnly := core.State{
+			ID:            "state2",
+			Asset:         "USDC",
+			UserWallet:    "0xuser123",
+			Epoch:         1,
+			Version:       2,
+			HomeChannelID: &homeChannelID,
+			Transition: core.Transition{
+				Type: core.TransitionTypeTransferReceive,
+			},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(750),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			NodeSig: &nodeSig,
+		}
+		require.NoError(t, store.StoreUserState(nodeOnly, ""))
+
+		// Pre-backfill: gate sees bilateral row at version 1, channel.state_version is 2 → mismatch.
+		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		require.Error(t, err)
+
+		// Backfill the user signature recovered from the on-chain event.
+		recoveredSig := "0xrecovered"
+		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 2, recoveredSig))
+
+		got, err := store.GetStateByID("state2")
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.NotNil(t, got.UserSig)
+		assert.Equal(t, recoveredSig, *got.UserSig)
+
+		// Post-backfill: gate sees the now-bilateral row at version 2, matches channel state_version.
+		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		require.NoError(t, err)
+	})
+
+	t.Run("Idempotent on replay - existing sig preserved", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		userSig := "0xexisting"
+		nodeSig := "0xnodesig"
+
+		channel := core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        "0xuser123",
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      1,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+
+		_, err := store.LockUserState("0xuser123", "USDC")
+		require.NoError(t, err)
+
+		state := core.State{
+			ID:            "state1",
+			Asset:         "USDC",
+			UserWallet:    "0xuser123",
+			Epoch:         1,
+			Version:       1,
+			HomeChannelID: &homeChannelID,
+			Transition: core.Transition{
+				Type: core.TransitionTypeHomeDeposit,
+			},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(1000),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			UserSig: &userSig,
+			NodeSig: &nodeSig,
+		}
+		require.NoError(t, store.StoreUserState(state, ""))
+
+		// Replayed event would carry a different (or any) sig; existing one must not be overwritten.
+		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 1, "0xshould-not-overwrite"))
+
+		got, err := store.GetStateByID("state1")
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.NotNil(t, got.UserSig)
+		assert.Equal(t, userSig, *got.UserSig)
+	})
+
+	t.Run("Empty sig is no-op", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 1, ""))
+	})
+
+	t.Run("Unknown version returns no error", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 99, "0xanything"))
+	})
+}

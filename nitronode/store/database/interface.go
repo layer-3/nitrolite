@@ -80,6 +80,9 @@ type DatabaseStore interface {
 	// EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
+	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+
 	// --- Blockchain Action Operations ---
 
 	// ScheduleInitiateEscrowWithdrawal queues a blockchain action to initiate withdrawal.

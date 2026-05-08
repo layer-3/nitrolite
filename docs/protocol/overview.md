@@ -60,7 +60,7 @@ A state represents the current agreed asset allocations and metadata shared betw
 User and a node advance states off-chain by exchanging signed state transitions. Each new state MUST have a version exactly one greater than the previous state. Transitions include deposits, withdrawals, transfers, commits, releases, escrow operations, and migrations.
 
 **State Enforcement**
-Any party MAY submit the latest signed state to the blockchain layer for on-chain enforcement. The blockchain layer validates signatures, version ordering, and ledger invariants before accepting a state.
+Any party MAY submit the latest mutually signed state to the blockchain layer for on-chain enforcement, provided that state's intent has a valid execution path in the current channel context. The blockchain layer validates signatures, version ordering, and ledger invariants before accepting a state.
 
 **Unified Assets**
 The same asset from multiple blockchains is represented in a unified model, enabling cross-chain operations among users and apps. The protocol normalizes amounts by decimal precision when comparing allocations across chains.

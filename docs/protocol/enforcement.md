@@ -31,7 +31,7 @@ Node-issued pending states (those carrying only the node's signature) are NOT en
 Off-chain states and on-chain enforcement states are related as follows:
 
 - Participants advance state off-chain through signed updates
-- At any time, any party MAY submit the latest mutually signed state to the blockchain layer
+- Any party MAY submit the latest mutually signed state to the blockchain layer, provided a valid execution path exists for that state's intent in the current channel context
 - The blockchain layer validates the submitted state and updates its record
 - On-chain state always reflects the latest successfully checkpointed state
 
@@ -69,7 +69,7 @@ The creation process:
 3. The blockchain layer validates signatures, creates the channel record, and applies fund effects according to the state's intent
 4. The channel is now active on the on-chain layer
 
-The state submitted for channel creation MAY carry a DEPOSIT, WITHDRAW, or OPERATE intent.
+The state submitted for channel creation MAY carry a DEPOSIT, WITHDRAW, or OPERATE intent. OPERATE intent requires the user net flow delta to be zero relative to the previous on-chain state (which is the empty state for a new channel). An OPERATE state that carries accumulated user net flow from an unconfirmed prior DEPOSIT state cannot be used to create a channel — parties MUST enforce the DEPOSIT state on-chain before advancing to subsequent OPERATE states that depend on it.
 
 ## State Submission
 

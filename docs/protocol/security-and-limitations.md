@@ -41,7 +41,8 @@ Each state update MUST satisfy transition-specific rules. Invalid transitions ar
 
 The blockchain layer provides the following guarantees:
 
-- Any party MAY submit the latest signed state at any time
+- Any party MAY submit the latest mutually signed state to the blockchain layer; enforcement succeeds when a valid execution path exists for that state's intent in the current channel context
+- Parties MUST retain and enforce intermediate states (such as a DEPOSIT state) before discarding them — a subsequent OPERATE state built on top of an unconfirmed DEPOSIT cannot be used to create or advance a channel on-chain, because OPERATE requires zero change in user net flow relative to the last enforced state
 - The blockchain layer accepts only states with valid signatures and a higher version than the current on-chain state
 - After the challenge period, the enforced state becomes final
 - Final state allocations determine asset distribution

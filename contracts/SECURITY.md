@@ -405,6 +405,12 @@ Use non-rebasing equivalents where available (e.g. wstETH instead of stETH).
 
 Fee-on-transfer tokens are **not supported**. The amount received by the contract is less than the amount recorded in the ledger, causing it to overstate holdings from the very first deposit. This produces the same class of insolvency as a negative rebase: late withdrawers may receive less than recorded or nothing at all.
 
+### Tokens without `decimals()`
+
+ERC-20 defines `decimals()` as an **optional** extension (via `IERC20Metadata`), not a core requirement. However, during token decimals validation a `IERC20Metadata(token).decimals()` is called, which will revert the outer transaction if the call fails. This check runs on every channel state transition, escrow deposit, and escrow withdrawal — meaning tokens that omit `decimals()` **cannot be used at all**, even for otherwise supported operations.
+
+Tokens must implement `IERC20Metadata.decimals()`. Unlike the rebasing and fee-on-transfer restrictions (which are accounting-correctness requirements), this is a hard on-chain gate: the contract will reject the transaction immediately rather than silently misaccount.
+
 ---
 
 ## Native ETH vs ERC20 Deposit Asymmetry

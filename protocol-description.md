@@ -582,8 +582,9 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
   * **Rebasing tokens** (e.g. stETH, aTokens): their autonomous balance changes are invisible to the ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
   * **Fee-on-transfer tokens**: the amount received by the contract is less than the amount recorded, causing the ledger to overstate holdings from the very first deposit.
+  * **Tokens without `decimals()`**: the contract calls `IERC20Metadata.decimals()` on every state transition; tokens that do not implement this optional ERC-20 extension are rejected on-chain with `FailedToFetchDecimals`. Unlike rebasing and fee-on-transfer issues (which silently corrupt accounting), missing `decimals()` causes an immediate hard revert.
 
-  There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
+  There is no hard-coded guardrail preventing deposit of rebasing or fee-on-transfer tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
 
 * **Transfer failure resilience**: Outbound transfers (to users) never revert on failure:
 

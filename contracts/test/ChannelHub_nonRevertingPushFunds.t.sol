@@ -176,6 +176,33 @@ contract ChannelHubTest_nonRevertingPushFunds is Test {
 
     // ========== Oversized Return Data ERC20 Tests ==========
 
+    // Regression pin for the SC-L01 audit finding.
+    // The existing oversized-data tests verify behavioural correctness but still pass if the old
+    // high-level `(bool, bytes memory) = addr.call(...)` form is restored, because Foundry's default
+    // gas budget is far too large to trigger OOG.  This test calls with a tight external gas cap so
+    // that the old copy path runs out of gas while the assembly fix passes comfortably.
+    //
+    // Budget breakdown (Berlin EVM, 80 000 gas forwarded to exposed_nonRevertingPushFunds):
+    //   function overhead + nonReentrant SSTORE + abi.encodeCall : ~11 000 gas
+    //   63/64 rule → forwarded to token                           : 67 922 gas
+    //   token execution (100 KB memory expansion, no SSTORE)      : ~28 500 gas (returned: 39 422)
+    //   caller gas after CALL (kept 1/64 + returned)              : ~40 500 gas
+    //   ── new code post-call (cold reclaim SSTORE + emit)         : ~26 250 → 14 250 spare → PASSES
+    //   ── old code extra (memory expand + RETURNDATACOPY 100 KB)  : ~38 072 → needs 64 322 → OOGs
+    function test_doesNotOOG_withTightGas_whenERC20ReturnsLargeData() public {
+        OversizedReturnERC20 largeToken = new OversizedReturnERC20(100_000, 0);
+        largeToken.mint(address(cHub), BALANCE_AMOUNT);
+
+        (bool ok,) = address(cHub).call{gas: 80_000}(
+            abi.encodeCall(
+                TestChannelHub.exposed_nonRevertingPushFunds, (recipient, address(largeToken), TRANSFER_AMOUNT)
+            )
+        );
+
+        assertTrue(ok, "assembly path must not OOG: old high-level copy costs ~38k extra gas");
+        assertEq(cHub.getReclaimBalance(recipient, address(largeToken)), TRANSFER_AMOUNT, "reclaim must be written");
+    }
+
     // Covers the rdsize > 32, retval != 0 branch of _trySafeTransfer.
     // With the old high-level (bool, bytes memory) call form, a token returning a large buffer
     // would exhaust caller gas during returndata copy before we could inspect the length.

@@ -12,17 +12,18 @@ import (
 
 // Handler manages channel state transitions and provides RPC endpoints for state submission.
 type Handler struct {
-	useStoreInTx     StoreTxProvider
-	memoryStore      MemoryStore
-	actionGateway    ActionGateway
-	nodeSigner       *core.ChannelDefaultSigner
-	stateAdvancer    core.StateAdvancer
-	statePacker      core.StatePacker
-	nodeAddress      string // Node's wallet address for channel ID calculation
-	minChallenge     uint32
-	maxChallenge     uint32
-	metrics          metrics.RuntimeMetricExporter
-	maxSessionKeyIDs int
+	useStoreInTx          StoreTxProvider
+	memoryStore           MemoryStore
+	actionGateway         ActionGateway
+	nodeSigner            *core.ChannelDefaultSigner
+	stateAdvancer         core.StateAdvancer
+	statePacker           core.StatePacker
+	nodeAddress           string // Node's wallet address for channel ID calculation
+	minChallenge          uint32
+	maxChallenge          uint32
+	metrics               metrics.RuntimeMetricExporter
+	maxSessionKeyIDs      int
+	maxSessionKeysPerUser int
 }
 
 // NewHandler creates a new Handler instance with the provided dependencies.
@@ -37,19 +38,21 @@ func NewHandler(
 	minChallenge, maxChallenge uint32,
 	m metrics.RuntimeMetricExporter,
 	maxSessionKeyIDs int,
+	maxSessionKeysPerUser int,
 ) *Handler {
 	return &Handler{
-		stateAdvancer:    stateAdvancer,
-		statePacker:      statePacker,
-		useStoreInTx:     useStoreInTx,
-		memoryStore:      memoryStore,
-		actionGateway:    actionGateway,
-		nodeSigner:       nodeSigner,
-		nodeAddress:      nodeAddress,
-		minChallenge:     minChallenge,
-		maxChallenge:     maxChallenge,
-		metrics:          m,
-		maxSessionKeyIDs: maxSessionKeyIDs,
+		stateAdvancer:         stateAdvancer,
+		statePacker:           statePacker,
+		useStoreInTx:          useStoreInTx,
+		memoryStore:           memoryStore,
+		actionGateway:         actionGateway,
+		nodeSigner:            nodeSigner,
+		nodeAddress:           nodeAddress,
+		minChallenge:          minChallenge,
+		maxChallenge:          maxChallenge,
+		metrics:               m,
+		maxSessionKeyIDs:      maxSessionKeyIDs,
+		maxSessionKeysPerUser: maxSessionKeysPerUser,
 	}
 }
 

@@ -50,7 +50,7 @@ func TestRebalanceAppSessions_Success_TwoSessions(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	// Create test wallets with real keys
@@ -222,7 +222,7 @@ func TestRebalanceAppSessions_Success_MultiAsset(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	// Create test wallets with real keys
@@ -383,7 +383,7 @@ func TestRebalanceAppSessions_Error_InsufficientSessions(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -442,7 +442,7 @@ func TestRebalanceAppSessions_Error_InvalidIntent(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -517,7 +517,7 @@ func TestRebalanceAppSessions_Error_DuplicateSession(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -594,7 +594,7 @@ func TestRebalanceAppSessions_Error_ConservationViolation(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	// Create test wallets with real keys
@@ -741,7 +741,7 @@ func TestRebalanceAppSessions_Error_SessionNotFound(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -823,7 +823,7 @@ func TestRebalanceAppSessions_Error_ClosedSession(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -919,7 +919,7 @@ func TestRebalanceAppSessions_Error_InvalidVersion(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -1016,7 +1016,7 @@ func TestRebalanceAppSessions_AppRegistryDisabled(t *testing.T) {
 		"0xNode",
 		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -1142,7 +1142,7 @@ func TestRebalanceAppSessions_Error_DuplicateAllocation(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -1271,7 +1271,7 @@ func TestRebalanceAppSessions_Error_DifferentApplications(t *testing.T) {
 		"0xNode",
 		false, // registry disabled — simpler: skip GetApp path
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16,
+		32, 1024, 256, 16, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)

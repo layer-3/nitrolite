@@ -2,6 +2,7 @@ package app_session_v1
 
 import (
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
@@ -43,9 +44,11 @@ type Store interface {
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
 	// App Session key state operations
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+	CountSessionKeysForUser(userAddress string) (uint32, error)
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
 
 	// Channel Session key state operations

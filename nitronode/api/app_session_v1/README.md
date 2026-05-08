@@ -708,6 +708,9 @@ ORDER BY created_at DESC;
 - `user_sig` is required
 - Version must be sequential (latest_version + 1)
 - Signature must recover to `user_address`
+- Newly registered keys count against the per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100). Updates to keys that already exist for the user are not blocked by the cap.
+
+**Concurrency**: A `SELECT ... FOR UPDATE` is taken on a per-(user, session_key, kind) pointer row in `current_session_key_states_v1` so concurrent submits for the same key serialize and report a clean "expected version" error instead of racing on the history table's UNIQUE constraint.
 
 **Signature Verification**:
 - Uses ABI encoding via `PackAppSessionKeyStateV1` to create a deterministic hash
@@ -749,6 +752,10 @@ ORDER BY created_at DESC;
 - `user_address` is required
 - Returns only the latest version per session key
 - Excludes expired session key states
+
+**Pagination**: Optional `pagination` block (`limit`, `offset`); response includes a `pagination` block with `current_page`, `page_count`, `per_page`, `total_items`. Server-side default and max `limit` are both 10.
+
+**Read path**: Filters `current_session_key_states_v1` by (user_address, kind=app_session) and JOINs the history table on (user_address, session_key, version). Per-request DB work is bounded by the number of distinct session keys for the user, regardless of version churn in history.
 
 ## Implementation Details
 

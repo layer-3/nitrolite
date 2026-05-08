@@ -11,6 +11,7 @@ function makeClient(sessions: any[]) {
     client.userAddress = wallet;
     client.innerClient = {
         getAppSessions: jest.fn().mockResolvedValue({ sessions }),
+        getConfig: jest.fn(),
     };
     client.assetsBySymbol = new Map([
         ['yusd', { decimals: 6 }],
@@ -118,5 +119,55 @@ describe('NitroliteClient getAppSessionsList compat mapping', () => {
                 sessionData: '{"legacy":true}',
             },
         ]);
+    });
+
+    it('maps an empty app session list without requiring legacy fields', async () => {
+        const client = makeClient([]);
+
+        await expect(client.getAppSessionsList()).resolves.toEqual([]);
+        expect(client.innerClient.getAppSessions).toHaveBeenCalledWith({
+            wallet: wallet.toLowerCase(),
+        });
+    });
+
+    it('passes through current SDK camelCase getConfig shape', async () => {
+        const currentConfig = {
+            nodeAddress: wallet,
+            nodeVersion: 'test-node',
+            supportedSigValidators: [0, 1],
+            blockchains: [
+                {
+                    name: 'Sepolia',
+                    id: 11155111n,
+                    channelHubAddress: '0x3333333333333333333333333333333333333333',
+                    lockingContractAddress: '0x4444444444444444444444444444444444444444',
+                    blockStep: 0n,
+                },
+            ],
+        };
+        const client = makeClient([]);
+        client.innerClient.getConfig.mockResolvedValue(currentConfig);
+
+        await expect(client.getConfig()).resolves.toBe(currentConfig);
+    });
+
+    it('documents snake_case getConfig as pass-through, not normalized compat mapping', async () => {
+        const rawConfig = {
+            node_address: wallet,
+            node_version: 'raw-node',
+            supported_sig_validators: [0, 1],
+            blockchains: [
+                {
+                    name: 'Sepolia',
+                    blockchain_id: '11155111',
+                    channel_hub_address: '0x3333333333333333333333333333333333333333',
+                    locking_contract_address: '0x4444444444444444444444444444444444444444',
+                },
+            ],
+        };
+        const client = makeClient([]);
+        client.innerClient.getConfig.mockResolvedValue(rawConfig);
+
+        await expect(client.getConfig()).resolves.toBe(rawConfig);
     });
 });

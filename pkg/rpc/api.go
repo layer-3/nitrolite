@@ -126,12 +126,16 @@ type ChannelsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// Pagination contains pagination parameters (offset, limit, sort)
+	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
 // ChannelsV1GetSessionKeysResponse returns the list of active session keys.
 type ChannelsV1GetLastKeyStatesResponse struct {
 	// States is the list of active session key states for the user
 	States []ChannelSessionKeyStateV1 `json:"states"`
+	// Metadata contains pagination information
+	Metadata PaginationMetadataV1 `json:"metadata"`
 }
 
 // ============================================================================
@@ -254,12 +258,16 @@ type AppSessionsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// Pagination contains pagination parameters (offset, limit, sort)
+	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
 // SessionKeysV1GetSessionKeysResponse returns the list of active session keys.
 type AppSessionsV1GetLastKeyStatesResponse struct {
 	// States is the list of active session key states for the user
 	States []AppSessionKeyStateV1 `json:"states"`
+	// Metadata contains pagination information
+	Metadata PaginationMetadataV1 `json:"metadata"`
 }
 
 // ============================================================================

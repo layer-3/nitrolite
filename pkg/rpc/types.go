@@ -364,3 +364,8 @@ type PaginationMetadataV1 struct {
 	// PageCount is the total number of pages
 	PageCount uint32 `json:"page_count"`
 }
+
+// GetLastKeyStatesPageLimit is the API contract for the channels.v1 / app_sessions.v1
+// get_last_key_states endpoints: both the default and the maximum page size are 10.
+// Defined in pkg/rpc so the two handler packages share a single source of truth.
+const GetLastKeyStatesPageLimit uint32 = 10

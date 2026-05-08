@@ -406,7 +406,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(stateB1))
 
-		results, err := store.GetLastAppSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 2)
@@ -455,7 +455,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
 		sessionKey := testKeyA
-		results, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
@@ -488,7 +488,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
-		results, err := store.GetLastAppSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 
 		// Both keys returned — caller is responsible for checking expiration
@@ -501,7 +501,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 
 		store := NewDBStore(db)
 
-		results, err := store.GetLastAppSessionKeyStates("0x0000000000000000000000000000000000000099", nil)
+		results, _, err := store.GetLastAppSessionKeyStates("0x0000000000000000000000000000000000000099", nil, 100, 0)
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
@@ -530,11 +530,59 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state2))
 
-		results, err := store.GetLastAppSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
 		assert.Equal(t, testUser1, results[0].UserAddress)
+	})
+
+	t.Run("Pagination - limit and offset bound results, totalCount reflects unpaginated total", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		const numKeys = 5
+		for i := 0; i < numKeys; i++ {
+			state := app.AppSessionKeyStateV1{
+				UserAddress: testUser1,
+				SessionKey:  fakeSessionKey(i),
+				Version:     1,
+				ExpiresAt:   time.Now().Add(24 * time.Hour),
+				UserSig:     "0xsig",
+			}
+			require.NoError(t, store.StoreAppSessionKeyState(state))
+		}
+
+		page1, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 0)
+		require.NoError(t, err)
+		assert.Len(t, page1, 2)
+		assert.Equal(t, uint32(numKeys), total)
+
+		page2, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 2)
+		require.NoError(t, err)
+		assert.Len(t, page2, 2)
+		assert.Equal(t, uint32(numKeys), total)
+
+		page3, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 4)
+		require.NoError(t, err)
+		assert.Len(t, page3, 1)
+		assert.Equal(t, uint32(numKeys), total)
+
+		seen := map[string]struct{}{}
+		for _, s := range page1 {
+			seen[s.SessionKey] = struct{}{}
+		}
+		for _, s := range page2 {
+			_, dup := seen[s.SessionKey]
+			assert.False(t, dup, "page2 overlaps page1 for %s", s.SessionKey)
+			seen[s.SessionKey] = struct{}{}
+		}
+		for _, s := range page3 {
+			_, dup := seen[s.SessionKey]
+			assert.False(t, dup, "page3 overlaps earlier page for %s", s.SessionKey)
+		}
 	})
 }
 
@@ -736,7 +784,7 @@ func TestDBStore_AppSessionKeyState_ForeignRelations(t *testing.T) {
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
 		// GetLastAppSessionKeyStates returns both — verify preloaded relations are correct
-		results, err := store.GetLastAppSessionKeyStates(testUser1, nil)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 

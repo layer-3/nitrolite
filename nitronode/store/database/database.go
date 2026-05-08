@@ -1,9 +1,11 @@
 package database
 
 import (
+	"database/sql"
 	"embed"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -120,7 +122,9 @@ func connectToSqlite(cnf DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	// Migrate sqlite
-	migrateSqlite(db)
+	if err := migrateSqlite(db); err != nil {
+		return nil, fmt.Errorf("failed to auto-migrate sqlite: %w", err)
+	}
 
 	log.Println("Successfully auto-migrated")
 
@@ -165,17 +169,15 @@ func ensurePostgresqlSchema(cnf DatabaseConfig) error {
 		return err
 	}
 
-	queryDbCheck := fmt.Sprintf("SELECT 1 FROM information_schema.schemata WHERE schema_name='%s'", cnf.Schema)
-	if res, err := db.Exec(queryDbCheck); err != nil {
+	var exists int
+	if err := db.QueryRow("SELECT 1 FROM information_schema.schemata WHERE schema_name=$1", cnf.Schema).Scan(&exists); err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("error while checking schema existance: %s", err.Error())
-	} else if rows, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("error while checking schema existance: %s", err.Error())
-	} else if rows > 0 {
+	} else if err == nil {
 		log.Printf("Schema already exists: %s\n", cnf.Schema)
 		return nil
 	}
 
-	if _, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", cnf.Schema)); err != nil {
+	if _, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", quotePostgresIdentifier(cnf.Schema))); err != nil {
 		return fmt.Errorf("error while creating schema: %s", err.Error())
 	}
 
@@ -197,7 +199,7 @@ func migratePostgres(cnf DatabaseConfig, embedMigrations embed.FS) error {
 	if cnf.Schema != "" {
 		switch cnf.Driver {
 		case "postgres":
-			if _, err := db.Exec(fmt.Sprintf("SET search_path TO %s", cnf.Schema)); err != nil {
+			if _, err := db.Exec(fmt.Sprintf("SET search_path TO %s", quotePostgresIdentifier(cnf.Schema))); err != nil {
 				return fmt.Errorf("failed to set search path: %v", err)
 			}
 		}
@@ -206,7 +208,7 @@ func migratePostgres(cnf DatabaseConfig, embedMigrations embed.FS) error {
 	log.Println("Applying database migrations")
 	goose.SetBaseFS(embedMigrations)
 	if err := goose.Up(db, "config/migrations/"+cnf.Driver); err != nil {
-		panic(err)
+		return fmt.Errorf("goose migration failed: %w", err)
 	}
 
 	log.Println("Applied migrations")
@@ -214,8 +216,32 @@ func migratePostgres(cnf DatabaseConfig, embedMigrations embed.FS) error {
 }
 
 func migrateSqlite(db *gorm.DB) error {
-	if err := db.AutoMigrate(&AppV1{}, &AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &State{}, &Transaction{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &UserBalance{}, &UserStakedV1{}, &ActionLogEntryV1{}, &LifespanMetric{}); err != nil {
+	if err := db.AutoMigrate(
+		&AppV1{},
+		&AppLedgerEntryV1{},
+		&Channel{},
+		&AppSessionV1{},
+		&AppParticipantV1{},
+		&ContractEvent{},
+		&State{},
+		&Transaction{},
+		&BlockchainAction{},
+		&AppSessionKeyStateV1{},
+		&AppSessionKeyApplicationV1{},
+		&AppSessionKeyAppSessionIDV1{},
+		&ChannelSessionKeyStateV1{},
+		&ChannelSessionKeyAssetV1{},
+		&CurrentSessionKeyStateV1{},
+		&UserBalance{},
+		&UserStakedV1{},
+		&ActionLogEntryV1{},
+		&LifespanMetric{},
+	); err != nil {
 		return err
 	}
 	return nil
+}
+
+func quotePostgresIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }

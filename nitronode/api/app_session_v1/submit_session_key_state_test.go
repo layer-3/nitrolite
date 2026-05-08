@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/nitronode/metrics"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 	"github.com/layer-3/nitrolite/pkg/sign"
@@ -82,7 +83,7 @@ func TestSubmitSessionKeyState_Success(t *testing.T) {
 
 	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, appIDs, sessionIDs, expiresAt, userSigner)
 
-	mockStore.On("GetLastAppSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, nil)
 	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -227,7 +228,7 @@ func TestSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 
 	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, appIDs, sessionIDs, expiresAt, userSigner)
 
-	mockStore.On("GetLastAppSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, nil)
 	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -379,7 +380,7 @@ func TestSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	// Submit version 3 when latest is 0 (expects 1)
 	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, []string{}, []string{}, expiresAt, userSigner)
 
-	mockStore.On("GetLastAppSessionKeyVersion", userAddress, sessionKeyAddress).Return(uint64(0), nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -396,6 +397,84 @@ func TestSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	require.NotNil(t, respErr)
 	assert.Contains(t, respErr.Error(), fmt.Sprintf("expected version %d, got %d", 1, 3))
 	mockStore.AssertExpectations(t)
+}
+
+func TestSubmitSessionKeyState_RejectsWhenAtUserCap(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 3,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, nil, nil, expiresAt, userSigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, nil)
+	mockStore.On("CountSessionKeysForUser", userAddress).Return(3, nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "session key limit of 3")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "StoreAppSessionKeyState", mock.Anything)
+}
+
+func TestSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 3,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 5, nil, nil, expiresAt, userSigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(4, nil)
+	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
 }
 
 func TestSubmitSessionKeyState_SignatureMismatch(t *testing.T) {

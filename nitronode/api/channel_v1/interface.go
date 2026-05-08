@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 )
@@ -68,6 +69,14 @@ type Store interface {
 
 	// Session key state operations
 
+	// LockSessionKeyState locks the (user, session_key, kind) pointer row for the surrounding
+	// transaction, returning the current version (0 if newly created).
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+
+	// CountSessionKeysForUser returns the number of distinct session keys for the wallet
+	// across both kinds, used to enforce the per-user cap at submit time.
+	CountSessionKeysForUser(userAddress string) (uint32, error)
+
 	// StoreChannelSessionKeyState persists a channel session key state.
 	StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV1) error
 
@@ -76,8 +85,8 @@ type Store interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error)
+	// optionally filtered by session key. Results are paginated.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

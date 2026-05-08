@@ -52,6 +52,7 @@ func main() {
 		MaxAppMetadataLen:         vl.MaxAppMetadataLen,
 		MaxRebalanceSignedUpdates: vl.MaxSignedUpdates,
 		MaxSessionKeyIDs:          vl.MaxSessionKeyIDs,
+		MaxSessionKeysPerUser:     vl.MaxSessionKeysPerUser,
 		RateLimitPerSec:           bb.RateLimitPerSec,
 		RateLimitBurst:            bb.RateLimitBurst,
 	}

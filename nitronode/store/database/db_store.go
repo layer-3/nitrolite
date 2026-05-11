@@ -199,38 +199,38 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 	switch result.TransitionType {
 	case core.TransitionTypeHomeDeposit:
 		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion != nil && result.StateVersion != *result.HomeChannelVersion {
+		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
 			return fmt.Errorf("home deposit is still ongoing")
 		}
 
 	case core.TransitionTypeHomeWithdrawal:
 		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion != nil && result.StateVersion != *result.HomeChannelVersion {
+		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
 			return fmt.Errorf("home withdrawal is still ongoing")
 		}
 
 	case core.TransitionTypeMutualLock:
 		// Verify last_state.version == home_channel.state_version == escrow_channel.state_version
-		if result.HomeChannelVersion != nil && result.StateVersion != *result.HomeChannelVersion ||
-			result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion ||
+			result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
 			return fmt.Errorf("mutual lock is still ongoing")
 		}
 
 	case core.TransitionTypeEscrowLock:
 		// Verify last_state.version == escrow_channel.state_version
-		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+		if result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
 			return fmt.Errorf("escrow lock is still ongoing")
 		}
 
 	case core.TransitionTypeEscrowWithdraw:
 		// Verify last_state.version == escrow_channel.state_version
-		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+		if result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
 			return fmt.Errorf("escrow withdrawal is still ongoing")
 		}
 
 	case core.TransitionTypeMigrate:
 		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion != nil && result.StateVersion != *result.HomeChannelVersion {
+		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
 			return fmt.Errorf("home chain migration is still ongoing")
 		}
 	}
@@ -287,12 +287,12 @@ func (s *DBStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
 		return fmt.Errorf("mutual lock is still ongoing")
 
 	case core.TransitionTypeEscrowDeposit:
-		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+		if result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
 			return fmt.Errorf("escrow deposit finalization is still ongoing")
 		}
 
 	case core.TransitionTypeEscrowWithdraw:
-		if result.EscrowChannelVersion != nil && result.StateVersion != *result.EscrowChannelVersion {
+		if result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
 			return fmt.Errorf("escrow withdrawal finalization is still ongoing")
 		}
 	}

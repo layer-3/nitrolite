@@ -3,7 +3,7 @@ module github.com/layer-3/nitrolite
 go 1.25.9
 
 require (
-	cloud.google.com/go/kms v1.30.0
+	cloud.google.com/go/kms v1.31.0
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/ethereum/go-ethereum v1.17.2
 	github.com/google/uuid v1.6.0
@@ -15,8 +15,8 @@ require (
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	go.yaml.in/yaml/v2 v2.4.4
-	golang.org/x/term v0.42.0
-	google.golang.org/api v0.277.0
+	golang.org/x/term v0.43.0
+	google.golang.org/api v0.278.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
@@ -135,7 +135,7 @@ require (
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1

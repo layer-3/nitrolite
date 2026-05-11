@@ -167,16 +167,14 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 					return rpc.Errorf("failed to create transaction: %v", err)
 				}
 			case core.TransitionTypeMutualLock:
+				// Require home channel materialized onchain before co-signing a MutualLock.
+				// Onchain _isChannelHomeChain() returns false while status == VOID, so
+				// initiateEscrowDeposit() on the home chain would not take the home-chain
+				// path until the prior creation/checkpoint state is submitted via createChannel().
+				if *channelStatus != core.ChannelStatusOpen {
+					return rpc.Errorf("home channel is not materialized onchain")
+				}
 				return rpc.Errorf("transition is not supported yet")
-				// When unstubbing: require home channel materialized onchain before
-				// co-signing a MutualLock. Onchain _isChannelHomeChain() returns false
-				// while status == VOID, so initiateEscrowDeposit() on the home chain
-				// would not take the home-chain path until the prior creation/checkpoint
-				// state is submitted via createChannel().
-				//
-				// if *channelStatus != core.ChannelStatusOpen {
-				// 	return rpc.Errorf("home channel is not materialized onchain")
-				// }
 				// if err := h.createEscrowChannel(tx, incomingState); err != nil {
 				// 	return err
 				// }
@@ -186,15 +184,13 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				// 	return rpc.Errorf("failed to create transaction: %v", err)
 				// }
 			case core.TransitionTypeEscrowLock:
+				// Require home channel materialized onchain before co-signing an EscrowLock.
+				// Same reason as MutualLock — the onchain home-chain path depends on the home
+				// channel having been created via createChannel() first.
+				if *channelStatus != core.ChannelStatusOpen {
+					return rpc.Errorf("home channel is not materialized onchain")
+				}
 				return rpc.Errorf("transition is not supported yet")
-				// When unstubbing: require home channel materialized onchain before
-				// co-signing an EscrowLock. Same reason as MutualLock — the onchain
-				// home-chain path depends on the home channel having been created via
-				// createChannel() first.
-				//
-				// if *channelStatus != core.ChannelStatusOpen {
-				// 	return rpc.Errorf("home channel is not materialized onchain")
-				// }
 				// if err := h.createEscrowChannel(tx, incomingState); err != nil {
 				// 	return err
 				// }

@@ -4,13 +4,14 @@ import { Client } from '../../src/client.js';
 import * as core from '../../src/core/index.js';
 
 const USER_WALLET = '0x1234567890123456789012345678901234567890' as const;
+const RECIPIENT_WALLET = '0x3333333333333333333333333333333333333333' as const;
 const NODE_ADDRESS = '0x1111111111111111111111111111111111111111' as const;
 const TOKEN_ADDRESS = '0x2222222222222222222222222222222222222222' as const;
 const HOME_CHANNEL_ID = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const USER_SIGNATURE = '0x00';
 const NODE_SIGNATURE = '0x01';
 
-function createAcknowledgeClient(latestState?: core.State, latestStateError?: Error) {
+function createHighLevelClient(latestState?: core.State, latestStateError?: Error) {
     const getLatestState = jest.fn();
     if (latestStateError) {
         getLatestState.mockRejectedValue(latestStateError);
@@ -29,10 +30,7 @@ function createAcknowledgeClient(latestState?: core.State, latestStateError?: Er
     };
     client.getNodeAddress = jest.fn().mockResolvedValue(NODE_ADDRESS);
     client.signState = jest.fn().mockResolvedValue(USER_SIGNATURE);
-    client.requestChannelCreation = jest.fn().mockImplementation(async (state: core.State) => {
-        state.nodeSig = NODE_SIGNATURE;
-        return NODE_SIGNATURE;
-    });
+    client.requestChannelCreation = jest.fn().mockResolvedValue(NODE_SIGNATURE);
     client.signAndSubmitState = jest.fn().mockImplementation(async (_current: core.State, proposed: core.State) => {
         proposed.userSig = USER_SIGNATURE;
         proposed.nodeSig = NODE_SIGNATURE;
@@ -141,7 +139,7 @@ describe('Client.getOnChainBalance', () => {
 
 describe('Client.acknowledge', () => {
     it('creates a channel with acknowledgement when latest state lookup fails', async () => {
-        const client = createAcknowledgeClient(undefined, new Error('state not found'));
+        const client = createHighLevelClient(undefined, new Error('state not found'));
 
         const state = await client.acknowledge('usdc');
 
@@ -155,7 +153,7 @@ describe('Client.acknowledge', () => {
 
     it('creates a channel with acknowledgement when received off-chain funds have no home channel', async () => {
         const latestState = receivedOffchainState();
-        const client = createAcknowledgeClient(latestState);
+        const client = createHighLevelClient(latestState);
 
         const state = await client.acknowledge('usdc');
 
@@ -163,6 +161,8 @@ describe('Client.acknowledge', () => {
         expect(client.signAndSubmitState).not.toHaveBeenCalled();
         expect(state.version).toBe(latestState.version + 1n);
         expect(state.homeChannelId).toBeDefined();
+        expect(state.homeLedger.userBalance.equals(latestState.homeLedger.userBalance)).toBe(true);
+        expect(state.homeLedger.userNetFlow.equals(latestState.homeLedger.userNetFlow)).toBe(true);
         expect(state.transition.type).toBe(core.TransitionType.Acknowledgement);
         expect(state.userSig).toBe(USER_SIGNATURE);
         expect(state.nodeSig).toBe(NODE_SIGNATURE);
@@ -170,7 +170,7 @@ describe('Client.acknowledge', () => {
 
     it('submits an acknowledgement when latest state already has a home channel', async () => {
         const latestState = openChannelState();
-        const client = createAcknowledgeClient(latestState);
+        const client = createHighLevelClient(latestState);
 
         const state = await client.acknowledge('usdc');
 
@@ -185,11 +185,75 @@ describe('Client.acknowledge', () => {
     it('rejects an already acknowledged state on an existing home channel', async () => {
         const latestState = openChannelState();
         latestState.userSig = USER_SIGNATURE;
-        const client = createAcknowledgeClient(latestState);
+        const client = createHighLevelClient(latestState);
 
         await expect(client.acknowledge('usdc')).rejects.toThrow('state already acknowledged by user');
 
         expect(client.requestChannelCreation).not.toHaveBeenCalled();
         expect(client.signAndSubmitState).not.toHaveBeenCalled();
+    });
+
+    it('rejects an already acknowledged state before creating a home channel', async () => {
+        const latestState = receivedOffchainState();
+        latestState.userSig = USER_SIGNATURE;
+        const client = createHighLevelClient(latestState);
+
+        await expect(client.acknowledge('usdc')).rejects.toThrow('state already acknowledged by user');
+
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+        expect(client.signAndSubmitState).not.toHaveBeenCalled();
+    });
+});
+
+describe('Client.transfer', () => {
+    it('creates a channel with transfer when latest state lookup fails', async () => {
+        const client = createHighLevelClient(undefined, new Error('state not found'));
+        const amount = new Decimal(1);
+
+        const state = await client.transfer(RECIPIENT_WALLET, 'usdc', amount);
+
+        expect(client.requestChannelCreation).toHaveBeenCalledTimes(1);
+        expect(client.signAndSubmitState).not.toHaveBeenCalled();
+        expect(state.homeChannelId).toBeDefined();
+        expect(state.transition.type).toBe(core.TransitionType.TransferSend);
+        expect(state.transition.accountId).toBe(RECIPIENT_WALLET);
+        expect(state.userSig).toBe(USER_SIGNATURE);
+        expect(state.nodeSig).toBe(NODE_SIGNATURE);
+    });
+
+    it('creates a channel with transfer when received off-chain funds have no home channel', async () => {
+        const latestState = receivedOffchainState();
+        const client = createHighLevelClient(latestState);
+        const amount = new Decimal(2);
+
+        const state = await client.transfer(RECIPIENT_WALLET, 'usdc', amount);
+
+        expect(client.requestChannelCreation).toHaveBeenCalledTimes(1);
+        expect(client.signAndSubmitState).not.toHaveBeenCalled();
+        expect(state.version).toBe(latestState.version + 1n);
+        expect(state.homeChannelId).toBeDefined();
+        expect(state.homeLedger.userBalance.equals(latestState.homeLedger.userBalance.sub(amount))).toBe(true);
+        expect(state.homeLedger.userNetFlow.equals(latestState.homeLedger.userNetFlow)).toBe(true);
+        expect(state.transition.type).toBe(core.TransitionType.TransferSend);
+        expect(state.transition.accountId).toBe(RECIPIENT_WALLET);
+        expect(state.userSig).toBe(USER_SIGNATURE);
+        expect(state.nodeSig).toBe(NODE_SIGNATURE);
+    });
+
+    it('submits a transfer when latest state already has a home channel', async () => {
+        const latestState = openChannelState();
+        const client = createHighLevelClient(latestState);
+        const amount = new Decimal(2);
+
+        const state = await client.transfer(RECIPIENT_WALLET, 'usdc', amount);
+
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+        expect(client.signAndSubmitState).toHaveBeenCalledTimes(1);
+        expect(state.homeChannelId).toBe(HOME_CHANNEL_ID);
+        expect(state.homeLedger.userBalance.equals(latestState.homeLedger.userBalance.sub(amount))).toBe(true);
+        expect(state.transition.type).toBe(core.TransitionType.TransferSend);
+        expect(state.transition.accountId).toBe(RECIPIENT_WALLET);
+        expect(state.userSig).toBe(USER_SIGNATURE);
+        expect(state.nodeSig).toBe(NODE_SIGNATURE);
     });
 });

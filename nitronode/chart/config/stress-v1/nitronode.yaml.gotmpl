@@ -9,6 +9,9 @@ config:
     port: 5432
     name: nitronode_stress_v1
     user: nitronode_stress_v1_admin
+    # pgbouncer runs in-cluster on a private network, so TLS is not required
+    # here. Override the chart's `require` default explicitly.
+    sslmode: disable
   envSecret: nitronode-secret-env
   extraEnvs:
     NITRONODE_DATABASE_MAX_OPEN_CONNS: "{{ $p.database.maxOpenConns }}"

@@ -88,7 +88,7 @@ Returns common environment variables
 - name: NITRONODE_DATABASE_USERNAME
   value: {{ .user }}
 - name: NITRONODE_DATABASE_SSLMODE
-  value: {{ .sslmode | default "disable" | quote }}
+  value: {{ .sslmode | default "require" | quote }}
 {{- end }}
 {{- range $key, $value := .Values.config.extraEnvs }}
 - name: {{ $key | upper }}

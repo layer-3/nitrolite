@@ -21,8 +21,13 @@ config:
     user: changeme
     # -- Database password
     password: changeme
-    # -- Database SSL mode (disable, require, verify-ca, verify-full)
-    sslmode: disable
+    # -- Database SSL mode (disable, require, verify-ca, verify-full).
+    # Defaults to `require` so any deployment that exposes Postgres over an
+    # untrusted network gets TLS without extra configuration. Override to
+    # `disable` for setups where the database is only reachable on a private
+    # network (e.g. a cluster-internal pgbouncer / VPC-only Cloud SQL) and TLS
+    # is not required; use `verify-ca` / `verify-full` for strict cert checking.
+    sslmode: require
   # -- Name of the secret containing GCP SA Credentials (Optional)
   gcpSaSecret: ""
   # -- Additional environment variables as key-value pairs

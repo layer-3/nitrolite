@@ -62,6 +62,7 @@ In the current protocol version, participants MUST trust nodes for:
 - **Cross-chain liquidity** — nodes MUST maintain sufficient funds on each supported chain to honour off-chain allocations; insufficient liquidity may cause on-chain enforcement to fail
 - **Cross-chain relay** — nodes relay cross-chain state updates; trustless cross-chain enforcement is not yet implemented
 - **Timely enforcement** — nodes are expected to submit checkpoints when requested; delayed enforcement may affect user experience but does not compromise single-chain asset safety
+- **Off-chain transfer routing** — when a user sends funds off-chain to another party, the node must countersign both the sender's state (decreasing their allocation) and the receiver's credit state (increasing theirs); the on-chain contract cannot enforce atomicity between two independent channel updates. A malicious node could apply the sender's state while withholding the receiver's credit, capturing the transferred funds. Users must trust the node to faithfully execute both legs of every off-chain transfer.
 
 Participants do not need to trust nodes for:
 

@@ -315,6 +315,20 @@ The registration is an observable on-chain event, and with monitoring in place, 
 
 **Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes. Validators must be registered 1 day before first use (one-time cost per validator).
 
+**User responsibilities and monitoring requirement:**
+
+The `VALIDATOR_ACTIVATION_DELAY` is only effective if users actively monitor on-chain validator registrations within the 1-day window. The delay provides no protection for users who are not watching. Key points every user must understand:
+
+1. **Validators are permanent.** Once a validator is registered at a given ID, it cannot be deactivated or overwritten. If a malicious validator becomes active, it remains active for the lifetime of the ChannelHub deployment. There is no on-chain recovery mechanism after the delay expires.
+
+2. **The 1-day window is the entire response budget.** After `VALIDATOR_ACTIVATION_DELAY` elapses, the validator is active and any outstanding ERC20 approvals to ChannelHub are immediately exploitable via a forged `createChannel`.
+
+3. **Users must subscribe to `ValidatorRegistered` events.** Monitor the `ValidatorRegistered(uint8 validatorId, ISignatureValidator validator)` event on the ChannelHub contract. Any unexpected registration should be treated as a potential compromise. Revoke all ERC20 approvals granted to ChannelHub immediately if an unrecognised validator appears.
+
+4. **Avoid large standing ERC20 approvals.** Do not grant unlimited (`type(uint256).max`) or long-lived ERC20 allowances to ChannelHub. Prefer exact-amount approvals per operation. A standing approval only becomes exploitable once a malicious validator activates, so minimising the approved amount caps the worst-case loss.
+
+The TypeScript and Go SDKs expose validator-monitoring helpers that subscribe to `ValidatorRegistered` events and surface alerts when new validators are registered, making this surveillance practical for all integrators.
+
 #### Stronger alternatives
 
 **Option F — Protocol-managed bootstrap registry.** A separate registry controlled by a `bootstrapAdmin` multisig lists the validators permitted for `createChannel` user-sig validation. Nodes have no influence over this registry. New schemes (e.g. an ERC-4337 freezer validator) can be added without redeployment. The remaining attack requires compromising the multisig; using a timelock gives users a guaranteed observation window. Supports multiple nodes in one deployment.

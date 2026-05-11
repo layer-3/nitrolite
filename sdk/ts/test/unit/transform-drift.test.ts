@@ -229,6 +229,13 @@ describe('Nitronode response transform drift guards', () => {
         expect(transformAppSessionKeyState(appSessionKeyStateRaw)).toEqual(appSessionKeyStateRaw);
     });
 
+    it('accepts empty session_key_sig for rows written before the column existed', () => {
+        const legacyChannel = { ...channelKeyStateRaw, session_key_sig: '' };
+        const legacyApp = { ...appSessionKeyStateRaw, session_key_sig: '' };
+        expect(transformChannelSessionKeyState(legacyChannel)).toEqual(legacyChannel);
+        expect(transformAppSessionKeyState(legacyApp)).toEqual(legacyApp);
+    });
+
     it('rejects malformed key-state fixtures with clear errors', () => {
         expect(() =>
             transformChannelSessionKeyState(

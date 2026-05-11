@@ -108,10 +108,12 @@ func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind Sessi
 	var locked CurrentSessionKeyStateV1
 	err := query.First(&locked).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// Should not happen: the seed above either inserted our row or no-op'd on an
-			// existing one. Treat as unowned for safety.
-			return 0, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Must not happen: the seed insert above either created our row or no-op'd on
+			// an existing one, so a SELECT keyed on (session_key, kind) must hit a row.
+			// Treat as a hard error rather than falling through as unowned — silently
+			// returning version 0 here would let a submit bypass ownership enforcement.
+			return 0, fmt.Errorf("session key pointer row missing after seed insert for (session_key=%s, kind=%d)", sessionKey, kind)
 		}
 		return 0, fmt.Errorf("failed to lock current session key state: %w", err)
 	}

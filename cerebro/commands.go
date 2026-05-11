@@ -1080,9 +1080,6 @@ func (o *Operator) createChannelSessionKey(ctx context.Context, sessionKeyAddr, 
 	fmt.Printf("  Assets:      %s\n", strings.Join(assets, ", "))
 	fmt.Printf("  Expires At:  %s\n", expiresAt.Format("2006-01-02 15:04:05"))
 
-	// We already verified above that storedPK matches sessionKeyAddr; activate it as the state signer.
-
-	// Compute metadata hash and store full session key data
 	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt.Unix())
 	if err != nil {
 		fmt.Printf("WARNING: Failed to compute metadata hash: %v\n", err)

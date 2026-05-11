@@ -80,7 +80,10 @@ library Utils {
 
     /**
      * @notice Validates that the ledger's decimals match the token contract's decimals
-     * @dev Only validates if on the same chain as the ledger
+     * @dev Only validates if on the same chain as the ledger.
+     *      The token must implement IERC20Metadata.decimals(). If the call reverts,
+     *      this function reverts with FailedToFetchDecimals. ERC-20 tokens that omit
+     *      the optional decimals() method cannot be used in any protocol operation.
      * @param ledger The ledger to validate
      */
     function validateTokenDecimals(Ledger memory ledger) internal view {

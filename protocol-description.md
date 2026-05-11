@@ -582,8 +582,9 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
   * **Rebasing tokens** (e.g. stETH, aTokens): their autonomous balance changes are invisible to the ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
   * **Fee-on-transfer tokens**: the amount received by the contract is less than the amount recorded, causing the ledger to overstate holdings from the very first deposit.
+  * **Tokens without `decimals()`**: the contract calls `IERC20Metadata.decimals()` on every state transition; tokens that do not implement this optional ERC-20 extension are rejected on-chain with `FailedToFetchDecimals`. Unlike rebasing and fee-on-transfer issues (which silently corrupt accounting), missing `decimals()` causes an immediate hard revert.
 
-  There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
+  There is no hard-coded guardrail preventing deposit of rebasing or fee-on-transfer tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
 
 * **Transfer failure resilience**: Outbound transfers (to users) never revert on failure:
 
@@ -594,6 +595,8 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
     1. **Channel lifecycle denial**: User blacklists prevent state enforcement, blocking Node operations,
     2. **Node fund lock**: User forces Node to lock large funds via escrow deposit, then blocks all recovery operations with minimal capital.
   * Combined gas limiting + reclaim pattern ensures channel operations continue regardless of transfer success.
+
+* **Node trust for off-chain transfer routing**: Off-chain transfers between parties are routed through the Node. The sender signs a state where their allocation decreases; the Node is expected to countersign it and also countersign a corresponding credit state for the receiver. The on-chain contract cannot enforce atomicity between two independent channel updates. A malicious Node could apply the sender's state while withholding the receiver's credit, effectively capturing the transferred funds. Users must trust the Node to faithfully execute both legs of every off-chain transfer.
 
 ---
 
@@ -614,6 +617,7 @@ Since `approvedSignatureValidators` is part of the `channelId` computation, agre
 * Zero transaction overhead (no separate validator registration needed)
 * Prevents node-controlled validator forgery attacks
 * Default ECDSA validator always available as fallback
+* **Signature domain**: The default on-chain ECDSA validator accepts both EIP-191 (`eth_sign`) and raw `keccak256` signatures (this is done for extensibility), while the Nitronode off-chain validator accepts EIP-191 only. All client-produced signatures must use EIP-191 to be valid on both paths.
 
 ### Node validator registry
 

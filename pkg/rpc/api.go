@@ -148,7 +148,7 @@ type AppSessionsV1SubmitDepositStateRequest struct {
 	AppStateUpdate AppStateUpdateV1 `json:"app_state_update"`
 	// QuorumSigs is the list of participant signatures for the app state update
 	QuorumSigs []string `json:"quorum_sigs"`
-	// SigQuorum is the signature quorum for the application session
+	// UserState is the signed channel state from the user, used to fund the application session deposit
 	UserState StateV1 `json:"user_state"`
 }
 

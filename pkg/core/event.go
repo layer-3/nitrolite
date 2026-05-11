@@ -61,6 +61,19 @@ type UserLockedBalanceUpdatedEvent struct {
 	Balance      decimal.Decimal `json:"balance"`
 }
 
+// ValidatorRegisteredEvent is emitted by ChannelHub when the node registers a new
+// signature validator. Users should react to unexpected registrations by revoking
+// ERC20 approvals granted to ChannelHub — see contracts/SECURITY.md for details.
+type ValidatorRegisteredEvent struct {
+	BlockchainID uint64 `json:"blockchain_id"`
+	ValidatorID  uint8  `json:"validator_id"`
+	// Validator is the EIP-55 checksummed hex address of the registered validator contract.
+	// Always compare using strings.EqualFold or common.HexToAddress(ev.Validator).Hex()
+	// to avoid silent mismatches against lowercase or non-checksummed config values.
+	Validator   string `json:"validator"`
+	BlockNumber uint64 `json:"block_number"` // block where the event was emitted; use as fromBlock on reconnect
+}
+
 type BlockchainEvent struct {
 	ContractAddress string `json:"contract_address"`
 	BlockchainID    uint64 `json:"blockchain_id"`

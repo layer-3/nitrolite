@@ -1078,6 +1078,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "transfer: (recipientWallet: string, asset: string, amount: Decimal): Promise<core.State>",
       "validateAndSignState: (currentState: core.State, proposedState: core.State): Promise<Hex>",
       "waitForClose: (): Promise<void>",
+      "watchValidatorRegistered: (chainId: bigint, fromBlock?: bigint, signal?: AbortSignal): AsyncGenerator<core.ValidatorRegisteredEvent>",
       "withdraw: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
       "withdrawSecurityTokens: (blockchainId: bigint, destinationWalletAddress: string): Promise<string>",
     ],
@@ -2431,6 +2432,17 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [
       "(ledger: Ledger): void",
     ],
+  },
+  {
+    "kind": "interface",
+    "name": "ValidatorRegisteredEvent",
+    "properties": [
+      "blockNumber: bigint",
+      "blockchainId: bigint",
+      "validator: Address",
+      "validatorId: number",
+    ],
+    "signatures": [],
   },
   {
     "constructors": [

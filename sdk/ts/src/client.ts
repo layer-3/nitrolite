@@ -1769,6 +1769,62 @@ export class Client {
   }
 
   // ============================================================================
+  // On-Chain Event Watching
+  // ============================================================================
+
+  /**
+   * Subscribes to ValidatorRegistered events emitted by the ChannelHub contract
+   * on the given chain and yields them as an async stream.
+   *
+   * Gap-free monitoring: pass fromBlock = 0n on the first call. On reconnect,
+   * pass lastEvent.blockNumber + 1n so any events emitted during the outage
+   * are replayed before live events resume. This preserves the 1-day
+   * VALIDATOR_ACTIVATION_DELAY safety window across network interruptions.
+   *
+   * The generator completes when the AbortSignal fires or the subscription is
+   * lost. Reconnect by calling watchValidatorRegistered again with the last
+   * received blockNumber + 1n as fromBlock.
+   *
+   * The RPC URL configured via withBlockchainRPC for chainId should be a
+   * WebSocket endpoint (wss://) for push-based delivery. With an HTTP endpoint
+   * viem falls back to polling getLogs at a 4-second interval.
+   *
+   * @example
+   * ```ts
+   * const ac = new AbortController();
+   * let fromBlock = 0n;
+   * while (!ac.signal.aborted) {
+   *   for await (const ev of client.watchValidatorRegistered(chainId, fromBlock, ac.signal)) {
+   *     console.warn(`Unexpected validator ${ev.validatorId} at block ${ev.blockNumber}`);
+   *     fromBlock = ev.blockNumber + 1n;
+   *   }
+   *   await new Promise(r => setTimeout(r, 5_000)); // back off before reconnect
+   * }
+   * ```
+   */
+  async *watchValidatorRegistered(
+      chainId: bigint,
+      fromBlock: bigint = 0n,
+      signal?: AbortSignal,
+  ): AsyncGenerator<core.ValidatorRegisteredEvent> {
+      const { rpcUrl, blockchainInfo } = await this.getBlockchainRPCInfo(chainId);
+
+      if (!blockchainInfo.channelHubAddress) {
+          throw new Error(`channel hub address not configured for blockchain ${chainId}`);
+      }
+
+      const { publicClient } = this.createEVMClients(chainId, rpcUrl);
+
+      yield* blockchain.evm.watchValidatorRegistered(
+          blockchainInfo.channelHubAddress as Address,
+          publicClient,
+          chainId,
+          fromBlock,
+          signal,
+      );
+  }
+
+  // ============================================================================
   // Private Helper Methods
   // ============================================================================
 

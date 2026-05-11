@@ -2,7 +2,7 @@
 
 Nitrolite is a state channel protocol that enables high-speed off-chain interactions between users while preserving on-chain security guarantees.
 
-Users exchange signed state updates off-chain with Nodes that act as a hub connecting network participants. Any user can enforce the latest agreed state on the blockchain layer at any time.
+Users exchange signed state updates off-chain with Nodes that act as a hub connecting network participants. Any user can enforce the latest agreed state on the blockchain layer, provided a valid execution path exists for that state's intent in the current channel context.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Users exchange signed state updates off-chain with Nodes that act as a hub conne
 The protocol is designed to achieve:
 
 - **Off-chain scalability** — minimize on-chain transactions by moving state advancement off-chain
-- **Blockchain security guarantees** — any user can fall back to the blockchain layer to enforce the latest state
+- **Blockchain security guarantees** — any user can fall back to the blockchain layer to enforce the latest state, provided a valid execution path exists for that state's intent
 - **Cross-chain asset interaction** — operate on assets across multiple blockchains through a unified model
 - **Extensibility** — support additional functionality through protocol extensions without modifying the core protocol
 

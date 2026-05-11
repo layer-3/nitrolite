@@ -47,12 +47,17 @@ type EscrowWithdrawalFinalizedEvent channelEvent
 type channelEvent struct {
 	ChannelID    string `json:"channel_id"`
 	StateVersion uint64 `json:"state_version"`
+	// UserSig is the hex-encoded user signature recovered from the on-chain state payload.
+	// Empty when the parsed event carries no user signature (e.g. unilateral node-only state).
+	UserSig string `json:"user_sig,omitempty"`
 }
 
 type channelChallengedEvent struct {
 	ChannelID       string `json:"channel_id"`
 	StateVersion    uint64 `json:"state_version"`
 	ChallengeExpiry uint64 `json:"challenge_expiry"`
+	// UserSig is the hex-encoded user signature recovered from the on-chain state payload.
+	UserSig string `json:"user_sig,omitempty"`
 }
 
 type UserLockedBalanceUpdatedEvent struct {

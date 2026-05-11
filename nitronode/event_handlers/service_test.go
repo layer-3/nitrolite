@@ -47,6 +47,7 @@ func TestHandleHomeChannelCreated_Success(t *testing.T) {
 			ch.StateVersion == 1
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(1), "").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelCreated(ctx, mockStore, event)
@@ -91,6 +92,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 			ch.StateVersion == 5
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(5), "").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
@@ -138,6 +140,7 @@ func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
 			ch.ChallengeExpiresAt.Unix() == int64(challengeExpiry)
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(4), "").Return(nil)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
@@ -266,6 +269,7 @@ func TestHandleHomeChannelClosed_Success(t *testing.T) {
 			ch.StateVersion == 10
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(10), "").Return(nil)
 
 	// Execute
 	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
@@ -320,6 +324,7 @@ func TestHandleEscrowDepositInitiated_Success(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("GetStateByChannelIDAndVersion", channelID, uint64(1)).Return(state, nil)
 	mockStore.On("ScheduleInitiateEscrowDeposit", "state123", uint64(0)).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(1), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowDepositInitiated(ctx, mockStore, event)
@@ -374,6 +379,7 @@ func TestHandleEscrowDepositChallenged_Success(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("GetLastStateByChannelID", channelID, true).Return(state, nil)
 	mockStore.On("ScheduleFinalizeEscrowDeposit", "state123", uint64(2)).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(3), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
@@ -415,6 +421,7 @@ func TestHandleEscrowDepositFinalized_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == 5
 	})).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(5), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowDepositFinalized(ctx, mockStore, event)
@@ -456,6 +463,7 @@ func TestHandleEscrowWithdrawalInitiated_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusOpen &&
 			ch.StateVersion == 1
 	})).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(1), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowWithdrawalInitiated(ctx, mockStore, event)
@@ -510,6 +518,7 @@ func TestHandleEscrowWithdrawalChallenged_Success(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("GetLastStateByChannelID", channelID, true).Return(state, nil)
 	mockStore.On("ScheduleFinalizeEscrowWithdrawal", "state123", uint64(2)).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(3), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowWithdrawalChallenged(ctx, mockStore, event)
@@ -551,6 +560,7 @@ func TestHandleEscrowWithdrawalFinalized_Success(t *testing.T) {
 			ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == 5
 	})).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(5), "").Return(nil)
 
 	// Execute
 	err := service.HandleEscrowWithdrawalFinalized(ctx, mockStore, event)
@@ -586,6 +596,88 @@ func TestHandleUserLockedBalanceUpdated_Success(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
+// TestHandleHomeChannelCheckpointed_BackfillsUserSig covers the recovery path for the wedge
+// scenario: a node-only state was checkpointed on chain (e.g. the receiver of a transfer signed
+// the receiver state and submitted it directly). The reactor extracts the user signature from the
+// event and the handler must forward it to the store so the local row matches what is enforced
+// on chain. Without this, EnsureNoOngoingStateTransitions stays blocked on the now-stale prior
+// bilateral state and the channel can only be unblocked via on-chain challenge.
+func TestHandleHomeChannelCheckpointed_BackfillsUserSig(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	userSig := "0xabcdef0123456789"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 4,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+		UserSig:      userSig,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.StateVersion == 5
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(5), userSig).Return(nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
+// TestHandleHomeChannelCheckpointed_BackfillError surfaces store errors from the backfill so
+// the surrounding event-processing transaction rolls back and the event can be retried.
+func TestHandleHomeChannelCheckpointed_BackfillError(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 4,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+		UserSig:      "0xdeadbeef",
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(5), "0xdeadbeef").Return(errors.New("db error"))
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "db error")
 	mockStore.AssertExpectations(t)
 }
 

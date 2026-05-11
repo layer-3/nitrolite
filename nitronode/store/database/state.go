@@ -221,6 +221,24 @@ func (s *DBStore) GetLastStateByChannelID(channelID string, signed bool) (*core.
 	return databaseStateToCore(&state)
 }
 
+// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
+// Used by the on-chain event reactor to repair the local record once a state has been bilaterally
+// enforced on chain. The IS NULL guard makes the call idempotent on event replay and prevents
+// overwriting a signature already populated by the user-facing RPC path.
+func (s *DBStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
+	if userSig == "" {
+		return nil
+	}
+	cid := strings.ToLower(channelID)
+	res := s.db.Model(&State{}).
+		Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND user_sig IS NULL", cid, cid, version).
+		Update("user_sig", userSig)
+	if res.Error != nil {
+		return fmt.Errorf("failed to backfill user_sig: %w", res.Error)
+	}
+	return nil
+}
+
 // GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
 // Uses UNION ALL of two indexed queries instead of OR for better performance.
 func (s *DBStore) GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error) {

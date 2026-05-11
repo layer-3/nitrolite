@@ -64,6 +64,10 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 		return err
 	}
 
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
+	}
+
 	logger.Info("handled HomeChannelCreated event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
@@ -107,6 +111,10 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	}
 
 	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
 		return err
 	}
 
@@ -158,6 +166,10 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return err
 	}
 
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
+	}
+
 	logger.Warn("home channel challenged",
 		"channelId", chanID,
 		"userWallet", channel.UserWallet,
@@ -196,6 +208,10 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	}
 
 	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
 		return err
 	}
 
@@ -239,6 +255,10 @@ func (s *EventHandlerService) HandleEscrowDepositInitiated(ctx context.Context, 
 		if err := tx.ScheduleInitiateEscrowDeposit(state.ID, state.HomeLedger.BlockchainID); err != nil {
 			return err
 		}
+	}
+
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
 	}
 
 	logger.Info("handled EscrowDepositInitiated event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
@@ -298,6 +318,10 @@ func (s *EventHandlerService) HandleEscrowDepositChallenged(ctx context.Context,
 		}
 	}
 
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
+	}
+
 	logger.Info("handled EscrowDepositChallenged event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
@@ -328,6 +352,10 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 		return err
 	}
 
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
+	}
+
 	logger.Info("handled EscrowDepositFinalized event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
@@ -355,6 +383,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalInitiated(ctx context.Contex
 	channel.Status = core.ChannelStatusOpen
 
 	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
 		return err
 	}
 
@@ -414,6 +446,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalChallenged(ctx context.Conte
 		}
 	}
 
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+		return err
+	}
+
 	logger.Info("handled EscrowWithdrawalChallenged event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
@@ -441,6 +477,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 	channel.Status = core.ChannelStatusClosed
 
 	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+
+	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
 		return err
 	}
 

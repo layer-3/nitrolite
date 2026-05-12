@@ -16,13 +16,13 @@ import (
 // ChannelSessionKeyStateV1 represents the state of a session key.
 type ChannelSessionKeyStateV1 struct {
 	// ID Hash(user_address + session_key + version)
-	UserAddress   string    `json:"user_address"`     // UserAddress is the user wallet address
-	SessionKey    string    `json:"session_key"`      // SessionKey is the session key address for delegation
-	Version       uint64    `json:"version"`          // Version is the version of the session key format
-	Assets        []string  `json:"assets"`           // Assets associated with this session key
-	ExpiresAt     time.Time `json:"expires_at"`       // Expiration time as unix timestamp of this session key
-	UserSig       string    `json:"user_sig"`         // UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
-	SessionKeySig string    `json:"session_key_sig"`  // SessionKeySig is the session-key holder's signature proving possession of the key being registered.
+	UserAddress   string    `json:"user_address"`    // UserAddress is the user wallet address
+	SessionKey    string    `json:"session_key"`     // SessionKey is the session key address for delegation
+	Version       uint64    `json:"version"`         // Version is the version of the session key format
+	Assets        []string  `json:"assets"`          // Assets associated with this session key
+	ExpiresAt     time.Time `json:"expires_at"`      // Expiration time as unix timestamp of this session key
+	UserSig       string    `json:"user_sig"`        // UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
+	SessionKeySig string    `json:"session_key_sig"` // SessionKeySig is the session-key holder's signature proving possession of the key being registered.
 }
 
 type VerifyChannelSessionKePermissionsV1 func(walletAddr, sessionKeyAddr, metadataHash string) (bool, error)
@@ -92,40 +92,25 @@ func PackChannelKeyStateV1(sessionKey string, metadataHash common.Hash) ([]byte,
 	return packed, nil
 }
 
-// PackChannelSessionKeyOwnershipV1 packs the bytes the session-key holder signs to prove
-// possession of the key being registered. The user_address is bound into the payload so the
-// signature cannot be replayed under a different wallet; the session_key itself is recovered
-// from the signature and need not be repeated in the packed bytes.
-func PackChannelSessionKeyOwnershipV1(userAddress string, metadataHash common.Hash) ([]byte, error) {
-	args := abi.Arguments{
-		{Type: abi.Type{T: abi.AddressTy}},              // user_address
-		{Type: abi.Type{T: abi.FixedBytesTy, Size: 32}}, // hashed metadata
-	}
-
-	packed, err := args.Pack(
-		common.HexToAddress(userAddress),
-		metadataHash,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pack session key ownership: %w", err)
-	}
-
-	return packed, nil
-}
-
-func GetChannelSessionKeyAuthMetadataHashV1(version uint64, assets []string, expiresAt int64) (common.Hash, error) {
+// GetChannelSessionKeyAuthMetadataHashV1 hashes the session-key authorization metadata.
+// user_address is bound into the hash; together with the session_key already in
+// PackChannelKeyStateV1, this binds the signed payload to a single (wallet, session_key)
+// pair so signatures cannot be replayed across wallets or session keys.
+func GetChannelSessionKeyAuthMetadataHashV1(userAddress string, version uint64, assets []string, expiresAt int64) (common.Hash, error) {
 	stringArrayType, err := abi.NewType("string[]", "", nil)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to create string array type: %w", err)
 	}
 
 	metadtataArgs := abi.Arguments{
+		{Type: abi.Type{T: abi.AddressTy}},        // user_address
 		{Type: abi.Type{T: abi.UintTy, Size: 64}}, // version
 		{Type: stringArrayType},                   // assets
 		{Type: abi.Type{T: abi.UintTy, Size: 64}}, // expires_at (unix timestamp)
 	}
 
 	packedMetadataArgs, err := metadtataArgs.Pack(
+		common.HexToAddress(userAddress),
 		version,
 		assets,
 		uint64(expiresAt),
@@ -138,8 +123,18 @@ func GetChannelSessionKeyAuthMetadataHashV1(version uint64, assets []string, exp
 	return hashedMetadata, nil
 }
 
-func ValidateChannelSessionKeyAuthSigV1(state ChannelSessionKeyStateV1) error {
-	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+// ValidateChannelSessionKeyStateV1 verifies both signatures over the registration payload:
+// user_sig must recover to state.UserAddress (wallet authorizes the delegation) and
+// session_key_sig must recover to state.SessionKey (session-key holder proves possession).
+// Both signatures sign the same PackChannelKeyStateV1(session_key, metadataHash) payload;
+// session_key binds the packed bytes and user_address binds the metadata hash, so a
+// signature minted for one (wallet, session_key) pair cannot be replayed for another.
+func ValidateChannelSessionKeyStateV1(state ChannelSessionKeyStateV1) error {
+	if state.SessionKeySig == "" {
+		return fmt.Errorf("session_key_sig is required")
+	}
+
+	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return fmt.Errorf("failed to get metadata hash: %w", err)
 	}
@@ -149,63 +144,32 @@ func ValidateChannelSessionKeyAuthSigV1(state ChannelSessionKeyStateV1) error {
 		return fmt.Errorf("failed to pack session key state: %w", err)
 	}
 
-	authSigBytes, err := hexutil.Decode(state.UserSig)
+	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
+	if err != nil {
+		return fmt.Errorf("failed to create address recoverer: %w", err)
+	}
+
+	userSigBytes, err := hexutil.Decode(state.UserSig)
 	if err != nil {
 		return fmt.Errorf("failed to decode user signature: %w", err)
 	}
-
-	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
+	recoveredUser, err := recoverer.RecoverAddress(packed, userSigBytes)
 	if err != nil {
-		return fmt.Errorf("failed to create address recoverer: %w", err)
+		return fmt.Errorf("failed to recover user_sig: %w", err)
+	}
+	if !strings.EqualFold(recoveredUser.String(), state.UserAddress) {
+		return fmt.Errorf("invalid signature: recovered address %s does not match wallet %s", recoveredUser.String(), state.UserAddress)
 	}
 
-	recoveredAddr, err := recoverer.RecoverAddress(packed, authSigBytes)
-	if err != nil {
-		return fmt.Errorf("failed to recover address from signature: %w", err)
-	}
-
-	if !strings.EqualFold(recoveredAddr.String(), state.UserAddress) {
-		return fmt.Errorf("invalid signature: recovered address %s does not match wallet %s", recoveredAddr.String(), state.UserAddress)
-	}
-
-	return nil
-}
-
-// ValidateChannelSessionKeySigV1 verifies the session-key holder's signature over a payload
-// bound to user_address + metadataHash. The recovered address must equal the declared
-// session_key, proving the submitter controls the key being registered and that the
-// signature was minted for this specific user_address.
-func ValidateChannelSessionKeySigV1(state ChannelSessionKeyStateV1) error {
-	if state.SessionKeySig == "" {
-		return fmt.Errorf("session_key_sig is required")
-	}
-
-	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
-	if err != nil {
-		return fmt.Errorf("failed to get metadata hash: %w", err)
-	}
-
-	packed, err := PackChannelSessionKeyOwnershipV1(state.UserAddress, metadataHash)
-	if err != nil {
-		return fmt.Errorf("failed to pack session key ownership: %w", err)
-	}
-
-	sigBytes, err := hexutil.Decode(state.SessionKeySig)
+	sessionKeySigBytes, err := hexutil.Decode(state.SessionKeySig)
 	if err != nil {
 		return fmt.Errorf("failed to decode session_key_sig: %w", err)
 	}
-
-	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
-	if err != nil {
-		return fmt.Errorf("failed to create address recoverer: %w", err)
-	}
-
-	recoveredAddr, err := recoverer.RecoverAddress(packed, sigBytes)
+	recoveredKey, err := recoverer.RecoverAddress(packed, sessionKeySigBytes)
 	if err != nil {
 		return fmt.Errorf("failed to recover session_key_sig: %w", err)
 	}
-
-	if !strings.EqualFold(recoveredAddr.String(), state.SessionKey) {
+	if !strings.EqualFold(recoveredKey.String(), state.SessionKey) {
 		return fmt.Errorf("session_key_sig does not match session_key")
 	}
 

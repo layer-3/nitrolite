@@ -946,7 +946,7 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 //	state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
 //	err = client.SubmitChannelSessionKeyState(ctx, state)
 func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1) (string, error) {
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return "", fmt.Errorf("failed to compute metadata hash: %w", err)
 	}
@@ -971,18 +971,17 @@ func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1)
 
 // SignChannelSessionKeyOwnership produces the session-key holder's ownership signature for a
 // channel session key registration. The signer must hold the session key; the returned hex
-// string populates state.SessionKeySig before submit. The signed payload is bound to
-// user_address (via PackChannelSessionKeyOwnershipV1) so the signature cannot be replayed
-// under a different wallet.
+// string populates state.SessionKeySig before submit. The signed payload binds session_key
+// into the metadata hash so a signature minted for one key cannot be replayed for another.
 func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, sessionKeySigner sign.Signer) (string, error) {
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return "", fmt.Errorf("failed to compute metadata hash: %w", err)
 	}
 
-	packed, err := core.PackChannelSessionKeyOwnershipV1(state.UserAddress, metadataHash)
+	packed, err := core.PackChannelKeyStateV1(state.SessionKey, metadataHash)
 	if err != nil {
-		return "", fmt.Errorf("failed to pack channel session key ownership: %w", err)
+		return "", fmt.Errorf("failed to pack channel session key state: %w", err)
 	}
 
 	sig, err := sessionKeySigner.Sign(packed)

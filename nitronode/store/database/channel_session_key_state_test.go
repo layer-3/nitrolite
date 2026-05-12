@@ -511,7 +511,7 @@ func TestDBStore_ValidateChannelSessionKeyForAsset(t *testing.T) {
 	// Helper to compute metadata hash for a given state
 	computeMetadataHash := func(t *testing.T, version uint64, assets []string, expiresAt time.Time) string {
 		t.Helper()
-		hash, err := core.GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt.Unix())
+		hash, err := core.GetChannelSessionKeyAuthMetadataHashV1(testUser1, version, assets, expiresAt.Unix())
 		require.NoError(t, err)
 		return strings.ToLower(hash.Hex())
 	}

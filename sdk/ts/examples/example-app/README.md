@@ -261,6 +261,7 @@ await client.submitChannelSessionKeyState(state);
 
 // 5. Compute the metadata hash
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
+  address,
   version,
   ['usdc', 'weth'],
   expiresAt,
@@ -306,6 +307,7 @@ const revokeState = {
 
 // Sign the revocation with the main wallet (EIP-191)
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
+  address,
   BigInt(revokeState.version),
   [],
   BigInt(revokeState.expires_at),

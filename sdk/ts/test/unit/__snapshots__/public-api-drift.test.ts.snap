@@ -1360,7 +1360,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "function",
     "name": "getChannelSessionKeyAuthMetadataHashV1",
     "signatures": [
-      "(version: bigint, assets: string[], expiresAt: bigint): \`0x\${string}\`",
+      "(userAddress: Address, version: bigint, assets: string[], expiresAt: bigint): \`0x\${string}\`",
     ],
   },
   {
@@ -1826,13 +1826,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "name": "packChannelKeyStateV1",
     "signatures": [
       "(sessionKey: Address, metadataHash: \`0x\${string}\`): \`0x\${string}\`",
-    ],
-  },
-  {
-    "kind": "function",
-    "name": "packChannelSessionKeyOwnershipV1",
-    "signatures": [
-      "(userAddress: Address, metadataHash: \`0x\${string}\`): \`0x\${string}\`",
     ],
   },
   {
@@ -2638,7 +2631,6 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "packAppV1",
   "packChallengeState",
   "packChannelKeyStateV1",
-  "packChannelSessionKeyOwnershipV1",
   "packCreateAppSessionRequestV1",
   "packState",
   "payloadError",

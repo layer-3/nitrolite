@@ -12,7 +12,6 @@ import {
   EthereumMsgSigner,
   getChannelSessionKeyAuthMetadataHashV1,
   packChannelKeyStateV1,
-  packChannelSessionKeyOwnershipV1,
 } from '@yellow-org/sdk';
 import type { Client, ChannelSessionKeyStateV1, ActionAllowance, AppInfoV1 } from '@yellow-org/sdk';
 import type { SessionKeyState, StatusMessage } from '../types';
@@ -26,10 +25,11 @@ import ActionModal from './ActionModal';
  */
 async function signSessionKeyStateWithWallet(
   wc: WalletClient,
-  state: { session_key: string; version: string; assets: string[]; expires_at: string },
+  state: { user_address: string; session_key: string; version: string; assets: string[]; expires_at: string },
 ): Promise<`0x${string}`> {
   if (!wc.account) throw new Error('Wallet client does not have an account');
   const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
+    state.user_address as `0x${string}`,
     BigInt(state.version),
     state.assets,
     BigInt(state.expires_at),
@@ -274,7 +274,7 @@ export default function WalletDashboard({
       await client.submitChannelSessionKeyState(state);
 
       // Compute metadata hash for the session key signer
-      const metadataHash = getChannelSessionKeyAuthMetadataHashV1(version, assetList, expiresAt);
+      const metadataHash = getChannelSessionKeyAuthMetadataHashV1(address as `0x${string}`, version, assetList, expiresAt);
 
       const activeSk: SessionKeyState = {
         ...newSk,

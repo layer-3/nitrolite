@@ -47,7 +47,7 @@ func (s *DBStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV
 		return fmt.Errorf("failed to generate session key state ID: %w", err)
 	}
 
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(userAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return fmt.Errorf("failed to compute metadata hash: %w", err)
 	}

@@ -21,9 +21,10 @@ import (
 )
 
 // buildSignedChannelSessionKeyStateReq creates a properly signed ChannelsV1SubmitSessionKeyState request.
-// signer signs the wallet UserSig over PackChannelKeyStateV1; keySigner signs the SessionKeySig
-// over PackChannelSessionKeyOwnershipV1 (user_address, metadataHash). Pass nil for keySigner
-// to leave SessionKeySig empty for negative-path tests.
+// Both signer (wallet UserSig) and keySigner (SessionKeySig) sign over the same
+// PackChannelKeyStateV1 payload. session_key is bound into the metadata hash, so a signature
+// minted for one key cannot be replayed as ownership of another. Pass nil for keySigner to
+// leave SessionKeySig empty for negative-path tests.
 func buildSignedChannelSessionKeyStateReq(t *testing.T, userAddress, sessionKey string, version uint64, assets []string, expiresAt time.Time, signer, keySigner sign.Signer) rpc.ChannelsV1SubmitSessionKeyStateRequest {
 	t.Helper()
 
@@ -31,7 +32,7 @@ func buildSignedChannelSessionKeyStateReq(t *testing.T, userAddress, sessionKey 
 		assets = []string{}
 	}
 
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(strings.ToLower(userAddress), version, assets, expiresAt.Unix())
 	require.NoError(t, err)
 
 	packed, err := core.PackChannelKeyStateV1(strings.ToLower(sessionKey), metadataHash)
@@ -50,9 +51,7 @@ func buildSignedChannelSessionKeyStateReq(t *testing.T, userAddress, sessionKey 
 	}
 
 	if keySigner != nil {
-		ownershipPacked, err := core.PackChannelSessionKeyOwnershipV1(strings.ToLower(userAddress), metadataHash)
-		require.NoError(t, err)
-		keySig, err := keySigner.Sign(ownershipPacked)
+		keySig, err := keySigner.Sign(packed)
 		require.NoError(t, err)
 		state.SessionKeySig = hexutil.Encode(keySig)
 	}

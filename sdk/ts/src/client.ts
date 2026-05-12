@@ -1666,6 +1666,7 @@ export class Client {
    */
   async signChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<Hex> {
     const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
       BigInt(state.version),
       state.assets,
       BigInt(state.expires_at)
@@ -1681,9 +1682,9 @@ export class Client {
   /**
    * Produce the session-key holder's ownership signature for a channel session key
    * registration. The caller-supplied signer must hold the session key being registered;
-   * the returned hex string populates state.session_key_sig before submit. The signed
-   * payload is bound to user_address, so the signature cannot be replayed under a
-   * different wallet.
+   * the returned hex string populates state.session_key_sig before submit. session_key is
+   * bound into the metadata hash so a signature minted for one key cannot be replayed for
+   * another.
    *
    * @param state - The channel session key state to sign (session_key_sig field is excluded)
    * @param sessionKeySigner - StateSigner whose address equals state.session_key
@@ -1694,12 +1695,13 @@ export class Client {
     sessionKeySigner: StateSigner
   ): Promise<Hex> {
     const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
       BigInt(state.version),
       state.assets,
       BigInt(state.expires_at)
     );
-    const packed = core.packChannelSessionKeyOwnershipV1(
-      state.user_address as Address,
+    const packed = core.packChannelKeyStateV1(
+      state.session_key as Address,
       metadataHash
     );
     return await sessionKeySigner.signMessage(packed);

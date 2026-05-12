@@ -73,14 +73,8 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
-	// Validate user's signature over the session key state
-	if err := core.ValidateChannelSessionKeyAuthSigV1(coreState); err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
-		return
-	}
-
-	// Validate session-key holder's possession signature over (user_address, metadata).
-	if err := core.ValidateChannelSessionKeySigV1(coreState); err != nil {
+	// Validate both signatures: wallet's user_sig and session-key holder's session_key_sig.
+	if err := core.ValidateChannelSessionKeyStateV1(coreState); err != nil {
 		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
 		return
 	}

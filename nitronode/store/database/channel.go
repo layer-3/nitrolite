@@ -79,6 +79,10 @@ func (s *DBStore) GetChannelByID(channelID string) (*core.Channel, error) {
 }
 
 // GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
+// "Active" means the node has co-signed the channel definition (status Void or Open) — it
+// does NOT guarantee the channel has been materialized onchain. Callers requiring onchain
+// materialization (e.g., cross-chain escrow operations) must additionally check that
+// Status == ChannelStatusOpen.
 func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, error) {
 	var dbChannel Channel
 	err := s.db.
@@ -95,27 +99,37 @@ func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, err
 	return databaseChannelToCore(&dbChannel), nil
 }
 
-// CheckOpenChannel verifies if a user has an active channel for the given asset
-// and returns the approved signature validators if such a channel exists.
-func (s *DBStore) CheckOpenChannel(wallet, asset string) (string, bool, error) {
-	var approvedSigValidators string
+// CheckActiveChannel verifies if a user has an active home channel for the given asset
+// and returns its approved signature validators along with the channel status.
+// "Active" includes Void (DB-only, awaiting onchain confirmation) and Open (materialized
+// onchain). This is intentional: non-escrow offchain transitions (transfers, etc.) are
+// permitted before onchain confirmation lands. Callers operating on cross-chain escrow
+// flows that depend on onchain home-channel materialization must check that the returned
+// status is ChannelStatusOpen.
+//
+// A nil status pointer means no active channel was found.
+func (s *DBStore) CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error) {
+	var row struct {
+		ApprovedSigValidators string             `gorm:"column:approved_sig_validators"`
+		Status                core.ChannelStatus `gorm:"column:status"`
+	}
 	result := s.db.Raw(`
-		SELECT approved_sig_validators
+		SELECT approved_sig_validators, status
 		FROM channels
 		WHERE user_wallet = ?
 			AND asset = ?
 			AND status <= ?
 			AND type = ?
 		LIMIT 1
-	`, strings.ToLower(wallet), strings.ToLower(asset), core.ChannelStatusOpen, core.ChannelTypeHome).Scan(&approvedSigValidators)
+	`, strings.ToLower(wallet), strings.ToLower(asset), core.ChannelStatusOpen, core.ChannelTypeHome).Scan(&row)
 	if result.Error != nil {
-		return "", false, fmt.Errorf("failed to check open channel: %w", result.Error)
+		return "", nil, fmt.Errorf("failed to check active channel: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return "", false, nil
+		return "", nil, nil
 	}
 
-	return approvedSigValidators, true, nil
+	return row.ApprovedSigValidators, &row.Status, nil
 }
 
 // GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.

@@ -156,7 +156,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", senderWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
@@ -339,7 +339,7 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", senderWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
@@ -455,7 +455,7 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	// Mock expectations — should reach the issueTransferReceiverState check
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", senderWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
@@ -591,7 +591,7 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("GetChannelByID", homeChannelID).Return(&homeChannel, nil)
@@ -751,7 +751,7 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentUnsignedState, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, true).Return(currentSignedState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
@@ -890,7 +890,7 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
 
@@ -1025,7 +1025,7 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
 
@@ -1179,7 +1179,7 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("GetChannelByID", homeChannelID).Return(&homeChannel, nil)
@@ -1340,7 +1340,7 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentUnsignedState, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, true).Return(currentSignedState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
@@ -1480,7 +1480,7 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
 
@@ -1617,7 +1617,7 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 	// Mock expectations
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckOpenChannel", userWallet, asset).Return("0x03", true, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil).Maybe()
@@ -1666,6 +1666,189 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 	// Verify all mock expectations - notably RecordTransaction should NOT have been called
 	mockTxStore.AssertExpectations(t)
 	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+}
+
+func TestSubmitState_MutualLock_VoidHomeChannel_Rejected(t *testing.T) {
+	// Setup
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	minChallenge := uint32(3600)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     minChallenge,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	lockAmount := decimal.NewFromInt(100)
+
+	currentState := core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, 1),
+		Transition:    core.Transition{},
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+
+	incomingState := currentState.NextState()
+	_, err := incomingState.ApplyMutualLockTransition(2, "0xTokenAddress", lockAmount)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	packedState, _ := core.PackState(*incomingState, mockAssetStore)
+	userSig, _ := userWalletSigner.Sign(packedState)
+	userSigStr := userSig.String()
+	incomingState.UserSig = &userSigStr
+
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusVoid, nil)
+	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
+	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
+	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
+	mockTxStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	rpcState := toRPCState(*incomingState)
+	reqPayload := rpc.ChannelsV1SubmitStateRequest{State: rpcState}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when home channel is Void")
+	assert.Contains(t, respErr.Error(), "home channel is not materialized onchain")
+
+	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
+}
+
+func TestSubmitState_EscrowLock_VoidHomeChannel_Rejected(t *testing.T) {
+	// Setup
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	minChallenge := uint32(3600)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     minChallenge,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	lockAmount := decimal.NewFromInt(100)
+
+	currentState := core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, 1),
+		Transition:    core.Transition{},
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+
+	incomingState := currentState.NextState()
+	_, err := incomingState.ApplyEscrowLockTransition(2, "0xTokenAddress", lockAmount)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	mockAssetStore.On("GetTokenDecimals", uint64(2), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	packedState, _ := core.PackState(*incomingState, mockAssetStore)
+	userSig, _ := userWalletSigner.Sign(packedState)
+	userSigStr := userSig.String()
+	incomingState.UserSig = &userSigStr
+
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("0x03", core.ChannelStatusVoid, nil)
+	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(currentState, nil)
+	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
+	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
+	mockTxStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	rpcState := toRPCState(*incomingState)
+	reqPayload := rpc.ChannelsV1SubmitStateRequest{State: rpcState}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when home channel is Void")
+	assert.Contains(t, respErr.Error(), "home channel is not materialized onchain")
+
+	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "ScheduleInitiateEscrowWithdrawal", mock.Anything, mock.Anything)
 }
 
 // Helper function to create a string pointer

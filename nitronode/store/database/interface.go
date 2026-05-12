@@ -46,11 +46,15 @@ type DatabaseStore interface {
 	GetChannelByID(channelID string) (*core.Channel, error)
 
 	// GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
+	// "Active" includes both Void (DB-only) and Open (materialized onchain).
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
-	// CheckOpenChannel verifies if a user has an active channel for the given asset
-	// and returns the approved signature validators if such a channel exists.
-	CheckOpenChannel(wallet, asset string) (string, bool, error)
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 
 	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
 	UpdateChannel(channel core.Channel) error

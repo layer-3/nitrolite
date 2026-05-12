@@ -103,7 +103,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 }
 
 func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
-	// Channel must be marked Challenged with the challenge expiry so CheckOpenChannel and
+	// Channel must be marked Challenged with the challenge expiry so CheckActiveChannel and
 	// RefreshUserEnforcedBalance stop treating it as open. Auto-checkpoint stays disabled:
 	// non-checkpointable intents (CLOSE, escrow initiate/finalize, migration) cannot be
 	// resolved via ScheduleCheckpoint, so operator action is required.

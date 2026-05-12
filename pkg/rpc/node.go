@@ -56,6 +56,11 @@ type Node interface {
 	// Groups can have their own middleware and can be nested to create
 	// hierarchical handler structures.
 	NewGroup(name string) HandlerGroup
+
+	// RegisteredMethods returns every RPC method name registered on the node
+	// (across the root group and all subgroups). Intended for instrumentation
+	// at startup, not for request routing.
+	RegisteredMethods() []string
 }
 
 type HandlerGroup interface {
@@ -377,6 +382,17 @@ func (wn *WebsocketNode) NewGroup(name string) HandlerGroup {
 func (wn *WebsocketNode) Handle(method string, handler Handler) {
 	wn.handle(method, handler)
 	wn.routes[method] = []string{wn.groupId, method}
+}
+
+// RegisteredMethods returns every method registered on the node. Order is not
+// guaranteed. The underlying map is not mutex-protected, so the call must happen
+// after registration has finished (registration is expected to be single-threaded).
+func (wn *WebsocketNode) RegisteredMethods() []string {
+	methods := make([]string, 0, len(wn.routes))
+	for method := range wn.routes {
+		methods = append(methods, method)
+	}
+	return methods
 }
 
 // handle is the internal method for registering handlers.

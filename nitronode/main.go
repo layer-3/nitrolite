@@ -355,85 +355,107 @@ func runStoreMetricsExporter(
 	ticker := time.NewTicker(fetchInterval)
 	defer ticker.Stop()
 
+	timeSpans := []struct {
+		label    string
+		duration time.Duration
+	}{
+		{"day", 24 * time.Hour},
+		{"week", 7 * 24 * time.Hour},
+		{"month", 30 * 24 * time.Hour},
+	}
+
+	// refresh runs one full pass over every store-backed gauge. Each block resets
+	// its gauge before re-publishing the latest snapshot so label tuples that have
+	// dropped out of the store (e.g., the last open channel for an asset closed)
+	// disappear from the metric instead of sticking at their previous value. Reset
+	// happens only inside the successful-query branch so a transient DB error does
+	// not blank a healthy gauge.
+	refresh := func() {
+		channelCounts, err := store.GetChannelsCountByLabels()
+		if err != nil {
+			logger.Error("failed to get channel counts by labels", "error", err)
+		} else {
+			metricExported.ResetChannels()
+			for _, c := range channelCounts {
+				metricExported.SetChannels(c.Asset, c.Status, c.Count)
+			}
+		}
+
+		appSessionCounts, err := store.GetAppSessionsCountByLabels()
+		if err != nil {
+			logger.Error("failed to get app sessions counts by labels", "error", err)
+		} else {
+			metricExported.ResetAppSessions()
+			for _, c := range appSessionCounts {
+				metricExported.SetAppSessions(c.Application, c.Status, c.Count)
+			}
+		}
+
+		tvlCounts, err := store.GetTotalValueLocked()
+		if err != nil {
+			logger.Error("failed to get total value locked", "error", err)
+		} else {
+			metricExported.ResetTotalValueLocked()
+			for _, c := range tvlCounts {
+				metricExported.SetTotalValueLocked(c.Domain, c.Asset, c.Value.InexactFloat64())
+			}
+		}
+
+		nodeBalances, err := store.GetNodeBalance()
+		if err != nil {
+			logger.Error("failed to get node balances", "error", err)
+		} else {
+			metricExported.ResetNodeBalance()
+			for _, nb := range nodeBalances {
+				metricExported.SetNodeBalance(nb.BlockchainID, nb.Asset, nb.Value.InexactFloat64())
+			}
+		}
+
+		offChain, err := store.GetUserBalanceSummary()
+		if err != nil {
+			logger.Error("failed to get off-chain liquidity", "error", err)
+		} else {
+			metricExported.ResetUserBalances()
+			for _, l := range offChain {
+				metricExported.SetUserBalanceTotal(l.BlockchainID, l.Asset, l.Total.InexactFloat64())
+				metricExported.SetUserBalanceUnderfunded(l.BlockchainID, l.Asset, l.Underfunded.InexactFloat64())
+				metricExported.SetUserBalanceReleasable(l.BlockchainID, l.Asset, l.Releasable.InexactFloat64())
+			}
+		}
+
+		for _, tw := range timeSpans {
+			counts, err := store.CountActiveUsers(tw.duration)
+			if err != nil {
+				logger.Error("failed to count active users", "timeframe", tw.label, "error", err)
+				continue
+			}
+			metricExported.ResetActiveUsers(tw.label)
+			for _, c := range counts {
+				metricExported.SetActiveUsers(c.Label, tw.label, c.Count)
+			}
+		}
+
+		for _, tw := range timeSpans {
+			counts, err := store.CountActiveAppSessions(tw.duration)
+			if err != nil {
+				logger.Error("failed to count active app sessions", "timeframe", tw.label, "error", err)
+				continue
+			}
+			metricExported.ResetActiveAppSessions(tw.label)
+			for _, c := range counts {
+				metricExported.SetActiveAppSessions(c.Label, tw.label, c.Count)
+			}
+		}
+	}
+
+	// Populate gauges immediately so they are non-empty before the first ticker fire
+	// (otherwise alerts using absent() trip during the cold-start window).
+	refresh()
+
 	for {
 		select {
 		case <-ticker.C:
-			timeSpans := []struct {
-				label    string
-				duration time.Duration
-			}{
-				{"day", 24 * time.Hour},
-				{"week", 7 * 24 * time.Hour},
-				{"month", 30 * 24 * time.Hour},
-			}
-
-			channelCounts, err := store.GetChannelsCountByLabels()
-			if err != nil {
-				logger.Error("failed to get channel counts by labels", "error", err)
-			} else {
-				for _, c := range channelCounts {
-					metricExported.SetChannels(c.Asset, c.Status, c.Count)
-				}
-			}
-
-			appSessionCounts, err := store.GetAppSessionsCountByLabels()
-			if err != nil {
-				logger.Error("failed to get app sessions counts by labels", "error", err)
-			} else {
-				for _, c := range appSessionCounts {
-					metricExported.SetAppSessions(c.Application, c.Status, c.Count)
-				}
-			}
-
-			tvlCounts, err := store.GetTotalValueLocked()
-			if err != nil {
-				logger.Error("failed to get total value locked", "error", err)
-			} else {
-				for _, c := range tvlCounts {
-					metricExported.SetTotalValueLocked(c.Domain, c.Asset, c.Value.InexactFloat64())
-				}
-			}
-
-			nodeBalances, err := store.GetNodeBalance()
-			if err != nil {
-				logger.Error("failed to get node balances", "error", err)
-			} else {
-				for _, nb := range nodeBalances {
-					metricExported.SetNodeBalance(nb.BlockchainID, nb.Asset, nb.Value.InexactFloat64())
-				}
-			}
-
-			offChain, err := store.GetUserBalanceSummary()
-			if err != nil {
-				logger.Error("failed to get off-chain liquidity", "error", err)
-			} else {
-				for _, l := range offChain {
-					metricExported.SetUserBalanceTotal(l.BlockchainID, l.Asset, l.Total.InexactFloat64())
-					metricExported.SetUserBalanceUnderfunded(l.BlockchainID, l.Asset, l.Underfunded.InexactFloat64())
-					metricExported.SetUserBalanceReleasable(l.BlockchainID, l.Asset, l.Releasable.InexactFloat64())
-				}
-			}
-
-			for _, tw := range timeSpans {
-				if counts, err := store.CountActiveUsers(tw.duration); err != nil {
-					logger.Error("failed to count active users", "timeframe", tw.label, "error", err)
-				} else {
-					for _, c := range counts {
-						metricExported.SetActiveUsers(c.Label, tw.label, c.Count)
-					}
-				}
-			}
-
-			for _, tw := range timeSpans {
-				if counts, err := store.CountActiveAppSessions(tw.duration); err != nil {
-					logger.Error("failed to count active app sessions", "timeframe", tw.label, "error", err)
-				} else {
-					for _, c := range counts {
-						metricExported.SetActiveAppSessions(c.Label, tw.label, c.Count)
-					}
-				}
-			}
-
+			refresh()
 		case <-ctx.Done():
 			logger.Info("stopping store metrics exporter")
 			return

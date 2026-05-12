@@ -165,6 +165,27 @@ func (m *storeMetricExporter) SetUserBalanceReleasable(blockchainID, asset strin
 	m.userBalanceReleasable.WithLabelValues(blockchainID, asset).Set(value)
 }
 
+func (m *storeMetricExporter) ResetAppSessions()      { m.appSessionsTotal.Reset() }
+func (m *storeMetricExporter) ResetChannels()         { m.channelsTotal.Reset() }
+func (m *storeMetricExporter) ResetTotalValueLocked() { m.totalValueLocked.Reset() }
+func (m *storeMetricExporter) ResetNodeBalance()      { m.nodeBalance.Reset() }
+func (m *storeMetricExporter) ResetUserBalances() {
+	m.userBalanceTotal.Reset()
+	m.userBalanceUnderfunded.Reset()
+	m.userBalanceReleasable.Reset()
+}
+
+// ResetActiveUsers clears only the rows for the given timespan so a failure in one
+// window does not blank the gauges for windows that may still be succeeding.
+func (m *storeMetricExporter) ResetActiveUsers(timeSpanLabel string) {
+	m.usersActive.DeletePartialMatch(prometheus.Labels{"timespan": timeSpanLabel})
+}
+
+// ResetActiveAppSessions clears only the rows for the given timespan; see ResetActiveUsers.
+func (m *storeMetricExporter) ResetActiveAppSessions(timeSpanLabel string) {
+	m.appSessionsActive.DeletePartialMatch(prometheus.Labels{"timespan": timeSpanLabel})
+}
+
 // runtimeMetricExporter is the concrete implementation of the Metrics interface.
 type runtimeMetricExporter struct {
 	// Shared Metrics (Cross-Package)

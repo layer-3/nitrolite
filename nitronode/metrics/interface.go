@@ -80,6 +80,13 @@ func (noopRuntimeMetricExporter) DecRPCInflight(string)                      {}
 func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration) {}
 
 // StoreMetricExporter defines the interface for setting metrics that are stored and updated by a separate metric worker.
+//
+// The Reset* methods drop every series in their respective gauges so the next batch of
+// Set* calls re-publishes a complete picture. Without this, label tuples that disappear
+// from the store (e.g., the last open channel for an asset closes) would keep their
+// previous non-zero value indefinitely because the underlying GROUP BY queries omit
+// zero-count buckets. Callers should only reset after a successful query — resetting
+// on error would blank a healthy gauge during a transient DB outage.
 type StoreMetricExporter interface {
 	SetAppSessions(applicationID string, status app.AppSessionStatus, count uint64)
 	SetChannels(asset string, status core.ChannelStatus, count uint64)
@@ -90,4 +97,12 @@ type StoreMetricExporter interface {
 	SetUserBalanceTotal(blockchainID, asset string, value float64)
 	SetUserBalanceUnderfunded(blockchainID, asset string, value float64)
 	SetUserBalanceReleasable(blockchainID, asset string, value float64)
+
+	ResetAppSessions()
+	ResetChannels()
+	ResetTotalValueLocked()
+	ResetNodeBalance()
+	ResetUserBalances()
+	ResetActiveUsers(timeSpanLabel string)
+	ResetActiveAppSessions(timeSpanLabel string)
 }

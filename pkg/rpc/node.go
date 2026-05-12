@@ -157,7 +157,7 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 
 	if config.ObserveConnections == nil {
 		// Default implementation does nothing, but can be overridden for monitoring
-		config.ObserveConnections = func(region, origin string, count uint32) {}
+		config.ObserveConnections = func(applicationID string, count uint32) {}
 	}
 	if config.WsUpgraderReadBufferSize <= 0 {
 		// It's the optimal default value as recommended
@@ -236,6 +236,7 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connConfig := WebsocketConnectionConfig{
 		ConnectionID:      connectionID,
 		Origin:            r.Header.Get("Origin"),
+		ApplicationID:     applicationID,
 		WebsocketConn:     wsConnection,
 		Logger:            wn.cfg.Logger,
 		ProcessBufferSize: wn.cfg.WsConnProcessBufferSize,

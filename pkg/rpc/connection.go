@@ -44,6 +44,10 @@ type Connection interface {
 	// Origin returns the origin of the connection, such as the client's IP address or other identifying information.
 	Origin() string
 
+	// ApplicationID returns the application identifier supplied at connection time (via the
+	// app_id query parameter). Returns an empty string if no application_id was provided.
+	ApplicationID() string
+
 	// RawRequests returns a read-only channel for receiving incoming raw request messages.
 	// Messages received on this channel are raw bytes that need to be unmarshaled
 	// into Request objects for processing. The channel is closed when the
@@ -104,6 +108,8 @@ type WebsocketConnection struct {
 	connectionID string
 	// origin is the origin of the connection, such as the client's IP address
 	origin string
+	// applicationID is the app_id query parameter supplied at WebSocket upgrade (may be empty)
+	applicationID string
 	// websocketConn is the underlying WebSocket connection
 	websocketConn GorillaWsConnectionAdapter
 	// writeTimeout is the maximum duration to wait for a write to complete
@@ -140,6 +146,9 @@ type WebsocketConnectionConfig struct {
 	ConnectionID string
 	// Origin is the origin of the connection, such as the client's IP address (optional)
 	Origin string
+	// ApplicationID is the app_id query parameter supplied at WebSocket upgrade (optional).
+	// Caller is responsible for validation; the connection stores it as-is for metrics labeling.
+	ApplicationID string
 	// WebsocketConn is the underlying WebSocket connection (required)
 	WebsocketConn GorillaWsConnectionAdapter
 
@@ -212,6 +221,7 @@ func NewWebsocketConnection(config WebsocketConnectionConfig) (*WebsocketConnect
 	return &WebsocketConnection{
 		connectionID:     config.ConnectionID,
 		origin:           config.Origin,
+		applicationID:    config.ApplicationID,
 		websocketConn:    config.WebsocketConn,
 		writeTimeout:     config.WriteTimeout,
 		pingInterval:     config.PingInterval,
@@ -319,6 +329,12 @@ func (conn *WebsocketConnection) ConnectionID() string {
 // Origin returns the origin of the connection, such as the client's IP address or other identifying information.
 func (conn *WebsocketConnection) Origin() string {
 	return conn.origin
+}
+
+// ApplicationID returns the app_id query parameter supplied at WebSocket upgrade,
+// or an empty string if none was provided.
+func (conn *WebsocketConnection) ApplicationID() string {
+	return conn.applicationID
 }
 
 // RawRequests returns the channel for processing incoming requests.

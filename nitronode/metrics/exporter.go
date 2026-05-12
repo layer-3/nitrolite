@@ -289,11 +289,11 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 		rpcConnectionsTotal: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_connections_active",
-			Help: "Active RPC (WebSocket) connections. Labels: region, origin " +
-				"(both sourced from request headers / client metadata at connect " +
-				"time). Operator-decided values — bounded only by the set of " +
-				"connecting clients.",
-		}, []string{"region", "origin"}),
+			Help: "Active RPC (WebSocket) connections, labeled by application_id " +
+				"sourced from the app_id query parameter at connect time. " +
+				"Connections without an app_id are bucketed under _DEFAULT. " +
+				"Series for an application_id are deleted once its count drops to 0.",
+		}, []string{"application_id"}),
 		rpcInflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,
 			Name:      "rpc_inflight",
@@ -412,8 +412,15 @@ func (m *runtimeMetricExporter) ObserveRPCDuration(method, path string, success 
 	m.rpcRequestDurationSeconds.WithLabelValues(method, path, result.String()).Observe(duration.Seconds())
 }
 
-func (m *runtimeMetricExporter) SetRPCConnections(region, origin string, count uint32) {
-	m.rpcConnectionsTotal.WithLabelValues(region, origin).Set(float64(count))
+func (m *runtimeMetricExporter) SetRPCConnections(applicationID string, count uint32) {
+	label := getApplicationIDLabelValue(applicationID)
+	if count == 0 {
+		// Shed the series when the bucket empties so unique application_id values
+		// from clients cannot accumulate unbounded gauge labels over time.
+		m.rpcConnectionsTotal.DeleteLabelValues(label)
+		return
+	}
+	m.rpcConnectionsTotal.WithLabelValues(label).Set(float64(count))
 }
 
 func (m *runtimeMetricExporter) IncRPCInflight(method string) {

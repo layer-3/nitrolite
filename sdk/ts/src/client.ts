@@ -540,7 +540,8 @@ export class Client {
   /**
    * Transfer prepares a transfer state to send funds to another wallet address.
    * This method handles two scenarios automatically:
-   * 1. If no channel exists: Creates a new channel with the transfer transition
+   * 1. If no open channel exists, including received off-chain funds before channel creation:
+   *    Creates a new channel with the transfer transition
    * 2. If channel exists: Advances the state with a transfer send transition
    *
    * The returned state is signed by both the user and the node. For existing channels,
@@ -569,11 +570,10 @@ export class Client {
       // Channel doesn't exist
     }
 
-    // homeChannelId is intentionally not checked here: a non-null state with
-    // an undefined homeChannelId is valid — it represents a user who received
-    // funds but has not yet opened a channel. Only enter the creation path when
-    // there is truly no prior state at all.
-    if (!state) {
+    // No open channel path - create channel with transfer. A non-null state
+    // without a homeChannelId represents received off-chain funds before the
+    // user has opened a home channel.
+    if (!state || !state.homeChannelId) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -639,7 +639,8 @@ export class Client {
    * or to acknowledge channel creation without a deposit.
    *
    * This method handles two scenarios automatically:
-   * 1. If no channel exists: Creates a new channel with the acknowledgement transition
+   * 1. If no channel exists, including received off-chain funds before channel creation:
+   *    Creates a new channel with the acknowledgement transition
    * 2. If channel exists: Advances the state with an acknowledgement transition
    *
    * The returned state is signed by both the user and the node.
@@ -663,12 +664,14 @@ export class Client {
       // No state exists
     }
 
-    // homeChannelId is intentionally not checked here: a non-null state with
-    // an undefined homeChannelId is valid — it represents a user who received
-    // funds but has not yet opened a channel. Only enter the creation path when
-    // there is truly no prior state at all.
-    // No channel path - create channel with acknowledgement
-    if (!state) {
+    if (state?.userSig) {
+      throw new Error('state already acknowledged by user');
+    }
+
+    // No open channel path - create channel with acknowledgement. A non-null
+    // state without a homeChannelId represents received off-chain funds before
+    // the user has opened a home channel.
+    if (!state || !state.homeChannelId) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -712,10 +715,6 @@ export class Client {
       newState.nodeSig = nodeSig as Hex;
 
       return newState;
-    }
-
-    if (state.userSig) {
-      throw new Error('state already acknowledged by user');
     }
 
     // Has channel path - submit acknowledgement

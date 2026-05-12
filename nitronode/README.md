@@ -85,7 +85,8 @@ assets:
 |----------|-------------|---------|
 | `NITRONODE_SIGNER_KEY` | Private key for signing node state updates | (Required) |
 | `NITRONODE_DATABASE_DRIVER` | `sqlite` or `postgres` | `sqlite` |
-| `NITRONODE_DATABASE_URL` | Connection string or file path | `nitronode.db` |
+| `NITRONODE_DATABASE_URL` | Postgres DSN/URL or sqlite file path. When set for `postgres`, used verbatim and overrides the individual host/user/password/sslmode fields | `nitronode.db` |
+| `NITRONODE_DATABASE_SSLMODE` | Postgres SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` | `require` |
 | `NITRONODE_LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
 | `NITRONODE_BLOCKCHAIN_RPC_<NAME>` | RPC endpoint for a specific blockchain | (Required) |
 

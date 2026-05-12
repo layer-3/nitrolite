@@ -21,6 +21,9 @@ import (
 //
 // To connect to sqlite, you just need to specify "sqlite" driver.
 // By default it will use in-memory database. You can provide NITRONODE_DATABASE_NAME to use the file.
+//
+// For Postgresql, NITRONODE_DATABASE_URL takes precedence: when set, it is used verbatim
+// and the individual Username/Password/Host/Port/Name/SSLMode fields are ignored.
 type DatabaseConfig struct {
 	URL      string `env:"NITRONODE_DATABASE_URL" env-default:""`
 	Name     string `env:"NITRONODE_DATABASE_NAME" env-default:""`
@@ -30,6 +33,7 @@ type DatabaseConfig struct {
 	Password string `env:"NITRONODE_DATABASE_PASSWORD" env-default:"your-super-secret-and-long-postgres-password"`
 	Host     string `env:"NITRONODE_DATABASE_HOST" env-default:"localhost"`
 	Port     string `env:"NITRONODE_DATABASE_PORT" env-default:"5432"`
+	SSLMode  string `env:"NITRONODE_DATABASE_SSLMODE" env-default:"require"`
 	Retries  int    `env:"NITRONODE_DATABASE_RETRIES" env-default:"5"`
 
 	// Connection pool settings
@@ -131,12 +135,37 @@ func connectToSqlite(cnf DatabaseConfig) (*gorm.DB, error) {
 	return db, nil
 }
 
+// validPostgresSSLModes lists sslmode values accepted by libpq / pgx.
+// See https://www.postgresql.org/docs/current/libpq-ssl.html.
+var validPostgresSSLModes = map[string]struct{}{
+	"disable":     {},
+	"allow":       {},
+	"prefer":      {},
+	"require":     {},
+	"verify-ca":   {},
+	"verify-full": {},
+}
+
 func postgresqlDbUrl(cnf DatabaseConfig) (string, error) {
 	switch cnf.Driver {
 	case "postgres":
+		// URL, when supplied, is used verbatim. The operator owns sslmode, search_path,
+		// and any other parameters encoded in it.
+		if cnf.URL != "" {
+			return cnf.URL, nil
+		}
+
+		sslMode := cnf.SSLMode
+		if sslMode == "" {
+			sslMode = "require"
+		}
+		if _, ok := validPostgresSSLModes[sslMode]; !ok {
+			return "", fmt.Errorf("invalid sslmode %q: must be one of disable, allow, prefer, require, verify-ca, verify-full", sslMode)
+		}
+
 		dsn := fmt.Sprintf(
-			"user=%s password=%s host=%s port=%s dbname=%s sslmode=disable",
-			cnf.Username, cnf.Password, cnf.Host, cnf.Port, cnf.Name,
+			"user=%s password=%s host=%s port=%s dbname=%s sslmode=%s",
+			cnf.Username, cnf.Password, cnf.Host, cnf.Port, cnf.Name, sslMode,
 		)
 
 		if cnf.Schema != "" {

@@ -159,15 +159,8 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 		return rpc.Errorf("failed to apply release transition: %v", err)
 	}
 
-	// Check if we need to sign the state (skip signing if last signed state was a lock)
-	lastSignedState, err := tx.GetLastUserState(receiverWallet, asset, true)
-	if err != nil {
-		return rpc.Errorf("failed to get last signed state: %v", err)
-	}
-
-	// TODO: move to DB query
-	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
-		return rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
+	if err := tx.EnsureNoOngoingEscrowOperation(receiverWallet, asset); err != nil {
+		return rpc.Errorf("cannot issue release receiver state: %v", err)
 	}
 
 	if newState.HomeChannelID != nil {

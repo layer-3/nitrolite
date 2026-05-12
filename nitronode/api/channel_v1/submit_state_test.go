@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -164,7 +165,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	// For issueTransferReceiverState
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
-	mockTxStore.On("GetLastUserState", receiverWallet, asset, true).Return(nil, nil)
+	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		// Verify receiver state
 		return state.UserWallet == receiverWallet &&
@@ -324,17 +325,6 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 		NodeSig:      nil,
 	}
 
-	// Receiver's last signed state has an active escrow channel
-	escrowChannelID := "0xEscrowChannel456"
-	lastSignedReceiverState := core.State{
-		Asset:           asset,
-		UserWallet:      receiverWallet,
-		Epoch:           1,
-		Version:         1,
-		HomeChannelID:   &homeChannelID,
-		EscrowChannelID: &escrowChannelID,
-	}
-
 	// Mock expectations
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil)
@@ -352,7 +342,7 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	// For issueTransferReceiverState - receiver has an active escrow lock
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
-	mockTxStore.On("GetLastUserState", receiverWallet, asset, true).Return(lastSignedReceiverState, nil)
+	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(fmt.Errorf("escrow lock is still ongoing"))
 
 	// Create RPC request
 	rpcState := toRPCState(*incomingSenderState)
@@ -379,7 +369,7 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr, "Expected error when receiver has active escrow lock")
-	assert.Contains(t, respErr.Error(), "last signed state is a lock with escrow channel")
+	assert.Contains(t, respErr.Error(), "escrow lock is still ongoing")
 
 	mockTxStore.AssertExpectations(t)
 }

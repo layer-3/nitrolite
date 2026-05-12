@@ -46,6 +46,11 @@ type Store interface {
 	StoreUserState(state core.State, applicationID string) error
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
 	// App Session key state operations
 	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
 	CountSessionKeysForUser(userAddress string) (uint32, error)

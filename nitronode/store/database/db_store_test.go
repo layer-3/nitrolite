@@ -645,6 +645,170 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
 	})
+
+	const wallet = "0xuser123"
+	const asset = "USDC"
+	const homeChannelID = "0xhomechannel123"
+	const escrowChannelID = "0xescrowchannel456"
+	userSig := "0xusersig"
+	nodeSig := "0xnodesig"
+
+	newHomeChannel := func(version uint64) core.Channel {
+		return core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        wallet,
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      version,
+		}
+	}
+
+	newEscrowChannel := func(version uint64) core.Channel {
+		return core.Channel{
+			ChannelID:         escrowChannelID,
+			UserWallet:        wallet,
+			Asset:             "usdc",
+			Type:              core.ChannelTypeEscrow,
+			BlockchainID:      137,
+			TokenAddress:      "0xtoken456",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      version,
+		}
+	}
+
+	newSignedState := func(version uint64, transitionType core.TransitionType, withEscrow bool) core.State {
+		hc := homeChannelID
+		state := core.State{
+			ID:            "state1",
+			Asset:         asset,
+			UserWallet:    wallet,
+			Epoch:         1,
+			Version:       version,
+			HomeChannelID: &hc,
+			Transition:    core.Transition{Type: transitionType},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(500),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			UserSig: &userSig,
+			NodeSig: &nodeSig,
+		}
+		if withEscrow {
+			ec := escrowChannelID
+			state.EscrowChannelID = &ec
+			state.EscrowLedger = &core.Ledger{
+				UserBalance: decimal.NewFromInt(500),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			}
+		}
+		return state
+	}
+
+	storeState := func(t *testing.T, store DatabaseStore, state core.State) {
+		t.Helper()
+		_, err := store.LockUserState(wallet, asset)
+		require.NoError(t, err)
+		require.NoError(t, store.StoreUserState(state, ""))
+	}
+
+	t.Run("HomeDeposit - home channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		storeState(t, store, newSignedState(1, core.TransitionTypeHomeDeposit, false))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "home deposit is still ongoing")
+	})
+
+	t.Run("HomeWithdrawal - home channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		storeState(t, store, newSignedState(1, core.TransitionTypeHomeWithdrawal, false))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "home withdrawal is still ongoing")
+	})
+
+	t.Run("MutualLock - home channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(newEscrowChannel(2)))
+		storeState(t, store, newSignedState(2, core.TransitionTypeMutualLock, true))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "mutual lock is still ongoing")
+	})
+
+	t.Run("MutualLock - escrow channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(newHomeChannel(2)))
+		storeState(t, store, newSignedState(2, core.TransitionTypeMutualLock, true))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "mutual lock is still ongoing")
+	})
+
+	t.Run("EscrowLock - escrow channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(newHomeChannel(1)))
+		storeState(t, store, newSignedState(1, core.TransitionTypeEscrowLock, true))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow lock is still ongoing")
+	})
+
+	t.Run("EscrowWithdraw - escrow channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(newHomeChannel(4)))
+		storeState(t, store, newSignedState(4, core.TransitionTypeEscrowWithdraw, true))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow withdrawal is still ongoing")
+	})
+
+	t.Run("Migrate - home channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		storeState(t, store, newSignedState(1, core.TransitionTypeMigrate, false))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "home chain migration is still ongoing")
+	})
 }
 
 func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
@@ -820,4 +984,238 @@ func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
 		homeChannelID := "0xhomechannel123"
 		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 99, "0xanything"))
 	})
+}
+
+func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
+	const wallet = "0xuser123"
+	const asset = "USDC"
+	const homeChannelID = "0xhomechannel123"
+	const escrowChannelID = "0xescrowchannel456"
+	const userSig = "0xusersig"
+	const nodeSig = "0xnodesig"
+
+	homeChannel := core.Channel{
+		ChannelID:         homeChannelID,
+		UserWallet:        wallet,
+		Asset:             "usdc",
+		Type:              core.ChannelTypeHome,
+		BlockchainID:      1,
+		TokenAddress:      "0xtoken123",
+		ChallengeDuration: 86400,
+		Nonce:             1,
+		Status:            core.ChannelStatusOpen,
+		StateVersion:      1,
+	}
+
+	newEscrowChannel := func(version uint64) core.Channel {
+		return core.Channel{
+			ChannelID:         escrowChannelID,
+			UserWallet:        wallet,
+			Asset:             "usdc",
+			Type:              core.ChannelTypeEscrow,
+			BlockchainID:      137,
+			TokenAddress:      "0xtoken456",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      version,
+		}
+	}
+
+	newSignedState := func(version uint64, transitionType core.TransitionType, withEscrow bool) core.State {
+		state := core.State{
+			ID:            "state1",
+			Asset:         asset,
+			UserWallet:    wallet,
+			Epoch:         1,
+			Version:       version,
+			HomeChannelID: ptr(homeChannelID),
+			Transition:    core.Transition{Type: transitionType},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(500),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			UserSig: ptr(userSig),
+			NodeSig: ptr(nodeSig),
+		}
+		if withEscrow {
+			state.EscrowChannelID = ptr(escrowChannelID)
+			state.EscrowLedger = &core.Ledger{
+				UserBalance: decimal.NewFromInt(500),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			}
+		}
+		return state
+	}
+
+	storeState := func(t *testing.T, store DatabaseStore, state core.State) {
+		t.Helper()
+		_, err := store.LockUserState(wallet, asset)
+		require.NoError(t, err)
+		require.NoError(t, store.StoreUserState(state, ""))
+	}
+
+	t.Run("No previous state - allow", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.NoError(t, err)
+	})
+
+	t.Run("Non-escrow transition (TransferSend) - allow", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+
+		storeState(t, store, newSignedState(1, core.TransitionTypeTransferSend, false))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.NoError(t, err)
+	})
+
+	t.Run("EscrowLock - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(1)))
+
+		storeState(t, store, newSignedState(1, core.TransitionTypeEscrowLock, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow lock is still ongoing")
+	})
+
+	t.Run("MutualLock - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(1)))
+
+		storeState(t, store, newSignedState(1, core.TransitionTypeMutualLock, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "mutual lock is still ongoing")
+	})
+
+	t.Run("EscrowDeposit - chain caught up - allow", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(2)))
+
+		storeState(t, store, newSignedState(2, core.TransitionTypeEscrowDeposit, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.NoError(t, err)
+	})
+
+	t.Run("EscrowDeposit - chain not synced - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(1)))
+
+		storeState(t, store, newSignedState(2, core.TransitionTypeEscrowDeposit, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow deposit finalization is still ongoing")
+	})
+
+	t.Run("EscrowWithdraw - chain caught up - allow", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(3)))
+
+		storeState(t, store, newSignedState(3, core.TransitionTypeEscrowWithdraw, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.NoError(t, err)
+	})
+
+	t.Run("EscrowWithdraw - chain not synced - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(2)))
+
+		storeState(t, store, newSignedState(3, core.TransitionTypeEscrowWithdraw, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow withdrawal finalization is still ongoing")
+	})
+
+	t.Run("EscrowDeposit - escrow channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+
+		storeState(t, store, newSignedState(2, core.TransitionTypeEscrowDeposit, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow deposit finalization is still ongoing")
+	})
+
+	t.Run("EscrowWithdraw - escrow channel missing from DB - block", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+
+		storeState(t, store, newSignedState(3, core.TransitionTypeEscrowWithdraw, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow withdrawal finalization is still ongoing")
+	})
+
+	t.Run("Unsigned state - ignored", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		require.NoError(t, store.CreateChannel(newEscrowChannel(1)))
+
+		state := newSignedState(2, core.TransitionTypeEscrowLock, true)
+		state.UserSig = nil
+		state.NodeSig = nil
+		storeState(t, store, state)
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.NoError(t, err)
+	})
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

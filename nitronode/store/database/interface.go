@@ -84,6 +84,11 @@ type DatabaseStore interface {
 	// EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
 	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
 	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
 

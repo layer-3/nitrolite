@@ -110,14 +110,8 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 		return nil, err
 	}
 
-	lastSignedState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, true)
-	if err != nil {
-		return nil, rpc.Errorf("failed to get last %s user state for transfer receiver with address %s", senderState.Asset, receiverWallet)
-	}
-
-	// TODO: move to DB query
-	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
-		return nil, rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
+	if err := tx.EnsureNoOngoingEscrowOperation(receiverWallet, senderState.Asset); err != nil {
+		return nil, rpc.Errorf("cannot issue transfer receiver state: %v", err)
 	}
 
 	if newState.HomeChannelID != nil {

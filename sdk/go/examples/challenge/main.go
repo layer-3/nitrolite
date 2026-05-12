@@ -90,6 +90,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get latest state: %v", err)
 	}
+	if preTransferState == nil {
+		log.Fatalf("No signed state available to save")
+	}
 	fmt.Printf("Saved state at version %d (balance: %s USDC)\n\n",
 		preTransferState.Version, preTransferState.HomeLedger.UserBalance)
 

@@ -510,7 +510,7 @@ api:
         - version: v1
           methods:
             - name: get_home_channel
-              description: Retrieve current on-chain home channel information
+              description: Retrieve current on-chain home channel information. Returns a successful response with `channel` omitted when no home channel exists for the wallet/asset pair.
               request:
                 - field_name: wallet
                   type: string
@@ -521,12 +521,11 @@ api:
               response:
                 - field_name: channel
                   type: channel
-                  description: The on-chain channel information
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
+                  description: The on-chain channel information; omitted when no home channel exists for the wallet/asset pair
+                  optional: true
+              errors: []
             - name: get_escrow_channel
-              description: Retrieve current on-chain escrow channel information
+              description: Retrieve current on-chain escrow channel information. Returns a successful response with `channel` omitted when no escrow channel exists for the given ID.
               request:
                 - field_name: escrow_channel_id
                   type: string
@@ -534,10 +533,9 @@ api:
               response:
                 - field_name: channel
                   type: channel
-                  description: The on-chain channel information
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
+                  description: The on-chain channel information; omitted when no escrow channel exists for the given ID
+                  optional: true
+              errors: []
             - name: get_channels
               description: Retrieve all channels for a user with optional filtering
               request:
@@ -570,7 +568,7 @@ api:
                 - message: invalid_parameters
                   description: The request parameters are invalid
             - name: get_latest_state
-              description: Retrieve the current state of the user stored on the Node
+              description: Retrieve the current state of the user stored on the Node. Returns a successful response with `state` omitted when no state is stored for the wallet/asset pair.
               request:
                 - field_name: wallet
                   type: string
@@ -585,10 +583,9 @@ api:
               response:
                 - field_name: state
                   type: state
-                  description: The current state of the user
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
+                  description: The current state of the user; omitted when no state is stored for the wallet/asset pair
+                  optional: true
+              errors: []
             - name: request_creation
               description: Request the creation of a channel from Node
               request:
@@ -733,7 +730,7 @@ api:
 
               errors: []
             - name: get_app_definition
-              description: Retrieve the application definition for a specific app session
+              description: Retrieve the application definition for a specific app session. Returns a successful response with `definition` omitted when no app session exists for the given ID.
               request:
                 - field_name: app_session_id
                   type: string
@@ -741,10 +738,9 @@ api:
               response:
                 - field_name: definition
                   type: app_definition
-                  description: The application definition
-              errors:
-                - message: app_session_not_found
-                  description: The specified app session was not found
+                  description: The application definition; omitted when no app session exists for the given ID
+                  optional: true
+              errors: []
             - name: get_app_sessions
               description: List all application sessions for a participant with optional filtering
               request:

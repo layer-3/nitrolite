@@ -137,7 +137,7 @@ func TestClientV1_ChannelsV1GetHomeChannel(t *testing.T) {
 	client, dialer := setupClient()
 
 	channel := rpc.ChannelsV1GetHomeChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:         testChannelID,
 			UserWallet:        testWalletV1,
 			Type:              "home",
@@ -167,7 +167,7 @@ func TestClientV1_ChannelsV1GetEscrowChannel(t *testing.T) {
 	client, dialer := setupClient()
 
 	channel := rpc.ChannelsV1GetEscrowChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    testChannelID,
 			Type:         "escrow",
 			BlockchainID: testChainIDV1,
@@ -218,7 +218,7 @@ func TestClientV1_ChannelsV1GetLatestState(t *testing.T) {
 	client, dialer := setupClient()
 
 	state := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:         "state123",
 			Asset:      testAssetV1,
 			UserWallet: testWalletV1,
@@ -302,7 +302,7 @@ func TestClientV1_AppSessionsV1GetAppDefinition(t *testing.T) {
 	client, dialer := setupClient()
 
 	definition := rpc.AppSessionsV1GetAppDefinitionResponse{
-		Definition: rpc.AppDefinitionV1{
+		Definition: &rpc.AppDefinitionV1{
 			Application: "game",
 			Participants: []rpc.AppParticipantV1{
 				{WalletAddress: testWalletV1, SignatureWeight: 1},

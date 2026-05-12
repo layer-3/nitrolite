@@ -22,9 +22,11 @@ type ChannelsV1GetHomeChannelRequest struct {
 }
 
 // ChannelsV1GetHomeChannelResponse returns the on-chain channel information.
+// Channel is nil when no home channel exists for the given wallet/asset pair;
+// this is a successful response, not an error.
 type ChannelsV1GetHomeChannelResponse struct {
-	// Channel is the on-chain channel information
-	Channel ChannelV1 `json:"channel"`
+	// Channel is the on-chain channel information, or nil if absent.
+	Channel *ChannelV1 `json:"channel,omitempty"`
 }
 
 // ChannelsV1GetEscrowChannelRequest retrieves current on-chain escrow channel information.
@@ -34,9 +36,11 @@ type ChannelsV1GetEscrowChannelRequest struct {
 }
 
 // ChannelsV1GetEscrowChannelResponse returns the on-chain channel information.
+// Channel is nil when no escrow channel exists for the given ID; this is a
+// successful response, not an error.
 type ChannelsV1GetEscrowChannelResponse struct {
-	// Channel is the on-chain channel information
-	Channel ChannelV1 `json:"channel"`
+	// Channel is the on-chain channel information, or nil if absent.
+	Channel *ChannelV1 `json:"channel,omitempty"`
 }
 
 // ChannelsV1GetChannelsRequest retrieves all channels for a user with optional filtering.
@@ -72,9 +76,11 @@ type ChannelsV1GetLatestStateRequest struct {
 }
 
 // ChannelsV1GetLatestStateResponse returns the current state of the user.
+// State is nil when no state has been stored for the given wallet/asset pair;
+// this is a successful response, not an error.
 type ChannelsV1GetLatestStateResponse struct {
-	// State is the current state of the user
-	State StateV1 `json:"state"`
+	// State is the current state of the user, or nil if absent.
+	State *StateV1 `json:"state,omitempty"`
 }
 
 // ChannelsV1RequestCreationRequest requests the creation of a channel from Node.
@@ -192,9 +198,11 @@ type AppSessionsV1GetAppDefinitionRequest struct {
 }
 
 // AppSessionsV1GetAppDefinitionResponse returns the application definition.
+// Definition is nil when no app session exists for the given ID; this is a
+// successful response, not an error.
 type AppSessionsV1GetAppDefinitionResponse struct {
-	// Definition is the application definition
-	Definition AppDefinitionV1 `json:"definition"`
+	// Definition is the application definition, or nil if absent.
+	Definition *AppDefinitionV1 `json:"definition,omitempty"`
 }
 
 // AppSessionsV1GetAppSessionsRequest lists all application sessions for a participant with optional filtering.

@@ -20,18 +20,14 @@ func (h *Handler) GetLatestState(c *rpc.Context) {
 	}
 	req.Wallet = normalizedWallet
 
-	var state core.State
+	var state *core.State
 	err = h.useStoreInTx(func(tx Store) error {
 		lastState, err := tx.GetLastUserState(req.Wallet, req.Asset, req.OnlySigned)
 		if err != nil {
 			return rpc.Errorf("failed to get last user state: %v", err)
 		}
 
-		if lastState == nil {
-			return rpc.Errorf("channel not found")
-		}
-
-		state = *lastState
+		state = lastState
 		return nil
 	})
 
@@ -40,8 +36,10 @@ func (h *Handler) GetLatestState(c *rpc.Context) {
 		return
 	}
 
-	response := rpc.ChannelsV1GetLatestStateResponse{
-		State: coreStateToRPC(state),
+	response := rpc.ChannelsV1GetLatestStateResponse{}
+	if state != nil {
+		rpcState := coreStateToRPC(*state)
+		response.State = &rpcState
 	}
 
 	payload, err := rpc.NewPayload(response)

@@ -41,8 +41,11 @@ export interface ChannelsV1GetHomeChannelRequest {
 }
 
 export interface ChannelsV1GetHomeChannelResponse {
-  /** On-chain channel information */
-  channel: ChannelV1;
+  /**
+   * On-chain channel information, or null/absent when no home channel exists
+   * for the requested wallet/asset pair. Absence is a successful response.
+   */
+  channel?: ChannelV1 | null;
 }
 
 export interface ChannelsV1GetEscrowChannelRequest {
@@ -51,8 +54,11 @@ export interface ChannelsV1GetEscrowChannelRequest {
 }
 
 export interface ChannelsV1GetEscrowChannelResponse {
-  /** On-chain channel information */
-  channel: ChannelV1;
+  /**
+   * On-chain channel information, or null/absent when no escrow channel exists
+   * for the requested ID. Absence is a successful response.
+   */
+  channel?: ChannelV1 | null;
 }
 
 export interface ChannelsV1GetChannelsRequest {
@@ -85,8 +91,11 @@ export interface ChannelsV1GetLatestStateRequest {
 }
 
 export interface ChannelsV1GetLatestStateResponse {
-  /** Current state of the user */
-  state: StateV1;
+  /**
+   * Current state of the user, or null/absent when no state is stored for the
+   * requested wallet/asset pair. Absence is a successful response.
+   */
+  state?: StateV1 | null;
 }
 
 export interface ChannelsV1RequestCreationRequest {
@@ -184,8 +193,11 @@ export interface AppSessionsV1GetAppDefinitionRequest {
 }
 
 export interface AppSessionsV1GetAppDefinitionResponse {
-  /** Application definition */
-  definition: AppDefinitionV1;
+  /**
+   * Application definition, or null/absent when no app session exists for the
+   * requested ID. Absence is a successful response.
+   */
+  definition?: AppDefinitionV1 | null;
 }
 
 export interface AppSessionsV1GetAppSessionsRequest {

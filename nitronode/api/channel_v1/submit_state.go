@@ -70,6 +70,15 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 		// FIXME:
 		// var extraTransitions []core.Transition
 		switch incomingTransition.Type {
+		case core.TransitionTypeMutualLock, core.TransitionTypeEscrowLock:
+			// Reject before node signs. Home channel must be materialized onchain
+			// before co-signing escrow transitions — onchain _isChannelHomeChain()
+			// returns false while status == VOID, so initiateEscrowDeposit() on the
+			// home chain would not take the home-chain path until createChannel() runs.
+			if *channelStatus != core.ChannelStatusOpen {
+				return rpc.Errorf("home channel is not materialized onchain")
+			}
+			return rpc.Errorf("transition is not supported yet")
 		case core.TransitionTypeEscrowDeposit, core.TransitionTypeEscrowWithdraw, core.TransitionTypeMigrate:
 			return rpc.Errorf("transition is not supported yet")
 			// latestStateVersion := currentState.Version

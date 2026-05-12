@@ -14,6 +14,7 @@ ALTER TABLE channel_session_key_states_v1
 -- Pre-flight: refuse the migration if duplicate (session_key, kind) rows are present in
 -- current_session_key_states_v1. Such rows are evidence of cross-wallet collisions that
 -- the old code path allowed; manual remediation is required before the constraint adds.
+-- +goose StatementBegin
 DO $$
 DECLARE
     dup_count bigint;
@@ -30,6 +31,7 @@ BEGIN
         RAISE EXCEPTION 'duplicate (session_key, kind) rows detected (%); manual remediation required before applying constraint', dup_count;
     END IF;
 END $$;
+-- +goose StatementEnd
 
 ALTER TABLE current_session_key_states_v1
     ADD CONSTRAINT current_session_key_states_v1_key_kind_uniq UNIQUE (session_key, kind);

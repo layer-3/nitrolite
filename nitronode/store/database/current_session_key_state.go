@@ -28,10 +28,15 @@ const (
 // Reads of get_last_key_states JOIN this table to the corresponding history table
 // (channel_session_key_states_v1 or app_session_key_states_v1) on
 // (user_address, session_key, version), bounding per-request DB work to O(distinct keys).
+//
+// The uniqueIndex on (session_key, kind) mirrors the postgres constraint added by
+// 20260508000000_session_key_ownership_constraints.sql so AutoMigrate (sqlite) enforces the
+// same one-owner-per-key invariant that LockSessionKeyState relies on. The index name
+// matches the postgres constraint name so both paths converge on a single source of truth.
 type CurrentSessionKeyStateV1 struct {
 	UserAddress string         `gorm:"column:user_address;primaryKey;size:42"`
-	SessionKey  string         `gorm:"column:session_key;primaryKey;size:42"`
-	Kind        SessionKeyKind `gorm:"column:kind;primaryKey;type:smallint"`
+	SessionKey  string         `gorm:"column:session_key;primaryKey;size:42;uniqueIndex:current_session_key_states_v1_key_kind_uniq,priority:1"`
+	Kind        SessionKeyKind `gorm:"column:kind;primaryKey;type:smallint;uniqueIndex:current_session_key_states_v1_key_kind_uniq,priority:2"`
 	Version     uint64         `gorm:"column:version;not null"`
 	UpdatedAt   time.Time      `gorm:"column:updated_at"`
 }

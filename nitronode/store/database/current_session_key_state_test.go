@@ -15,6 +15,48 @@ func TestCurrentSessionKeyStateV1_TableName(t *testing.T) {
 	assert.Equal(t, "current_session_key_states_v1", CurrentSessionKeyStateV1{}.TableName())
 }
 
+// TestCurrentSessionKeyStateV1_UniqueKeyKindConstraint pins the (session_key, kind) uniqueness
+// invariant at the database layer on every supported dialect. Postgres gets it from migration
+// 20260508000000; sqlite gets it from the uniqueIndex gorm tag via AutoMigrate. Without the
+// tag, sqlite would silently accept two pointer rows for the same key/kind under different
+// wallets, breaking LockSessionKeyState's read-first-then-check ownership flow.
+func TestCurrentSessionKeyStateV1_UniqueKeyKindConstraint(t *testing.T) {
+	db, cleanup := SetupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	first := CurrentSessionKeyStateV1{
+		UserAddress: testUser1,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindAppSession,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	require.NoError(t, db.Create(&first).Error)
+
+	// Foreign wallet attempting the same (session_key, kind) must be rejected at the
+	// database layer, not just by application logic.
+	collision := CurrentSessionKeyStateV1{
+		UserAddress: testUser2,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindAppSession,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	err := db.Create(&collision).Error
+	require.Error(t, err)
+
+	// Same (session_key) under a different kind is allowed — the constraint is composite.
+	otherKind := CurrentSessionKeyStateV1{
+		UserAddress: testUser2,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindChannel,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	require.NoError(t, db.Create(&otherKind).Error)
+}
+
 func TestDBStore_LockSessionKeyState(t *testing.T) {
 	t.Run("Seeds row at version=0 on first call", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)

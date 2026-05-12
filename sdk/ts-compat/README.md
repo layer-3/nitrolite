@@ -457,7 +457,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 ### Enums
 
 - `RPCMethod` — RPC method names (`Ping`, `GetConfig`, `GetChannels`, etc.)
-- `RPCChannelStatus` — Channel status values (`Open`, `Closed`, `Resizing`, `Challenged`)
+- `RPCChannelStatus` — Channel status values (`Open`, `Closed`, `Resizing`, `Challenged`, `Closing`)
 
 ### Wire Types
 

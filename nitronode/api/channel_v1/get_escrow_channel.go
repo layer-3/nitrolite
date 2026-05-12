@@ -20,11 +20,6 @@ func (h *Handler) GetEscrowChannel(c *rpc.Context) {
 		if err != nil {
 			return rpc.Errorf("failed to get channel: %v", err)
 		}
-
-		if channel == nil {
-			return rpc.Errorf("channel_not_found")
-		}
-
 		return nil
 	})
 
@@ -33,8 +28,10 @@ func (h *Handler) GetEscrowChannel(c *rpc.Context) {
 		return
 	}
 
-	response := rpc.ChannelsV1GetEscrowChannelResponse{
-		Channel: coreChannelToRPC(*channel),
+	response := rpc.ChannelsV1GetEscrowChannelResponse{}
+	if channel != nil {
+		rpcChannel := coreChannelToRPC(*channel)
+		response.Channel = &rpcChannel
 	}
 
 	payload, err := rpc.NewPayload(response)

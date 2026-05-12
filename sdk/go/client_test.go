@@ -23,7 +23,7 @@ func TestClient_GetHomeChannel(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetHomeChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    "0xChannelID",
 			UserWallet:   "0xWallet",
 			Type:         "home",
@@ -51,7 +51,7 @@ func TestClient_GetEscrowChannel(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetEscrowChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    "0xEscrowID",
 			UserWallet:   "0xWallet",
 			Type:         "escrow",
@@ -79,7 +79,7 @@ func TestClient_GetLatestState(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:         "0xStateID",
 			Epoch:      "1",
 			Version:    "1",
@@ -198,7 +198,7 @@ func TestClient_GetAppDefinition(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.AppSessionsV1GetAppDefinitionResponse{
-		Definition: rpc.AppDefinitionV1{
+		Definition: &rpc.AppDefinitionV1{
 			Application:  "0xApp",
 			Participants: []rpc.AppParticipantV1{},
 			Nonce:        "1",
@@ -274,7 +274,7 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 	homeChannelID := "0xHomeChannel"
 	// Mock latest state
 	stateResp := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:            "0xStateID",
 			Epoch:         "1",
 			Version:       "1",

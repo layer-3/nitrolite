@@ -636,6 +636,10 @@ func (o *Operator) getHomeChannel(ctx context.Context, wallet, asset string) {
 		fmt.Printf("ERROR: Failed to get home channel: %v\n", err)
 		return
 	}
+	if channel == nil {
+		fmt.Printf("No home channel found for %s (%s)\n", wallet, asset)
+		return
+	}
 
 	typeStr := "unknown"
 	switch channel.Type {
@@ -673,6 +677,10 @@ func (o *Operator) getEscrowChannel(ctx context.Context, escrowChannelID string)
 	channel, err := o.client.GetEscrowChannel(ctx, escrowChannelID)
 	if err != nil {
 		fmt.Printf("ERROR: Failed to get escrow channel: %v\n", err)
+		return
+	}
+	if channel == nil {
+		fmt.Printf("No escrow channel found with ID %s\n", escrowChannelID)
 		return
 	}
 
@@ -832,6 +840,10 @@ func (o *Operator) getLatestState(ctx context.Context, wallet, asset string) {
 	state, err := o.client.GetLatestState(ctx, wallet, asset, false)
 	if err != nil {
 		fmt.Printf("ERROR: Failed to get state: %v\n", err)
+		return
+	}
+	if state == nil {
+		fmt.Printf("No state found for %s (%s)\n", wallet, asset)
 		return
 	}
 

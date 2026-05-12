@@ -11,12 +11,13 @@ const HOME_CHANNEL_ID = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const USER_SIGNATURE = '0x00';
 const NODE_SIGNATURE = '0x01';
 
-function createHighLevelClient(latestState?: core.State, latestStateError?: Error) {
+function createHighLevelClient(latestState?: core.State | null, latestStateError?: Error) {
     const getLatestState = jest.fn();
     if (latestStateError) {
         getLatestState.mockRejectedValue(latestStateError);
     } else {
-        getLatestState.mockResolvedValue(latestState);
+        // Default to null (absence) when no state provided.
+        getLatestState.mockResolvedValue(latestState ?? null);
     }
 
     const client = Object.create(Client.prototype) as any;
@@ -138,8 +139,8 @@ describe('Client.getOnChainBalance', () => {
 });
 
 describe('Client.acknowledge', () => {
-    it('creates a channel with acknowledgement when latest state lookup fails', async () => {
-        const client = createHighLevelClient(undefined, new Error('state not found'));
+    it('creates a channel with acknowledgement when no latest state exists', async () => {
+        const client = createHighLevelClient(null);
 
         const state = await client.acknowledge('usdc');
 
@@ -206,8 +207,8 @@ describe('Client.acknowledge', () => {
 });
 
 describe('Client.transfer', () => {
-    it('creates a channel with transfer when latest state lookup fails', async () => {
-        const client = createHighLevelClient(undefined, new Error('state not found'));
+    it('creates a channel with transfer when no latest state exists', async () => {
+        const client = createHighLevelClient(null);
         const amount = new Decimal(1);
 
         const state = await client.transfer(RECIPIENT_WALLET, 'usdc', amount);

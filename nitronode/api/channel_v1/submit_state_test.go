@@ -1475,6 +1475,14 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 	mockTxStore.On("EnsureNoOngoingStateTransitions", userWallet, asset).Return(nil)
 
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
+	openChannel := &core.Channel{
+		ChannelID: homeChannelID,
+		Status:    core.ChannelStatusOpen,
+	}
+	mockTxStore.On("GetChannelByID", homeChannelID).Return(openChannel, nil)
+	mockTxStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == homeChannelID && ch.Status == core.ChannelStatusClosing
+	})).Return(nil)
 	mockTxStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
 		return tx.TxType == core.TransactionTypeFinalize &&
 			tx.FromAccount == userWallet &&

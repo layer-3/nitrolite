@@ -99,6 +99,21 @@ func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, err
 	return databaseChannelToCore(&dbChannel), nil
 }
 
+// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) has a
+// status other than Closed, meaning a channel lifecycle is still in progress.
+func (s *DBStore) HasNonClosedHomeChannel(wallet, asset string) (bool, error) {
+	var count int64
+	err := s.db.Model(&Channel{}).
+		Where("user_wallet = ? AND asset = ? AND type = ? AND status != ?",
+			strings.ToLower(wallet), strings.ToLower(asset),
+			core.ChannelTypeHome, core.ChannelStatusClosed).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check non-closed home channel: %w", err)
+	}
+	return count > 0, nil
+}
+
 // CheckActiveChannel verifies if a user has an active home channel for the given asset
 // and returns its approved signature validators along with the channel status.
 // "Active" includes Void (DB-only, awaiting onchain confirmation) and Open (materialized

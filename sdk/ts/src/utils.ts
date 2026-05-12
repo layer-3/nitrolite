@@ -120,6 +120,8 @@ function parseChannelStatus(status: string): core.ChannelStatus {
       return core.ChannelStatus.Open;
     case 'challenged':
       return core.ChannelStatus.Challenged;
+    case 'closing':
+      return core.ChannelStatus.Closing;
     case 'closed':
       return core.ChannelStatus.Closed;
     default:

@@ -91,6 +91,7 @@ func TestRequestCreation_Success(t *testing.T) {
 	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil).Once()
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil).Once()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("CreateChannel", mock.MatchedBy(func(channel core.Channel) bool {
@@ -245,6 +246,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil).Once()
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil).Once()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("CreateChannel", mock.MatchedBy(func(channel core.Channel) bool {
@@ -521,4 +523,101 @@ func TestRequestCreation_ChallengeTooHigh(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "challenge")
 	assert.Contains(t, err.Error(), "at most")
+}
+
+// TestRequestCreation_NonClosedChannelRejection verifies the security gate that prevents a
+// user from opening a new channel while a prior channel lifecycle is still in progress
+// (e.g., Closing after off-chain Finalize, or Open/Challenged). This is the primary
+// protection against the MF-C02 epoch-rebinding vulnerability.
+func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     uint32(3600),
+		maxChallenge:     uint32(604800),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	tokenAddress := "0xTokenAddress"
+	blockchainID := uint64(1)
+	nonce := uint64(99)
+	challenge := uint32(86400)
+
+	homeChannelID, err := core.GetHomeChannelID(nodeAddress, userWallet, asset, nonce, challenge, "0x03")
+	require.NoError(t, err)
+
+	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
+
+	// Gate fires: a non-closed channel exists (e.g., the channel is Closing after off-chain Finalize).
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(true, nil).Once()
+
+	reqPayload := rpc.ChannelsV1RequestCreationRequest{
+		State: rpc.StateV1{
+			ID:            core.GetStateID(userWallet, asset, 1, 1),
+			UserWallet:    userWallet,
+			Asset:         asset,
+			Epoch:         "1",
+			Version:       "1",
+			HomeChannelID: &homeChannelID,
+			Transition:    rpc.TransitionV1{Amount: "100"},
+			HomeLedger: rpc.LedgerV1{
+				TokenAddress: tokenAddress,
+				BlockchainID: "1",
+				UserBalance:  "100",
+				UserNetFlow:  "100",
+				NodeBalance:  "0",
+				NodeNetFlow:  "0",
+			},
+		},
+		ChannelDefinition: rpc.ChannelDefinitionV1{
+			Nonce:                 strconv.FormatUint(nonce, 10),
+			Challenge:             challenge,
+			ApprovedSigValidators: "0x03",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{
+			RequestID: 1,
+			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
+			Payload:   payload,
+		},
+	}
+
+	handler.RequestCreation(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.Error(t, respErr)
+	assert.Contains(t, respErr.Error(), "not yet closed")
+
+	mockTxStore.AssertExpectations(t)
+	// GetLastUserState, CreateChannel, StoreUserState must NOT be called.
+	mockTxStore.AssertNotCalled(t, "GetLastUserState", mock.Anything, mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 }

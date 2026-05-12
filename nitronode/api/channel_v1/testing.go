@@ -97,6 +97,16 @@ func (m *MockStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, e
 	return args.Get(0).(*core.Channel), args.Error(1)
 }
 
+func (m *MockStore) UpdateChannel(channel core.Channel) error {
+	args := m.Called(channel)
+	return args.Error(0)
+}
+
+func (m *MockStore) HasNonClosedHomeChannel(wallet, asset string) (bool, error) {
+	args := m.Called(wallet, asset)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockStore) GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error) {
 	args := m.Called(wallet, status, asset, channelType, limit, offset)
 	if args.Get(0) == nil {

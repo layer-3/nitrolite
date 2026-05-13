@@ -105,6 +105,23 @@ contract ChannelHubTest_createChannel is ChannelHubTest_Base {
         );
     }
 
+    function test_createChannel_allowsMaxChallengeDuration() public {
+        def.challengeDuration = cHub.MAX_CHALLENGE_DURATION();
+        bytes32 maxDurationChannelId = Utils.getChannelId(def, CHANNEL_HUB_VERSION);
+        State memory state = mutualSignStateBothWithEcdsaValidator(initialDepositState, maxDurationChannelId, ALICE_PK);
+
+        vm.prank(alice);
+        cHub.createChannel(def, state);
+
+        verifyChannelData(
+            maxDurationChannelId,
+            ChannelStatus.OPERATING,
+            0,
+            0,
+            "Channel status should be OPERATING when challenge duration is the contract max"
+        );
+    }
+
     // ========== Revert: createChannel on existing channel ==========
 
     function _createDefaultChannel() internal {
@@ -164,6 +181,28 @@ contract ChannelHubTest_createChannel is ChannelHubTest_Base {
         state.intent = StateIntent.CLOSE;
 
         vm.expectRevert(ChannelHub.IncorrectStateIntent.selector);
+        cHub.createChannel(def, state);
+    }
+
+    // ========== Challenge duration ==========
+
+    function test_revert_ifChallengeDurationAboveMax() public {
+        def.challengeDuration = cHub.MAX_CHALLENGE_DURATION() + 1;
+        bytes32 tooLongChannelId = Utils.getChannelId(def, CHANNEL_HUB_VERSION);
+        State memory state = mutualSignStateBothWithEcdsaValidator(initialDepositState, tooLongChannelId, ALICE_PK);
+
+        vm.prank(alice);
+        vm.expectRevert(ChannelHub.IncorrectChallengeDuration.selector);
+        cHub.createChannel(def, state);
+    }
+
+    function test_revert_ifChallengeDurationBelowMin() public {
+        def.challengeDuration = cHub.MIN_CHALLENGE_DURATION() - 1;
+        bytes32 tooShortChannelId = Utils.getChannelId(def, CHANNEL_HUB_VERSION);
+        State memory state = mutualSignStateBothWithEcdsaValidator(initialDepositState, tooShortChannelId, ALICE_PK);
+
+        vm.prank(alice);
+        vm.expectRevert(ChannelHub.IncorrectChallengeDuration.selector);
         cHub.createChannel(def, state);
     }
 

@@ -164,6 +164,7 @@ contract ChannelHub is ReentrancyGuard {
 
     // TODO: estimate these values better
     uint32 public constant MIN_CHALLENGE_DURATION = 1 days;
+    uint32 public constant MAX_CHALLENGE_DURATION = 7 days;
 
     uint32 public constant ESCROW_DEPOSIT_UNLOCK_DELAY = 3 hours;
 
@@ -1344,7 +1345,10 @@ contract ChannelHub is ReentrancyGuard {
         require(user != address(0), InvalidAddress());
         require(def.node == NODE, IncorrectNode());
         require(user != NODE, AddressCollision(user));
-        require(def.challengeDuration >= MIN_CHALLENGE_DURATION, IncorrectChallengeDuration());
+        require(
+            def.challengeDuration >= MIN_CHALLENGE_DURATION && def.challengeDuration <= MAX_CHALLENGE_DURATION,
+            IncorrectChallengeDuration()
+        );
     }
 
     /// @dev Returns true when the channel is active and considers the current chain its home chain.

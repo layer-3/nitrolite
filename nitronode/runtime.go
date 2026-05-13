@@ -32,6 +32,11 @@ var embedMigrations embed.FS
 
 var Version = "v1.0.0" // set at build time with -ldflags "-X main.Version=x.y.z"
 
+const (
+	channelHubMinChallengeDuration uint32 = 24 * 60 * 60
+	channelHubMaxChallengeDuration uint32 = 7 * 24 * 60 * 60
+)
+
 type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
@@ -106,6 +111,31 @@ type ValidationLimits struct {
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 
+func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
+	if minChallenge < channelHubMinChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be at least %d seconds, got %d",
+			channelHubMinChallengeDuration,
+			minChallenge,
+		)
+	}
+	if maxChallenge > channelHubMaxChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION must be at most %d seconds, got %d",
+			channelHubMaxChallengeDuration,
+			maxChallenge,
+		)
+	}
+	if minChallenge > maxChallenge {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be <= NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION, got min=%d max=%d",
+			minChallenge,
+			maxChallenge,
+		)
+	}
+	return nil
+}
+
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
 	closers := []func() error{} // collect closer functions for resources that need cleanup
@@ -125,6 +155,9 @@ func InitBackbone() *Backbone {
 	var conf FullConfig
 	if err := cleanenv.ReadEnv(&conf); err != nil {
 		logger.Fatal("failed to read env", "err", err)
+	}
+	if err := validateChannelChallengeConfig(conf.ChannelMinChallengeDuration, conf.ChannelMaxChallengeDuration); err != nil {
+		logger.Fatal("invalid channel challenge duration config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)

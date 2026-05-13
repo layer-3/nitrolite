@@ -36,7 +36,26 @@ END $$;
 ALTER TABLE current_session_key_states_v1
     ADD CONSTRAINT current_session_key_states_v1_key_kind_uniq UNIQUE (session_key, kind);
 
+-- Fail closed at the DB layer for new history rows during rolling deploys: a pre-MF-H02 binary
+-- (already running the MF-H01 schema where current_session_key_states_v1 exists) would happily
+-- insert history rows without session_key_sig, and the new GetAppSessionKeyOwner/GetChannelSessionKeyOwner
+-- lookups would then trust those unproven rows as legitimate owners. NOT VALID skips the legacy
+-- backfill scan so pre-existing rows are not blocked; only future inserts are checked.
+ALTER TABLE app_session_key_states_v1
+    ADD CONSTRAINT app_session_key_states_v1_session_key_sig_present_chk
+    CHECK (session_key_sig IS NOT NULL AND session_key_sig <> '') NOT VALID;
+
+ALTER TABLE channel_session_key_states_v1
+    ADD CONSTRAINT channel_session_key_states_v1_session_key_sig_present_chk
+    CHECK (session_key_sig IS NOT NULL AND session_key_sig <> '') NOT VALID;
+
 -- +goose Down
+ALTER TABLE channel_session_key_states_v1
+    DROP CONSTRAINT IF EXISTS channel_session_key_states_v1_session_key_sig_present_chk;
+
+ALTER TABLE app_session_key_states_v1
+    DROP CONSTRAINT IF EXISTS app_session_key_states_v1_session_key_sig_present_chk;
+
 ALTER TABLE current_session_key_states_v1
     DROP CONSTRAINT IF EXISTS current_session_key_states_v1_key_kind_uniq;
 

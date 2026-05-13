@@ -135,6 +135,8 @@ func channelStatusToString(s core.ChannelStatus) string {
 		return "open"
 	case core.ChannelStatusChallenged:
 		return "challenged"
+	case core.ChannelStatusClosing:
+		return "closing"
 	case core.ChannelStatusClosed:
 		return "closed"
 	default:
@@ -224,23 +226,25 @@ func unmapChannelSessionKeyStateV1(state *rpc.ChannelSessionKeyStateV1) (core.Ch
 	}
 
 	return core.ChannelSessionKeyStateV1{
-		UserAddress: strings.ToLower(state.UserAddress),
-		SessionKey:  strings.ToLower(state.SessionKey),
-		Version:     version,
-		Assets:      assets,
-		ExpiresAt:   time.Unix(expiresAtUnix, 0),
-		UserSig:     state.UserSig,
+		UserAddress:   strings.ToLower(state.UserAddress),
+		SessionKey:    strings.ToLower(state.SessionKey),
+		Version:       version,
+		Assets:        assets,
+		ExpiresAt:     time.Unix(expiresAtUnix, 0),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}, nil
 }
 
 // mapChannelSessionKeyStateV1 converts a core.ChannelSessionKeyStateV1 to an RPC ChannelSessionKeyStateV1.
 func mapChannelSessionKeyStateV1(state *core.ChannelSessionKeyStateV1) rpc.ChannelSessionKeyStateV1 {
 	return rpc.ChannelSessionKeyStateV1{
-		UserAddress: state.UserAddress,
-		SessionKey:  state.SessionKey,
-		Version:     strconv.FormatUint(state.Version, 10),
-		Assets:      state.Assets,
-		ExpiresAt:   strconv.FormatInt(state.ExpiresAt.Unix(), 10),
-		UserSig:     state.UserSig,
+		UserAddress:   state.UserAddress,
+		SessionKey:    state.SessionKey,
+		Version:       strconv.FormatUint(state.Version, 10),
+		Assets:        state.Assets,
+		ExpiresAt:     strconv.FormatInt(state.ExpiresAt.Unix(), 10),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}
 }

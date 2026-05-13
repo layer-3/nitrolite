@@ -5,9 +5,10 @@ import (
 	"sync"
 )
 
-const defaultConnectionRegion = "default"
-
-type ObserveConnectionsFn func(region, origin string, count uint32)
+// ObserveConnectionsFn is invoked on connect and disconnect with the current per-application
+// connection count. A count of 0 signals that the bucket is empty and the observer should
+// shed any per-label state (e.g., delete the Prometheus gauge series) to bound cardinality.
+type ObserveConnectionsFn func(applicationID string, count uint32)
 
 // ConnectionHub provides centralized management of all active RPC connections.
 // It maintains thread-safe mappings between connection IDs and Connection instances,
@@ -28,9 +29,9 @@ type ConnectionHub struct {
 	// mu protects concurrent access to the maps
 	mu sync.RWMutex
 
-	// sourceMap is an optional mapping of connection sources (e.g., IP addresses or regions)
-	sourceMap map[string]uint32
-	// observeConnections is a callback function to monitor connection counts by region
+	// appConnCount tracks active connection counts keyed by application_id (may be empty string)
+	appConnCount map[string]uint32
+	// observeConnections is a callback function to report per-application connection counts
 	observeConnections ObserveConnectionsFn
 }
 
@@ -41,7 +42,7 @@ func NewConnectionHub(observeConnections ObserveConnectionsFn) *ConnectionHub {
 	return &ConnectionHub{
 		connections:        make(map[string]Connection),
 		authMapping:        make(map[string]map[string]bool),
-		sourceMap:          make(map[string]uint32),
+		appConnCount:       make(map[string]uint32),
 		observeConnections: observeConnections,
 	}
 }
@@ -60,18 +61,23 @@ func (hub *ConnectionHub) Add(conn Connection) error {
 	connID := conn.ConnectionID()
 
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 
 	// If the connection already exists, return an error
 	if _, exists := hub.connections[connID]; exists {
+		hub.mu.Unlock()
 		return fmt.Errorf("connection with ID %s already exists", connID)
 	}
 
 	hub.connections[connID] = conn
 
-	sourceID := getSourceID(conn.Origin())
-	hub.sourceMap[sourceID]++
-	hub.observeConnections(defaultConnectionRegion, conn.Origin(), uint32(hub.sourceMap[sourceID]))
+	appID := conn.ApplicationID()
+	hub.appConnCount[appID]++
+	count := hub.appConnCount[appID]
+	hub.mu.Unlock()
+
+	// Invoke the observer outside the lock: SetRPCConnections takes Prometheus-internal
+	// mutexes, and holding hub.mu across that would serialize readers (including Publish).
+	hub.observeConnections(appID, count)
 
 	return nil
 }
@@ -103,22 +109,33 @@ func (hub *ConnectionHub) Get(connID string) Connection {
 // This method is safe for concurrent access.
 func (hub *ConnectionHub) Remove(connID string) {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 
 	conn, exists := hub.connections[connID]
 	if !exists {
+		hub.mu.Unlock()
 		return // No connection to remove
 	}
 	delete(hub.connections, connID)
 
-	sourceID := getSourceID(conn.Origin())
-	if count, exists := hub.sourceMap[sourceID]; exists && count > 0 {
-		hub.sourceMap[sourceID]--
-		if hub.sourceMap[sourceID] == 0 {
-			delete(hub.sourceMap, sourceID)
+	appID := conn.ApplicationID()
+	count, tracked := hub.appConnCount[appID]
+	changed := false
+	if tracked && count > 0 {
+		hub.appConnCount[appID]--
+		count = hub.appConnCount[appID]
+		if count == 0 {
+			delete(hub.appConnCount, appID)
 		}
+		changed = true
 	}
-	hub.observeConnections(defaultConnectionRegion, conn.Origin(), uint32(hub.sourceMap[sourceID]))
+	hub.mu.Unlock()
+
+	// Only notify the observer when the bucket actually changed; otherwise we would
+	// emit DeleteLabelValues for an app_id the gauge never tracked. Invoke outside
+	// hub.mu to avoid serializing readers behind Prometheus-internal locks.
+	if changed {
+		hub.observeConnections(appID, count)
+	}
 }
 
 // Publish broadcasts a message to all active connections for a specific user.
@@ -153,6 +170,3 @@ func (hub *ConnectionHub) Publish(userID string, response []byte) {
 	}
 }
 
-func getSourceID(origin string) string {
-	return origin
-}

@@ -17,7 +17,11 @@ contract MalformedReturningERC20 is ERC20 {
         // Return only 1 byte instead of 32 (malformed) WITHOUT actually transferring
         // This simulates a malicious/buggy token that returns invalid data
         assembly {
-            mstore(0, 1)
+            // mstore8 writes a single byte (0x01) to address 0.
+            // mstore(0, 1) would write the value 1 as a 32-byte big-endian word,
+            // placing 0x01 at address 31 and 0x00 at address 0 — so return(0, 1)
+            // would yield 0x00, not 0x01. mstore8 avoids this by writing exactly one byte.
+            mstore8(0, 1)
             return(0, 1)
         }
     }
@@ -26,7 +30,11 @@ contract MalformedReturningERC20 is ERC20 {
         // Return only 1 byte instead of 32 (malformed) WITHOUT actually transferring
         // This simulates a malicious/buggy token that returns invalid data
         assembly {
-            mstore(0, 1)
+            // mstore8 writes a single byte (0x01) to address 0.
+            // mstore(0, 1) would write the value 1 as a 32-byte big-endian word,
+            // placing 0x01 at address 31 and 0x00 at address 0 — so return(0, 1)
+            // would yield 0x00, not 0x01. mstore8 avoids this by writing exactly one byte.
+            mstore8(0, 1)
             return(0, 1)
         }
     }

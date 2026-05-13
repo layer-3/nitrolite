@@ -46,11 +46,25 @@ type DatabaseStore interface {
 	GetChannelByID(channelID string) (*core.Channel, error)
 
 	// GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
+	// "Active" includes both Void (DB-only) and Open (materialized onchain).
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
-	// CheckOpenChannel verifies if a user has an active channel for the given asset
-	// and returns the approved signature validators if such a channel exists.
-	CheckOpenChannel(wallet, asset string) (string, bool, error)
+	// GetNotClosedHomeChannel retrieves the home channel for a user's wallet and asset
+	// regardless of status, as long as it has not reached ChannelStatusClosed. Intended
+	// for read paths (e.g. GetHomeChannel RPC) that must remain functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
+
+	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) exists
+	// with a status other than Closed, indicating an in-progress channel lifecycle.
+	HasNonClosedHomeChannel(wallet, asset string) (bool, error)
 
 	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
 	UpdateChannel(channel core.Channel) error
@@ -80,6 +94,14 @@ type DatabaseStore interface {
 	// EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
+	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
+	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+
 	// --- Blockchain Action Operations ---
 
 	// ScheduleInitiateEscrowWithdrawal queues a blockchain action to initiate withdrawal.
@@ -89,6 +111,10 @@ type DatabaseStore interface {
 	// ScheduleCheckpoint schedules a checkpoint operation for a home channel state.
 	// This queues the state to be submitted on-chain to update the channel's on-chain state.
 	ScheduleCheckpoint(stateID string, chainID uint64) error
+
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
 
 	// ScheduleFinalizeEscrowDeposit schedules a checkpoint for an escrow deposit operation.
 	// This queues the state to be submitted on-chain to finalize an escrow deposit.
@@ -160,6 +186,18 @@ type DatabaseStore interface {
 	// RecordLedgerEntry logs a movement of funds within the internal ledger.
 	RecordLedgerEntry(userWallet, accountID, asset string, amount decimal.Decimal) error
 
+	// --- Session Key State Pointer Operations ---
+
+	// LockSessionKeyState seeds the pointer row for (user, session_key, kind) if absent and
+	// locks the (session_key, kind) row for the surrounding transaction. Returns the latest
+	// stored version for the caller's row, or ErrSessionKeyNotAllowed if the key is bound to
+	// a different wallet for this kind.
+	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error)
+
+	// CountSessionKeysForUser returns the number of distinct session keys recorded for the
+	// wallet across both kinds. Used to enforce the per-user cap at submit time.
+	CountSessionKeysForUser(userAddress string) (uint32, error)
+
 	// --- App Session Key State Operations ---
 
 	// StoreAppSessionKeyState stores or updates a session key state.
@@ -175,8 +213,11 @@ type DatabaseStore interface {
 	// Returns nil if no state exists.
 	GetLastAppSessionKeyState(wallet, sessionKey string) (*app.AppSessionKeyStateV1, error)
 
-	// GetLastKeyStates retrieves the latest session key states for a user with optional filtering.
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
+	// GetLastAppSessionKeyStates retrieves the latest session key states for a user with optional
+	// filtering. When includeInactive is false, only states whose expires_at is in the future are
+	// returned; when true, all latest states are returned regardless of expiry. Results are
+	// paginated; totalCount is the unpaginated total matching the filter.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 
 	// --- Channel Session Key State Operations ---
 
@@ -188,8 +229,11 @@ type DatabaseStore interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error)
+	// optionally filtered by session key. When includeInactive is false, only states whose
+	// expires_at is in the future are returned; when true, all latest states are returned
+	// regardless of expiry. Results are paginated; totalCount is the unpaginated total matching
+	// the filter.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

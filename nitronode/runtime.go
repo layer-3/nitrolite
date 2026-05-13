@@ -80,6 +80,14 @@ type FullConfig struct {
 	RateLimitBurst              float64          `yaml:"rate_limit_burst" env:"NITRONODE_RATE_LIMIT_BURST" env-default:"20"`
 	WsProcessBufferSize         int              `yaml:"ws_process_buffer_size" env:"NITRONODE_WS_PROCESS_BUFFER_SIZE" env-default:"64"`
 	WsWriteBufferSize           int              `yaml:"ws_write_buffer_size" env:"NITRONODE_WS_WRITE_BUFFER_SIZE" env-default:"64"`
+	// WsMaxMessageSize caps inbound WebSocket frame size in bytes. Frames over the
+	// cap close the connection with WebSocket close code 1009 before allocation.
+	// 128 KiB fits any legitimate v1 RPC with substantial headroom.
+	WsMaxMessageSize int64 `yaml:"ws_max_message_size" env:"NITRONODE_WS_MAX_MESSAGE_SIZE" env-default:"131072"`
+	// WsBytesPerSec is the steady-state byte budget per connection. Set <0 to disable.
+	WsBytesPerSec float64 `yaml:"ws_bytes_per_sec" env:"NITRONODE_WS_BYTES_PER_SEC" env-default:"262144"`
+	// WsBytesBurst is the burst capacity of the per-connection byte bucket.
+	WsBytesBurst float64 `yaml:"ws_bytes_burst" env:"NITRONODE_WS_BYTES_BURST" env-default:"1048576"`
 }
 
 type SignerConfig struct {
@@ -90,11 +98,37 @@ type SignerConfig struct {
 
 // ValidationLimits defines configurable upper bounds for dynamic-length request fields.
 type ValidationLimits struct {
-	MaxParticipants   int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
-	MaxSessionDataLen int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
-	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
-	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
-	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	MaxParticipants       int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
+	MaxSessionDataLen     int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
+	MaxAppMetadataLen     int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
+	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
+	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
+}
+
+func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
+	if minChallenge < core.ChannelMinChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be at least %d seconds, got %d",
+			core.ChannelMinChallengeDuration,
+			minChallenge,
+		)
+	}
+	if maxChallenge > core.ChannelMaxChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION must be at most %d seconds, got %d",
+			core.ChannelMaxChallengeDuration,
+			maxChallenge,
+		)
+	}
+	if minChallenge > maxChallenge {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be <= NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION, got min=%d max=%d",
+			minChallenge,
+			maxChallenge,
+		)
+	}
+	return nil
 }
 
 // InitBackbone initializes the backbone components of the application.
@@ -116,6 +150,9 @@ func InitBackbone() *Backbone {
 	var conf FullConfig
 	if err := cleanenv.ReadEnv(&conf); err != nil {
 		logger.Fatal("failed to read env", "err", err)
+	}
+	if err := validateChannelChallengeConfig(conf.ChannelMinChallengeDuration, conf.ChannelMaxChallengeDuration); err != nil {
+		logger.Fatal("invalid channel challenge duration config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)
@@ -195,11 +232,50 @@ func InitBackbone() *Backbone {
 	// RPC Node
 	// ------------------------------------------------
 
+	// MF-C01 requires a hard frame-size cap; refuse to start without one even if
+	// the operator zeroed the env. The library would substitute its own default,
+	// but we want the misconfiguration surfaced rather than papered over.
+	if conf.WsMaxMessageSize <= 0 {
+		logger.Fatal(
+			"NITRONODE_WS_MAX_MESSAGE_SIZE must be > 0; the WebSocket frame cap cannot be disabled",
+			"ws_max_message_size", conf.WsMaxMessageSize,
+		)
+	}
+
+	bytesPerSec := conf.WsBytesPerSec
+	bytesBurst := conf.WsBytesBurst
+	// When the per-connection byte budget is enabled, the burst must be at least
+	// the max message size; otherwise every legitimate frame that passes
+	// SetReadLimit would still be rejected by the bucket on arrival, taking the
+	// node out via config alone. Fail fast at startup.
+	if bytesPerSec > 0 {
+		if bytesBurst <= 0 {
+			logger.Fatal(
+				"NITRONODE_WS_BYTES_BURST must be > 0 when NITRONODE_WS_BYTES_PER_SEC is enabled",
+				"ws_bytes_burst", bytesBurst,
+				"ws_bytes_per_sec", bytesPerSec,
+			)
+		}
+		if bytesBurst < float64(conf.WsMaxMessageSize) {
+			logger.Fatal(
+				"NITRONODE_WS_BYTES_BURST must be >= NITRONODE_WS_MAX_MESSAGE_SIZE when byte limiting is enabled",
+				"ws_bytes_burst", bytesBurst,
+				"ws_max_message_size", conf.WsMaxMessageSize,
+			)
+		}
+	}
 	rpcNode, err := rpc.NewWebsocketNode(rpc.WebsocketNodeConfig{
 		Logger:                  logger,
 		ObserveConnections:      runtimeMetrics.SetRPCConnections,
 		WsConnProcessBufferSize: conf.WsProcessBufferSize,
 		WsConnWriteBufferSize:   conf.WsWriteBufferSize,
+		WsConnMaxMessageSize:    conf.WsMaxMessageSize,
+		NewFrameRateLimiter: func() rpc.FrameRateLimiter {
+			if bytesPerSec <= 0 {
+				return rpc.NoopFrameRateLimiter{}
+			}
+			return rpc.NewByteTokenBucket(bytesPerSec, bytesBurst)
+		},
 	})
 	if err != nil {
 		logger.Fatal("failed to initialize RPC node", "error", err)

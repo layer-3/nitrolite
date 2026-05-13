@@ -37,6 +37,7 @@ export function transformChannelSessionKeyState(
     assets: requireStringArrayField(raw, context, 'assets'),
     expires_at: requireStringField(raw, context, 'expires_at'),
     user_sig: requireStringField(raw, context, 'user_sig'),
+    session_key_sig: requireStringField(raw, context, 'session_key_sig'),
   };
 }
 
@@ -52,5 +53,6 @@ export function transformAppSessionKeyState(
     app_session_ids: requireStringArrayField(raw, context, 'app_session_ids'),
     expires_at: requireStringField(raw, context, 'expires_at'),
     user_sig: requireStringField(raw, context, 'user_sig'),
+    session_key_sig: requireStringField(raw, context, 'session_key_sig'),
   };
 }

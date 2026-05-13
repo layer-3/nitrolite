@@ -154,6 +154,27 @@ contract UtilsTest is Test {
         console.logBytes32(channelId);
     }
 
+    function test_getChannelId_matchesAbiEncodePath() public pure {
+        ChannelDefinition memory def = ChannelDefinition({
+            challengeDuration: 86400,
+            user: 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045,
+            node: 0x435d4B6b68e1083Cc0835D1F971C4739204C1d2a,
+            nonce: 42,
+            approvedSignatureValidators: 24042,
+            metadata: 0x13730b0d8e1bdbdc000000000000000000000000000000000000000000000000
+        });
+        uint8 version = 1;
+
+        // Reproduce the pre-assembly path: keccak256(abi.encode(def)) + version in first byte
+        bytes32 baseId = keccak256(abi.encode(def));
+        bytes32 expected = bytes32(
+            (uint256(baseId) & 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+                | (uint256(version) << 248)
+        );
+
+        assertEq(Utils.getChannelId(def, version), expected);
+    }
+
     function test_log_calculateEscrowId() public pure {
         bytes32 channelId = 0xeac2bed767671a8ab77527e1e2fff00bb2e62de5467d9ba3a4105dad5c6e3d66;
         uint64 version = 42;

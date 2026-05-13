@@ -12,7 +12,7 @@ CREATE TABLE channels (
     challenge_expires_at TIMESTAMPTZ,
     nonce NUMERIC(20,0) NOT NULL DEFAULT 0,
     approved_sig_validators VARCHAR(66) NOT NULL DEFAULT 0,
-    status SMALLINT NOT NULL, -- ChannelStatus enum: 0=void, 1=open, 2=challenged, 3=closed
+    status SMALLINT NOT NULL, -- ChannelStatus enum: 0=void, 1=open, 2=challenged, 3=closing, 4=closed
     state_version NUMERIC(20,0) NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

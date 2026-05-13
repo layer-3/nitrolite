@@ -328,10 +328,10 @@ async function runSmoke() {
     );
     assertSmoke(Array.isArray(channelKeyStates), 'transform', 'channel key states is not an array');
 
-    logStep('calling getLastKeyStates');
+    logStep('calling getLastAppKeyStates');
     const appSessionKeyStates = await withTimeout(
-      'client.getLastKeyStates',
-      client.getLastKeyStates(wallet)
+      'client.getLastAppKeyStates',
+      client.getLastAppKeyStates(wallet)
     );
     assertSmoke(Array.isArray(appSessionKeyStates), 'transform', 'app session key states is not an array');
 

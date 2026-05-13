@@ -25,19 +25,20 @@ import (
 
 // Handler manages app session operations and provides RPC endpoints for app session management.
 type Handler struct {
-	useStoreInTx       StoreTxProvider
-	assetStore         AssetStore
-	actionGateway      ActionGateway
-	signer             *core.ChannelDefaultSigner
-	stateAdvancer      core.StateAdvancer
-	statePacker        core.StatePacker
-	nodeAddress        string // Node's wallet address
-	appRegistryEnabled bool
-	metrics            metrics.RuntimeMetricExporter
-	maxParticipants    int
-	maxSessionData     int
-	maxSessionKeyIDs   int
-	maxSignedUpdates   int
+	useStoreInTx          StoreTxProvider
+	assetStore            AssetStore
+	actionGateway         ActionGateway
+	signer                *core.ChannelDefaultSigner
+	stateAdvancer         core.StateAdvancer
+	statePacker           core.StatePacker
+	nodeAddress           string // Node's wallet address
+	appRegistryEnabled    bool
+	metrics               metrics.RuntimeMetricExporter
+	maxParticipants       int
+	maxSessionData        int
+	maxSessionKeyIDs      int
+	maxSignedUpdates      int
+	maxSessionKeysPerUser int
 }
 
 // NewHandler creates a new Handler instance with the provided dependencies.
@@ -52,21 +53,23 @@ func NewHandler(
 	appRegistryEnabled bool,
 	m metrics.RuntimeMetricExporter,
 	maxParticipants, maxSessionData, maxSessionKeyIDs, maxSignedUpdates int,
+	maxSessionKeysPerUser int,
 ) *Handler {
 	return &Handler{
-		useStoreInTx:       useStoreInTx,
-		assetStore:         assetStore,
-		actionGateway:      actionGateway,
-		signer:             signer,
-		stateAdvancer:      stateAdvancer,
-		statePacker:        statePacker,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: appRegistryEnabled,
-		metrics:            m,
-		maxParticipants:    maxParticipants,
-		maxSessionData:     maxSessionData,
-		maxSessionKeyIDs:   maxSessionKeyIDs,
-		maxSignedUpdates:   maxSignedUpdates,
+		useStoreInTx:          useStoreInTx,
+		assetStore:            assetStore,
+		actionGateway:         actionGateway,
+		signer:                signer,
+		stateAdvancer:         stateAdvancer,
+		statePacker:           statePacker,
+		nodeAddress:           nodeAddress,
+		appRegistryEnabled:    appRegistryEnabled,
+		metrics:               m,
+		maxParticipants:       maxParticipants,
+		maxSessionData:        maxSessionData,
+		maxSessionKeyIDs:      maxSessionKeyIDs,
+		maxSignedUpdates:      maxSignedUpdates,
+		maxSessionKeysPerUser: maxSessionKeysPerUser,
 	}
 }
 
@@ -156,15 +159,8 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 		return rpc.Errorf("failed to apply release transition: %v", err)
 	}
 
-	// Check if we need to sign the state (skip signing if last signed state was a lock)
-	lastSignedState, err := tx.GetLastUserState(receiverWallet, asset, true)
-	if err != nil {
-		return rpc.Errorf("failed to get last signed state: %v", err)
-	}
-
-	// TODO: move to DB query
-	if lastSignedState != nil && lastSignedState.EscrowChannelID != nil {
-		return rpc.Errorf("cannot issue release receiver state: last signed state is a lock with escrow channel %s", *lastSignedState.EscrowChannelID)
+	if err := tx.EnsureNoOngoingEscrowOperation(receiverWallet, asset); err != nil {
+		return rpc.Errorf("cannot issue release receiver state: %v", err)
 	}
 
 	if newState.HomeChannelID != nil {

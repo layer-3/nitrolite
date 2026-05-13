@@ -167,12 +167,18 @@ async function main() {
     app_session_ids: [],
     expires_at: String(expiresAt),
     user_sig: '',
+    session_key_sig: '',
   };
 
   const packedAppSessionKey3State = packAppSessionKeyStateV1(appSessionKey3State);
+
+  // Wallet's user_sig authorizes the delegation.
   const wallet3MsgSigner = new EthereumMsgSigner(wallet3PrivateKey);
-  const appSessionKey3StateSig = await wallet3MsgSigner.signMessage(packedAppSessionKey3State);
-  appSessionKey3State.user_sig = appSessionKey3StateSig;
+  appSessionKey3State.user_sig = await wallet3MsgSigner.signMessage(packedAppSessionKey3State);
+
+  // Session-key holder's session_key_sig proves possession of the key being registered.
+  // Both signatures are required at submit time.
+  appSessionKey3State.session_key_sig = await sessionKey3MsgSigner.signMessage(packedAppSessionKey3State);
 
   await wallet3Client.submitSessionKeyState(appSessionKey3State);
 

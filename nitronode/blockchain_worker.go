@@ -37,20 +37,32 @@ const (
 )
 
 type BlockchainWorker struct {
-	blockchainID uint64
-	client       core.BlockchainClient
-	store        BlockchainWorkerStore
-	logger       log.Logger
-	metrics      MetricsExporter
+	blockchainID  uint64
+	client        core.BlockchainClient
+	store         BlockchainWorkerStore
+	channelSigner core.ChannelSigner
+	assetStore    core.AssetStore
+	logger        log.Logger
+	metrics       MetricsExporter
 }
 
-func NewBlockchainWorker(blockchainID uint64, client core.BlockchainClient, store BlockchainWorkerStore, logger log.Logger, m MetricsExporter) *BlockchainWorker {
+func NewBlockchainWorker(
+	blockchainID uint64,
+	client core.BlockchainClient,
+	store BlockchainWorkerStore,
+	channelSigner core.ChannelSigner,
+	assetStore core.AssetStore,
+	logger log.Logger,
+	m MetricsExporter,
+) *BlockchainWorker {
 	return &BlockchainWorker{
-		blockchainID: blockchainID,
-		client:       client,
-		store:        store,
-		logger:       logger.WithName("bw").WithKV("blockchainID", blockchainID),
-		metrics:      m,
+		blockchainID:  blockchainID,
+		client:        client,
+		store:         store,
+		channelSigner: channelSigner,
+		assetStore:    assetStore,
+		logger:        logger.WithName("bw").WithKV("blockchainID", blockchainID),
+		metrics:       m,
 	}
 }
 
@@ -166,6 +178,9 @@ func (w *BlockchainWorker) processAction(_ context.Context, action database.Bloc
 	case database.ActionTypeCheckpoint:
 		txHash, err = w.client.Checkpoint(*state)
 
+	case database.ActionTypeChallenge:
+		txHash, err = w.submitChallenge(*state)
+
 	// case database.ActionTypeInitiateEscrowDeposit:
 	// 	txHash, err = w.processInitiateEscrow(state, w.client.InitiateEscrowDeposit)
 
@@ -196,6 +211,20 @@ func (w *BlockchainWorker) processAction(_ context.Context, action database.Bloc
 	logger.Info("action completed successfully", "txHash", txHash)
 
 	return true
+}
+
+// submitChallenge produces a node challenger signature for the given state and submits
+// challengeChannel(...) on the channel's home blockchain.
+func (w *BlockchainWorker) submitChallenge(state core.State) (string, error) {
+	packed, err := core.PackChallengeState(state, w.assetStore)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack challenge state: %w", err)
+	}
+	challengerSig, err := w.channelSigner.Sign(packed)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign challenge state: %w", err)
+	}
+	return w.client.Challenge(state, challengerSig, core.ChannelParticipantNode)
 }
 
 // func (w *BlockchainWorker) processInitiateEscrow(state *core.State, initiate func(core.ChannelDefinition, core.State) (string, error)) (string, error) {

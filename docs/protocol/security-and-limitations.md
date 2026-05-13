@@ -17,7 +17,7 @@ However, the protocol in its current form is not fully trust-minimized. The prim
 The protocol aims to guarantee:
 
 - **Asset safety** — participants MUST NOT lose assets without signing a state that authorizes the change
-- **State finality** — the latest mutually signed state can always be enforced on-chain
+- **State finality** — the latest mutually signed state can be enforced on-chain when a valid execution path exists for its intent; parties MUST retain any intermediate states required to establish that path
 - **Non-repudiation** — a participant cannot deny having signed a state
 - **Censorship resistance** — any party MAY independently enforce state on the blockchain layer
 
@@ -41,7 +41,8 @@ Each state update MUST satisfy transition-specific rules. Invalid transitions ar
 
 The blockchain layer provides the following guarantees:
 
-- Any party MAY submit the latest signed state at any time
+- Any party MAY submit the latest mutually signed state to the blockchain layer; enforcement succeeds when a valid execution path exists for that state's intent in the current channel context
+- Parties MUST retain and enforce intermediate states (such as a DEPOSIT state) before discarding them — a subsequent OPERATE state built on top of an unenforced DEPOSIT cannot be used to create or checkpoint a channel on-chain, because OPERATE requires zero change in user net flow relative to the last enforced state
 - The blockchain layer accepts only states with valid signatures and a higher version than the current on-chain state
 - After the challenge period, the enforced state becomes final
 - Final state allocations determine asset distribution
@@ -62,6 +63,8 @@ In the current protocol version, participants MUST trust nodes for:
 - **Cross-chain liquidity** — nodes MUST maintain sufficient funds on each supported chain to honour off-chain allocations; insufficient liquidity may cause on-chain enforcement to fail
 - **Cross-chain relay** — nodes relay cross-chain state updates; trustless cross-chain enforcement is not yet implemented
 - **Timely enforcement** — nodes are expected to submit checkpoints when requested; delayed enforcement may affect user experience but does not compromise single-chain asset safety
+- **Off-chain transfer routing** — when a user sends funds off-chain to another party, the node must countersign both the sender's state (decreasing their allocation) and the receiver's credit state (increasing theirs); the on-chain contract cannot enforce atomicity between two independent channel updates. A malicious node could apply the sender's state while withholding the receiver's credit, capturing the transferred funds. Users must trust the node to faithfully execute both legs of every off-chain transfer.
+- **Signature validator registry** — the node operator controls which additional signature validators are registered on the ChannelHub contract. A malicious or compromised node could register a validator that approves forged user signatures, then use it to create channels or close them without the user's knowledge. A 1-day activation delay (`VALIDATOR_ACTIVATION_DELAY`) creates an observable window before any newly registered validator can be used. Users MUST monitor the `ValidatorRegistered` event on the ChannelHub contract and SHOULD revoke all ERC20 approvals granted to ChannelHub immediately upon detecting an unexpected registration. Once registered, a validator cannot be deactivated — the 1-day window is the entire response budget. Users SHOULD avoid granting large standing ERC20 approvals to ChannelHub to cap worst-case exposure.
 
 Participants do not need to trust nodes for:
 

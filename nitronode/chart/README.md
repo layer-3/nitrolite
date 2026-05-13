@@ -98,6 +98,73 @@ helm delete my-release
 | stressTest.maxErrorRate | string | `"0.01"` | Default max error rate threshold (0.01 = 1%) |
 | stressTest.pods | list | see values.yaml | List of stress test pods to run |
 
+## WebSocket DoS hardening
+
+Defense layered top-down. Each layer sheds load before the next.
+
+### Cloudflare (recommended for public-facing envs)
+
+WAF Rate Limiting rules — production / sandbox only. Skip for `stress-v1`
+(test traffic, no Cloudflare zone configured).
+
+Suggested rule:
+
+| Field      | Value                                                                                  |
+|------------|----------------------------------------------------------------------------------------|
+| Match      | `(http.host eq "<your-host>" and http.request.uri.path eq "/v1/ws")`                   |
+| Threshold  | 60 requests per 1 minute per IP                                                        |
+| Action     | Block 10m                                                                              |
+| Counting   | All HTTP statuses                                                                      |
+
+Pair with Bot Fight Mode + Managed Challenge on the same hostname for low-rep
+sources.
+
+### NGINX Ingress (per-IP, per-conn)
+
+The env templates already wire these annotations on the WebSocket Ingress:
+
+```yaml
+nginx.ingress.kubernetes.io/limit-connections:      "50"   # concurrent / IP
+nginx.ingress.kubernetes.io/limit-rps:              "20"   # new conns/s / IP
+nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+```
+
+> Note: `proxy-body-size` (nginx `client_max_body_size`) intentionally not set.
+> It applies to HTTP request bodies only; after the WebSocket upgrade the
+> ingress proxies the TCP stream transparently and cannot enforce a per-frame
+> size limit. Frame size is capped at the application layer
+> (`NITRONODE_WS_MAX_MESSAGE_SIZE` → `SetReadLimit`).
+
+**Real-IP requirement.** ingress-nginx must see the client IP, not the CF
+edge IP or LB pod IP. Cluster-wide ConfigMap (one-time, ops-owned):
+
+```yaml
+use-forwarded-headers:        "true"
+compute-full-forwarded-for:   "true"
+forwarded-for-header:         "CF-Connecting-IP"   # if behind Cloudflare
+proxy-real-ip-cidr:           "<Cloudflare ranges + LB CIDR>"
+```
+
+Without this, all traffic appears to come from a handful of LB IPs and the
+per-IP limiters are useless.
+
+For envs without Cloudflare in front (e.g. `stress-v1`), ensure the
+ingress-nginx Service has `externalTrafficPolicy: Local` so the GCP LB
+preserves source IPs to the pods.
+
+### Application (`pkg/rpc`)
+
+Per-connection caps configured via env on the nitronode pod:
+
+| Env                              | Default     | Purpose                                                                  |
+|----------------------------------|-------------|--------------------------------------------------------------------------|
+| `NITRONODE_WS_MAX_MESSAGE_SIZE`  | `131072`    | Hard cap on inbound frame (bytes). Exceeded → close 1009 before alloc.   |
+| `NITRONODE_WS_BYTES_PER_SEC`     | `262144`    | Steady-state byte budget per connection. Set ≤ 0 to disable.             |
+| `NITRONODE_WS_BYTES_BURST`       | `1048576`   | Burst capacity for the per-connection byte bucket.                       |
+
+Disable the byte-rate cap (`WS_BYTES_PER_SEC=-1`) for canary rollout if
+false positives are suspected. The frame size cap stays on regardless.
+
 ## Gateway Configuration
 
 By default, the chart creates an API Gateway and configures it to use TLS via cert-manager. To use this feature:

@@ -30,7 +30,8 @@ var (
 	ChannelStatusVoid       ChannelStatus = 0
 	ChannelStatusOpen       ChannelStatus = 1
 	ChannelStatusChallenged ChannelStatus = 2
-	ChannelStatusClosed     ChannelStatus = 3
+	ChannelStatusClosing    ChannelStatus = 3 // co-signed Finalize stored off-chain; on-chain close pending
+	ChannelStatusClosed     ChannelStatus = 4
 )
 
 func (s ChannelStatus) String() string {
@@ -41,6 +42,8 @@ func (s ChannelStatus) String() string {
 		return "open"
 	case ChannelStatusChallenged:
 		return "challenged"
+	case ChannelStatusClosing:
+		return "closing"
 	case ChannelStatusClosed:
 		return "closed"
 	default:
@@ -81,6 +84,8 @@ func (s *ChannelStatus) scanString(v string) error {
 		*s = ChannelStatusOpen
 	case ChannelStatusChallenged.String():
 		*s = ChannelStatusChallenged
+	case ChannelStatusClosing.String():
+		*s = ChannelStatusClosing
 	case ChannelStatusClosed.String():
 		*s = ChannelStatusClosed
 	default:

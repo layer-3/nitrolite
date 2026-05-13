@@ -194,6 +194,7 @@ classDiagram
         +numeric version
         +timestamptz expires_at
         +text user_sig
+        +text session_key_sig
         +timestamptz created_at
         +timestamptz updated_at
     }
@@ -216,12 +217,22 @@ classDiagram
         +char~66~ metadata_hash
         +timestamptz expires_at
         +text user_sig
+        +text session_key_sig
         +timestamptz created_at
     }
 
     class ChannelSessionKeyAssetV1 {
         +char~66~ session_key_state_id PK FK
         +varchar~20~ asset PK
+    }
+
+    class CurrentSessionKeyStateV1 {
+        +char~42~ user_address PK
+        +char~42~ session_key PK
+        +smallint kind PK
+        +numeric version
+        +timestamptz updated_at
+        UNIQUE(session_key, kind)
     }
 
     %% ===== BLOCKCHAIN TABLES =====
@@ -320,6 +331,10 @@ classDiagram
     %% -- Channel session keys link to channels via user_address + asset --
     ChannelSessionKeyAssetV1 --> ChannelSessionKeyStateV1 : session_key_state_id
     ChannelSessionKeyStateV1 ..> Channel : validated against user_address + asset
+
+    %% -- Pointer table tracks latest version per (user_address, session_key, kind) --
+    CurrentSessionKeyStateV1 ..> AppSessionKeyStateV1 : kind=2 -> latest version
+    CurrentSessionKeyStateV1 ..> ChannelSessionKeyStateV1 : kind=1 -> latest version
 
     %% -- Action log gates user operations --
     ActionLogEntryV1 --> GatedAction : gated_action

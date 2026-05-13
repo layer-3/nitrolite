@@ -2,6 +2,7 @@ package app_session_v1
 
 import (
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
@@ -33,19 +34,33 @@ type Store interface {
 	// Returns the current balance.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
-	// CheckOpenChannel verifies if a user has an active channel for the given asset
-	// and returns the approved signature validators if such a channel exists.
-	CheckOpenChannel(wallet, asset string) (string, bool, error)
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
 	// StoreUserState persists a user state. applicationID is the client-declared
 	// origin tag (rpc.ApplicationIDQueryParam); empty string is persisted as NULL.
 	StoreUserState(state core.State, applicationID string) error
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
 
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
 	// App Session key state operations
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+	CountSessionKeysForUser(userAddress string) (uint32, error)
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
+	// GetLastAppSessionKeyStates retrieves the latest app session key states for a user,
+	// optionally filtered by session key. When includeInactive is false, only non-expired
+	// latest states are returned; when true, all latest states are returned regardless of
+	// expiry. Results are paginated.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
 
 	// Channel Session key state operations

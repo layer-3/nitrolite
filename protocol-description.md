@@ -559,8 +559,22 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 * Signatures are validated **before** swapping (using the original signed state)
 * After swapping, signatures are invalidated (`userSig = ""`, `nodeSig = ""`) to prevent misuse
 * The swapped state is only used internally for storage and validation
-* Events emit the original signed state (before swap) for off-chain observability
+* Migration lifecycle events (`MigrationInInitiated`, `MigrationOutInitiated`, `MigrationInFinalized`, `MigrationOutFinalized`) emit the original signed state (before swap) for off-chain observability
+* `ChannelClosed` is an exception: it emits `meta.lastState`, which on the new home chain is the already-swapped state stored during `initiateMigration()`
 * This approach maintains the critical invariant: **ChannelEngine always sees homeLedger as the current chain**
+
+#### Dual-close during abandoned migration
+
+If a migration is initiated but never finalized and both channel copies are subsequently challenged and closed after timeout, `ChannelClosed` can be emitted on both chains for the same `channelId` and state version but with **opposite `homeLedger`/`nonHomeLedger` orientation**:
+
+* Old home chain (`OPERATING`/`DISPUTED`): emits `finalState` with `homeLedger` = old home chain (original orientation)
+* New home chain (`MIGRATING_IN`/`DISPUTED`): emits `finalState` with `homeLedger` = new home chain (swapped orientation)
+
+On-chain fund accounting is correct in both cases — each chain pays from its own locally stored allocations. The concern is for off-chain consumers:
+
+* Index and key `ChannelClosed` events by `(chainId, ChannelHub, channelId)`, never by `channelId` alone
+* Treat each emission as a distinct local settlement; there is no single canonical `finalState` for an abandoned migration
+* Code that persists the emitted `finalState` must handle the swapped ledger orientation for channels in `MIGRATING_IN` status
 
 ---
 
@@ -582,8 +596,9 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 
   * **Rebasing tokens** (e.g. stETH, aTokens): their autonomous balance changes are invisible to the ledger and create unrecoverable accounting divergence. Use non-rebasing wrappers instead (e.g. wstETH).
   * **Fee-on-transfer tokens**: the amount received by the contract is less than the amount recorded, causing the ledger to overstate holdings from the very first deposit.
+  * **Tokens without `decimals()`**: the contract calls `IERC20Metadata.decimals()` on every state transition; tokens that do not implement this optional ERC-20 extension are rejected on-chain with `FailedToFetchDecimals`. Unlike rebasing and fee-on-transfer issues (which silently corrupt accounting), missing `decimals()` causes an immediate hard revert.
 
-  There is no hard-coded guardrail preventing deposit of these tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
+  There is no hard-coded guardrail preventing deposit of rebasing or fee-on-transfer tokens — the contract will accept them, but any discrepancy will produce undefined accounting behavior for all users of that token. Enforcement is off-chain: the Node will not sign states that reference unsupported token types.
 
 * **Transfer failure resilience**: Outbound transfers (to users) never revert on failure:
 
@@ -594,6 +609,8 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
     1. **Channel lifecycle denial**: User blacklists prevent state enforcement, blocking Node operations,
     2. **Node fund lock**: User forces Node to lock large funds via escrow deposit, then blocks all recovery operations with minimal capital.
   * Combined gas limiting + reclaim pattern ensures channel operations continue regardless of transfer success.
+
+* **Node trust for off-chain transfer routing**: Off-chain transfers between parties are routed through the Node. The sender signs a state where their allocation decreases; the Node is expected to countersign it and also countersign a corresponding credit state for the receiver. The on-chain contract cannot enforce atomicity between two independent channel updates. A malicious Node could apply the sender's state while withholding the receiver's credit, effectively capturing the transferred funds. Users must trust the Node to faithfully execute both legs of every off-chain transfer.
 
 ---
 
@@ -614,6 +631,7 @@ Since `approvedSignatureValidators` is part of the `channelId` computation, agre
 * Zero transaction overhead (no separate validator registration needed)
 * Prevents node-controlled validator forgery attacks
 * Default ECDSA validator always available as fallback
+* **Signature domain**: The default on-chain ECDSA validator accepts both EIP-191 (`eth_sign`) and raw `keccak256` signatures (this is done for extensibility), while the Nitronode off-chain validator accepts EIP-191 only. All client-produced signatures must use EIP-191 to be valid on both paths.
 
 ### Node validator registry
 
@@ -690,7 +708,7 @@ The current implementation binds each ChannelHub to a single node address at dep
 
 Within the trust boundary of the bound node the original vulnerability remains. Users who interact with a given deployment must already trust that node — they sign off-chain states with it and grant it ERC20 allowances — so the residual risk sits inside an existing trust relationship rather than being exploitable by an arbitrary third party.
 
-A contract-enforced `VALIDATOR_ACTIVATION_DELAY` (1 day) provides a partial, targeted defence within this trust boundary: a newly registered validator cannot be used until the delay has elapsed, creating an observable window during which a key compromise can be detected and users can revoke ERC20 approvals before the attack on undeposited funds can execute.
+A contract-enforced `VALIDATOR_ACTIVATION_DELAY` (1 day) provides a partial, targeted defence within this trust boundary, effective only when users actively monitor on-chain registrations within the window: a newly registered validator cannot be used until the delay has elapsed, giving users time to detect a compromise and revoke ERC20 approvals before the attack can execute. Validators are permanent once registered — there is no deactivation mechanism. Users should subscribe to `ValidatorRegistered` events on the ChannelHub contract and avoid granting large standing ERC20 approvals; see `contracts/SECURITY.md` for concrete guidance.
 
 A consequence of this model is that each node requires its own ChannelHub deployment; a single contract instance cannot serve multiple independent nodes.
 
@@ -703,6 +721,25 @@ Two designs fully close the bootstrap gap without per-node deployments:
 **Two-registry system with tiered trusted validators (Option G).** The trusted validator set is split into a hardcoded tier (validator IDs 0–2, in contract bytecode) and a governance tier (IDs 3+, extensible by a multisig with a contract-enforced activation delay). `createChannel` accepts only hardcoded-tier IDs for the user signature; no governance action can influence it.
 
 Subsequent operations accept both tiers, filtered by the bitmask stored at creation time. This makes `createChannel` fully admin-proof while preserving extensibility for later operations. ERC-4337 wallets with key-rotation needs are supported within the hardcoded tier via a FreezerProxy ERC-1271 wrapper, requiring no governance action.
+
+---
+
+## Informational Events
+
+Several `ChannelHub` events are **informational** — emitted on a best-effort basis when a specific dedicated function path is taken, but not guaranteed to fire for every logical occurrence of the operation they name. Because the protocol allows any newer valid signed state to be enforced directly (e.g. a standard deposit or checkpoint on a `MIGRATING_IN` channel), intermediate cross-chain states can be bypassed without calling their dedicated functions, and therefore without emitting their events.
+
+External consumers such as indexers, SDKs, and analytics tooling **must not treat these events as exhaustive signals**. The canonical terminal events for each cross-chain flow remain reliable and are always emitted.
+
+The following events are informational:
+
+* **`MigrationInFinalized`** — not emitted if a `MIGRATING_IN` channel transitions to `OPERATING` via any standard operation (deposit, withdraw, checkpoint, challenge) rather than an explicit `finalizeMigration()` call. The canonical migration completion signal is `MigrationOutFinalized`, which is always emitted unconditionally on the old home chain.
+* **`MigrationOutInitiated`** — not emitted if a newer signed state is enforced on the old home channel that supersedes the explicit initiation state.
+* **`EscrowDepositFinalized`** — not emitted if the non-home channel advances past escrow finalization via a newer signed state.
+* **`EscrowDepositFinalizedOnHome`** — not emitted if the home channel advances past the escrow finalization acknowledgement via a newer signed state.
+* **`EscrowWithdrawalInitiatedOnHome`** — not emitted if the home channel advances past the escrow withdrawal initiation acknowledgement via a newer signed state.
+* **`EscrowWithdrawalFinalizedOnHome`** — not emitted if the home channel advances past the escrow withdrawal finalization acknowledgement via a newer signed state.
+
+The Nitronode does not rely on any of these informational events for its state machine. For migration, the Nitronode watches `MigrationInInitiated` (the on-chain signal establishing the new home chain) and `MigrationOutFinalized` (the unconditional completion signal on the old home chain).
 
 ---
 

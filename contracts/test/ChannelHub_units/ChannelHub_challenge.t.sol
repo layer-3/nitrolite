@@ -101,6 +101,88 @@ contract ChannelHubTest_challenge is ChannelHubTest_Base {
         cHub.challengeChannel(channelId, state, challengerSig, ParticipantIndex.USER);
     }
 
+    // ========== Payable ==========
+
+    function test_revert_ifETHSent_sameVersionChallenge() public {
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, initState, NODE_PK);
+
+        vm.deal(node, 1);
+        vm.expectRevert(ChannelHub.IncorrectValue.selector);
+        vm.prank(node);
+        cHub.challengeChannel{value: 1}(channelId, initState, challengerSig, ParticipantIndex.NODE);
+    }
+
+    function test_revert_challengeChannel_initiateEscrowDepositIntent_ifETHSent() public {
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, escrowState, NODE_PK);
+
+        vm.deal(node, 1);
+        vm.expectRevert(ChannelHub.IncorrectValue.selector);
+        vm.prank(node);
+        cHub.challengeChannel{value: 1}(channelId, escrowState, challengerSig, ParticipantIndex.NODE);
+    }
+
+    function test_nativeDepositChallenge_acceptsExactETH() public {
+        uint256 depositDelta = 100;
+        ChannelDefinition memory nativeDef = ChannelDefinition({
+            challengeDuration: CHALLENGE_DURATION,
+            user: alice,
+            node: node,
+            nonce: NONCE + 1,
+            approvedSignatureValidators: 0,
+            metadata: bytes32(0)
+        });
+        bytes32 nativeChannelId = Utils.getChannelId(nativeDef, CHANNEL_HUB_VERSION);
+
+        State memory nativeInitState = State({
+            version: 0,
+            intent: StateIntent.DEPOSIT,
+            metadata: bytes32(0),
+            homeLedger: Ledger({
+                chainId: uint64(block.chainid),
+                token: address(0),
+                decimals: 18,
+                userAllocation: DEPOSIT_AMOUNT,
+                userNetFlow: int256(DEPOSIT_AMOUNT),
+                nodeAllocation: 0,
+                nodeNetFlow: 0
+            }),
+            nonHomeLedger: TestUtils.emptyLedger(),
+            userSig: "",
+            nodeSig: ""
+        });
+        nativeInitState = mutualSignStateBothWithEcdsaValidator(nativeInitState, nativeChannelId, ALICE_PK);
+
+        vm.deal(alice, DEPOSIT_AMOUNT);
+        vm.prank(alice);
+        cHub.createChannel{value: DEPOSIT_AMOUNT}(nativeDef, nativeInitState);
+
+        State memory depositState = TestUtils.nextState(
+            nativeInitState,
+            StateIntent.DEPOSIT,
+            [uint256(DEPOSIT_AMOUNT + depositDelta), uint256(0)],
+            [int256(DEPOSIT_AMOUNT + depositDelta), int256(0)]
+        );
+        depositState = mutualSignStateBothWithEcdsaValidator(depositState, nativeChannelId, ALICE_PK);
+        bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(nativeChannelId, depositState, NODE_PK);
+
+        uint256 hubBalanceBefore = address(cHub).balance;
+        vm.deal(node, depositDelta);
+        vm.prank(node);
+        cHub.challengeChannel{value: depositDelta}(nativeChannelId, depositState, challengerSig, ParticipantIndex.NODE);
+
+        (ChannelStatus status,, State memory latestState, uint256 challengeExpiry,) =
+            cHub.getChannelData(nativeChannelId);
+        assertEq(uint8(status), uint8(ChannelStatus.DISPUTED), "Channel should be DISPUTED");
+        assertEq(latestState.version, 1, "Native deposit state should be enforced");
+        assertEq(
+            latestState.homeLedger.userAllocation,
+            DEPOSIT_AMOUNT + depositDelta,
+            "Native allocation should include challenge deposit"
+        );
+        assertEq(challengeExpiry, block.timestamp + CHALLENGE_DURATION, "Challenge expiry should be set");
+        assertEq(address(cHub).balance, hubBalanceBefore + depositDelta, "Native ETH should be pulled");
+    }
+
     // ========== INITIATE_ESCROW_DEPOSIT caller restriction ==========
 
     function test_revert_initiateEscrowDeposit_homeChain_callerNotNode() public {

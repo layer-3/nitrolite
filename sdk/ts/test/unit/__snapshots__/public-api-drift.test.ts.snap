@@ -218,6 +218,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "application_ids: string[]",
       "expires_at: string",
       "session_key: string",
+      "session_key_sig: string",
       "user_address: string",
       "user_sig: string",
       "version: string",
@@ -321,6 +322,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "AppSessionsV1GetLastKeyStatesRequest",
     "properties": [
+      "include_inactive: boolean",
+      "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
     ],
@@ -330,6 +333,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "AppSessionsV1GetLastKeyStatesResponse",
     "properties": [
+      "metadata: PaginationMetadataV1",
       "states: AppSessionKeyStateV1[]",
     ],
     "signatures": [],
@@ -781,6 +785,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "assets: string[]",
       "expires_at: string",
       "session_key: string",
+      "session_key_sig: string",
       "user_address: string",
       "user_sig: string",
       "version: string",
@@ -801,7 +806,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "Void = 0",
       "Open = 1",
       "Challenged = 2",
-      "Closed = 3",
+      "Closing = 3",
+      "Closed = 4",
     ],
     "name": "ChannelStatus",
   },
@@ -883,6 +889,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "ChannelsV1GetLastKeyStatesRequest",
     "properties": [
+      "include_inactive: boolean",
+      "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
     ],
@@ -892,6 +900,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "ChannelsV1GetLastKeyStatesResponse",
     "properties": [
+      "metadata: PaginationMetadataV1",
       "states: ChannelSessionKeyStateV1[]",
     ],
     "signatures": [],
@@ -1052,8 +1061,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getConfig: (): Promise<core.NodeConfig>",
       "getEscrowChannel: (escrowChannelId: string): Promise<core.Channel>",
       "getHomeChannel: (wallet: Address, asset: string): Promise<core.Channel>",
-      "getLastChannelKeyStates: (userAddress: string, sessionKey?: string): Promise<ChannelSessionKeyStateV1[]>",
-      "getLastKeyStates: (userAddress: string, sessionKey?: string): Promise<app.AppSessionKeyStateV1[]>",
+      "getLastAppKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<app.AppSessionKeyStateV1[]>",
+      "getLastChannelKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<ChannelSessionKeyStateV1[]>",
       "getLatestState: (wallet: Address, asset: string, onlySigned: boolean): Promise<core.State>",
       "getLockedBalance: (chainId: bigint, wallet: string): Promise<Decimal>",
       "getOnChainBalance: (chainId: bigint, asset: string, wallet: Address): Promise<Decimal>",
@@ -1064,6 +1073,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "rebalanceAppSessions: (signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string>",
       "registerApp: (appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
+      "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
+      "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyState: (state: ChannelSessionKeyStateV1): Promise<Hex>",
       "signSessionKeyState: (state: app.AppSessionKeyStateV1): Promise<Hex>",
       "signState: (state: core.State): Promise<Hex>",
@@ -1074,6 +1085,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "transfer: (recipientWallet: string, asset: string, amount: Decimal): Promise<core.State>",
       "validateAndSignState: (currentState: core.State, proposedState: core.State): Promise<Hex>",
       "waitForClose: (): Promise<void>",
+      "watchValidatorRegistered: (chainId: bigint, fromBlock?: bigint, signal?: AbortSignal): AsyncGenerator<core.ValidatorRegisteredEvent>",
       "withdraw: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
       "withdrawSecurityTokens: (blockchainId: bigint, destinationWalletAddress: string): Promise<string>",
     ],
@@ -1352,7 +1364,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "function",
     "name": "getChannelSessionKeyAuthMetadataHashV1",
     "signatures": [
-      "(version: bigint, assets: string[], expiresAt: bigint): \`0x\${string}\`",
+      "(userAddress: Address, version: bigint, assets: string[], expiresAt: bigint): \`0x\${string}\`",
     ],
   },
   {
@@ -2427,6 +2439,17 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [
       "(ledger: Ledger): void",
     ],
+  },
+  {
+    "kind": "interface",
+    "name": "ValidatorRegisteredEvent",
+    "properties": [
+      "blockNumber: bigint",
+      "blockchainId: bigint",
+      "validator: Address",
+      "validatorId: number",
+    ],
+    "signatures": [],
   },
   {
     "constructors": [

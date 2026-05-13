@@ -6,10 +6,11 @@ import (
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
 
-const (
-	// rateLimitStorageKey is the key used to store the token bucket in connection storage.
-	rateLimitStorageKey = "rate_limiter"
-)
+// rateLimitStorageKey is the per-connection SafeStorage key for the request-rate
+// token bucket. The bucket is allocated on the first request and mutated in
+// place on subsequent ones — processRequests dispatches the middleware chain
+// serially per connection, so a single load is sufficient.
+const rateLimitStorageKey = "rate_limiter"
 
 // tokenBucket holds the mutable state for per-connection rate limiting.
 type tokenBucket struct {
@@ -17,35 +18,42 @@ type tokenBucket struct {
 	last   time.Time
 }
 
-// RateLimitMiddleware enforces per-connection rate limiting using a token bucket algorithm.
-// It stores the token bucket in the connection's Storage for persistence across requests.
+// RateLimitMiddleware enforces a per-connection request-count token bucket.
+// It complements the per-frame byte budget enforced by FrameRateLimiter at the
+// connection layer: bytes guard bandwidth, this guards RPC throughput so a
+// flood of small requests cannot bypass the byte cap.
+//
+// On overrun the request fails with an RPC error and the connection stays
+// open; the byte limiter is the layer that closes connections.
 func (r *RPCRouter) RateLimitMiddleware(c *rpc.Context) {
-	bucket := &tokenBucket{
-		tokens: r.rateLimitBurst,
-		last:   time.Now().Add(-time.Second),
-	}
-	if val, ok := c.Storage.Get(rateLimitStorageKey); ok {
-		if b, ok := val.(*tokenBucket); ok {
-			bucket = b
-		}
-	}
+	bucket := loadOrInitBucket(c, r.rateLimitBurst)
 
 	now := time.Now()
-	elapsed := now.Sub(bucket.last).Seconds()
-	bucket.last = now
-
-	// Refill tokens based on elapsed time
-	bucket.tokens += elapsed * r.rateLimitPerSec
+	bucket.tokens += now.Sub(bucket.last).Seconds() * r.rateLimitPerSec
 	if bucket.tokens > r.rateLimitBurst {
 		bucket.tokens = r.rateLimitBurst
 	}
+	bucket.last = now
 
 	if bucket.tokens < 1 {
-		c.Fail(nil, "rate limit exceeded")
+		c.Fail(rpc.Errorf("rate limit exceeded"), "")
 		return
 	}
 	bucket.tokens--
-	c.Storage.Set(rateLimitStorageKey, bucket)
 
 	c.Next()
+}
+
+// loadOrInitBucket returns the bucket stored on the connection, allocating a
+// fresh one pre-filled to burst on first use. The bucket is stored as a
+// pointer; later mutations are visible without re-Set.
+func loadOrInitBucket(c *rpc.Context, burst float64) *tokenBucket {
+	if v, ok := c.Storage.Get(rateLimitStorageKey); ok {
+		if b, ok := v.(*tokenBucket); ok {
+			return b
+		}
+	}
+	b := &tokenBucket{tokens: burst, last: time.Now()}
+	c.Storage.Set(rateLimitStorageKey, b)
+	return b
 }

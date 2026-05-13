@@ -192,7 +192,7 @@ func TestSubmitDepositState_Success(t *testing.T) {
 
 	// Mock expectations
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckOpenChannel", participant1, asset).Return("0x03", true, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
@@ -541,7 +541,7 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 
 	// Mock expectations
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckOpenChannel", participant1, asset).Return("0x03", true, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
@@ -688,7 +688,7 @@ func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
 
 	// NO GetApp mock — it should not be called
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckOpenChannel", participant1, asset).Return("0x03", true, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
@@ -833,7 +833,7 @@ func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckOpenChannel", participant1, asset).Return("0x03", true, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
@@ -966,7 +966,7 @@ func TestSubmitDepositState_InvalidDecimalPrecision_Rejected(t *testing.T) {
 	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckOpenChannel", participant1, asset).Return("0x03", true, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)

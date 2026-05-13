@@ -51,6 +51,12 @@ func (m *MockStore) ScheduleCheckpoint(stateID string, chainID uint64) error {
 	return args.Error(0)
 }
 
+// ScheduleChallenge mocks scheduling a challenge operation
+func (m *MockStore) ScheduleChallenge(stateID string, chainID uint64) error {
+	args := m.Called(stateID, chainID)
+	return args.Error(0)
+}
+
 // ScheduleInitiateEscrowDeposit mocks scheduling an escrow deposit checkpoint
 func (m *MockStore) ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error {
 	args := m.Called(stateID, chainID)
@@ -84,5 +90,11 @@ func (m *MockStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 // UpdateUserStaked mocks updating the total staked amount for a user
 func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error {
 	args := m.Called(wallet, blockchainID, amount)
+	return args.Error(0)
+}
+
+// UpdateStateUserSigIfMissing mocks backfilling a user signature for a stored state.
+func (m *MockStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
+	args := m.Called(channelID, version, userSig)
 	return args.Error(0)
 }

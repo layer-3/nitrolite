@@ -79,6 +79,10 @@ func (s *DBStore) GetChannelByID(channelID string) (*core.Channel, error) {
 }
 
 // GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
+// "Active" means the node has co-signed the channel definition (status Void or Open) — it
+// does NOT guarantee the channel has been materialized onchain. Callers requiring onchain
+// materialization (e.g., cross-chain escrow operations) must additionally check that
+// Status == ChannelStatusOpen.
 func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, error) {
 	var dbChannel Channel
 	err := s.db.
@@ -95,27 +99,72 @@ func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, err
 	return databaseChannelToCore(&dbChannel), nil
 }
 
-// CheckOpenChannel verifies if a user has an active channel for the given asset
-// and returns the approved signature validators if such a channel exists.
-func (s *DBStore) CheckOpenChannel(wallet, asset string) (string, bool, error) {
-	var approvedSigValidators string
+// GetNotClosedHomeChannel retrieves the home channel for a user's wallet and asset as long
+// as it has not reached ChannelStatusClosed. This is broader than GetActiveHomeChannel
+// (which stops at Open) and is intended for read paths that must remain functional after
+// an off-chain Finalize, such as fetching channel data before submitting an on-chain close.
+func (s *DBStore) GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error) {
+	var dbChannel Channel
+	err := s.db.
+		Where("user_wallet = ? AND asset = ?", strings.ToLower(wallet), strings.ToLower(asset)).
+		Where("status != ? AND type = ?", core.ChannelStatusClosed, core.ChannelTypeHome).
+		First(&dbChannel).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get non-closed home channel: %w", err)
+	}
+
+	return databaseChannelToCore(&dbChannel), nil
+}
+
+// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) has a
+// status other than Closed, meaning a channel lifecycle is still in progress.
+func (s *DBStore) HasNonClosedHomeChannel(wallet, asset string) (bool, error) {
+	var count int64
+	err := s.db.Model(&Channel{}).
+		Where("user_wallet = ? AND asset = ? AND type = ? AND status != ?",
+			strings.ToLower(wallet), strings.ToLower(asset),
+			core.ChannelTypeHome, core.ChannelStatusClosed).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check non-closed home channel: %w", err)
+	}
+	return count > 0, nil
+}
+
+// CheckActiveChannel verifies if a user has an active home channel for the given asset
+// and returns its approved signature validators along with the channel status.
+// "Active" includes Void (DB-only, awaiting onchain confirmation) and Open (materialized
+// onchain). This is intentional: non-escrow offchain transitions (transfers, etc.) are
+// permitted before onchain confirmation lands. Callers operating on cross-chain escrow
+// flows that depend on onchain home-channel materialization must check that the returned
+// status is ChannelStatusOpen.
+//
+// A nil status pointer means no active channel was found.
+func (s *DBStore) CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error) {
+	var row struct {
+		ApprovedSigValidators string             `gorm:"column:approved_sig_validators"`
+		Status                core.ChannelStatus `gorm:"column:status"`
+	}
 	result := s.db.Raw(`
-		SELECT approved_sig_validators
+		SELECT approved_sig_validators, status
 		FROM channels
 		WHERE user_wallet = ?
 			AND asset = ?
 			AND status <= ?
 			AND type = ?
 		LIMIT 1
-	`, strings.ToLower(wallet), strings.ToLower(asset), core.ChannelStatusOpen, core.ChannelTypeHome).Scan(&approvedSigValidators)
+	`, strings.ToLower(wallet), strings.ToLower(asset), core.ChannelStatusOpen, core.ChannelTypeHome).Scan(&row)
 	if result.Error != nil {
-		return "", false, fmt.Errorf("failed to check open channel: %w", result.Error)
+		return "", nil, fmt.Errorf("failed to check active channel: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return "", false, nil
+		return "", nil, nil
 	}
 
-	return approvedSigValidators, true, nil
+	return row.ApprovedSigValidators, &row.Status, nil
 }
 
 // GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.

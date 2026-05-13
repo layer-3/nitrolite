@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -26,6 +27,9 @@ var (
 	// defaultWsConnPongTimeout is the default timeout for receiving pong responses from clients.
 	// If no pong is received within this duration after a ping, the connection is considered dead.
 	defaultWsConnPongTimeout = 10 * time.Second
+	// defaultWsConnMaxMessageSize is the default cap on inbound WebSocket frame size in bytes.
+	// Frames exceeding this trigger close 1009 (Message Too Big) before allocation.
+	defaultWsConnMaxMessageSize int64 = 128 * 1024
 )
 
 // Connection represents an active RPC connection that handles bidirectional communication.
@@ -39,6 +43,10 @@ type Connection interface {
 
 	// Origin returns the origin of the connection, such as the client's IP address or other identifying information.
 	Origin() string
+
+	// ApplicationID returns the application identifier supplied at connection time (via the
+	// app_id query parameter). Returns an empty string if no application_id was provided.
+	ApplicationID() string
 
 	// RawRequests returns a read-only channel for receiving incoming raw request messages.
 	// Messages received on this channel are raw bytes that need to be unmarshaled
@@ -75,6 +83,10 @@ type GorillaWsConnectionAdapter interface {
 	// SetReadDeadline sets the deadline for future Read calls.
 	// A zero value means reads will not time out.
 	SetReadDeadline(t time.Time) error
+	// SetReadLimit sets the maximum size in bytes for a single inbound message.
+	// Frames exceeding the limit cause ReadMessage to return a *CloseError with
+	// code 1009 (CloseMessageTooBig) and the connection sends a close frame.
+	SetReadLimit(limit int64)
 }
 
 // WebsocketConnection implements the Connection interface using WebSocket transport.
@@ -96,6 +108,8 @@ type WebsocketConnection struct {
 	connectionID string
 	// origin is the origin of the connection, such as the client's IP address
 	origin string
+	// applicationID is the app_id query parameter supplied at WebSocket upgrade (may be empty)
+	applicationID string
 	// websocketConn is the underlying WebSocket connection
 	websocketConn GorillaWsConnectionAdapter
 	// writeTimeout is the maximum duration to wait for a write to complete
@@ -104,6 +118,11 @@ type WebsocketConnection struct {
 	pingInterval time.Duration
 	// pongTimeout is the maximum duration to wait for a pong response from the client
 	pongTimeout time.Duration
+	// maxMessageSize caps inbound frame size in bytes. Always positive after
+	// NewWebsocketConnection: non-positive config values fall back to the default.
+	maxMessageSize int64
+	// frameRateLimiter decides whether each inbound frame is admitted.
+	frameRateLimiter FrameRateLimiter
 
 	// logger is used for logging events related to this connection
 	logger log.Logger
@@ -127,6 +146,9 @@ type WebsocketConnectionConfig struct {
 	ConnectionID string
 	// Origin is the origin of the connection, such as the client's IP address (optional)
 	Origin string
+	// ApplicationID is the app_id query parameter supplied at WebSocket upgrade (optional).
+	// Caller is responsible for validation; the connection stores it as-is for metrics labeling.
+	ApplicationID string
 	// WebsocketConn is the underlying WebSocket connection (required)
 	WebsocketConn GorillaWsConnectionAdapter
 
@@ -141,6 +163,14 @@ type WebsocketConnectionConfig struct {
 	// PongTimeout is the maximum duration to wait for a pong response from the client (default: 10s).
 	// If no pong is received within this duration, the connection is considered dead.
 	PongTimeout time.Duration
+	// MaxMessageSize caps inbound frame size in bytes (default: 128 KiB).
+	// Frames larger than this are rejected with WebSocket close code 1009
+	// before any allocation grows past the limit. Non-positive values fall
+	// back to the default; the cap cannot be disabled at this layer.
+	MaxMessageSize int64
+	// FrameRateLimiter is consulted for every inbound frame; returning false closes
+	// the connection. nil → NoopFrameRateLimiter (no enforcement).
+	FrameRateLimiter FrameRateLimiter
 	// Logger for connection events (default: no-op logger)
 	Logger log.Logger
 	// OnMessageSentHandler is called after a message is successfully sent (optional)
@@ -178,17 +208,26 @@ func NewWebsocketConnection(config WebsocketConnectionConfig) (*WebsocketConnect
 	if config.PongTimeout <= 0 {
 		config.PongTimeout = defaultWsConnPongTimeout
 	}
+	if config.MaxMessageSize <= 0 {
+		config.MaxMessageSize = defaultWsConnMaxMessageSize
+	}
+	if config.FrameRateLimiter == nil {
+		config.FrameRateLimiter = NoopFrameRateLimiter{}
+	}
 	if config.OnMessageSentHandler == nil {
 		config.OnMessageSentHandler = func([]byte) {}
 	}
 
 	return &WebsocketConnection{
-		connectionID:  config.ConnectionID,
-		origin:        config.Origin,
-		websocketConn: config.WebsocketConn,
-		writeTimeout:  config.WriteTimeout,
-		pingInterval:  config.PingInterval,
-		pongTimeout:   config.PongTimeout,
+		connectionID:     config.ConnectionID,
+		origin:           config.Origin,
+		applicationID:    config.ApplicationID,
+		websocketConn:    config.WebsocketConn,
+		writeTimeout:     config.WriteTimeout,
+		pingInterval:     config.PingInterval,
+		pongTimeout:      config.PongTimeout,
+		maxMessageSize:   config.MaxMessageSize,
+		frameRateLimiter: config.FrameRateLimiter,
 
 		logger:               config.Logger.WithKV("connectionID", config.ConnectionID),
 		onMessageSentHandler: config.OnMessageSentHandler,
@@ -218,6 +257,13 @@ func (conn *WebsocketConnection) Serve(parentCtx context.Context, handleClosure 
 	}
 	conn.ctx = parentCtx
 	conn.mu.Unlock()
+
+	// Cap inbound frame size before any read takes place. Exceeding the limit
+	// causes the next ReadMessage to return *CloseError{Code: 1009} and the
+	// underlying connection sends a close frame to the client.
+	if conn.maxMessageSize > 0 {
+		conn.websocketConn.SetReadLimit(conn.maxMessageSize)
+	}
 
 	// Set up pong handler to refresh read deadline when pong is received from client.
 	// This enables detection of dead connections - if no pong arrives within the timeout
@@ -285,6 +331,12 @@ func (conn *WebsocketConnection) Origin() string {
 	return conn.origin
 }
 
+// ApplicationID returns the app_id query parameter supplied at WebSocket upgrade,
+// or an empty string if none was provided.
+func (conn *WebsocketConnection) ApplicationID() string {
+	return conn.applicationID
+}
+
 // RawRequests returns the channel for processing incoming requests.
 func (conn *WebsocketConnection) RawRequests() <-chan []byte {
 	return conn.processSink
@@ -322,10 +374,27 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 	for {
 		_, messageBytes, err := conn.websocketConn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
+			switch {
+			case errors.Is(err, websocket.ErrReadLimit),
+				websocket.IsCloseError(err, websocket.CloseMessageTooBig):
+				// Expected attacker / misconfigured-client path. Local read limit
+				// exceeded → gorilla returns ErrReadLimit to us and best-effort
+				// sends close 1009 to the peer. The IsCloseError branch covers
+				// the symmetric case where the peer initiated a 1009 close.
+				// Treat both as graceful close, not abnormal termination.
+				conn.logger.Warn("inbound frame exceeded MaxMessageSize; closing connection",
+					"error", err,
+					"origin", conn.origin,
+					"max_message_size", conn.maxMessageSize,
+				)
+				handleClosure(nil)
+			case websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+				websocket.CloseNormalClosure):
 				conn.logger.Error("WebSocket connection closed with unexpected reason", "error", err)
 				handleClosure(err)
-			} else {
+			default:
 				handleClosure(nil) // Normal closure
 			}
 			return
@@ -334,6 +403,19 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 		if len(messageBytes) == 0 {
 			conn.logger.Debug("received empty message, skipping")
 			continue // Skip empty messages
+		}
+
+		if !conn.frameRateLimiter.Admit(time.Now(), len(messageBytes)) {
+			conn.logger.Warn("frame rate limit exceeded; closing connection",
+				"origin", conn.origin,
+				"frame_bytes", len(messageBytes),
+			)
+			select {
+			case conn.closeConnCh <- struct{}{}:
+			default:
+			}
+			handleClosure(nil)
+			return
 		}
 
 		select {
@@ -348,6 +430,7 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 			case conn.closeConnCh <- struct{}{}:
 			default:
 			}
+			handleClosure(nil)
 			return
 		}
 	}

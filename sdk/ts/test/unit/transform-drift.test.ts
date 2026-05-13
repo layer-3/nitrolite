@@ -51,6 +51,7 @@ const channelKeyStateRaw = {
     assets: ['YUSD'],
     expires_at: '1739812234',
     user_sig: '0xabc123',
+    session_key_sig: '0xabc124',
 };
 
 const appSessionKeyStateRaw = {
@@ -61,6 +62,7 @@ const appSessionKeyStateRaw = {
     app_session_ids: ['0x00000000000000000000000000000000000000000000000000000000000000b1'],
     expires_at: '1739812234',
     user_sig: '0xdef456',
+    session_key_sig: '0xdef457',
 };
 
 describe('Nitronode response transform drift guards', () => {
@@ -227,6 +229,13 @@ describe('Nitronode response transform drift guards', () => {
         expect(transformAppSessionKeyState(appSessionKeyStateRaw)).toEqual(appSessionKeyStateRaw);
     });
 
+    it('accepts empty session_key_sig for rows written before the column existed', () => {
+        const legacyChannel = { ...channelKeyStateRaw, session_key_sig: '' };
+        const legacyApp = { ...appSessionKeyStateRaw, session_key_sig: '' };
+        expect(transformChannelSessionKeyState(legacyChannel)).toEqual(legacyChannel);
+        expect(transformAppSessionKeyState(legacyApp)).toEqual(legacyApp);
+    });
+
     it('rejects malformed key-state fixtures with clear errors', () => {
         expect(() =>
             transformChannelSessionKeyState(
@@ -293,7 +302,7 @@ describe('Nitronode response transform drift guards', () => {
             clientLike,
             userAddress
         );
-        const appSessionKeyStates = await (Client.prototype.getLastKeyStates as any).call(
+        const appSessionKeyStates = await (Client.prototype.getLastAppKeyStates as any).call(
             clientLike,
             userAddress
         );
@@ -318,6 +327,57 @@ describe('Nitronode response transform drift guards', () => {
         });
     });
 
+    it('forwards includeInactive to channel and app key-state wire requests', async () => {
+        const channelsV1GetLastKeyStates = jest.fn(async () => ({ states: [] }));
+        const appSessionsV1GetLastKeyStates = jest.fn(async () => ({ states: [] }));
+        const clientLike = {
+            rpcClient: {
+                channelsV1GetLastKeyStates,
+                appSessionsV1GetLastKeyStates,
+            },
+        };
+
+        await (Client.prototype.getLastChannelKeyStates as any).call(
+            clientLike,
+            userAddress,
+            sessionKeyAddress,
+            { includeInactive: true }
+        );
+        await (Client.prototype.getLastAppKeyStates as any).call(
+            clientLike,
+            userAddress,
+            sessionKeyAddress,
+            { includeInactive: true }
+        );
+
+        expect(channelsV1GetLastKeyStates).toHaveBeenCalledWith({
+            user_address: userAddress,
+            session_key: sessionKeyAddress,
+            include_inactive: true,
+        });
+        expect(appSessionsV1GetLastKeyStates).toHaveBeenCalledWith({
+            user_address: userAddress,
+            session_key: sessionKeyAddress,
+            include_inactive: true,
+        });
+
+        // Default call (no options) must leave include_inactive undefined so the server
+        // applies its active-only default rather than seeing an explicit `false`.
+        await (Client.prototype.getLastChannelKeyStates as any).call(clientLike, userAddress);
+        await (Client.prototype.getLastAppKeyStates as any).call(clientLike, userAddress);
+
+        expect(channelsV1GetLastKeyStates).toHaveBeenLastCalledWith({
+            user_address: userAddress,
+            session_key: undefined,
+            include_inactive: undefined,
+        });
+        expect(appSessionsV1GetLastKeyStates).toHaveBeenLastCalledWith({
+            user_address: userAddress,
+            session_key: undefined,
+            include_inactive: undefined,
+        });
+    });
+
     it('rejects malformed key-state response containers before mapping', async () => {
         const clientLike = {
             rpcClient: {
@@ -334,7 +394,7 @@ describe('Nitronode response transform drift guards', () => {
             (Client.prototype.getLastChannelKeyStates as any).call(clientLike, userAddress)
         ).rejects.toThrow('Invalid channel key states response: expected states to be an array');
         await expect(
-            (Client.prototype.getLastKeyStates as any).call(clientLike, userAddress)
+            (Client.prototype.getLastAppKeyStates as any).call(clientLike, userAddress)
         ).rejects.toThrow('Invalid app key states response: expected states to be an array');
     });
 

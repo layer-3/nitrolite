@@ -49,6 +49,10 @@ type ChannelHubReactorStore interface {
 	// This queues the state to be submitted on-chain to update the channel's on-chain state.
 	ScheduleCheckpoint(stateID string, chainID uint64) error
 
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
 	// ScheduleInitiateEscrowDeposit schedules an initiate for an escrow deposit operation.
 	// This queues the state to be submitted on-chain to finalize an escrow deposit.
 	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
@@ -67,6 +71,9 @@ type ChannelHubReactorStore interface {
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
 
+	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
+	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
 }
@@ -74,6 +81,14 @@ type ChannelHubReactorStore interface {
 var channelHubAbi *abi.ABI
 var channelHubFilterer *ChannelHubFilterer
 var channelHubEventMapping map[common.Hash]string
+
+// encodeSig hex-encodes a signature byte slice or returns an empty string when absent.
+func encodeSig(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	return hexutil.Encode(b)
+}
 
 func initChannelHub() {
 	var err error
@@ -250,6 +265,7 @@ func (r *ChannelHubReactor) handleHomeChannelCreated(ctx context.Context, store 
 	ev := core.HomeChannelCreatedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.InitialState.Version,
+		UserSig:      encodeSig(event.InitialState.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCreated(ctx, store, &ev)
 }
@@ -263,6 +279,7 @@ func (r *ChannelHubReactor) handleHomeChannelMigrated(ctx context.Context, store
 	ev := core.HomeChannelMigratedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelMigrated(ctx, store, &ev)
 }
@@ -276,6 +293,7 @@ func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, s
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -289,6 +307,7 @@ func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store Ch
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -302,6 +321,7 @@ func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store Ch
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -316,6 +336,7 @@ func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, sto
 		ChannelID:       hexutil.Encode(event.ChannelId[:]),
 		StateVersion:    event.Candidate.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.Candidate.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, &ev)
 }
@@ -329,6 +350,7 @@ func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store C
 	ev := core.HomeChannelClosedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.FinalState.Version,
+		UserSig:      encodeSig(event.FinalState.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelClosed(ctx, store, &ev)
 }
@@ -342,6 +364,7 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, st
 	ev := core.EscrowDepositInitiatedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowDepositInitiated(ctx, store, &ev)
 }
@@ -356,6 +379,7 @@ func (r *ChannelHubReactor) handleEscrowDepositChallenged(ctx context.Context, s
 		ChannelID:       hexutil.Encode(event.EscrowId[:]),
 		StateVersion:    event.State.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowDepositChallenged(ctx, store, &ev)
 }
@@ -369,6 +393,7 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalized(ctx context.Context, st
 	ev := core.EscrowDepositFinalizedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowDepositFinalized(ctx, store, &ev)
 }
@@ -382,6 +407,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiated(ctx context.Context,
 	ev := core.EscrowWithdrawalInitiatedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowWithdrawalInitiated(ctx, store, &ev)
 }
@@ -396,6 +422,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalChallenged(ctx context.Context
 		ChannelID:       hexutil.Encode(event.EscrowId[:]),
 		StateVersion:    event.State.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowWithdrawalChallenged(ctx, store, &ev)
 }
@@ -409,6 +436,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalized(ctx context.Context,
 	ev := core.EscrowWithdrawalFinalizedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleEscrowWithdrawalFinalized(ctx, store, &ev)
 }
@@ -422,6 +450,7 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Conte
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -435,6 +464,7 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Conte
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -448,6 +478,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Co
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -461,6 +492,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Co
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
 	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
@@ -537,8 +569,12 @@ func (r *ChannelHubReactor) handleEscrowDepositsPurged(ctx context.Context, stor
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositsPurged event")
 	}
-	logger := log.FromContext(ctx)
-	logger.Info("EscrowDepositsPurged event", "purgedCount", event.PurgedCount.String())
 
-	return nil
+	escrowIDs := make([]string, len(event.EscrowIds))
+	for i, id := range event.EscrowIds {
+		escrowIDs[i] = hexutil.Encode(id[:])
+	}
+
+	ev := core.EscrowDepositsPurgedEvent{EscrowIDs: escrowIDs}
+	return r.eventHandler.HandleEscrowDepositsPurged(ctx, store, &ev)
 }

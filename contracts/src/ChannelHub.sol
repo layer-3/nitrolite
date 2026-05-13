@@ -62,7 +62,7 @@ contract ChannelHub is ReentrancyGuard {
     event Deposited(address indexed token, uint256 amount);
     event Withdrawn(address indexed token, uint256 amount);
 
-    event EscrowDepositsPurged(uint256 purgedCount);
+    event EscrowDepositsPurged(bytes32[] escrowIds, uint256 purgedCount);
 
     event ChannelCreated(
         bytes32 indexed channelId, address indexed user, ChannelDefinition definition, State initialState
@@ -76,18 +76,46 @@ contract ChannelHub is ReentrancyGuard {
     event EscrowDepositInitiated(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
     event EscrowDepositInitiatedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
     event EscrowDepositChallenged(bytes32 indexed escrowId, State state, uint64 challengeExpireAt);
+
+    /// @dev Informational event: emitted only when finalizeEscrowDeposit() is called on the non-home chain via its
+    /// dedicated function path. It is not emitted if a newer state is enforced on the channel that supersedes the
+    /// finalization. External consumers must not treat this as an exhaustive signal.
     event EscrowDepositFinalized(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when the home-chain channel advances through the dedicated
+    /// finalizeEscrowDeposit() path. It is not emitted if the channel state is advanced by a newer signed state that
+    /// supersedes the escrow finalization. External consumers must not treat this as an exhaustive signal.
     event EscrowDepositFinalizedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
 
     event EscrowWithdrawalInitiated(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when initiateEscrowWithdrawal() advances the home-chain channel via its
+    /// dedicated function path. It is not emitted if a newer signed state supersedes the initiation on that channel.
+    /// External consumers must not treat this as an exhaustive signal.
     event EscrowWithdrawalInitiatedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
     event EscrowWithdrawalChallenged(bytes32 indexed escrowId, State state, uint64 challengeExpireAt);
     event EscrowWithdrawalFinalized(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when finalizeEscrowWithdrawal() advances the home-chain channel via its
+    /// dedicated function path. It is not emitted if a newer signed state supersedes the finalization on that channel.
+    /// External consumers must not treat this as an exhaustive signal.
     event EscrowWithdrawalFinalizedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
 
+    /// @dev Informational event: emitted only when initiateMigration() is called on the old home chain via its
+    /// dedicated function path. It is not emitted if a newer signed state (e.g. FINALIZE_MIGRATION) is enforced
+    /// directly on the channel, bypassing the explicit initiation path. External consumers must not treat this as
+    /// an exhaustive signal.
     event MigrationOutInitiated(bytes32 indexed channelId, State state);
+
     event MigrationInInitiated(bytes32 indexed channelId, State state);
     event MigrationOutFinalized(bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when finalizeMigration() is called explicitly on the new home chain.
+    /// A MIGRATING_IN channel may transition to OPERATING through any standard channel operation (deposit, withdraw,
+    /// checkpoint, challenge) built on top of a FINALIZE_MIGRATION state, in which case this event is not emitted.
+    /// External consumers must not treat this as an exhaustive signal; the canonical migration completion signal is
+    /// MigrationOutFinalized, which is always emitted unconditionally on the old home chain.
     event MigrationInFinalized(bytes32 indexed channelId, State state);
 
     event ValidatorRegistered(uint8 indexed validatorId, ISignatureValidator indexed validator);
@@ -164,6 +192,7 @@ contract ChannelHub is ReentrancyGuard {
 
     // TODO: estimate these values better
     uint32 public constant MIN_CHALLENGE_DURATION = 1 days;
+    uint32 public constant MAX_CHALLENGE_DURATION = 7 days;
 
     uint32 public constant ESCROW_DEPOSIT_UNLOCK_DELAY = 3 hours;
 
@@ -337,7 +366,7 @@ contract ChannelHub is ReentrancyGuard {
     function withdrawFromNode(address to, address token, uint256 amount) external {
         require(to != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
-        require(msg.sender == NODE, IncorrectNode());
+        require(msg.sender == NODE, IncorrectMsgSender());
 
         uint256 currentBalance = _nodeBalances[token];
         require(currentBalance >= amount, InsufficientBalance());
@@ -430,6 +459,10 @@ contract ChannelHub is ReentrancyGuard {
         uint256 totalDeposits = _escrowDepositIds.length;
         uint256 escrowHeadTemp = escrowHead;
 
+        uint256 remaining = totalDeposits > escrowHeadTemp ? totalDeposits - escrowHeadTemp : 0;
+        uint256 maxPossible = maxSteps < remaining ? maxSteps : remaining;
+        bytes32[] memory purgedIds = new bytes32[](maxPossible);
+
         while (escrowHeadTemp < totalDeposits && steps < maxSteps) {
             bytes32 escrowId = _escrowDepositIds[escrowHeadTemp];
             EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
@@ -446,6 +479,7 @@ contract ChannelHub is ReentrancyGuard {
 
                 meta.status = EscrowStatus.FINALIZED;
                 meta.lockedAmount = 0;
+                purgedIds[purgedCount] = escrowId;
                 purgedCount++;
                 escrowHeadTemp++;
 
@@ -458,7 +492,11 @@ contract ChannelHub is ReentrancyGuard {
         escrowHead = escrowHeadTemp;
 
         if (purgedCount != 0) {
-            emit EscrowDepositsPurged(purgedCount);
+            // Trim the over-allocated memory array to the actual purged count.
+            assembly {
+                mstore(purgedIds, purgedCount)
+            }
+            emit EscrowDepositsPurged(purgedIds, purgedCount);
         }
     }
 
@@ -477,8 +515,12 @@ contract ChannelHub is ReentrancyGuard {
     /**
      * @notice Register a signature validator for NODE using signature-based authorization
      * @dev Anyone can submit this transaction with a valid NODE signature, enabling relayer-friendly registration.
-     *      NODE's private key only signs the registration data, never sends transactions directly.
-     *      This allows NODE to use cold storage or HSMs without exposing keys to transaction submission.
+     *      For this function only, NODE's private key only signs the registration data and does not need to send
+     *      the transaction directly, allowing cold storage or HSM usage without exposing keys to transaction submission.
+     *      Other NODE-gated operations (withdrawFromNode, home-chain initiateEscrowDeposit, and submitting
+     *      a new INITIATE_ESCROW_DEPOSIT state via challengeChannel) still require NODE to be msg.sender
+     *      and are not relayer-compatible. Note: challenging with the same-version INITIATE_ESCROW_DEPOSIT
+     *      state (already-processed path) is open to any caller, as it only sets the DISPUTED flag.
      *      The signature includes block.chainid and address(this) to prevent cross-chain and cross-deployment replay attacks.
      * @param validatorId The validator ID (0x01-0xFF, 0x00 reserved for DEFAULT)
      * @param validator The validator contract address
@@ -629,8 +671,9 @@ contract ChannelHub is ReentrancyGuard {
             ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
             _applyTransitionEffects(channelId, def, candidate, effects);
+        } else {
+            require(msg.value == 0, IncorrectValue());
         }
-        // else: challenging with same version, state already processed
 
         (ISignatureValidator validator, bytes calldata sigData) =
             _extractValidator(challengerSig, approvedSignatureValidators);
@@ -696,6 +739,7 @@ contract ChannelHub is ReentrancyGuard {
 
         if (_isChannelHomeChain(channelId)) {
             require(msg.sender == NODE, IncorrectMsgSender());
+            require(msg.value == 0, IncorrectValue());
             _processHomeChainEscrow(channelId, candidate);
             emit EscrowDepositInitiatedOnHome(escrowId, channelId, candidate);
         } else {
@@ -1145,17 +1189,19 @@ contract ChannelHub is ReentrancyGuard {
         ChannelEngine.TransitionEffects memory effects
     ) internal {
         ChannelMeta storage meta = _channels[channelId];
+        address token = candidate.homeLedger.token;
 
         meta.lastState = candidate;
 
         address user = def.user;
-        address token = candidate.homeLedger.token;
 
         // Process POSITIVE deltas first (additions to lockedFunds) to prevent underflow
         if (effects.userFundsDelta > 0) {
             uint256 amount = effects.userFundsDelta.toUint256();
             _pullFunds(user, token, amount);
             meta.lockedFunds += amount;
+        } else {
+            require(msg.value == 0, IncorrectValue());
         }
 
         if (effects.nodeFundsDelta > 0) {
@@ -1196,6 +1242,7 @@ contract ChannelHub is ReentrancyGuard {
         uint256 approvedSignatureValidators
     ) internal {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+        address token = effects.updateInitState ? candidate.nonHomeLedger.token : meta.initState.nonHomeLedger.token;
 
         if (effects.newStatus != EscrowStatus.VOID) {
             meta.status = effects.newStatus;
@@ -1209,22 +1256,22 @@ contract ChannelHub is ReentrancyGuard {
             meta.unlockAt = effects.newUnlockAt;
         }
 
-        if (effects.newChallengeExpiry > 0) {
+        if (meta.challengeExpireAt != effects.newChallengeExpiry) {
             meta.challengeExpireAt = effects.newChallengeExpiry;
         }
-
-        // Determine the correct token to use (from init state for finalization, from candidate for initiation)
-        address token = effects.updateInitState ? candidate.nonHomeLedger.token : meta.initState.nonHomeLedger.token;
 
         // Handle user funds (positive = pull from user)
         if (effects.userFundsDelta > 0) {
             uint256 amount = effects.userFundsDelta.toUint256();
             _pullFunds(user, token, amount);
             meta.lockedAmount += amount;
-        } else if (effects.userFundsDelta < 0) {
-            uint256 amount = (-effects.userFundsDelta).toUint256();
-            _nonRevertingPushFunds(user, token, amount);
-            meta.lockedAmount -= amount;
+        } else {
+            require(msg.value == 0, IncorrectValue());
+            if (effects.userFundsDelta < 0) {
+                uint256 amount = (-effects.userFundsDelta).toUint256();
+                _nonRevertingPushFunds(user, token, amount);
+                meta.lockedAmount -= amount;
+            }
         }
 
         // Handle node funds (positive = pull from node vault, negative = release to vault)
@@ -1264,7 +1311,7 @@ contract ChannelHub is ReentrancyGuard {
             _initEscrowWithdrawalMetadata(escrowId, channelId, candidate, user, approvedSignatureValidators);
         }
 
-        if (effects.newChallengeExpiry > 0) {
+        if (meta.challengeExpireAt != effects.newChallengeExpiry) {
             meta.challengeExpireAt = effects.newChallengeExpiry;
         }
 
@@ -1335,7 +1382,10 @@ contract ChannelHub is ReentrancyGuard {
         require(user != address(0), InvalidAddress());
         require(def.node == NODE, IncorrectNode());
         require(user != NODE, AddressCollision(user));
-        require(def.challengeDuration >= MIN_CHALLENGE_DURATION, IncorrectChallengeDuration());
+        require(
+            def.challengeDuration >= MIN_CHALLENGE_DURATION && def.challengeDuration <= MAX_CHALLENGE_DURATION,
+            IncorrectChallengeDuration()
+        );
     }
 
     /// @dev Returns true when the channel is active and considers the current chain its home chain.
@@ -1370,14 +1420,19 @@ contract ChannelHub is ReentrancyGuard {
         return _escrowWithdrawals[escrowId].channelId == bytes32(0) && _isChannelHomeChain(channelId);
     }
 
-    function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
-        if (amount == 0) return;
-
+    /// @dev native token: requires msg.value == amount; ERC20: requires msg.value == 0.
+    function _requireMsgValueForPull(address token, uint256 amount) internal view {
         if (token == address(0)) {
             require(msg.value == amount, IncorrectValue());
         } else {
             require(msg.value == 0, IncorrectValue());
         }
+    }
+
+    function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
+        if (amount == 0) return;
+
+        _requireMsgValueForPull(token, amount);
 
         if (token != address(0)) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
@@ -1425,16 +1480,27 @@ contract ChannelHub is ReentrancyGuard {
     /// - explicit return value: decoded as uint256, non-zero treated as success.
     ///   Decoding as uint256 (not bool) avoids an abi.decode revert on non-canonical bool encodings
     ///   (e.g. a token returning 2), which would otherwise break _nonRevertingPushFunds' no-revert guarantee.
+    /// Uses assembly to write the call output directly to scratch space (0x00-0x1f).
+    /// That range is already within the memory expanded by the preceding abi.encodeCall(), so no
+    /// additional memory expansion occurs regardless of actual returndata size.
+    /// The high-level `(bool, bytes memory) = addr.call(...)` form copies ALL returndata into caller memory
+    /// at caller-gas expense — a malicious token returning 1 MB would exhaust gas before we reach the length check.
     function _trySafeTransfer(address token, address to, uint256 amount) internal returns (bool) {
-        (bool success, bytes memory returnData) =
-            address(token).call{gas: TRANSFER_GAS_LIMIT}(abi.encodeCall(IERC20.transfer, (to, amount)));
+        bytes memory callData = abi.encodeCall(IERC20.transfer, (to, amount));
+        bool success;
+        uint256 rdsize;
+        uint256 retval;
+
+        assembly ("memory-safe") {
+            // Output to scratch space (0x00-0x1f); returndatasize() still reflects the full returndata length.
+            success := call(TRANSFER_GAS_LIMIT, token, 0, add(callData, 0x20), mload(callData), 0x00, 0x20)
+            rdsize := returndatasize()
+            retval := mload(0x00)
+        }
 
         if (!success) return false;
-        if (returnData.length == 0) return address(token).code.length > 0;
-        // Solidity 0.8's ABI decoder validates canonical bool encoding (only 0 or 1 are valid).
-        // A token returning any other non-zero value (e.g. 2, 0xff...ff) would cause abi.decode(..., (bool)) to revert
-        // — propagating out of _nonRevertingPushFunds and breaking its invariant
-        if (returnData.length >= 32) return abi.decode(returnData, (uint256)) != 0;
-        return false;
+        if (rdsize == 0) return address(token).code.length > 0;
+        if (rdsize < 32) return false;
+        return retval != 0;
     }
 }

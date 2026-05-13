@@ -2,6 +2,7 @@ import {
     Client,
     ChannelDefaultSigner,
     ChannelSessionKeyStateSigner,
+    type EthereumMsgSigner,
     type StateSigner,
     type TransactionSigner,
 } from '@yellow-org/sdk';
@@ -597,7 +598,8 @@ export class NitroliteClient {
         0: 'void',
         1: 'open',
         2: 'challenged',
-        3: 'closed',
+        3: 'closing',
+        4: 'closed',
     };
 
     async getChannels(): Promise<LedgerChannel[]> {
@@ -859,6 +861,13 @@ export class NitroliteClient {
         return this.innerClient.signChannelSessionKeyState(state);
     }
 
+    async signChannelSessionKeyOwnership(
+        state: ChannelSessionKeyStateV1,
+        sessionKeySigner: EthereumMsgSigner,
+    ): Promise<Hex> {
+        return this.innerClient.signChannelSessionKeyOwnership(state, sessionKeySigner);
+    }
+
     async submitChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<void> {
         await this.innerClient.submitChannelSessionKeyState(state);
     }
@@ -866,20 +875,39 @@ export class NitroliteClient {
     async getLastChannelKeyStates(
         userAddress: string,
         sessionKey?: string,
+        options?: { includeInactive?: boolean },
     ): Promise<ChannelSessionKeyStateV1[]> {
-        return this.innerClient.getLastChannelKeyStates(userAddress, sessionKey);
+        return this.innerClient.getLastChannelKeyStates(userAddress, sessionKey, options);
     }
 
     async signSessionKeyState(state: AppSessionKeyStateV1): Promise<Hex> {
         return this.innerClient.signSessionKeyState(state);
     }
 
+    async signAppSessionKeyOwnership(
+        state: AppSessionKeyStateV1,
+        sessionKeySigner: EthereumMsgSigner,
+    ): Promise<Hex> {
+        return this.innerClient.signAppSessionKeyOwnership(state, sessionKeySigner);
+    }
+
     async submitSessionKeyState(state: AppSessionKeyStateV1): Promise<void> {
         await this.innerClient.submitSessionKeyState(state);
     }
 
+    async getLastAppKeyStates(
+        userAddress: string,
+        sessionKey?: string,
+        options?: { includeInactive?: boolean },
+    ): Promise<AppSessionKeyStateV1[]> {
+        return this.innerClient.getLastAppKeyStates(userAddress, sessionKey, options);
+    }
+
+    /**
+     * @deprecated Use `getLastAppKeyStates` instead. Retained for 0.5.x callers; will be removed in the next major.
+     */
     async getLastKeyStates(userAddress: string, sessionKey?: string): Promise<AppSessionKeyStateV1[]> {
-        return this.innerClient.getLastKeyStates(userAddress, sessionKey);
+        return this.getLastAppKeyStates(userAddress, sessionKey);
     }
 
     // -----------------------------------------------------------------------

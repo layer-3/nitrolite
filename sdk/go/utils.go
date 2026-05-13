@@ -130,6 +130,8 @@ func transformChannel(channel rpc.ChannelV1) (core.Channel, error) {
 		channelStatus = core.ChannelStatusOpen
 	case "challenged":
 		channelStatus = core.ChannelStatusChallenged
+	case "closing":
+		channelStatus = core.ChannelStatusClosing
 	case "closed":
 		channelStatus = core.ChannelStatusClosed
 	}
@@ -513,12 +515,13 @@ func transformSignedAppStateUpdateToRPC(signed app.SignedAppStateUpdateV1) rpc.S
 // transformChannelSessionKeyStateToRPC converts core.ChannelSessionKeyStateV1 to RPC ChannelSessionKeyStateV1.
 func transformChannelSessionKeyStateToRPC(state core.ChannelSessionKeyStateV1) rpc.ChannelSessionKeyStateV1 {
 	return rpc.ChannelSessionKeyStateV1{
-		UserAddress: state.UserAddress,
-		SessionKey:  state.SessionKey,
-		Version:     strconv.FormatUint(state.Version, 10),
-		Assets:      state.Assets,
-		ExpiresAt:   strconv.FormatInt(state.ExpiresAt.Unix(), 10),
-		UserSig:     state.UserSig,
+		UserAddress:   state.UserAddress,
+		SessionKey:    state.SessionKey,
+		Version:       strconv.FormatUint(state.Version, 10),
+		Assets:        state.Assets,
+		ExpiresAt:     strconv.FormatInt(state.ExpiresAt.Unix(), 10),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}
 }
 
@@ -540,12 +543,13 @@ func transformChannelSessionKeyState(state rpc.ChannelSessionKeyStateV1) (core.C
 	}
 
 	return core.ChannelSessionKeyStateV1{
-		UserAddress: strings.ToLower(state.UserAddress),
-		SessionKey:  strings.ToLower(state.SessionKey),
-		Version:     version,
-		Assets:      assets,
-		ExpiresAt:   time.Unix(expiresAtUnix, 0),
-		UserSig:     state.UserSig,
+		UserAddress:   strings.ToLower(state.UserAddress),
+		SessionKey:    strings.ToLower(state.SessionKey),
+		Version:       version,
+		Assets:        assets,
+		ExpiresAt:     time.Unix(expiresAtUnix, 0),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}, nil
 }
 
@@ -576,6 +580,7 @@ func transformSessionKeyStateToRPC(state app.AppSessionKeyStateV1) rpc.AppSessio
 		AppSessionIDs:  state.AppSessionIDs,
 		ExpiresAt:      strconv.FormatInt(state.ExpiresAt.Unix(), 10),
 		UserSig:        state.UserSig,
+		SessionKeySig:  state.SessionKeySig,
 	}
 }
 
@@ -609,6 +614,7 @@ func transformSessionKeyState(state rpc.AppSessionKeyStateV1) (app.AppSessionKey
 		AppSessionIDs:  appSessionIDs,
 		ExpiresAt:      time.Unix(expiresAtUnix, 0),
 		UserSig:        state.UserSig,
+		SessionKeySig:  state.SessionKeySig,
 	}, nil
 }
 

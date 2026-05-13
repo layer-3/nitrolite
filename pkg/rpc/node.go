@@ -132,6 +132,14 @@ type WebsocketNodeConfig struct {
 	WsConnWriteBufferSize int
 	// WsConnProcessBufferSize is the capacity of each connection's incoming message queue (default: 10).
 	WsConnProcessBufferSize int
+	// WsConnMaxMessageSize caps inbound WebSocket frame size in bytes per connection
+	// (default: 128 KiB). Frames exceeding this trigger close 1009 before allocation.
+	// Non-positive values fall back to the default; the cap cannot be disabled at
+	// this layer.
+	WsConnMaxMessageSize int64
+	// NewFrameRateLimiter constructs a per-connection FrameRateLimiter on each
+	// upgrade. nil → no enforcement (NoopFrameRateLimiter is used).
+	NewFrameRateLimiter func() FrameRateLimiter
 }
 
 // NewWebsocketNode creates a new WebsocketNode instance with the provided configuration.
@@ -149,7 +157,7 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 
 	if config.ObserveConnections == nil {
 		// Default implementation does nothing, but can be overridden for monitoring
-		config.ObserveConnections = func(region, origin string, count uint32) {}
+		config.ObserveConnections = func(applicationID string, count uint32) {}
 	}
 	if config.WsUpgraderReadBufferSize <= 0 {
 		// It's the optimal default value as recommended
@@ -220,13 +228,21 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	connectionID := uuid.NewString()
 
+	var limiter FrameRateLimiter
+	if wn.cfg.NewFrameRateLimiter != nil {
+		limiter = wn.cfg.NewFrameRateLimiter()
+	}
+
 	connConfig := WebsocketConnectionConfig{
 		ConnectionID:      connectionID,
 		Origin:            r.Header.Get("Origin"),
+		ApplicationID:     applicationID,
 		WebsocketConn:     wsConnection,
 		Logger:            wn.cfg.Logger,
 		ProcessBufferSize: wn.cfg.WsConnProcessBufferSize,
 		WriteBufferSize:   wn.cfg.WsConnWriteBufferSize,
+		MaxMessageSize:    wn.cfg.WsConnMaxMessageSize,
+		FrameRateLimiter:  limiter,
 	}
 	connection, err := NewWebsocketConnection(connConfig)
 	if err != nil {

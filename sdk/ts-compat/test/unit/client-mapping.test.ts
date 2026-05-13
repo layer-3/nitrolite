@@ -288,6 +288,75 @@ describe('NitroliteClient compat mappings', () => {
         ]);
     });
 
+    it.each([
+        { numeric: 0, expected: 'void' },
+        { numeric: 1, expected: 'open' },
+        { numeric: 2, expected: 'challenged' },
+        { numeric: 3, expected: 'closing' },
+        { numeric: 4, expected: 'closed' },
+    ])('maps channel status $numeric to "$expected" in getChannels()', async ({ numeric, expected }) => {
+        const { client } = makeCompatClient({
+            getChannels: jest.fn().mockResolvedValue({
+                channels: [
+                    {
+                        channelId: 'channel-1',
+                        userWallet: USER,
+                        status: numeric,
+                        asset: 'yusd',
+                        tokenAddress: CURRENT_TOKEN,
+                        blockchainId: CURRENT_CHAIN,
+                        challengeDuration: 86400,
+                        nonce: 1n,
+                        stateVersion: 1n,
+                    },
+                ],
+            }),
+            getLatestState: jest.fn().mockResolvedValue({
+                homeLedger: { userBalance: new Decimal('0') },
+            }),
+        });
+        await client.refreshAssets();
+        const channels = await client.getChannels();
+        expect(channels[0].status).toBe(expected);
+    });
+
+    it('forwards includeInactive on session-key list methods through to the inner SDK', async () => {
+        const sessionKey = '0x0000000000000000000000000000000000000d01';
+        const { client, innerClient } = makeCompatClient({
+            getLastChannelKeyStates: jest.fn().mockResolvedValue([]),
+            getLastAppKeyStates: jest.fn().mockResolvedValue([]),
+        });
+
+        await client.getLastChannelKeyStates(USER, sessionKey, { includeInactive: true });
+        await client.getLastAppKeyStates(USER, sessionKey, { includeInactive: true });
+
+        expect(innerClient.getLastChannelKeyStates).toHaveBeenCalledWith(USER, sessionKey, {
+            includeInactive: true,
+        });
+        expect(innerClient.getLastAppKeyStates).toHaveBeenCalledWith(USER, sessionKey, {
+            includeInactive: true,
+        });
+
+        await client.getLastChannelKeyStates(USER);
+        await client.getLastAppKeyStates(USER);
+
+        expect(innerClient.getLastChannelKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+        expect(innerClient.getLastAppKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+    });
+
+    it('keeps the deprecated getLastKeyStates alias forwarding to getLastAppKeyStates', async () => {
+        const sessionKey = '0x0000000000000000000000000000000000000d02';
+        const { client, innerClient } = makeCompatClient({
+            getLastAppKeyStates: jest.fn().mockResolvedValue([]),
+        });
+
+        await client.getLastKeyStates(USER, sessionKey);
+        expect(innerClient.getLastAppKeyStates).toHaveBeenCalledWith(USER, sessionKey, undefined);
+
+        await client.getLastKeyStates(USER);
+        expect(innerClient.getLastAppKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+    });
+
     it('keeps unsupported legacy methods honest and getOpenChannels delegates to the current chain hub', async () => {
         const { client } = makeCompatClient();
         const readContract = jest.fn().mockResolvedValue(['0xabc', '0xdef']);

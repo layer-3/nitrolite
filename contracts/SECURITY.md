@@ -323,11 +323,13 @@ The `VALIDATOR_ACTIVATION_DELAY` is only effective if users actively monitor on-
 
 2. **The 1-day window is the entire response budget.** After `VALIDATOR_ACTIVATION_DELAY` elapses, the validator is active and any outstanding ERC20 approvals to ChannelHub are immediately exploitable via a forged `createChannel`.
 
-3. **Users must subscribe to `ValidatorRegistered` events.** Monitor the `ValidatorRegistered(uint8 indexed validatorId, address indexed validator)` event on the ChannelHub contract. Any unexpected registration should be treated as a potential compromise. Revoke all ERC20 approvals granted to ChannelHub immediately if an unrecognised validator appears.
+3. **Users must subscribe to `ValidatorRegistered` events.** Monitor the `ValidatorRegistered(uint8 indexed validatorId, address indexed validator)` event on the ChannelHub contract. Any unexpected registration should be treated as a potential compromise. Upon detecting an unrecognised validator:
+   - Revoke all ERC20 approvals granted to ChannelHub immediately (protects undeposited funds).
+   - Exit any open escrow positions via `initiateEscrowWithdrawal` before the delay expires — funds already in escrow remain exposed until withdrawn, since a malicious validator can forge user signatures for any on-chain operation, not only `createChannel`.
 
 4. **Avoid large standing ERC20 approvals.** Do not grant unlimited (`type(uint256).max`) or long-lived ERC20 allowances to ChannelHub. Prefer exact-amount approvals per operation. A standing approval only becomes exploitable once a malicious validator activates, so minimising the approved amount caps the worst-case loss.
 
-The TypeScript and Go SDKs expose validator-monitoring helpers that subscribe to `ValidatorRegistered` events and surface alerts when new validators are registered, making this surveillance practical for all integrators.
+The Go SDK exposes `Client.WatchValidatorRegistered` and the TypeScript SDK exposes `Client.watchValidatorRegistered`, both delivering events as streams. The two implementations differ in transport requirements: the Go watcher uses `SubscribeFilterLogs` and requires a WebSocket or IPC endpoint (`wss://`); the TypeScript watcher uses viem's `watchContractEvent` which falls back to polling `getLogs` over HTTP when no WebSocket endpoint is configured.
 
 #### Stronger alternatives
 

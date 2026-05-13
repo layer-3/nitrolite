@@ -51,6 +51,13 @@ func WatchValidatorRegistered(ctx context.Context, contractAddress common.Addres
 		defer close(eventCh)
 		defer sub.Unsubscribe()
 
+		// headBlock is the upper bound of the historical getLogs query. Any live
+		// event with BlockNumber ≤ headBlock was already fetched historically and
+		// must be skipped to prevent duplicate delivery from the subscription-to-
+		// getLogs transition window (the subscription starts before HeaderByNumber
+		// returns, so logs in that window land in both streams).
+		var headBlock uint64
+
 		// Historical phase: fetch logs from fromBlock to the current head before
 		// processing live events, so reconnects don't miss events emitted during
 		// any outage window.
@@ -61,6 +68,7 @@ func WatchValidatorRegistered(ctx context.Context, contractAddress common.Addres
 					logger.Warn("failed to get chain head for historical ValidatorRegistered fetch — skipping gap fill", "error", err)
 				}
 			} else {
+				headBlock = header.Number.Uint64()
 				histQuery := ethereum.FilterQuery{
 					FromBlock: new(big.Int).SetUint64(fromBlock),
 					ToBlock:   header.Number,
@@ -102,6 +110,11 @@ func WatchValidatorRegistered(ctx context.Context, contractAddress common.Addres
 				}
 				if l.Removed {
 					logger.Warn("skipping removed ValidatorRegistered log (reorg)", "blockchainID", blockchainID, "txHash", l.TxHash.Hex())
+					continue
+				}
+				// Skip events already covered by the historical getLogs query to
+				// prevent duplicate delivery from the subscription overlap window.
+				if l.BlockNumber <= headBlock {
 					continue
 				}
 				if parseAndSend(ctx, eventCh, l, blockchainID, logger) == nil {

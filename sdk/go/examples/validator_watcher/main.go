@@ -72,9 +72,17 @@ func main() {
 	fmt.Printf("Monitoring ValidatorRegistered events on chain %d...\n", chainID)
 	fmt.Println("Press Ctrl+C to stop.")
 
-	// fromBlock tracks where to resume on reconnect. Zero means "start from latest"
-	// on the first call; subsequent reconnects pass lastBlock+1 to replay any events
-	// emitted while the subscription was down.
+	// fromBlock tracks where to resume on reconnect. Zero on the first call means
+	// "skip historical replay and start from the current chain head". Subsequent
+	// reconnects pass lastBlock+1 to replay any events emitted during the outage.
+	//
+	// Limitation: if the subscription dies before any ValidatorRegistered event
+	// has been received, fromBlock stays 0 and the reconnect again skips history —
+	// events emitted during that outage window will be missed.
+	//
+	// For production use, initialise fromBlock to the ChannelHub contract's
+	// deployment block (or the last block number persisted in your own store)
+	// so every reconnect replays from a known-good anchor point.
 	var fromBlock uint64
 
 	for ctx.Err() == nil {
@@ -108,14 +116,18 @@ func main() {
 	fmt.Println("Validator watcher stopped.")
 }
 
-// handleValidatorRegistered is called for every ValidatorRegistered event.
-// Replace with your own alerting, logging, or user-notification logic.
+// handleValidatorRegistered is called for every ValidatorRegistered event,
+// including legitimate first-time registrations during normal node operation.
+// This example alerts unconditionally; production code should compare the
+// incoming validator ID and address against a set of expected validators
+// (communicated through official Nitrolite channels) and only alert when
+// an unknown validator appears.
 func handleValidatorRegistered(ev *core.ValidatorRegisteredEvent) {
 	fmt.Printf(
 		"[ALERT] New validator registered on chain %d at block %d: ID=%d address=%s\n",
 		ev.BlockchainID, ev.BlockNumber, ev.ValidatorID, ev.Validator,
 	)
-	fmt.Println("Action required: verify this validator is expected.")
+	fmt.Println("Verify this validator is expected via official Nitrolite channels.")
 	fmt.Println("If unexpected, revoke all ERC20 approvals to the ChannelHub contract immediately.")
 	fmt.Println("You have 1 day (VALIDATOR_ACTIVATION_DELAY) before the validator becomes active.")
 }

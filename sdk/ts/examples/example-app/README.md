@@ -232,6 +232,7 @@ Session keys let your app sign state updates automatically without wallet popups
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   ChannelSessionKeyStateSigner,
+  EthereumMsgSigner,
   getChannelSessionKeyAuthMetadataHashV1,
 } from '@layer-3/nitrolite';
 
@@ -253,9 +254,13 @@ const state = {
   assets: ['usdc', 'weth'],
   expires_at: expiresAt.toString(),
   user_sig: '',
+  session_key_sig: '',
 };
 
-// 4. Sign with the main wallet and submit
+// 4. Sign ownership with the session key, then user_sig with the main wallet, then submit.
+// Both signatures are required; the server rejects submits with either missing.
+const sessionKeySigner = new EthereumMsgSigner(privateKey);
+state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessionKeySigner);
 state.user_sig = await client.signChannelSessionKeyState(state);
 await client.submitChannelSessionKeyState(state);
 
@@ -291,7 +296,7 @@ Now `sessionClient` signs off-chain state updates with the session key — no wa
 Submit a new version with empty assets to revoke a session key:
 
 ```ts
-import { packChannelKeyStateV1 } from '@layer-3/nitrolite';
+import { EthereumMsgSigner, packChannelKeyStateV1 } from '@layer-3/nitrolite';
 
 const existing = await client.getLastChannelKeyStates(address, sessionKeyAddress);
 const latest = existing[0];
@@ -303,7 +308,13 @@ const revokeState = {
   assets: [],
   expires_at: latest.expires_at,
   user_sig: '',
+  session_key_sig: '',
 };
+
+// Revoke still requires the session-key holder's possession proof — sign with the session key
+// (the holder is consenting to retire it) before submit.
+const sessionKeySigner = new EthereumMsgSigner(sessionKeyPrivateKey);
+revokeState.session_key_sig = await client.signChannelSessionKeyOwnership(revokeState, sessionKeySigner);
 
 // Sign the revocation with the main wallet (EIP-191)
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(

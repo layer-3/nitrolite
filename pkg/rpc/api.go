@@ -126,13 +126,16 @@ type ChannelsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// IncludeInactive, when true, includes latest states whose expires_at is in the past
+	// (expired or revoked). Defaults to false: only currently active states are returned.
+	IncludeInactive *bool `json:"include_inactive,omitempty"`
 	// Pagination contains pagination parameters (offset, limit, sort)
 	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
-// ChannelsV1GetSessionKeysResponse returns the list of active session keys.
+// ChannelsV1GetLastKeyStatesResponse returns the latest session key states for the user.
 type ChannelsV1GetLastKeyStatesResponse struct {
-	// States is the list of active session key states for the user
+	// States is the list of latest session key states for the user, filtered by IncludeInactive.
 	States []ChannelSessionKeyStateV1 `json:"states"`
 	// Metadata contains pagination information
 	Metadata PaginationMetadataV1 `json:"metadata"`
@@ -258,13 +261,16 @@ type AppSessionsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// IncludeInactive, when true, includes latest states whose expires_at is in the past
+	// (expired or revoked). Defaults to false: only currently active states are returned.
+	IncludeInactive *bool `json:"include_inactive,omitempty"`
 	// Pagination contains pagination parameters (offset, limit, sort)
 	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
-// SessionKeysV1GetSessionKeysResponse returns the list of active session keys.
+// AppSessionsV1GetLastKeyStatesResponse returns the latest session key states for the user.
 type AppSessionsV1GetLastKeyStatesResponse struct {
-	// States is the list of active session key states for the user
+	// States is the list of latest session key states for the user, filtered by IncludeInactive.
 	States []AppSessionKeyStateV1 `json:"states"`
 	// Metadata contains pagination information
 	Metadata PaginationMetadataV1 `json:"metadata"`

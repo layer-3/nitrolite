@@ -645,7 +645,7 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key. Mandatory pagination caps response size (max page size 10).
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: user_address
                   type: string
@@ -653,6 +653,10 @@ api:
                 - field_name: session_key
                   type: string
                   description: Optionally filter by session key
+                  optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
                   optional: true
                 - field_name: pagination
                   type: pagination_params
@@ -663,7 +667,7 @@ api:
                   type: array
                   items:
                     type: channel_session_key_state
-                  description: List of active session key states for the user
+                  description: Latest session key states for the user, filtered by `include_inactive`.
                 - field_name: metadata
                   type: pagination_metadata
                   description: Pagination information
@@ -840,7 +844,7 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key. Mandatory pagination caps response size (max page size 10).
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: user_address
                   type: string
@@ -848,6 +852,10 @@ api:
                 - field_name: session_key
                   type: string
                   description: Optionally filter by session key
+                  optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
                   optional: true
                 - field_name: pagination
                   type: pagination_params
@@ -858,7 +866,7 @@ api:
                   type: array
                   items:
                     type: app_session_key_state
-                  description: List of active session key states for the user
+                  description: Latest session key states for the user, filtered by `include_inactive`.
                 - field_name: metadata
                   type: pagination_metadata
                   description: Pagination information

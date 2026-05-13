@@ -1152,10 +1152,14 @@ func (o *Operator) createAppSessionKey(ctx context.Context, sessionKeyAddr, expi
 		return
 	}
 
-	// Determine version by fetching existing keys
+	// Determine version by fetching existing keys. include_inactive=true so an expired
+	// prior version still surfaces — otherwise rotation would restart from version 1 and
+	// collide with the monotonic pointer enforced server-side.
+	includeInactive := true
 	var version uint64 = 1
 	existingStates, err := o.client.GetLastAppKeyStates(ctx, wallet, &sdk.GetLastKeyStatesOptions{
-		SessionKey: &sessionKeyAddr,
+		SessionKey:      &sessionKeyAddr,
+		IncludeInactive: &includeInactive,
 	})
 	if err == nil && len(existingStates) > 0 {
 		for _, s := range existingStates {

@@ -406,7 +406,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(stateB1))
 
-		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 2)
@@ -455,7 +455,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
 		sessionKey := testKeyA
-		results, _, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey, true, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
@@ -488,7 +488,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
-		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 100, 0)
 		require.NoError(t, err)
 
 		// Both keys returned — caller is responsible for checking expiration
@@ -501,7 +501,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 
 		store := NewDBStore(db)
 
-		results, _, err := store.GetLastAppSessionKeyStates("0x0000000000000000000000000000000000000099", nil, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates("0x0000000000000000000000000000000000000099", nil, true, 100, 0)
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
@@ -530,7 +530,7 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state2))
 
-		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 100, 0)
 		require.NoError(t, err)
 
 		assert.Len(t, results, 1)
@@ -555,17 +555,17 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 			require.NoError(t, store.StoreAppSessionKeyState(state))
 		}
 
-		page1, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 0)
+		page1, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 0)
 		require.NoError(t, err)
 		assert.Len(t, page1, 2)
 		assert.Equal(t, uint32(numKeys), total)
 
-		page2, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 2)
+		page2, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 2)
 		require.NoError(t, err)
 		assert.Len(t, page2, 2)
 		assert.Equal(t, uint32(numKeys), total)
 
-		page3, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, 2, 4)
+		page3, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 4)
 		require.NoError(t, err)
 		assert.Len(t, page3, 1)
 		assert.Equal(t, uint32(numKeys), total)
@@ -583,6 +583,72 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 			_, dup := seen[s.SessionKey]
 			assert.False(t, dup, "page3 overlaps earlier page for %s", s.SessionKey)
 		}
+	})
+
+	t.Run("includeInactive=false filters out expired latest states and matches count", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		// Active latest
+		active := app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(24 * time.Hour),
+			UserSig:     "0xsigA",
+		}
+		require.NoError(t, store.StoreAppSessionKeyState(active))
+
+		// Expired latest
+		expired := app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyB,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(-1 * time.Hour),
+			UserSig:     "0xsigB",
+		}
+		require.NoError(t, store.StoreAppSessionKeyState(expired))
+
+		results, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, false, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, testKeyA, results[0].SessionKey)
+		assert.Equal(t, uint32(1), total)
+
+		// includeInactive=true surfaces both, with count matching
+		all, allTotal, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, all, 2)
+		assert.Equal(t, uint32(2), allTotal)
+	})
+
+	t.Run("includeInactive=false combined with session_key filter excludes the expired match", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		expired := app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(-1 * time.Hour),
+			UserSig:     "0xsigA",
+		}
+		require.NoError(t, store.StoreAppSessionKeyState(expired))
+
+		sessionKey := testKeyA
+		results, total, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey, false, 100, 0)
+		require.NoError(t, err)
+		assert.Empty(t, results)
+		assert.Equal(t, uint32(0), total)
+
+		all, allTotal, err := store.GetLastAppSessionKeyStates(testUser1, &sessionKey, true, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, all, 1)
+		assert.Equal(t, uint32(1), allTotal)
 	})
 }
 
@@ -784,7 +850,7 @@ func TestDBStore_AppSessionKeyState_ForeignRelations(t *testing.T) {
 		require.NoError(t, store.StoreAppSessionKeyState(stateB))
 
 		// GetLastAppSessionKeyStates returns both — verify preloaded relations are correct
-		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, 100, 0)
+		results, _, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 100, 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 

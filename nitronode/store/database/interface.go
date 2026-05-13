@@ -210,8 +210,10 @@ type DatabaseStore interface {
 	GetLastAppSessionKeyState(wallet, sessionKey string) (*app.AppSessionKeyStateV1, error)
 
 	// GetLastAppSessionKeyStates retrieves the latest session key states for a user with optional
-	// filtering. Results are paginated; totalCount is the unpaginated total matching the filter.
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
+	// filtering. When includeInactive is false, only states whose expires_at is in the future are
+	// returned; when true, all latest states are returned regardless of expiry. Results are
+	// paginated; totalCount is the unpaginated total matching the filter.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 
 	// --- Channel Session Key State Operations ---
 
@@ -223,9 +225,11 @@ type DatabaseStore interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key. Results are paginated; totalCount is the unpaginated
-	// total matching the filter.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
+	// optionally filtered by session key. When includeInactive is false, only states whose
+	// expires_at is in the future are returned; when true, all latest states are returned
+	// regardless of expiry. Results are paginated; totalCount is the unpaginated total matching
+	// the filter.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

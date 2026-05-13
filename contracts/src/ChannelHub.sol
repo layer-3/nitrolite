@@ -633,8 +633,9 @@ contract ChannelHub is ReentrancyGuard {
             ChannelEngine.TransitionEffects memory effects = ChannelEngine.validateTransition(ctx, candidate);
 
             _applyTransitionEffects(channelId, def, candidate, effects);
+        } else {
+            require(msg.value == 0, IncorrectValue());
         }
-        // else: challenging with same version, state already processed
 
         (ISignatureValidator validator, bytes calldata sigData) =
             _extractValidator(challengerSig, approvedSignatureValidators);
@@ -700,6 +701,7 @@ contract ChannelHub is ReentrancyGuard {
 
         if (_isChannelHomeChain(channelId)) {
             require(msg.sender == NODE, IncorrectMsgSender());
+            require(msg.value == 0, IncorrectValue());
             _processHomeChainEscrow(channelId, candidate);
             emit EscrowDepositInitiatedOnHome(escrowId, channelId, candidate);
         } else {
@@ -1149,11 +1151,13 @@ contract ChannelHub is ReentrancyGuard {
         ChannelEngine.TransitionEffects memory effects
     ) internal {
         ChannelMeta storage meta = _channels[channelId];
+        address token = candidate.homeLedger.token;
+
+        _requireMsgValueForUserFundsDelta(token, effects.userFundsDelta);
 
         meta.lastState = candidate;
 
         address user = def.user;
-        address token = candidate.homeLedger.token;
 
         // Process POSITIVE deltas first (additions to lockedFunds) to prevent underflow
         if (effects.userFundsDelta > 0) {
@@ -1200,6 +1204,9 @@ contract ChannelHub is ReentrancyGuard {
         uint256 approvedSignatureValidators
     ) internal {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
+        address token = effects.updateInitState ? candidate.nonHomeLedger.token : meta.initState.nonHomeLedger.token;
+
+        _requireMsgValueForUserFundsDelta(token, effects.userFundsDelta);
 
         if (effects.newStatus != EscrowStatus.VOID) {
             meta.status = effects.newStatus;
@@ -1216,9 +1223,6 @@ contract ChannelHub is ReentrancyGuard {
         if (effects.newChallengeExpiry > 0) {
             meta.challengeExpireAt = effects.newChallengeExpiry;
         }
-
-        // Determine the correct token to use (from init state for finalization, from candidate for initiation)
-        address token = effects.updateInitState ? candidate.nonHomeLedger.token : meta.initState.nonHomeLedger.token;
 
         // Handle user funds (positive = pull from user)
         if (effects.userFundsDelta > 0) {
@@ -1374,14 +1378,23 @@ contract ChannelHub is ReentrancyGuard {
         return _escrowWithdrawals[escrowId].channelId == bytes32(0) && _isChannelHomeChain(channelId);
     }
 
-    function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
-        if (amount == 0) return;
+    function _requireMsgValueForUserFundsDelta(address token, int256 userFundsDelta) internal view {
+        uint256 amount = userFundsDelta > 0 ? userFundsDelta.toUint256() : 0;
+        _requireMsgValueForPull(token, amount);
+    }
 
+    function _requireMsgValueForPull(address token, uint256 amount) internal view {
         if (token == address(0)) {
             require(msg.value == amount, IncorrectValue());
         } else {
             require(msg.value == 0, IncorrectValue());
         }
+    }
+
+    function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
+        _requireMsgValueForPull(token, amount);
+
+        if (amount == 0) return;
 
         if (token != address(0)) {
             IERC20(token).safeTransferFrom(from, address(this), amount);

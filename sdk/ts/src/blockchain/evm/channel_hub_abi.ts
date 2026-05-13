@@ -4157,6 +4157,12 @@ export const ChannelHubAbi = [
     name: 'EscrowDepositsPurged',
     inputs: [
       {
+        name: 'escrowIds',
+        type: 'bytes32[]',
+        indexed: false,
+        internalType: 'bytes32[]'
+      },
+      {
         name: 'purgedCount',
         type: 'uint256',
         indexed: false,

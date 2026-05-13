@@ -49,6 +49,12 @@ type DatabaseStore interface {
 	// "Active" includes both Void (DB-only) and Open (materialized onchain).
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
+	// GetNotClosedHomeChannel retrieves the home channel for a user's wallet and asset
+	// regardless of status, as long as it has not reached ChannelStatusClosed. Intended
+	// for read paths (e.g. GetHomeChannel RPC) that must remain functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
 	// CheckActiveChannel verifies if a user has an active home channel for the given asset
 	// and returns its approved signature validators and current status. A nil status means
 	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)

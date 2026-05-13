@@ -72,6 +72,11 @@ type Store interface {
 	// Returns nil if no home channel exists for the given wallet and asset.
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
+	// GetNotClosedHomeChannel retrieves the home channel regardless of status as long as it
+	// is not Closed. Used by GetHomeChannel so the endpoint stays functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
 	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
 	// The channel must already exist in the database.
 	UpdateChannel(channel core.Channel) error

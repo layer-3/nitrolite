@@ -377,6 +377,70 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 	})
 }
 
+func TestDBStore_GetNotClosedHomeChannel(t *testing.T) {
+	makeChannel := func(id, wallet, asset string, status core.ChannelStatus, chType core.ChannelType) core.Channel {
+		return core.Channel{
+			ChannelID:         id,
+			UserWallet:        wallet,
+			Asset:             asset,
+			Type:              chType,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            status,
+			StateVersion:      1,
+		}
+	}
+
+	for _, tc := range []struct {
+		name        string
+		status      core.ChannelStatus
+		expectFound bool
+	}{
+		{"returns Void channel", core.ChannelStatusVoid, true},
+		{"returns Open channel", core.ChannelStatusOpen, true},
+		{"returns Challenged channel", core.ChannelStatusChallenged, true},
+		{"returns Closing channel", core.ChannelStatusClosing, true},
+		{"returns nil for Closed channel", core.ChannelStatusClosed, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := SetupTestDB(t)
+			defer cleanup()
+			store := NewDBStore(db)
+
+			require.NoError(t, store.CreateChannel(makeChannel("0xch1", "0xuser123", "usdc", tc.status, core.ChannelTypeHome)))
+
+			result, err := store.GetNotClosedHomeChannel("0xuser123", "USDC")
+			require.NoError(t, err)
+			if tc.expectFound {
+				require.NotNil(t, result)
+				assert.Equal(t, tc.status, result.Status)
+			} else {
+				assert.Nil(t, result)
+			}
+		})
+	}
+
+	t.Run("returns nil when no channel exists", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		result, err := NewDBStore(db).GetNotClosedHomeChannel("0xuser123", "USDC")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("ignores escrow channels", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(makeChannel("0xesc1", "0xuser123", "usdc", core.ChannelStatusOpen, core.ChannelTypeEscrow)))
+		result, err := store.GetNotClosedHomeChannel("0xuser123", "USDC")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+}
+
 func TestDBStore_CheckActiveChannel(t *testing.T) {
 	t.Run("Success - Has open channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)

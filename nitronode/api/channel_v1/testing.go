@@ -97,6 +97,14 @@ func (m *MockStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, e
 	return args.Get(0).(*core.Channel), args.Error(1)
 }
 
+func (m *MockStore) GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error) {
+	args := m.Called(wallet, asset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
 func (m *MockStore) UpdateChannel(channel core.Channel) error {
 	args := m.Called(channel)
 	return args.Error(0)

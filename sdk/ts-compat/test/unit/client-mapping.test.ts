@@ -288,6 +288,38 @@ describe('NitroliteClient compat mappings', () => {
         ]);
     });
 
+    it.each([
+        { numeric: 0, expected: 'void' },
+        { numeric: 1, expected: 'open' },
+        { numeric: 2, expected: 'challenged' },
+        { numeric: 3, expected: 'closing' },
+        { numeric: 4, expected: 'closed' },
+    ])('maps channel status $numeric to "$expected" in getChannels()', async ({ numeric, expected }) => {
+        const { client } = makeCompatClient({
+            getChannels: jest.fn().mockResolvedValue({
+                channels: [
+                    {
+                        channelId: 'channel-1',
+                        userWallet: USER,
+                        status: numeric,
+                        asset: 'yusd',
+                        tokenAddress: CURRENT_TOKEN,
+                        blockchainId: CURRENT_CHAIN,
+                        challengeDuration: 86400,
+                        nonce: 1n,
+                        stateVersion: 1n,
+                    },
+                ],
+            }),
+            getLatestState: jest.fn().mockResolvedValue({
+                homeLedger: { userBalance: new Decimal('0') },
+            }),
+        });
+        await client.refreshAssets();
+        const channels = await client.getChannels();
+        expect(channels[0].status).toBe(expected);
+    });
+
     it('keeps unsupported legacy methods honest and getOpenChannels delegates to the current chain hub', async () => {
         const { client } = makeCompatClient();
         const readContract = jest.fn().mockResolvedValue(['0xabc', '0xdef']);

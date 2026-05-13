@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Introduce ChannelStatusClosing (3) between Challenged (2) and Closed (4).
 -- Prior to this migration Closed was encoded as 3; shift it to 4 first,
 -- then the gap at 3 becomes the new Closing value.
@@ -10,3 +12,9 @@
 --   4 = closed
 
 UPDATE channels SET status = 4 WHERE status = 3;
+
+-- +goose Down
+
+UPDATE channels SET status = 3 WHERE status = 4;
+-- Note: any rows with status = 3 (Closing) at rollback time are left as-is;
+-- they have no valid representation in the old schema and must be resolved manually.

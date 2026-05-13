@@ -6,7 +6,6 @@ import {TestUtils} from "../TestUtils.sol";
 import {Utils} from "../../src/Utils.sol";
 
 import {ChannelHub} from "../../src/ChannelHub.sol";
-import {EscrowWithdrawalEngine} from "../../src/EscrowWithdrawalEngine.sol";
 import {
     State,
     ChannelDefinition,

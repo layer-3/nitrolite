@@ -427,6 +427,9 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 // HandleEscrowDepositsPurged processes the EscrowDepositsPurged event emitted when expired escrow deposits
 // are finalized by the on-chain purge queue without a signed FINALIZE_ESCROW_DEPOSIT state. It marks each
 // corresponding escrow channel as Closed, preserving its existing StateVersion.
+//
+// TODO: consider scoping the DB transaction per channel update instead of wrapping the whole batch,
+// so a single failure does not roll back already-processed channels in the same purge event.
 func (s *EventHandlerService) HandleEscrowDepositsPurged(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.EscrowDepositsPurgedEvent) error {
 	logger := log.FromContext(ctx)
 	closedCount := 0

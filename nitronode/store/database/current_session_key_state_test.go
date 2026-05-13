@@ -240,6 +240,83 @@ func TestDBStore_CountSessionKeysForUser(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint32(0), count)
 	})
+
+	t.Run("Revoked or expired keys do not count against the cap", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		// Active app-session key.
+		require.NoError(t, store.StoreAppSessionKeyState(app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(24 * time.Hour),
+			UserSig:     "0xsig",
+		}))
+
+		// Revoked app-session key (submit at the next version with expires_at in the past).
+		require.NoError(t, store.StoreAppSessionKeyState(app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyB,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(-time.Hour),
+			UserSig:     "0xsig",
+		}))
+
+		// Active channel key for the same user.
+		require.NoError(t, store.StoreChannelSessionKeyState(core.ChannelSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(24 * time.Hour),
+			UserSig:     "0xsig",
+		}))
+
+		// Revoked channel key.
+		require.NoError(t, store.StoreChannelSessionKeyState(core.ChannelSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyB,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(-time.Hour),
+			UserSig:     "0xsig",
+		}))
+
+		count, err := store.CountSessionKeysForUser(testUser1)
+		require.NoError(t, err)
+		assert.Equal(t, uint32(2), count, "only active keys (1 app + 1 channel) should count")
+	})
+
+	t.Run("Rotating an existing key out via past expires_at frees the slot", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		require.NoError(t, store.StoreAppSessionKeyState(app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     1,
+			ExpiresAt:   time.Now().Add(24 * time.Hour),
+			UserSig:     "0xsig_active",
+		}))
+
+		count, err := store.CountSessionKeysForUser(testUser1)
+		require.NoError(t, err)
+		assert.Equal(t, uint32(1), count)
+
+		// Submit version 2 with past expires_at as a revoke.
+		require.NoError(t, store.StoreAppSessionKeyState(app.AppSessionKeyStateV1{
+			UserAddress: testUser1,
+			SessionKey:  testKeyA,
+			Version:     2,
+			ExpiresAt:   time.Now().Add(-time.Hour),
+			UserSig:     "0xsig_revoke",
+		}))
+
+		count, err = store.CountSessionKeysForUser(testUser1)
+		require.NoError(t, err)
+		assert.Equal(t, uint32(0), count, "revoke must free the slot")
+	})
 }
 
 func TestDBStore_CurrentPointer_VersionMonotonic(t *testing.T) {

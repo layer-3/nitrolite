@@ -292,7 +292,45 @@ func TestSubmitSessionKeyState_InvalidUserAddress(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "invalid user_address")
 }
 
-func TestSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
+func TestSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	// expires_at in the past expresses a revoke: the same monotonic version sequence
+	// is preserved, the auth path filters expires_at > now so the key is deactivated.
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, nil, nil, expiresAt, userSigner, sessionKeySigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, nil)
+	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
+func TestSubmitSessionKeyState_RejectsNegativeExpiresAt(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := &Handler{
 		useStoreInTx: func(handler StoreTxHandler) error {
@@ -309,7 +347,7 @@ func TestSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
 			Version:        "1",
 			ApplicationIDs: []string{},
 			AppSessionIDs:  []string{},
-			ExpiresAt:      strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10),
+			ExpiresAt:      "-1",
 			UserSig:        "0xdeadbeef",
 		},
 	}
@@ -327,7 +365,8 @@ func TestSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
-	assert.Contains(t, respErr.Error(), "expires_at must be in the future")
+	assert.Contains(t, respErr.Error(), "expires_at must be non-negative")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestSubmitSessionKeyState_MissingUserSig(t *testing.T) {

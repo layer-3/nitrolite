@@ -290,10 +290,17 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 // Session Key Methods
 // ============================================================================
 
-// SubmitAppSessionKeyState submits a session key state for registration or update.
-// The state must carry both the wallet's UserSig (proving the user authorized the
-// delegation) and the session-key holder's SessionKeySig (proving possession of the key
-// being registered). Submits without a valid SessionKeySig are rejected.
+// SubmitAppSessionKeyState submits a session key state for registration, update,
+// revocation, or re-activation. The state must carry both the wallet's UserSig
+// (authorizing the delegation) and the session-key holder's SessionKeySig (proving
+// possession of the key); submits without a valid SessionKeySig are rejected.
+//
+// Set state.ExpiresAt to a future time to register or update the key. Set it to a
+// value at or before time.Now() to revoke the key — the auth path filters by
+// expires_at, so the key is deactivated immediately while keeping the same monotonic
+// version sequence. A later submit with the next version and a future ExpiresAt
+// re-activates the same session key address. Negative unix timestamps are rejected
+// by the server.
 //
 // Parameters:
 //   - state: The session key state containing delegation information

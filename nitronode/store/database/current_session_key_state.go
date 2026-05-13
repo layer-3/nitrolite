@@ -136,19 +136,34 @@ func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind Sessi
 	return locked.Version, nil
 }
 
-// CountSessionKeysForUser returns the number of distinct session keys recorded for the wallet
-// in the pointer table, across both kinds. Drives the per-user cap at submit time.
+// CountSessionKeysForUser returns the number of distinct active session keys recorded for the
+// wallet in the pointer table, across both kinds. Drives the per-user cap at submit time.
 // Rows seeded by LockSessionKeyState (version=0) are excluded so that a failed-cap rejection
-// does not itself leave a phantom row counted toward the cap.
+// does not itself leave a phantom row counted toward the cap. Revoked or naturally expired
+// keys (expires_at <= now in the underlying history row) are also excluded so that a revoke
+// frees the slot. A single now is bound for both kind branches so the count is internally
+// consistent.
 func (s *DBStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
 	userAddress = strings.ToLower(userAddress)
+	now := time.Now().UTC()
 
-	var count int64
-	err := s.db.Model(&CurrentSessionKeyStateV1{}).
-		Where("user_address = ? AND version > 0", userAddress).
-		Count(&count).Error
+	var channelCount int64
+	err := s.db.Table("current_session_key_states_v1 AS c").
+		Joins("JOIN channel_session_key_states_v1 h ON h.user_address = c.user_address AND h.session_key = c.session_key AND h.version = c.version").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0 AND h.expires_at > ?", userAddress, SessionKeyKindChannel, now).
+		Count(&channelCount).Error
 	if err != nil {
-		return 0, fmt.Errorf("failed to count session keys for user: %w", err)
+		return 0, fmt.Errorf("failed to count channel session keys for user: %w", err)
 	}
-	return uint32(count), nil
+
+	var appCount int64
+	err = s.db.Table("current_session_key_states_v1 AS c").
+		Joins("JOIN app_session_key_states_v1 h ON h.user_address = c.user_address AND h.session_key = c.session_key AND h.version = c.version").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0 AND h.expires_at > ?", userAddress, SessionKeyKindAppSession, now).
+		Count(&appCount).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count app session keys for user: %w", err)
+	}
+
+	return uint32(channelCount + appCount), nil
 }

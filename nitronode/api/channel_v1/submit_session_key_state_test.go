@@ -212,7 +212,47 @@ func TestChannelSubmitSessionKeyState_InvalidUserAddress(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "invalid user_address")
 }
 
-func TestChannelSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
+func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	// expires_at in the past expresses a revoke: the same monotonic version sequence
+	// is preserved, the auth path filters expires_at > now so the key is deactivated.
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	assets := []string{"USDC"}
+
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
+func TestChannelSubmitSessionKeyState_RejectsNegativeExpiresAt(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := &Handler{
 		useStoreInTx: func(handler StoreTxHandler) error {
@@ -228,7 +268,7 @@ func TestChannelSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
 			SessionKey:  "0x3333333333333333333333333333333333333333",
 			Version:     "1",
 			Assets:      []string{},
-			ExpiresAt:   strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10),
+			ExpiresAt:   "-1",
 			UserSig:     "0xdeadbeef",
 		},
 	}
@@ -246,7 +286,8 @@ func TestChannelSubmitSessionKeyState_ExpiredExpiresAt(t *testing.T) {
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
-	assert.Contains(t, respErr.Error(), "expires_at must be in the future")
+	assert.Contains(t, respErr.Error(), "expires_at must be non-negative")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestChannelSubmitSessionKeyState_MissingUserSig(t *testing.T) {

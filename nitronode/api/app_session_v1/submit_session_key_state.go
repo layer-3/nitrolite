@@ -57,8 +57,15 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
 	}
-	if coreState.ExpiresAt.Before(time.Now()) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
+	// Past expires_at is permitted as a revocation signal. The auth path filters
+	// expires_at > now so a past timestamp deactivates the key immediately while keeping
+	// the same monotonic version sequence (a later submit with a future expires_at can
+	// re-activate the key). A negative unix timestamp is rejected because the
+	// metadata-hash packer casts int64 -> uint64 (wraps to a huge future value), which
+	// would cause the user-signed payload to disagree with the value persisted in the
+	// database — defense-in-depth even though the DB filter is the source of truth.
+	if coreState.ExpiresAt.Unix() < 0 {
+		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be non-negative"), "")
 		return
 	}
 	if len(coreState.AppSessionIDs) > h.maxSessionKeyIDs {
@@ -155,6 +162,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	c.Succeed(c.Request.Method, payload)
+	if !coreState.ExpiresAt.After(time.Now()) {
+		logger.Info("session key revoked",
+			"userAddress", coreState.UserAddress,
+			"sessionKey", coreState.SessionKey,
+			"version", coreState.Version,
+			"expiresAt", coreState.ExpiresAt)
+		return
+	}
 	logger.Info("successfully stored session key state",
 		"userAddress", coreState.UserAddress,
 		"sessionKey", coreState.SessionKey,

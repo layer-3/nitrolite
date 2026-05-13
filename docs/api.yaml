@@ -648,11 +648,20 @@ api:
                 - message: denied_until_checkpoint
                   description: State submissions are denied until the next checkpoint
             - name: submit_session_key_state
-              description: Submit the session key state for registration and updates
+              description: |
+                Submit the channel session key state for registration, update, revocation, or re-activation.
+
+                The `expires_at` timestamp on `state` governs activation:
+                  * A value in the future activates the session key until that time.
+                  * A value at or before "now" revokes the key immediately. The same monotonic
+                    `version` sequence is preserved, so a subsequent submit with `version+1` and
+                    a future `expires_at` re-activates the same session key address.
+                The metadata hash binds `expires_at`, so each revoke or re-activation requires a
+                fresh user signature over the new payload. Negative unix timestamps are rejected.
               request:
                 - field_name: state
                   type: channel_session_key_state
-                  description: Session key metadata and delegation information
+                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
               response: []
               errors:
                 - message: invalid_session_key_state
@@ -846,11 +855,20 @@ api:
                 - message: insufficient_balance
                   description: Participant has insufficient balance for allocations
             - name: submit_session_key_state
-              description: Submit the session key state for registration and updates
+              description: |
+                Submit the app session key state for registration, update, revocation, or re-activation.
+
+                The `expires_at` timestamp on `state` governs activation:
+                  * A value in the future activates the session key until that time.
+                  * A value at or before "now" revokes the key immediately. The same monotonic
+                    `version` sequence is preserved, so a subsequent submit with `version+1` and
+                    a future `expires_at` re-activates the same session key address.
+                The metadata hash binds `expires_at`, so each revoke or re-activation requires a
+                fresh user signature over the new payload. Negative unix timestamps are rejected.
               request:
                 - field_name: state
                   type: app_session_key_state
-                  description: Session key metadata and delegation information
+                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
               response: []
               errors:
                 - message: invalid_session_key_state

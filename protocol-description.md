@@ -559,8 +559,22 @@ This works because `prevStoredState` was swapped during `INITIATE_MIGRATION`.
 * Signatures are validated **before** swapping (using the original signed state)
 * After swapping, signatures are invalidated (`userSig = ""`, `nodeSig = ""`) to prevent misuse
 * The swapped state is only used internally for storage and validation
-* Events emit the original signed state (before swap) for off-chain observability
+* Migration lifecycle events (`MigrationInInitiated`, `MigrationOutInitiated`, `MigrationInFinalized`, `MigrationOutFinalized`) emit the original signed state (before swap) for off-chain observability
+* `ChannelClosed` is an exception: it emits `meta.lastState`, which on the new home chain is the already-swapped state stored during `initiateMigration()`
 * This approach maintains the critical invariant: **ChannelEngine always sees homeLedger as the current chain**
+
+#### Dual-close during abandoned migration
+
+If a migration is initiated but never finalized and both channel copies are subsequently challenged and closed after timeout, `ChannelClosed` can be emitted on both chains for the same `channelId` and state version but with **opposite `homeLedger`/`nonHomeLedger` orientation**:
+
+* Old home chain (`OPERATING`/`DISPUTED`): emits `finalState` with `homeLedger` = old home chain (original orientation)
+* New home chain (`MIGRATING_IN`/`DISPUTED`): emits `finalState` with `homeLedger` = new home chain (swapped orientation)
+
+On-chain fund accounting is correct in both cases — each chain pays from its own locally stored allocations. The concern is for off-chain consumers:
+
+* Index and key `ChannelClosed` events by `(chainId, ChannelHub, channelId)`, never by `channelId` alone
+* Treat each emission as a distinct local settlement; there is no single canonical `finalState` for an abandoned migration
+* Code that persists the emitted `finalState` must handle the swapped ledger orientation for channels in `MIGRATING_IN` status
 
 ---
 

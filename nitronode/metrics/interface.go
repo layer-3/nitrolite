@@ -37,7 +37,7 @@ type RuntimeMetricExporter interface {
 	IncRPCMessage(msgType rpc.MsgType, method string)
 	IncRPCRequest(method, path string, success bool)
 	ObserveRPCDuration(method, path string, success bool, duration time.Duration)
-	SetRPCConnections(region, origin string, count uint32)
+	SetRPCConnections(applicationID string, count uint32)
 	IncRPCInflight(method string)
 	DecRPCInflight(method string)
 
@@ -68,7 +68,7 @@ func (noopRuntimeMetricExporter) IncAppSessionKeys()                            
 func (noopRuntimeMetricExporter) IncRPCMessage(rpc.MsgType, string)                         {}
 func (noopRuntimeMetricExporter) IncRPCRequest(string, string, bool)                        {}
 func (noopRuntimeMetricExporter) ObserveRPCDuration(string, string, bool, time.Duration)    {}
-func (noopRuntimeMetricExporter) SetRPCConnections(string, string, uint32)                  {}
+func (noopRuntimeMetricExporter) SetRPCConnections(string, uint32)                          {}
 func (noopRuntimeMetricExporter) IncAppStateUpdate(string)                                  {}
 func (noopRuntimeMetricExporter) IncAppSessionUpdateSigValidation(string, app.AppSessionSignerTypeV1, bool) {
 }

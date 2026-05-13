@@ -16,6 +16,11 @@ const (
 	// This version is encoded as the first byte of the channelId to prevent replay attacks
 	// across different ChannelHub deployments on the same chain.
 	ChannelHubVersion uint8 = 1
+
+	// ChannelMinChallengeDuration and ChannelMaxChallengeDuration mirror the
+	// ChannelHub challenge-duration bounds.
+	ChannelMinChallengeDuration uint32 = 24 * 60 * 60
+	ChannelMaxChallengeDuration uint32 = 7 * 24 * 60 * 60
 )
 
 var (

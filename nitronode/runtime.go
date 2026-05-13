@@ -106,6 +106,31 @@ type ValidationLimits struct {
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 
+func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
+	if minChallenge < core.ChannelMinChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be at least %d seconds, got %d",
+			core.ChannelMinChallengeDuration,
+			minChallenge,
+		)
+	}
+	if maxChallenge > core.ChannelMaxChallengeDuration {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION must be at most %d seconds, got %d",
+			core.ChannelMaxChallengeDuration,
+			maxChallenge,
+		)
+	}
+	if minChallenge > maxChallenge {
+		return fmt.Errorf(
+			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be <= NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION, got min=%d max=%d",
+			minChallenge,
+			maxChallenge,
+		)
+	}
+	return nil
+}
+
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
 	closers := []func() error{} // collect closer functions for resources that need cleanup
@@ -125,6 +150,9 @@ func InitBackbone() *Backbone {
 	var conf FullConfig
 	if err := cleanenv.ReadEnv(&conf); err != nil {
 		logger.Fatal("failed to read env", "err", err)
+	}
+	if err := validateChannelChallengeConfig(conf.ChannelMinChallengeDuration, conf.ChannelMaxChallengeDuration); err != nil {
+		logger.Fatal("invalid channel challenge duration config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)

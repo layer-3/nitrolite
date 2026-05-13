@@ -90,6 +90,13 @@ func upsertCurrentSessionKeyState(tx *gorm.DB, userAddress, sessionKey string, k
 //
 // SELECT ... FOR UPDATE is postgres-only; on sqlite the locking clause is skipped and the
 // surrounding transaction provides the necessary ordering for the in-process test setup.
+//
+// Seed-row permanence: the version=0 row written below is intentionally never deleted on
+// failure paths (sig validation, version mismatch, cap exceeded, mid-tx errors). Once a wallet
+// has staked a claim on (session_key, kind), no other wallet can take it for that kind — the
+// seed is the ownership reservation, not a transient placeholder. CountSessionKeysForUser
+// excludes version=0 rows so the per-user cap is unaffected, but the (session_key, kind)
+// ownership bind is permanent by design.
 func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error) {
 	userAddress = strings.ToLower(userAddress)
 	sessionKey = strings.ToLower(sessionKey)

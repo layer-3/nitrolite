@@ -903,6 +903,13 @@ export class NitroliteClient {
         return this.innerClient.getLastAppKeyStates(userAddress, sessionKey, options);
     }
 
+    /**
+     * @deprecated Use `getLastAppKeyStates` instead. Retained for 0.5.x callers; will be removed in the next major.
+     */
+    async getLastKeyStates(userAddress: string, sessionKey?: string): Promise<AppSessionKeyStateV1[]> {
+        return this.getLastAppKeyStates(userAddress, sessionKey);
+    }
+
     // -----------------------------------------------------------------------
     // App session operations
     // -----------------------------------------------------------------------

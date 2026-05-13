@@ -344,6 +344,19 @@ describe('NitroliteClient compat mappings', () => {
         expect(innerClient.getLastAppKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
     });
 
+    it('keeps the deprecated getLastKeyStates alias forwarding to getLastAppKeyStates', async () => {
+        const sessionKey = '0x0000000000000000000000000000000000000d02';
+        const { client, innerClient } = makeCompatClient({
+            getLastAppKeyStates: jest.fn().mockResolvedValue([]),
+        });
+
+        await client.getLastKeyStates(USER, sessionKey);
+        expect(innerClient.getLastAppKeyStates).toHaveBeenCalledWith(USER, sessionKey, undefined);
+
+        await client.getLastKeyStates(USER);
+        expect(innerClient.getLastAppKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+    });
+
     it('keeps unsupported legacy methods honest and getOpenChannels delegates to the current chain hub', async () => {
         const { client } = makeCompatClient();
         const readContract = jest.fn().mockResolvedValue(['0xabc', '0xdef']);

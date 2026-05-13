@@ -192,6 +192,7 @@ helpers produce `session_key_sig`.
 | `signAppSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for app state |
 | `submitSessionKeyState(state)` | Register/submit an app-session key state (both sigs required) |
 | `getLastAppKeyStates(userAddress, sessionKey?, options?)` | Fetch app-session key states (active-only by default; `{ includeInactive: true }` for expired/revoked) |
+| `getLastKeyStates(userAddress, sessionKey?)` | **Deprecated** — 0.5.x alias for `getLastAppKeyStates`; no `includeInactive` option |
 
 ### Transfers
 

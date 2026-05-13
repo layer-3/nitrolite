@@ -1219,7 +1219,7 @@ contract ChannelHub is ReentrancyGuard {
             meta.unlockAt = effects.newUnlockAt;
         }
 
-        if (effects.newChallengeExpiry > 0) {
+        if (meta.challengeExpireAt != effects.newChallengeExpiry) {
             meta.challengeExpireAt = effects.newChallengeExpiry;
         }
 
@@ -1274,7 +1274,7 @@ contract ChannelHub is ReentrancyGuard {
             _initEscrowWithdrawalMetadata(escrowId, channelId, candidate, user, approvedSignatureValidators);
         }
 
-        if (effects.newChallengeExpiry > 0) {
+        if (meta.challengeExpireAt != effects.newChallengeExpiry) {
             meta.challengeExpireAt = effects.newChallengeExpiry;
         }
 

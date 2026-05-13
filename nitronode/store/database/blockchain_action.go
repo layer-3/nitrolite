@@ -12,6 +12,7 @@ type BlockchainActionType uint8
 
 const (
 	ActionTypeCheckpoint BlockchainActionType = 1
+	ActionTypeChallenge  BlockchainActionType = 2
 
 	ActionTypeInitiateEscrowDeposit BlockchainActionType = 10
 	ActionTypeFinalizeEscrowDeposit BlockchainActionType = 11
@@ -24,6 +25,8 @@ func (t BlockchainActionType) String() string {
 	switch t {
 	case ActionTypeCheckpoint:
 		return "checkpoint"
+	case ActionTypeChallenge:
+		return "challenge"
 	case ActionTypeInitiateEscrowDeposit:
 		return "initiate_escrow_deposit"
 	case ActionTypeFinalizeEscrowDeposit:
@@ -66,6 +69,13 @@ func (BlockchainAction) TableName() string {
 // ScheduleCheckpoint queues a blockchain action to checkpoint a state on home blockchain.
 func (s *DBStore) ScheduleCheckpoint(stateID string, blockchainID uint64) error {
 	return s.scheduleStateEnforcement(stateID, blockchainID, ActionTypeCheckpoint)
+}
+
+// ScheduleChallenge queues a blockchain action to challenge a channel on its home blockchain
+// using the provided state. The worker submits the state via challengeChannel(...) with a
+// node-produced challenger signature.
+func (s *DBStore) ScheduleChallenge(stateID string, blockchainID uint64) error {
+	return s.scheduleStateEnforcement(stateID, blockchainID, ActionTypeChallenge)
 }
 
 // ScheduleInitiateEscrowDeposit queues a blockchain action to initiate escrow deposit on home blockchain.

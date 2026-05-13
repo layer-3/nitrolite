@@ -79,6 +79,11 @@ func main() {
 
 	eventHandlerService := event_handlers.NewEventHandlerService()
 
+	nodeChannelSigner, err := core.NewChannelDefaultSigner(bb.StateSigner)
+	if err != nil {
+		logger.Fatal("failed to build node channel signer", "error", err)
+	}
+
 	for _, b := range blockchains {
 		rpcURL, ok := bb.BlockchainRPCs[b.ID]
 		if !ok {
@@ -126,7 +131,7 @@ func main() {
 				}
 			})
 
-			worker := NewBlockchainWorker(b.ID, blockchainClient, bb.DbStore, logger, bb.RuntimeMetrics)
+			worker := NewBlockchainWorker(b.ID, blockchainClient, bb.DbStore, nodeChannelSigner, bb.MemoryStore, logger, bb.RuntimeMetrics)
 			worker.Start(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain worker stopped", "error", err, "blockchainID", b.ID)

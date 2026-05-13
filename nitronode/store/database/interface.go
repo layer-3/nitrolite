@@ -102,6 +102,10 @@ type DatabaseStore interface {
 	// This queues the state to be submitted on-chain to update the channel's on-chain state.
 	ScheduleCheckpoint(stateID string, chainID uint64) error
 
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
 	// ScheduleFinalizeEscrowDeposit schedules a checkpoint for an escrow deposit operation.
 	// This queues the state to be submitted on-chain to finalize an escrow deposit.
 	ScheduleFinalizeEscrowDeposit(stateID string, chainID uint64) error

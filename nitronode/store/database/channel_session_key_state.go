@@ -11,15 +11,16 @@ import (
 
 // ChannelSessionKeyStateV1 represents a channel session key state in the database.
 type ChannelSessionKeyStateV1 struct {
-	ID           string                     `gorm:"column:id;primaryKey"`
-	UserAddress  string                     `gorm:"column:user_address;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:1"`
-	SessionKey   string                     `gorm:"column:session_key;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:2"`
-	Version      uint64                     `gorm:"column:version;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:3"`
-	Assets       []ChannelSessionKeyAssetV1 `gorm:"foreignKey:SessionKeyStateID;references:ID"`
-	MetadataHash string                     `gorm:"column:metadata_hash;type:char(66);not null"`
-	ExpiresAt    time.Time                  `gorm:"column:expires_at;not null"`
-	UserSig      string                     `gorm:"column:user_sig;not null"`
-	CreatedAt    time.Time
+	ID            string                     `gorm:"column:id;primaryKey"`
+	UserAddress   string                     `gorm:"column:user_address;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:1"`
+	SessionKey    string                     `gorm:"column:session_key;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:2"`
+	Version       uint64                     `gorm:"column:version;not null;uniqueIndex:idx_channel_session_key_states_v1_user_key_ver,priority:3"`
+	Assets        []ChannelSessionKeyAssetV1 `gorm:"foreignKey:SessionKeyStateID;references:ID"`
+	MetadataHash  string                     `gorm:"column:metadata_hash;type:char(66);not null"`
+	ExpiresAt     time.Time                  `gorm:"column:expires_at;not null"`
+	UserSig       string                     `gorm:"column:user_sig;not null"`
+	SessionKeySig string                     `gorm:"column:session_key_sig"`
+	CreatedAt     time.Time
 }
 
 func (ChannelSessionKeyStateV1) TableName() string {
@@ -46,19 +47,20 @@ func (s *DBStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV
 		return fmt.Errorf("failed to generate session key state ID: %w", err)
 	}
 
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(userAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return fmt.Errorf("failed to compute metadata hash: %w", err)
 	}
 
 	dbState := ChannelSessionKeyStateV1{
-		ID:           id,
-		UserAddress:  userAddress,
-		SessionKey:   sessionKey,
-		Version:      state.Version,
-		MetadataHash: strings.ToLower(metadataHash.Hex()),
-		ExpiresAt:    state.ExpiresAt.UTC(),
-		UserSig:      state.UserSig,
+		ID:            id,
+		UserAddress:   userAddress,
+		SessionKey:    sessionKey,
+		Version:       state.Version,
+		MetadataHash:  strings.ToLower(metadataHash.Hex()),
+		ExpiresAt:     state.ExpiresAt.UTC(),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}
 
 	if err := s.db.Create(&dbState).Error; err != nil {
@@ -186,11 +188,12 @@ func dbChannelSessionKeyStateToCore(dbState *ChannelSessionKeyStateV1) core.Chan
 	}
 
 	return core.ChannelSessionKeyStateV1{
-		UserAddress: dbState.UserAddress,
-		SessionKey:  dbState.SessionKey,
-		Version:     dbState.Version,
-		Assets:      assets,
-		ExpiresAt:   dbState.ExpiresAt,
-		UserSig:     dbState.UserSig,
+		UserAddress:   dbState.UserAddress,
+		SessionKey:    dbState.SessionKey,
+		Version:       dbState.Version,
+		Assets:        assets,
+		ExpiresAt:     dbState.ExpiresAt,
+		UserSig:       dbState.UserSig,
+		SessionKeySig: dbState.SessionKeySig,
 	}
 }

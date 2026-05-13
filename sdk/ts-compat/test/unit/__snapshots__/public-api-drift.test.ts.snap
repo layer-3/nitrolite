@@ -567,6 +567,8 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
       "resolveAsset: (symbol: string): Promise<AssetInfo>",
       "resolveAssetDisplay: (tokenAddress: Address | string, _chainId?: number): Promise<{ symbol: string; decimals: number; } | null>",
       "resolveToken: (tokenAddress: Address | string): Promise<AssetInfo>",
+      "signAppSessionKeyOwnership: (state: AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
+      "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyState: (state: ChannelSessionKeyStateV1): Promise<Hex>",
       "signSessionKeyState: (state: AppSessionKeyStateV1): Promise<Hex>",
       "submitAppState: (params: SubmitAppStateRequestParams): Promise<{ appSessionId: string; version: number; status: string; }>",

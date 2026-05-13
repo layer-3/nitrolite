@@ -1,17 +1,15 @@
 package app_session_v1
 
 import (
+	"errors"
 	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
-	"github.com/layer-3/nitrolite/pkg/sign"
 )
 
 // SubmitSessionKeyState processes session key state submissions for registration and updates.
@@ -50,6 +48,11 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
+	if strings.EqualFold(coreState.UserAddress, coreState.SessionKey) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key must differ from user_address"), "")
+		return
+	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
@@ -70,37 +73,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
-
-	// Pack the session key state for signature verification (ABI encoding)
-	packedState, err := app.PackAppSessionKeyStateV1(coreState)
-	if err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: failed to pack state: %v", err), "")
+	if coreState.SessionKeySig == "" {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
 		return
 	}
 
-	// Decode the user signature
-	sigBytes, err := hexutil.Decode(coreState.UserSig)
-	if err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: failed to decode user_sig: %v", err), "")
-		return
-	}
-
-	// Recover signer address from signature using ECDSA recovery
-	ethMsgRecoverer, err := sign.NewSigValidator(sign.TypeEthereumMsg)
-	if err != nil {
-		c.Fail(rpc.Errorf("internal_error: failed to create signature validator: %v", err), "")
-		return
-	}
-
-	recoveredAddress, err := ethMsgRecoverer.Recover(packedState, sigBytes)
-	if err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: failed to recover signer: %v", err), "")
-		return
-	}
-
-	// Verify the recovered address matches user_address
-	if !strings.EqualFold(recoveredAddress, coreState.UserAddress) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: signature does not match user_address"), "")
+	// Validate both signatures: wallet's UserSig and session-key holder's SessionKeySig.
+	if err := app.ValidateAppSessionKeyStateV1(coreState); err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
 		return
 	}
 
@@ -111,6 +91,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// a proper "expected version" error rather than racing on the history UNIQUE constraint.
 		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindAppSession)
 		if err != nil {
+			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
+				logger.Warn("session key registration collision",
+					"userAddress", coreState.UserAddress,
+					"sessionKey", coreState.SessionKey,
+					"kind", database.SessionKeyKindAppSession)
+				return rpc.Errorf("invalid_session_key_state: session_key not allowed")
+			}
 			return rpc.Errorf("failed to lock session key state: %v", err)
 		}
 

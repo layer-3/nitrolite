@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,48 @@ import (
 
 func TestCurrentSessionKeyStateV1_TableName(t *testing.T) {
 	assert.Equal(t, "current_session_key_states_v1", CurrentSessionKeyStateV1{}.TableName())
+}
+
+// TestCurrentSessionKeyStateV1_UniqueKeyKindConstraint pins the (session_key, kind) uniqueness
+// invariant at the database layer on every supported dialect. Postgres gets it from migration
+// 20260508000000; sqlite gets it from the uniqueIndex gorm tag via AutoMigrate. Without the
+// tag, sqlite would silently accept two pointer rows for the same key/kind under different
+// wallets, breaking LockSessionKeyState's read-first-then-check ownership flow.
+func TestCurrentSessionKeyStateV1_UniqueKeyKindConstraint(t *testing.T) {
+	db, cleanup := SetupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().UTC()
+	first := CurrentSessionKeyStateV1{
+		UserAddress: testUser1,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindAppSession,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	require.NoError(t, db.Create(&first).Error)
+
+	// Foreign wallet attempting the same (session_key, kind) must be rejected at the
+	// database layer, not just by application logic.
+	collision := CurrentSessionKeyStateV1{
+		UserAddress: testUser2,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindAppSession,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	err := db.Create(&collision).Error
+	require.Error(t, err)
+
+	// Same (session_key) under a different kind is allowed — the constraint is composite.
+	otherKind := CurrentSessionKeyStateV1{
+		UserAddress: testUser2,
+		SessionKey:  testSessionKey,
+		Kind:        SessionKeyKindChannel,
+		Version:     1,
+		UpdatedAt:   now,
+	}
+	require.NoError(t, db.Create(&otherKind).Error)
 }
 
 func TestDBStore_LockSessionKeyState(t *testing.T) {
@@ -71,6 +114,33 @@ func TestDBStore_LockSessionKeyState(t *testing.T) {
 		appV, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), appV)
+	})
+
+	t.Run("Foreign wallet trying to claim an already-owned (session_key, kind) is rejected", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		// User1 owns the session key for the app-session kind.
+		_, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
+		require.NoError(t, err)
+
+		// User2 attempts to lock the same (session_key, kind) — must surface the generic
+		// not-allowed sentinel without leaking that the key belongs to someone else.
+		_, err = store.LockSessionKeyState(testUser2, testSessionKey, SessionKeyKindAppSession)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrSessionKeyNotAllowed))
+	})
+
+	t.Run("Same (user, session_key) across both kinds is allowed", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		_, err := store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindChannel)
+		require.NoError(t, err)
+		_, err = store.LockSessionKeyState(testUser1, testSessionKey, SessionKeyKindAppSession)
+		require.NoError(t, err)
 	})
 
 	t.Run("Lowercases user_address and session_key", func(t *testing.T) {

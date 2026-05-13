@@ -1,6 +1,8 @@
 package channel_v1
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/layer-3/nitrolite/nitronode/store/database"
@@ -45,6 +47,11 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
+	if strings.EqualFold(coreState.UserAddress, coreState.SessionKey) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key must differ from user_address"), "")
+		return
+	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
@@ -61,9 +68,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
+	if coreState.SessionKeySig == "" {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+		return
+	}
 
-	// Validate user's signature over the session key state
-	if err := core.ValidateChannelSessionKeyAuthSigV1(coreState); err != nil {
+	// Validate both signatures: wallet's user_sig and session-key holder's session_key_sig.
+	if err := core.ValidateChannelSessionKeyStateV1(coreState); err != nil {
 		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
 		return
 	}
@@ -75,6 +86,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// proper "expected version" error rather than racing on the history UNIQUE constraint.
 		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindChannel)
 		if err != nil {
+			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
+				logger.Warn("session key registration collision",
+					"userAddress", coreState.UserAddress,
+					"sessionKey", coreState.SessionKey,
+					"kind", database.SessionKeyKindChannel)
+				return rpc.Errorf("invalid_session_key_state: session_key not allowed")
+			}
 			return rpc.Errorf("failed to lock session key state: %v", err)
 		}
 

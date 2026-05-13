@@ -51,6 +51,7 @@ const channelKeyStateRaw = {
     assets: ['YUSD'],
     expires_at: '1739812234',
     user_sig: '0xabc123',
+    session_key_sig: '0xabc124',
 };
 
 const appSessionKeyStateRaw = {
@@ -61,6 +62,7 @@ const appSessionKeyStateRaw = {
     app_session_ids: ['0x00000000000000000000000000000000000000000000000000000000000000b1'],
     expires_at: '1739812234',
     user_sig: '0xdef456',
+    session_key_sig: '0xdef457',
 };
 
 describe('Nitronode response transform drift guards', () => {
@@ -225,6 +227,13 @@ describe('Nitronode response transform drift guards', () => {
     it('validates channel key-state and app-session key-state fixtures', () => {
         expect(transformChannelSessionKeyState(channelKeyStateRaw)).toEqual(channelKeyStateRaw);
         expect(transformAppSessionKeyState(appSessionKeyStateRaw)).toEqual(appSessionKeyStateRaw);
+    });
+
+    it('accepts empty session_key_sig for rows written before the column existed', () => {
+        const legacyChannel = { ...channelKeyStateRaw, session_key_sig: '' };
+        const legacyApp = { ...appSessionKeyStateRaw, session_key_sig: '' };
+        expect(transformChannelSessionKeyState(legacyChannel)).toEqual(legacyChannel);
+        expect(transformAppSessionKeyState(legacyApp)).toEqual(legacyApp);
     });
 
     it('rejects malformed key-state fixtures with clear errors', () => {

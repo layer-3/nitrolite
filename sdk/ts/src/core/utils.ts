@@ -407,26 +407,31 @@ function parseAccountIdToBytes32(accountId: string | undefined): `0x${string}` {
 }
 
 /**
- * Computes the metadata hash for a channel session key authorization.
- * Matches Go SDK's GetChannelSessionKeyAuthMetadataHashV1.
+ * Computes the metadata hash for a channel session key authorization. user_address is bound
+ * into the hash; together with the session_key already in packChannelKeyStateV1, this binds
+ * the signed payload to a single (wallet, session_key) pair so signatures cannot be replayed
+ * across wallets or session keys. Matches Go SDK's GetChannelSessionKeyAuthMetadataHashV1.
  *
+ * @param userAddress - The wallet address authorizing the session key
  * @param version - Session key state version
  * @param assets - Asset symbols associated with the session key
  * @param expiresAt - Unix timestamp in seconds when the session key expires
  * @returns Keccak256 hash of the ABI-encoded metadata
  */
 export function getChannelSessionKeyAuthMetadataHashV1(
+  userAddress: Address,
   version: bigint,
   assets: string[],
   expiresAt: bigint
 ): `0x${string}` {
   const packed = encodeAbiParameters(
     [
+      { type: 'address' },  // user_address
       { type: 'uint64' },   // version
       { type: 'string[]' }, // assets
       { type: 'uint64' },   // expires_at
     ],
-    [version, assets, expiresAt]
+    [userAddress, version, assets, expiresAt]
   );
   return keccak256(packed);
 }
@@ -451,3 +456,4 @@ export function packChannelKeyStateV1(
     [sessionKey, metadataHash]
   );
 }
+

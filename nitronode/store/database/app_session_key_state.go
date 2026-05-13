@@ -20,6 +20,7 @@ type AppSessionKeyStateV1 struct {
 	AppSessionIDs  []AppSessionKeyAppSessionIDV1 `gorm:"foreignKey:SessionKeyStateID;references:ID"`
 	ExpiresAt      time.Time                     `gorm:"column:expires_at;not null"`
 	UserSig        string                        `gorm:"column:user_sig;not null"`
+	SessionKeySig  string                        `gorm:"column:session_key_sig"`
 	CreatedAt      time.Time
 }
 
@@ -58,12 +59,13 @@ func (s *DBStore) StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error 
 	}
 
 	dbState := AppSessionKeyStateV1{
-		ID:          id,
-		UserAddress: userAddress,
-		SessionKey:  sessionKey,
-		Version:     state.Version,
-		ExpiresAt:   state.ExpiresAt.UTC(),
-		UserSig:     state.UserSig,
+		ID:            id,
+		UserAddress:   userAddress,
+		SessionKey:    sessionKey,
+		Version:       state.Version,
+		ExpiresAt:     state.ExpiresAt.UTC(),
+		UserSig:       state.UserSig,
+		SessionKeySig: state.SessionKeySig,
 	}
 
 	if err := s.db.Create(&dbState).Error; err != nil {
@@ -239,6 +241,7 @@ func dbSessionKeyStateToCore(dbState *AppSessionKeyStateV1) app.AppSessionKeySta
 		UserAddress:    dbState.UserAddress,
 		SessionKey:     dbState.SessionKey,
 		Version:        dbState.Version,
+		SessionKeySig:  dbState.SessionKeySig,
 		ApplicationIDs: applicationIDs,
 		AppSessionIDs:  appSessionIDs,
 		ExpiresAt:      dbState.ExpiresAt,

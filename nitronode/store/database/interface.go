@@ -174,8 +174,10 @@ type DatabaseStore interface {
 
 	// --- Session Key State Pointer Operations ---
 
-	// LockSessionKeyState ensures the (user, session_key, kind) pointer row exists and locks
-	// it for the surrounding transaction. Returns the current version (0 if newly created).
+	// LockSessionKeyState seeds the pointer row for (user, session_key, kind) if absent and
+	// locks the (session_key, kind) row for the surrounding transaction. Returns the latest
+	// stored version for the caller's row, or ErrSessionKeyNotAllowed if the key is bound to
+	// a different wallet for this kind.
 	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error)
 
 	// CountSessionKeysForUser returns the number of distinct session keys recorded for the

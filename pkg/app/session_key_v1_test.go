@@ -47,6 +47,89 @@ func TestGenerateSessionKeyStateIDV1(t *testing.T) {
 	assert.NotEqual(t, id1, id3)
 }
 
+func TestValidateAppSessionKeyStateV1(t *testing.T) {
+	t.Parallel()
+	userSigner, userAddress := createTestSigner(t)
+	sessionSigner, sessionKeyAddr := createTestSigner(t)
+
+	version := uint64(1)
+	appSessionIDs := []string{
+		"0x1111111111111111111111111111111111111111111111111111111111111111",
+	}
+	applicationIDs := []string{
+		"0x2222222222222222222222222222222222222222222222222222222222222222",
+	}
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	baseState := AppSessionKeyStateV1{
+		UserAddress:    userAddress,
+		SessionKey:     sessionKeyAddr,
+		Version:        version,
+		AppSessionIDs:  appSessionIDs,
+		ApplicationIDs: applicationIDs,
+		ExpiresAt:      expiresAt,
+	}
+
+	packed, err := PackAppSessionKeyStateV1(baseState)
+	require.NoError(t, err)
+
+	userSig, err := userSigner.Sign(packed)
+	require.NoError(t, err)
+	sessionKeySig, err := sessionSigner.Sign(packed)
+	require.NoError(t, err)
+
+	state := baseState
+	state.UserSig = hexutil.Encode(userSig)
+	state.SessionKeySig = hexutil.Encode(sessionKeySig)
+
+	require.NoError(t, ValidateAppSessionKeyStateV1(state))
+
+	// Empty session_key_sig
+	stateNoKeySig := state
+	stateNoKeySig.SessionKeySig = ""
+	err = ValidateAppSessionKeyStateV1(stateNoKeySig)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session_key_sig is required")
+
+	// user_sig signed by wrong wallet
+	wrongSigner, _ := createTestSigner(t)
+	wrongUserSig, err := wrongSigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongUser := state
+	stateWrongUser.UserSig = hexutil.Encode(wrongUserSig)
+	err = ValidateAppSessionKeyStateV1(stateWrongUser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "user_sig does not match user_address")
+
+	// session_key_sig signed by wrong key
+	wrongKeySigner, _ := createTestSigner(t)
+	wrongKeySig, err := wrongKeySigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongKey := state
+	stateWrongKey.SessionKeySig = hexutil.Encode(wrongKeySig)
+	err = ValidateAppSessionKeyStateV1(stateWrongKey)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session_key_sig does not match session_key")
+
+	// Tampered version (hash mismatch on recover)
+	stateTampered := state
+	stateTampered.Version = 2
+	assert.Error(t, ValidateAppSessionKeyStateV1(stateTampered))
+
+	// Cross-wallet replay: substitute a different user_address. Packed bytes diverge so
+	// neither recovery yields the matching address.
+	_, otherUser := createTestSigner(t)
+	stateCrossUser := state
+	stateCrossUser.UserAddress = otherUser
+	assert.Error(t, ValidateAppSessionKeyStateV1(stateCrossUser))
+
+	// Cross-session-key replay: substitute a different session_key.
+	_, otherKey := createTestSigner(t)
+	stateCrossKey := state
+	stateCrossKey.SessionKey = otherKey
+	assert.Error(t, ValidateAppSessionKeyStateV1(stateCrossKey))
+}
+
 func TestPackAppSessionKeyStateV1(t *testing.T) {
 	t.Parallel()
 	expiresAt := time.Unix(1739812234, 0)

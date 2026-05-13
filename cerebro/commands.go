@@ -1010,13 +1010,21 @@ func (o *Operator) createChannelSessionKey(ctx context.Context, sessionKeyAddr, 
 		return
 	}
 
-	// Determine version by fetching existing keys
+	// Determine version by fetching existing keys. include_inactive=true so an expired
+	// prior version still surfaces — otherwise rotation would restart from version 1 and
+	// collide with the monotonic pointer enforced server-side.
+	includeInactive := true
 	var version uint64 = 1
 	existingStates, err := o.client.GetLastChannelKeyStates(ctx, wallet, &sdk.GetLastChannelKeyStatesOptions{
-		SessionKey: &sessionKeyAddr,
+		SessionKey:      &sessionKeyAddr,
+		IncludeInactive: &includeInactive,
 	})
 	if err == nil && len(existingStates) > 0 {
-		version = existingStates[0].Version + 1
+		for _, s := range existingStates {
+			if s.Version >= version {
+				version = s.Version + 1
+			}
+		}
 	}
 
 	// SessionKeySig requires the session-key private key. Fetch it up-front and bail if the
@@ -1152,10 +1160,14 @@ func (o *Operator) createAppSessionKey(ctx context.Context, sessionKeyAddr, expi
 		return
 	}
 
-	// Determine version by fetching existing keys
+	// Determine version by fetching existing keys. include_inactive=true so an expired
+	// prior version still surfaces — otherwise rotation would restart from version 1 and
+	// collide with the monotonic pointer enforced server-side.
+	includeInactive := true
 	var version uint64 = 1
 	existingStates, err := o.client.GetLastAppKeyStates(ctx, wallet, &sdk.GetLastKeyStatesOptions{
-		SessionKey: &sessionKeyAddr,
+		SessionKey:      &sessionKeyAddr,
+		IncludeInactive: &includeInactive,
 	})
 	if err == nil && len(existingStates) > 0 {
 		for _, s := range existingStates {

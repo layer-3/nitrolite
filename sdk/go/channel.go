@@ -848,6 +848,9 @@ func (c *Client) requestChannelCreation(ctx context.Context, state core.State, c
 type GetLastChannelKeyStatesOptions struct {
 	// SessionKey filters by a specific session key address
 	SessionKey *string
+	// IncludeInactive, when set to true, includes latest states whose expires_at is in
+	// the past (expired or revoked). Defaults to false (active-only) when nil or false.
+	IncludeInactive *bool
 }
 
 // SubmitChannelSessionKeyState submits a channel session key state for registration or update.
@@ -885,13 +888,15 @@ func (c *Client) SubmitChannelSessionKeyState(ctx context.Context, state core.Ch
 }
 
 // GetLastChannelKeyStates retrieves the latest channel session key states for a user.
+// By default only currently active (non-expired) states are returned; set
+// opts.IncludeInactive to true to include expired or revoked latest states.
 //
 // Parameters:
 //   - userAddress: The user's wallet address
-//   - opts: Optional filters (pass nil for no filters)
+//   - opts: Optional filters (pass nil for active-only with no session-key filter)
 //
 // Returns:
-//   - Slice of ChannelSessionKeyStateV1 with the latest non-expired session key states
+//   - Slice of ChannelSessionKeyStateV1 with the latest session key states matching the filter
 //   - Error if the request fails
 //
 // Example:
@@ -906,6 +911,7 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 	}
 	if opts != nil {
 		req.SessionKey = opts.SessionKey
+		req.IncludeInactive = opts.IncludeInactive
 	}
 
 	resp, err := c.rpcClient.ChannelsV1GetLastKeyStates(ctx, req)

@@ -56,7 +56,11 @@ type Store interface {
 	CountSessionKeysForUser(userAddress string) (uint32, error)
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
-	GetLastAppSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
+	// GetLastAppSessionKeyStates retrieves the latest app session key states for a user,
+	// optionally filtered by session key. When includeInactive is false, only non-expired
+	// latest states are returned; when true, all latest states are returned regardless of
+	// expiry. Results are paginated.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
 	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
 
 	// Channel Session key state operations

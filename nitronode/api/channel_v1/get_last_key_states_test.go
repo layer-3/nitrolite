@@ -46,7 +46,7 @@ func TestChannelGetLastKeyStates_DefaultsToPageOneOnEmptyResult(t *testing.T) {
 	mockStore := new(MockStore)
 	h := newGetLastKeyStatesHandler(mockStore)
 
-	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), uint32(10), uint32(0)).
+	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), false, uint32(10), uint32(0)).
 		Return([]core.ChannelSessionKeyStateV1{}, 0, nil)
 
 	c := callGetLastKeyStates(t, h, rpc.ChannelsV1GetLastKeyStatesRequest{UserAddress: "0xuser"})
@@ -67,7 +67,7 @@ func TestChannelGetLastKeyStates_PaginationMetadata_AlignedOffset(t *testing.T) 
 	offset := uint32(10)
 	pagination := &rpc.PaginationParamsV1{Limit: &limit, Offset: &offset}
 
-	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), uint32(10), uint32(10)).
+	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), false, uint32(10), uint32(10)).
 		Return([]core.ChannelSessionKeyStateV1{
 			{UserAddress: "0xuser", SessionKey: "0xkey", Version: 1, ExpiresAt: time.Now().Add(time.Hour)},
 		}, 25, nil)
@@ -90,7 +90,7 @@ func TestChannelGetLastKeyStates_ClampsLimitToMax(t *testing.T) {
 	excessive := uint32(1000)
 	pagination := &rpc.PaginationParamsV1{Limit: &excessive}
 
-	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), rpc.GetLastKeyStatesPageLimit, uint32(0)).
+	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), false, rpc.GetLastKeyStatesPageLimit, uint32(0)).
 		Return([]core.ChannelSessionKeyStateV1{}, 0, nil)
 
 	c := callGetLastKeyStates(t, h, rpc.ChannelsV1GetLastKeyStatesRequest{
@@ -118,7 +118,7 @@ func TestChannelGetLastKeyStates_RejectsSortField(t *testing.T) {
 	require.NotNil(t, c.Response)
 	require.NotNil(t, c.Response.Error())
 	assert.Contains(t, c.Response.Error().Error(), "sort is not supported")
-	mockStore.AssertNotCalled(t, "GetLastChannelSessionKeyStates", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastChannelSessionKeyStates", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestChannelGetLastKeyStates_RequiresUserAddress(t *testing.T) {
@@ -130,4 +130,38 @@ func TestChannelGetLastKeyStates_RequiresUserAddress(t *testing.T) {
 	require.NotNil(t, c.Response)
 	require.NotNil(t, c.Response.Error())
 	assert.Contains(t, c.Response.Error().Error(), "user_address is required")
+}
+
+func TestChannelGetLastKeyStates_IncludeInactiveTruePlumbsToStore(t *testing.T) {
+	mockStore := new(MockStore)
+	h := newGetLastKeyStatesHandler(mockStore)
+
+	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), true, uint32(10), uint32(0)).
+		Return([]core.ChannelSessionKeyStateV1{}, 0, nil)
+
+	includeInactive := true
+	c := callGetLastKeyStates(t, h, rpc.ChannelsV1GetLastKeyStatesRequest{
+		UserAddress:     "0xuser",
+		IncludeInactive: &includeInactive,
+	})
+	_ = extractGetLastKeyStatesResponse(t, c)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestChannelGetLastKeyStates_IncludeInactiveFalsePlumbsToStore(t *testing.T) {
+	mockStore := new(MockStore)
+	h := newGetLastKeyStatesHandler(mockStore)
+
+	mockStore.On("GetLastChannelSessionKeyStates", "0xuser", (*string)(nil), false, uint32(10), uint32(0)).
+		Return([]core.ChannelSessionKeyStateV1{}, 0, nil)
+
+	includeInactive := false
+	c := callGetLastKeyStates(t, h, rpc.ChannelsV1GetLastKeyStatesRequest{
+		UserAddress:     "0xuser",
+		IncludeInactive: &includeInactive,
+	})
+	_ = extractGetLastKeyStatesResponse(t, c)
+
+	mockStore.AssertExpectations(t)
 }

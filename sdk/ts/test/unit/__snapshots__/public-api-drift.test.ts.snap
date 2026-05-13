@@ -322,6 +322,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "AppSessionsV1GetLastKeyStatesRequest",
     "properties": [
+      "include_inactive: boolean",
       "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
@@ -887,6 +888,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "interface",
     "name": "ChannelsV1GetLastKeyStatesRequest",
     "properties": [
+      "include_inactive: boolean",
       "pagination: PaginationParamsV1",
       "session_key: string",
       "user_address: string",
@@ -1058,8 +1060,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getConfig: (): Promise<core.NodeConfig>",
       "getEscrowChannel: (escrowChannelId: string): Promise<core.Channel>",
       "getHomeChannel: (wallet: Address, asset: string): Promise<core.Channel>",
-      "getLastChannelKeyStates: (userAddress: string, sessionKey?: string): Promise<ChannelSessionKeyStateV1[]>",
-      "getLastKeyStates: (userAddress: string, sessionKey?: string): Promise<app.AppSessionKeyStateV1[]>",
+      "getLastAppKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<app.AppSessionKeyStateV1[]>",
+      "getLastChannelKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<ChannelSessionKeyStateV1[]>",
       "getLatestState: (wallet: Address, asset: string, onlySigned: boolean): Promise<core.State>",
       "getLockedBalance: (chainId: bigint, wallet: string): Promise<Decimal>",
       "getOnChainBalance: (chainId: bigint, asset: string, wallet: Address): Promise<Decimal>",

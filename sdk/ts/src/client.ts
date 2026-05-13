@@ -1728,19 +1728,25 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest channel session key states for a user.
+   * Retrieve the latest channel session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active channel session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of channel session key states matching the filter
    */
   async getLastChannelKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<ChannelSessionKeyStateV1[]> {
     const req: API.ChannelsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.channelsV1GetLastKeyStates(req);
     if (!Array.isArray(resp.states)) {
@@ -1810,19 +1816,25 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest session key states for a user.
+   * Retrieve the latest app session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of app session key states matching the filter
    */
-  async getLastKeyStates(
+  async getLastAppKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<app.AppSessionKeyStateV1[]> {
     const req: API.AppSessionsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.appSessionsV1GetLastKeyStates(req);
     if (!Array.isArray(resp.states)) {

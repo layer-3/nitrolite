@@ -83,7 +83,7 @@ describe('TS RPC drift guards', () => {
         ['app_sessions.v1.get_app_sessions', 'getAppSessions'],
         ['app_sessions.v1.create_app_session', 'createAppSession'],
         ['app_sessions.v1.submit_session_key_state', 'submitSessionKeyState'],
-        ['app_sessions.v1.get_last_key_states', 'getLastKeyStates'],
+        ['app_sessions.v1.get_last_key_states', 'getLastAppKeyStates'],
         ['apps.v1.get_apps', 'getApps'],
         ['apps.v1.submit_app_version', 'registerApp'],
     ]);

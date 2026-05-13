@@ -91,14 +91,22 @@ func (s *DBStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV
 // Reads filter the current_session_key_states_v1 pointer table by (user_address, kind=channel)
 // and JOIN history on (user_address, session_key, version). Per-request DB work is bounded by
 // the number of distinct session keys for the user, regardless of version churn in history.
-// Results are paginated; totalCount is the unpaginated total of matching session keys.
-func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
+// When includeInactive is false the same now is applied to both the count and the list query so
+// pagination stays consistent across the two reads. Results are paginated; totalCount is the
+// unpaginated total of matching session keys.
+func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
 	wallet = strings.ToLower(wallet)
+	now := time.Now().UTC()
 
-	pointerQuery := s.db.Model(&CurrentSessionKeyStateV1{}).
-		Where("user_address = ? AND kind = ? AND version > 0", wallet, SessionKeyKindChannel)
+	pointerQuery := s.db.Table("current_session_key_states_v1 AS c").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0", wallet, SessionKeyKindChannel)
 	if sessionKey != nil && *sessionKey != "" {
-		pointerQuery = pointerQuery.Where("session_key = ?", strings.ToLower(*sessionKey))
+		pointerQuery = pointerQuery.Where("c.session_key = ?", strings.ToLower(*sessionKey))
+	}
+	if !includeInactive {
+		pointerQuery = pointerQuery.
+			Joins("JOIN channel_session_key_states_v1 h ON h.user_address = c.user_address AND h.session_key = c.session_key AND h.version = c.version").
+			Where("h.expires_at > ?", now)
 	}
 
 	var totalCount int64
@@ -115,6 +123,9 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 		Offset(int(offset))
 	if sessionKey != nil && *sessionKey != "" {
 		query = query.Where("c.session_key = ?", strings.ToLower(*sessionKey))
+	}
+	if !includeInactive {
+		query = query.Where("channel_session_key_states_v1.expires_at > ?", now)
 	}
 
 	var dbStates []ChannelSessionKeyStateV1

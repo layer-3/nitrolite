@@ -203,6 +203,7 @@ describe('compat public runtime API drift guard', () => {
                 expect.stringContaining('signSessionKeyState:'),
                 expect.stringContaining('signAppSessionKeyOwnership:'),
                 expect.stringContaining('submitSessionKeyState:'),
+                expect.stringContaining('getLastAppKeyStates:'),
                 expect.stringContaining('getLastKeyStates:'),
             ])
         );

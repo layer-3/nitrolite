@@ -44,9 +44,12 @@ func (h *Handler) GetLastKeyStates(c *rpc.Context) {
 		limit = rpc.GetLastKeyStatesPageLimit
 	}
 
+	includeInactive := req.IncludeInactive != nil && *req.IncludeInactive
+
 	logger.Debug("retrieving session key states",
 		"userAddress", req.UserAddress,
 		"sessionKey", req.SessionKey,
+		"includeInactive", includeInactive,
 		"limit", limit,
 		"offset", offset)
 
@@ -55,7 +58,7 @@ func (h *Handler) GetLastKeyStates(c *rpc.Context) {
 
 	err := h.useStoreInTx(func(tx Store) error {
 		var err error
-		states, totalCount, err = tx.GetLastAppSessionKeyStates(req.UserAddress, req.SessionKey, limit, offset)
+		states, totalCount, err = tx.GetLastAppSessionKeyStates(req.UserAddress, req.SessionKey, includeInactive, limit, offset)
 		return err
 	})
 

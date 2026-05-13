@@ -320,16 +320,21 @@ func (c *Client) SubmitAppSessionKeyState(ctx context.Context, state app.AppSess
 type GetLastKeyStatesOptions struct {
 	// SessionKey filters by a specific session key address
 	SessionKey *string
+	// IncludeInactive, when set to true, includes latest states whose expires_at is in
+	// the past (expired or revoked). Defaults to false (active-only) when nil or false.
+	IncludeInactive *bool
 }
 
-// GetLastAppKeyStates retrieves the latest session key states for a user.
+// GetLastAppKeyStates retrieves the latest app session key states for a user.
+// By default only currently active (non-expired) states are returned; set
+// opts.IncludeInactive to true to include expired or revoked latest states.
 //
 // Parameters:
 //   - userAddress: The user's wallet address
-//   - opts: Optional filters (pass nil for no filters)
+//   - opts: Optional filters (pass nil for active-only with no session-key filter)
 //
 // Returns:
-//   - Slice of AppSessionKeyStateV1 with the latest non-expired session key states
+//   - Slice of AppSessionKeyStateV1 with the latest session key states matching the filter
 //   - Error if the request fails
 //
 // Example:
@@ -344,6 +349,7 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 	}
 	if opts != nil {
 		req.SessionKey = opts.SessionKey
+		req.IncludeInactive = opts.IncludeInactive
 	}
 
 	resp, err := c.rpcClient.AppSessionsV1GetLastKeyStates(ctx, req)

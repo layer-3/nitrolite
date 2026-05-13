@@ -875,8 +875,9 @@ export class NitroliteClient {
     async getLastChannelKeyStates(
         userAddress: string,
         sessionKey?: string,
+        options?: { includeInactive?: boolean },
     ): Promise<ChannelSessionKeyStateV1[]> {
-        return this.innerClient.getLastChannelKeyStates(userAddress, sessionKey);
+        return this.innerClient.getLastChannelKeyStates(userAddress, sessionKey, options);
     }
 
     async signSessionKeyState(state: AppSessionKeyStateV1): Promise<Hex> {
@@ -894,8 +895,19 @@ export class NitroliteClient {
         await this.innerClient.submitSessionKeyState(state);
     }
 
+    async getLastAppKeyStates(
+        userAddress: string,
+        sessionKey?: string,
+        options?: { includeInactive?: boolean },
+    ): Promise<AppSessionKeyStateV1[]> {
+        return this.innerClient.getLastAppKeyStates(userAddress, sessionKey, options);
+    }
+
+    /**
+     * @deprecated Use `getLastAppKeyStates` instead. Retained for 0.5.x callers; will be removed in the next major.
+     */
     async getLastKeyStates(userAddress: string, sessionKey?: string): Promise<AppSessionKeyStateV1[]> {
-        return this.innerClient.getLastKeyStates(userAddress, sessionKey);
+        return this.getLastAppKeyStates(userAddress, sessionKey);
     }
 
     // -----------------------------------------------------------------------

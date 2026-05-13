@@ -60,7 +60,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 
 	// Validate nonce
 	if appDef.Nonce == 0 {
-		c.Fail(nil, "nonce is zero or not provided")
+		c.Fail(nil, "nonce must be non-zero")
 		return
 	}
 

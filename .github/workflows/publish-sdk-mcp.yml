@@ -1,0 +1,264 @@
+name: Publish SDK MCP
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish-sdk-mcp.yml'
+      - 'docs/api.yaml'
+      - 'docs/protocol/**'
+      - 'pkg/app/**'
+      - 'pkg/core/**'
+      - 'pkg/rpc/**'
+      - 'sdk/go/**'
+      - 'sdk/mcp/**'
+      - 'sdk/ts/**'
+      - 'sdk/ts-compat/**'
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  contents: read
+
+env:
+  MCP_PUBLISHER_VERSION: v1.7.6
+  MCP_PUBLISHER_SHA256_LINUX_AMD64: bcc96ca630cae4cf503b4550bd4a17462d42ad4819273bee56f4385bb059ddee
+
+jobs:
+  verify-and-pack:
+    name: Verify and pack @yellow-org/sdk-mcp
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: 'sdk/mcp/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./sdk/mcp
+        run: npm ci
+
+      - name: Audit production dependencies
+        working-directory: ./sdk/mcp
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Typecheck
+        working-directory: ./sdk/mcp
+        run: npm run typecheck
+
+      - name: Build package
+        working-directory: ./sdk/mcp
+        run: npm run build
+
+      - name: Verify release preflight
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mcp-v')
+        working-directory: ./sdk/mcp
+        run: npm run verify:release-preflight
+
+      - name: Pack package
+        id: pack
+        working-directory: ./sdk/mcp
+        run: |
+          PACK_JSON="$(npm pack --json)"
+          printf '%s\n' "$PACK_JSON" > pack.json
+          TARBALL="$(node -e "const pack = require('./pack.json')[0]; console.log(pack.filename)")"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Adversarial tarball validation
+        working-directory: ./sdk/mcp
+        run: npm run verify:package -- pack.json
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-mcp-package
+          path: |
+            sdk/mcp/${{ steps.pack.outputs.tarball }}
+            sdk/mcp/pack.json
+            sdk/mcp/server.json
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke packed MCP server
+    runs-on: ubuntu-latest
+    needs: verify-and-pack
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-mcp-package
+          path: sdk-mcp-package
+
+      - name: Adversarial runtime smoke test
+        run: |
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d)"
+          mkdir "$SMOKE_DIR/app"
+          EXPECTED_VERSION="$(node -e "const pack = require('./sdk-mcp-package/pack.json')[0]; console.log(pack.version)")"
+          TARBALL="${{ needs.verify-and-pack.outputs.tarball }}"
+          npm --prefix "$SMOKE_DIR/app" install "./sdk-mcp-package/$TARBALL"
+          BIN="$SMOKE_DIR/app/node_modules/.bin/yellow-sdk-mcp"
+          cd "$SMOKE_DIR/app"
+          BIN="$BIN" EXPECTED_VERSION="$EXPECTED_VERSION" node --input-type=module <<'NODE'
+          import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+          import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+          const expectedVersion = process.env.EXPECTED_VERSION;
+          const expectedGoVersion = `v${expectedVersion}`;
+          const transport = new StdioClientTransport({ command: process.env.BIN, args: [] });
+          const client = new Client({ name: 'sdk-mcp-smoke', version: '0.0.0' });
+          await client.connect(transport);
+
+          const tools = await client.listTools();
+          if (tools.tools.length !== 9) {
+            throw new Error(`expected 9 tools, got ${tools.tools.length}`);
+          }
+          if (!tools.tools.some((tool) => tool.name === 'server_info')) {
+            throw new Error('server_info tool missing');
+          }
+
+          const resources = await client.listResources();
+          if (resources.resources.length !== 31) {
+            throw new Error(`expected 31 resources, got ${resources.resources.length}`);
+          }
+
+          const infoResult = await client.callTool({ name: 'server_info', arguments: {} });
+          const info = JSON.parse(infoResult.content[0].text);
+          if (info.version !== expectedVersion) {
+            throw new Error(`unexpected server version ${info.version}`);
+          }
+          if (info.sdkVersion !== expectedVersion) {
+            throw new Error(`unexpected sdk version ${info.sdkVersion}`);
+          }
+          if (info.compatVersion !== expectedVersion) {
+            throw new Error(`unexpected compat version ${info.compatVersion}`);
+          }
+          if (info.goModuleVersion !== expectedGoVersion) {
+            throw new Error(`unexpected Go module version ${info.goModuleVersion}`);
+          }
+          if (info.contentMode !== 'packaged-snapshot') {
+            throw new Error(`expected packaged-snapshot mode, got ${info.contentMode}`);
+          }
+          if (info.versionPolicy !== 'strict-mirror') {
+            throw new Error(`expected strict-mirror policy, got ${info.versionPolicy}`);
+          }
+          if (!info.sourceCommit || info.sourceCommit === 'unknown') {
+            throw new Error('sourceCommit must be present in packaged metadata');
+          }
+          if (!Number.isInteger(info.contentManifestFiles) || info.contentManifestFiles < 70) {
+            throw new Error(`unexpected manifest file count ${info.contentManifestFiles}`);
+          }
+
+          const tsMethodResult = await client.callTool({
+            name: 'lookup_method',
+            arguments: { name: 'deposit', language: 'typescript' },
+          });
+          if (!tsMethodResult.content[0].text.includes('deposit')) {
+            throw new Error('lookup_method did not return packaged TypeScript SDK content');
+          }
+
+          const goMethodResult = await client.callTool({
+            name: 'lookup_method',
+            arguments: { name: 'Deposit', language: 'go' },
+          });
+          if (!goMethodResult.content[0].text.includes('Deposit')) {
+            throw new Error('lookup_method did not return packaged Go SDK content');
+          }
+
+          const typeResult = await client.callTool({
+            name: 'lookup_type',
+            arguments: { name: 'AppDefinitionV1', language: 'both' },
+          });
+          if (!typeResult.content[0].text.includes('AppDefinitionV1')) {
+            throw new Error('lookup_type did not return packaged app type content');
+          }
+
+          const rpcResult = await client.callTool({
+            name: 'lookup_rpc_method',
+            arguments: { method: 'channels.v1.get_home_channel' },
+          });
+          if (!rpcResult.content[0].text.includes('channels.v1.get_home_channel')) {
+            throw new Error('lookup_rpc_method did not return packaged API docs content');
+          }
+
+          const scaffoldResult = await client.callTool({
+            name: 'scaffold_project',
+            arguments: { template: 'go-transfer-app' },
+          });
+          if (!scaffoldResult.content[0].text.includes(`github.com/layer-3/nitrolite ${expectedGoVersion}`)) {
+            throw new Error('Go scaffold did not use the packaged Go module version');
+          }
+
+          await client.close();
+          NODE
+
+  publish-npm:
+    name: Publish npm package
+    runs-on: ubuntu-latest
+    needs:
+      - verify-and-pack
+      - smoke
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mcp-v')
+    environment: mcp-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-mcp-package
+          path: sdk-mcp-package
+
+      - name: Publish package
+        run: npm publish "./sdk-mcp-package/${{ needs.verify-and-pack.outputs.tarball }}" --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-registry:
+    name: Publish MCP Registry metadata
+    runs-on: ubuntu-latest
+    needs: publish-npm
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mcp-v')
+    environment: mcp-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install MCP publisher
+        working-directory: ./sdk/mcp
+        run: |
+          ASSET="mcp-publisher_linux_amd64.tar.gz"
+          curl -fL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${ASSET}" -o "$ASSET"
+          echo "${MCP_PUBLISHER_SHA256_LINUX_AMD64}  ${ASSET}" | sha256sum -c -
+          tar xzf "$ASSET" mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        working-directory: ./sdk/mcp
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish MCP Registry metadata
+        working-directory: ./sdk/mcp
+        run: ./mcp-publisher publish

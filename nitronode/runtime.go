@@ -32,11 +32,6 @@ var embedMigrations embed.FS
 
 var Version = "v1.0.0" // set at build time with -ldflags "-X main.Version=x.y.z"
 
-const (
-	channelHubMinChallengeDuration uint32 = 24 * 60 * 60
-	channelHubMaxChallengeDuration uint32 = 7 * 24 * 60 * 60
-)
-
 type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
@@ -112,17 +107,17 @@ type ValidationLimits struct {
 }
 
 func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
-	if minChallenge < channelHubMinChallengeDuration {
+	if minChallenge < core.ChannelMinChallengeDuration {
 		return fmt.Errorf(
 			"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION must be at least %d seconds, got %d",
-			channelHubMinChallengeDuration,
+			core.ChannelMinChallengeDuration,
 			minChallenge,
 		)
 	}
-	if maxChallenge > channelHubMaxChallengeDuration {
+	if maxChallenge > core.ChannelMaxChallengeDuration {
 		return fmt.Errorf(
 			"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION must be at most %d seconds, got %d",
-			channelHubMaxChallengeDuration,
+			core.ChannelMaxChallengeDuration,
 			maxChallenge,
 		)
 	}

@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 func TestValidateChannelChallengeConfig(t *testing.T) {
@@ -15,8 +17,8 @@ func TestValidateChannelChallengeConfig(t *testing.T) {
 	}{
 		{
 			name:         "default range passes",
-			minChallenge: 86400,
-			maxChallenge: 604800,
+			minChallenge: core.ChannelMinChallengeDuration,
+			maxChallenge: core.ChannelMaxChallengeDuration,
 		},
 		{
 			name:         "stricter range passes",
@@ -25,22 +27,22 @@ func TestValidateChannelChallengeConfig(t *testing.T) {
 		},
 		{
 			name:          "max above contract limit fails",
-			minChallenge:  86400,
-			maxChallenge:  604801,
+			minChallenge:  core.ChannelMinChallengeDuration,
+			maxChallenge:  core.ChannelMaxChallengeDuration + 1,
 			wantErr:       true,
 			errorContains: "NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION",
 		},
 		{
 			name:          "min below contract limit fails",
-			minChallenge:  86399,
-			maxChallenge:  604800,
+			minChallenge:  core.ChannelMinChallengeDuration - 1,
+			maxChallenge:  core.ChannelMaxChallengeDuration,
 			wantErr:       true,
 			errorContains: "NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION",
 		},
 		{
 			name:          "min greater than max fails",
-			minChallenge:  604800,
-			maxChallenge:  86400,
+			minChallenge:  core.ChannelMaxChallengeDuration,
+			maxChallenge:  core.ChannelMinChallengeDuration,
 			wantErr:       true,
 			errorContains: "must be <=",
 		},

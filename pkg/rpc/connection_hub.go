@@ -61,10 +61,10 @@ func (hub *ConnectionHub) Add(conn Connection) error {
 	connID := conn.ConnectionID()
 
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 
 	// If the connection already exists, return an error
 	if _, exists := hub.connections[connID]; exists {
+		hub.mu.Unlock()
 		return fmt.Errorf("connection with ID %s already exists", connID)
 	}
 
@@ -72,7 +72,12 @@ func (hub *ConnectionHub) Add(conn Connection) error {
 
 	appID := conn.ApplicationID()
 	hub.appConnCount[appID]++
-	hub.observeConnections(appID, hub.appConnCount[appID])
+	count := hub.appConnCount[appID]
+	hub.mu.Unlock()
+
+	// Invoke the observer outside the lock: SetRPCConnections takes Prometheus-internal
+	// mutexes, and holding hub.mu across that would serialize readers (including Publish).
+	hub.observeConnections(appID, count)
 
 	return nil
 }
@@ -104,22 +109,33 @@ func (hub *ConnectionHub) Get(connID string) Connection {
 // This method is safe for concurrent access.
 func (hub *ConnectionHub) Remove(connID string) {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 
 	conn, exists := hub.connections[connID]
 	if !exists {
+		hub.mu.Unlock()
 		return // No connection to remove
 	}
 	delete(hub.connections, connID)
 
 	appID := conn.ApplicationID()
-	if count, exists := hub.appConnCount[appID]; exists && count > 0 {
+	count, tracked := hub.appConnCount[appID]
+	changed := false
+	if tracked && count > 0 {
 		hub.appConnCount[appID]--
-		if hub.appConnCount[appID] == 0 {
+		count = hub.appConnCount[appID]
+		if count == 0 {
 			delete(hub.appConnCount, appID)
 		}
+		changed = true
 	}
-	hub.observeConnections(appID, hub.appConnCount[appID])
+	hub.mu.Unlock()
+
+	// Only notify the observer when the bucket actually changed; otherwise we would
+	// emit DeleteLabelValues for an app_id the gauge never tracked. Invoke outside
+	// hub.mu to avoid serializing readers behind Prometheus-internal locks.
+	if changed {
+		hub.observeConnections(appID, count)
+	}
 }
 
 // Publish broadcasts a message to all active connections for a specific user.

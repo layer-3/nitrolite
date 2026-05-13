@@ -292,7 +292,11 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Help: "Active RPC (WebSocket) connections, labeled by application_id " +
 				"sourced from the app_id query parameter at connect time. " +
 				"Connections without an app_id are bucketed under _DEFAULT. " +
-				"Series for an application_id are deleted once its count drops to 0.",
+				"Series for an application_id are deleted once its count drops to 0. " +
+				"NOTE: cardinality is bounded by the app_id format check " +
+				"(^[a-z0-9_-]{1,66}$) and by series shedding on disconnect — long-lived " +
+				"connections from many distinct but format-valid app_ids are not gated " +
+				"by a registry or per-app connection cap.",
 		}, []string{"application_id"}),
 		rpcInflight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricNamespace,

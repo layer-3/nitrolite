@@ -569,8 +569,12 @@ func (r *ChannelHubReactor) handleEscrowDepositsPurged(ctx context.Context, stor
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositsPurged event")
 	}
-	logger := log.FromContext(ctx)
-	logger.Info("EscrowDepositsPurged event", "purgedCount", event.PurgedCount.String())
 
-	return nil
+	escrowIDs := make([]string, len(event.EscrowIds))
+	for i, id := range event.EscrowIds {
+		escrowIDs[i] = hexutil.Encode(id[:])
+	}
+
+	ev := core.EscrowDepositsPurgedEvent{EscrowIDs: escrowIDs}
+	return r.eventHandler.HandleEscrowDepositsPurged(ctx, store, &ev)
 }

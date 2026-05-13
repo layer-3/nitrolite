@@ -145,6 +145,11 @@ func (m *mockChannelHubEventHandler) HandleEscrowDepositFinalized(ctx context.Co
 	return args.Error(0)
 }
 
+func (m *mockChannelHubEventHandler) HandleEscrowDepositsPurged(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.EscrowDepositsPurgedEvent) error {
+	args := m.Called(ctx, tx, ev)
+	return args.Error(0)
+}
+
 func (m *mockChannelHubEventHandler) HandleEscrowWithdrawalInitiated(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.EscrowWithdrawalInitiatedEvent) error {
 	args := m.Called(ctx, tx, ev)
 	return args.Error(0)
@@ -945,6 +950,46 @@ func TestChannelHubReactor_HandleEscrowWithdrawalFinalizedOnHome(t *testing.T) {
 	})).Return(nil)
 
 	expectStoreContractEvent(store, "EscrowWithdrawalFinalizedOnHome", 1800, blockchainID)
+
+	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+	handler.AssertExpectations(t)
+	store.AssertExpectations(t)
+}
+
+func TestChannelHubReactor_HandleEscrowDepositsPurged(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+
+	escrowID1 := common.HexToHash("0xee10")
+	escrowID2 := common.HexToHash("0xee11")
+	escrowIds := [][32]byte{escrowID1, escrowID2}
+	purgedCount := big.NewInt(2)
+
+	data := packNonIndexed(t, "EscrowDepositsPurged", escrowIds, purgedCount)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["EscrowDepositsPurged"].ID,
+		},
+		Data:        data,
+		BlockNumber: 1200,
+		TxHash:      common.HexToHash("0x999"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	handler.On("HandleEscrowDepositsPurged", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.EscrowDepositsPurgedEvent) bool {
+		return len(ev.EscrowIDs) == 2 &&
+			ev.EscrowIDs[0] == hexutil.Encode(escrowID1[:]) &&
+			ev.EscrowIDs[1] == hexutil.Encode(escrowID2[:])
+	})).Return(nil)
+
+	expectStoreContractEvent(store, "EscrowDepositsPurged", 1200, blockchainID)
 
 	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
 	err := reactor.HandleEvent(context.Background(), logEntry)

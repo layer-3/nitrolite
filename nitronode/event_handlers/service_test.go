@@ -1143,3 +1143,55 @@ func TestHandleUserLockedBalanceUpdated_StoreError(t *testing.T) {
 	require.Contains(t, err.Error(), "db error")
 	mockStore.AssertExpectations(t)
 }
+
+func TestHandleEscrowDepositsPurged_ClosesEscrowChannels(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	openEscrow := &core.Channel{
+		ChannelID: "0xEscrow001",
+		Type:      core.ChannelTypeEscrow,
+		Status:    core.ChannelStatusOpen,
+	}
+	// Already closed — UpdateChannel must NOT be called for it.
+	closedEscrow := &core.Channel{
+		ChannelID: "0xEscrow002",
+		Type:      core.ChannelTypeEscrow,
+		Status:    core.ChannelStatusClosed,
+	}
+
+	event := &core.EscrowDepositsPurgedEvent{
+		EscrowIDs: []string{"0xEscrow001", "0xEscrow002", "0xUnknown003"},
+	}
+
+	mockStore.On("GetChannelByID", "0xEscrow001").Return(openEscrow, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == "0xEscrow001" && ch.Status == core.ChannelStatusClosed
+	})).Return(nil)
+	mockStore.On("GetChannelByID", "0xEscrow002").Return(closedEscrow, nil)
+	mockStore.On("GetChannelByID", "0xUnknown003").Return(nil, nil)
+
+	err := service.HandleEscrowDepositsPurged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleEscrowDepositsPurged_StoreError_Propagates(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	event := &core.EscrowDepositsPurgedEvent{
+		EscrowIDs: []string{"0xEscrow001"},
+	}
+
+	mockStore.On("GetChannelByID", "0xEscrow001").Return(nil, errors.New("db error"))
+
+	err := service.HandleEscrowDepositsPurged(ctx, mockStore, event)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "db error")
+	mockStore.AssertExpectations(t)
+}

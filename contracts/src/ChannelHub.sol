@@ -76,18 +76,46 @@ contract ChannelHub is ReentrancyGuard {
     event EscrowDepositInitiated(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
     event EscrowDepositInitiatedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
     event EscrowDepositChallenged(bytes32 indexed escrowId, State state, uint64 challengeExpireAt);
+
+    /// @dev Informational event: emitted only when finalizeEscrowDeposit() is called on the non-home chain via its
+    /// dedicated function path. It is not emitted if a newer state is enforced on the channel that supersedes the
+    /// finalization. External consumers must not treat this as an exhaustive signal.
     event EscrowDepositFinalized(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when the home-chain channel advances through the dedicated
+    /// finalizeEscrowDeposit() path. It is not emitted if the channel state is advanced by a newer signed state that
+    /// supersedes the escrow finalization. External consumers must not treat this as an exhaustive signal.
     event EscrowDepositFinalizedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
 
     event EscrowWithdrawalInitiated(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when initiateEscrowWithdrawal() advances the home-chain channel via its
+    /// dedicated function path. It is not emitted if a newer signed state supersedes the initiation on that channel.
+    /// External consumers must not treat this as an exhaustive signal.
     event EscrowWithdrawalInitiatedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
     event EscrowWithdrawalChallenged(bytes32 indexed escrowId, State state, uint64 challengeExpireAt);
     event EscrowWithdrawalFinalized(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when finalizeEscrowWithdrawal() advances the home-chain channel via its
+    /// dedicated function path. It is not emitted if a newer signed state supersedes the finalization on that channel.
+    /// External consumers must not treat this as an exhaustive signal.
     event EscrowWithdrawalFinalizedOnHome(bytes32 indexed escrowId, bytes32 indexed channelId, State state);
 
+    /// @dev Informational event: emitted only when initiateMigration() is called on the old home chain via its
+    /// dedicated function path. It is not emitted if a newer signed state (e.g. FINALIZE_MIGRATION) is enforced
+    /// directly on the channel, bypassing the explicit initiation path. External consumers must not treat this as
+    /// an exhaustive signal.
     event MigrationOutInitiated(bytes32 indexed channelId, State state);
+
     event MigrationInInitiated(bytes32 indexed channelId, State state);
     event MigrationOutFinalized(bytes32 indexed channelId, State state);
+
+    /// @dev Informational event: emitted only when finalizeMigration() is called explicitly on the new home chain.
+    /// A MIGRATING_IN channel may transition to OPERATING through any standard channel operation (deposit, withdraw,
+    /// checkpoint, challenge) built on top of a FINALIZE_MIGRATION state, in which case this event is not emitted.
+    /// External consumers must not treat this as an exhaustive signal; the canonical migration completion signal is
+    /// MigrationOutFinalized, which is always emitted unconditionally on the old home chain.
     event MigrationInFinalized(bytes32 indexed channelId, State state);
 
     event ValidatorRegistered(uint8 indexed validatorId, ISignatureValidator indexed validator);

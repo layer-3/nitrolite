@@ -595,3 +595,24 @@ Critically, DISPUTED entries still consume a step. Without this, an actor could 
 > **Bounded purge iteration** (complements invariant 22): `_purgeEscrowDeposits(maxSteps)` inspects at most `maxSteps` queue entries per call. Every inspected entry, regardless of disposition (skipped, purged, or halting), counts against the budget. The per-operation automatic budget is `MAX_DEPOSIT_ESCROW_STEPS = 64`.
 
 ---
+
+## Informational Events
+
+Several `ChannelHub` events are **informational** — they are emitted on a best-effort basis when a specific dedicated function path is taken, but are not guaranteed to fire for every logical occurrence of the operation they name. A newer signed state that supersedes an intermediate cross-chain step can be enforced directly through a standard channel operation (deposit, withdraw, checkpoint, challenge), bypassing the dedicated function and therefore skipping its event. This is intentional: for example, `MIGRATING_IN` channels are treated as fully operational home-chain channels, and similarly, channel states involved in escrow flows can be advanced by any valid newer state.
+
+External consumers — indexers, SDKs, analytics — **must not treat these events as exhaustive signals**. The canonical, always-guaranteed terminal events for each cross-chain flow (`MigrationOutFinalized`, `EscrowDepositInitiated`, `EscrowWithdrawalFinalized`, etc.) remain reliable.
+
+The following events are informational:
+
+| Event | When it may be skipped |
+| --- | --- |
+| `MigrationInFinalized` | A `MIGRATING_IN` channel transitions to `OPERATING` via any standard operation (deposit, withdraw, checkpoint, challenge) rather than explicit `finalizeMigration()` |
+| `MigrationOutInitiated` | A newer `MIGRATING_OUT` signed state is enforced on the old home channel that is the successor of the explicit initiation state |
+| `EscrowDepositFinalized` | The non-home channel advances past escrow finalization via a newer signed state |
+| `EscrowDepositFinalizedOnHome` | The home channel advances past the escrow finalization acknowledgement via a newer signed state |
+| `EscrowWithdrawalInitiatedOnHome` | The home channel advances past the escrow withdrawal initiation acknowledgement via a newer signed state |
+| `EscrowWithdrawalFinalizedOnHome` | The home channel advances past the escrow withdrawal finalization acknowledgement via a newer signed state |
+
+The Nitronode does not rely on any of these informational events for its state machine. For migration, the Nitronode watches `MigrationInInitiated` (the on-chain request establishing the new home chain) and `MigrationOutFinalized` (the unconditional completion signal on the old home chain). Both are guaranteed events.
+
+---

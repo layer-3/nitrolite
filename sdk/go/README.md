@@ -425,7 +425,10 @@ and the session-key holder's `SessionKeySig` (proving possession of the key bein
 registered). The node rejects submits that lack a valid `SessionKeySig`.
 
 ```go
-// sessionKeySigner is a sign.Signer whose address equals state.SessionKey.
+// sessionKeySigner must be a *sign.EthereumMsgSigner (raw EIP-191 signer)
+// whose address equals state.SessionKey — not a wrapped sign.Signer, because
+// the node recovers SessionKeySig as a raw 65-byte Ethereum message signature.
+sessionKeySigner, _ := sign.NewEthereumMsgSigner(sessionKeyPrivHex)
 state := app.AppSessionKeyStateV1{
     UserAddress:    client.GetUserAddress(),
     SessionKey:     "0xSessionKey...",
@@ -448,7 +451,10 @@ states, err := client.GetLastAppKeyStates(ctx, userAddress, &sdk.GetLastKeyState
 ### Session Keys — Channels
 
 ```go
-// sessionKeySigner is a sign.Signer whose address equals state.SessionKey.
+// sessionKeySigner must be a *sign.EthereumMsgSigner (raw EIP-191 signer)
+// whose address equals state.SessionKey — not a wrapped sign.Signer, because
+// the node recovers SessionKeySig as a raw 65-byte Ethereum message signature.
+sessionKeySigner, _ := sign.NewEthereumMsgSigner(sessionKeyPrivHex)
 state := core.ChannelSessionKeyStateV1{
     UserAddress: client.GetUserAddress(),
     SessionKey:  "0xSessionKey...",

@@ -2,6 +2,7 @@ import {
     Client,
     ChannelDefaultSigner,
     ChannelSessionKeyStateSigner,
+    type EthereumMsgSigner,
     type StateSigner,
     type TransactionSigner,
 } from '@yellow-org/sdk';
@@ -861,7 +862,7 @@ export class NitroliteClient {
 
     async signChannelSessionKeyOwnership(
         state: ChannelSessionKeyStateV1,
-        sessionKeySigner: StateSigner,
+        sessionKeySigner: EthereumMsgSigner,
     ): Promise<Hex> {
         return this.innerClient.signChannelSessionKeyOwnership(state, sessionKeySigner);
     }
@@ -883,7 +884,7 @@ export class NitroliteClient {
 
     async signAppSessionKeyOwnership(
         state: AppSessionKeyStateV1,
-        sessionKeySigner: StateSigner,
+        sessionKeySigner: EthereumMsgSigner,
     ): Promise<Hex> {
         return this.innerClient.signAppSessionKeyOwnership(state, sessionKeySigner);
     }

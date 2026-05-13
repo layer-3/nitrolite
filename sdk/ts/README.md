@@ -499,7 +499,10 @@ delegation) and the session-key holder's `session_key_sig` (proving possession o
 being registered). The node rejects submits that lack a valid `session_key_sig`.
 
 ```typescript
-// sessionKeyHolder is a StateSigner whose address equals state.session_key.
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
 const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',
@@ -523,7 +526,10 @@ const filtered = await client.getLastKeyStates('0x1234...', '0xSessionKey...');
 ### Channel Session Keys
 
 ```typescript
-// sessionKeyHolder is a StateSigner whose address equals state.session_key.
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
 const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',

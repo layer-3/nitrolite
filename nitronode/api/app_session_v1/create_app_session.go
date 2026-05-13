@@ -59,7 +59,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 		"nonce", reqPayload.Definition.Nonce)
 
 	// Validate nonce
-	if reqPayload.Definition.Nonce == "" || reqPayload.Definition.Nonce == "0" {
+	if appDef.Nonce == 0 {
 		c.Fail(nil, "nonce is zero or not provided")
 		return
 	}

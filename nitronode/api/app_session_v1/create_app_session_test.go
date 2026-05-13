@@ -223,68 +223,70 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 }
 
 func TestCreateAppSession_ZeroNonce(t *testing.T) {
-	// Setup
-	mockStore := new(MockStore)
+	// Zero-padded values must also be rejected: strconv.ParseUint accepts "00",
+	// "000", etc. and yields 0, which used to bypass the raw-string "0" check.
+	cases := []string{"0", "00", "000"}
+	for _, nonce := range cases {
+		t.Run("nonce="+nonce, func(t *testing.T) {
+			mockStore := new(MockStore)
 
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
+			storeTxProvider := func(fn StoreTxHandler) error {
+				return fn(mockStore)
+			}
 
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
+			mockSigner := NewMockChannelSigner()
+			mockAssetStore := new(MockAssetStore)
+			mockStatePacker := new(MockStatePacker)
 
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xnode",
-		true,
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
-	)
+			handler := NewHandler(
+				storeTxProvider,
+				mockAssetStore,
+				&MockActionGateway{},
+				mockSigner,
+				core.NewStateAdvancerV1(mockAssetStore),
+				mockStatePacker,
+				"0xnode",
+				true,
+				metrics.NewNoopRuntimeMetricExporter(),
+				32, 1024, 256, 16, 100,
+			)
 
-	// Test data
-	participant1 := "0x1111111111111111111111111111111111111111"
+			participant1 := "0x1111111111111111111111111111111111111111"
 
-	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
-		Definition: rpc.AppDefinitionV1{
-			Application: "test-app",
-			Participants: []rpc.AppParticipantV1{
-				{
-					WalletAddress:   participant1,
-					SignatureWeight: 1,
+			reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+				Definition: rpc.AppDefinitionV1{
+					Application: "test-app",
+					Participants: []rpc.AppParticipantV1{
+						{
+							WalletAddress:   participant1,
+							SignatureWeight: 1,
+						},
+					},
+					Quorum: 1,
+					Nonce:  nonce,
 				},
-			},
-			Quorum: 1,
-			Nonce:  "0", // Zero nonce - invalid
-		},
-		QuorumSigs: []string{"0x1234567890abcdef"},
+				QuorumSigs: []string{"0x1234567890abcdef"},
+			}
+
+			payload, err := rpc.NewPayload(reqPayload)
+			require.NoError(t, err)
+
+			ctx := &rpc.Context{
+				Context: context.Background(),
+				Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+			}
+
+			handler.CreateAppSession(ctx)
+
+			assert.NotNil(t, ctx.Response)
+
+			err = ctx.Response.Error()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "nonce")
+
+			mockStore.AssertExpectations(t)
+		})
 	}
-
-	// Create RPC context
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
-	}
-
-	handler.CreateAppSession(ctx)
-
-	assert.NotNil(t, ctx.Response)
-
-	// Verify response contains error about nonce
-	err = ctx.Response.Error()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nonce")
-
-	// Verify no mocks were called since we fail early
-	mockStore.AssertExpectations(t)
 }
 
 func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {

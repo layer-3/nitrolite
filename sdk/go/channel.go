@@ -973,7 +973,11 @@ func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1)
 // channel session key registration. The signer must hold the session key; the returned hex
 // string populates state.SessionKeySig before submit. The signed payload binds session_key
 // into the metadata hash so a signature minted for one key cannot be replayed for another.
-func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, sessionKeySigner sign.Signer) (string, error) {
+//
+// The parameter is narrowed to *sign.EthereumMsgSigner because the server recovers
+// SessionKeySig under sign.TypeEthereumMsg — a broader signer interface could produce a
+// signature without the EIP-191 prefix (or with extra wrapper bytes) that the server rejects.
+func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, sessionKeySigner *sign.EthereumMsgSigner) (string, error) {
 	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return "", fmt.Errorf("failed to compute metadata hash: %w", err)

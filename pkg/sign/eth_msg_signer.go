@@ -20,8 +20,8 @@ func (s *EthereumMsgSigner) Sign(hash []byte) (Signature, error) {
 	return Signature(sig), nil
 }
 
-// NewEthereumRawSigner creates a new Ethereum signer from a hex-encoded private key.
-func NewEthereumMsgSigner(privateKeyHex string) (Signer, error) {
+// NewEthereumMsgSigner creates a new Ethereum signer from a hex-encoded private key.
+func NewEthereumMsgSigner(privateKeyHex string) (*EthereumMsgSigner, error) {
 	signer, err := NewEthereumRawSigner(privateKeyHex)
 	if err != nil {
 		return nil, err
@@ -30,8 +30,8 @@ func NewEthereumMsgSigner(privateKeyHex string) (Signer, error) {
 	return NewEthereumMsgSignerFromRaw(signer)
 }
 
-// NewEthereumRawSignerFronRaw creates a new Ethereum signer from an existing Signer instance.
-func NewEthereumMsgSignerFromRaw(signer Signer) (Signer, error) {
+// NewEthereumMsgSignerFromRaw creates a new Ethereum signer from an existing Signer instance.
+func NewEthereumMsgSignerFromRaw(signer Signer) (*EthereumMsgSigner, error) {
 	return &EthereumMsgSigner{
 		signer,
 	}, nil

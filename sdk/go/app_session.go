@@ -404,7 +404,11 @@ func (c *Client) SignSessionKeyState(state app.AppSessionKeyStateV1) (string, er
 // registered; the resulting hex-encoded signature is intended to populate state.SessionKeySig
 // before submitting via SubmitAppSessionKeyState. The packed state already binds user_address,
 // so replay across wallets is not possible.
-func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner sign.Signer) (string, error) {
+//
+// The parameter is narrowed to *sign.EthereumMsgSigner because the server recovers
+// SessionKeySig under sign.TypeEthereumMsg — a broader signer interface could produce a
+// signature without the EIP-191 prefix (or with extra wrapper bytes) that the server rejects.
+func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner *sign.EthereumMsgSigner) (string, error) {
 	packed, err := app.PackAppSessionKeyStateV1(state)
 	if err != nil {
 		return "", fmt.Errorf("failed to pack session key state: %w", err)

@@ -39,7 +39,7 @@ import * as blockchain from './blockchain/index.js';
 import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state.js';
 import { newVoidState } from './core/types.js';
 import { packState, packChallengeState } from './core/state_packer.js';
-import { StateSigner, TransactionSigner } from './signers.js';
+import { EthereumMsgSigner, StateSigner, TransactionSigner } from './signers.js';
 
 /**
  * Default challenge period for channels (1 day in seconds)
@@ -1686,13 +1686,18 @@ export class Client {
    * bound into the metadata hash so a signature minted for one key cannot be replayed for
    * another.
    *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. ChannelDefaultSigner, ChannelSessionKeyStateSigner)
+   * that the server rejects.
+   *
    * @param state - The channel session key state to sign (session_key_sig field is excluded)
-   * @param sessionKeySigner - StateSigner whose address equals state.session_key
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
    * @returns The hex-encoded signature string
    */
   async signChannelSessionKeyOwnership(
     state: ChannelSessionKeyStateV1,
-    sessionKeySigner: StateSigner
+    sessionKeySigner: EthereumMsgSigner
   ): Promise<Hex> {
     const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
       state.user_address as Address,
@@ -1773,13 +1778,17 @@ export class Client {
    * app-session state already binds user_address, so the same packed bytes are used for
    * both the wallet's user_sig and the session-key holder's session_key_sig.
    *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. AppSessionWalletSignerV1) that the server rejects.
+   *
    * @param state - The app session key state to sign (session_key_sig field is excluded)
-   * @param sessionKeySigner - StateSigner whose address equals state.session_key
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
    * @returns The hex-encoded signature string
    */
   async signAppSessionKeyOwnership(
     state: app.AppSessionKeyStateV1,
-    sessionKeySigner: StateSigner
+    sessionKeySigner: EthereumMsgSigner
   ): Promise<Hex> {
     const packed = app.packAppSessionKeyStateV1(state);
     return await sessionKeySigner.signMessage(packed);

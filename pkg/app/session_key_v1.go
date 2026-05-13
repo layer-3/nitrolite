@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/layer-3/nitrolite/pkg/sign"
 )
@@ -51,6 +52,54 @@ func GenerateSessionKeyStateIDV1(userAddress, sessionKey string, version uint64)
 	}
 
 	return crypto.Keccak256Hash(packed).Hex(), nil
+}
+
+// ValidateAppSessionKeyStateV1 verifies both signatures over the registration payload:
+// UserSig must recover to state.UserAddress (wallet authorizes the delegation) and
+// SessionKeySig must recover to state.SessionKey (session-key holder proves possession).
+// Both signatures sign the same PackAppSessionKeyStateV1(state) payload, which already binds
+// user_address and session_key — so a signature minted for one (wallet, session_key) pair
+// cannot be replayed for another.
+func ValidateAppSessionKeyStateV1(state AppSessionKeyStateV1) error {
+	if state.SessionKeySig == "" {
+		return fmt.Errorf("session_key_sig is required")
+	}
+
+	packed, err := PackAppSessionKeyStateV1(state)
+	if err != nil {
+		return fmt.Errorf("failed to pack session key state: %w", err)
+	}
+
+	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
+	if err != nil {
+		return fmt.Errorf("failed to create address recoverer: %w", err)
+	}
+
+	userSigBytes, err := hexutil.Decode(state.UserSig)
+	if err != nil {
+		return fmt.Errorf("failed to decode user_sig: %w", err)
+	}
+	recoveredUser, err := recoverer.RecoverAddress(packed, userSigBytes)
+	if err != nil {
+		return fmt.Errorf("failed to recover user_sig: %w", err)
+	}
+	if !strings.EqualFold(recoveredUser.String(), state.UserAddress) {
+		return fmt.Errorf("user_sig does not match user_address")
+	}
+
+	sessionKeySigBytes, err := hexutil.Decode(state.SessionKeySig)
+	if err != nil {
+		return fmt.Errorf("failed to decode session_key_sig: %w", err)
+	}
+	recoveredKey, err := recoverer.RecoverAddress(packed, sessionKeySigBytes)
+	if err != nil {
+		return fmt.Errorf("failed to recover session_key_sig: %w", err)
+	}
+	if !strings.EqualFold(recoveredKey.String(), state.SessionKey) {
+		return fmt.Errorf("session_key_sig does not match session_key")
+	}
+
+	return nil
 }
 
 // PackAppSessionKeyStateV1 packs the session key state for signing using ABI encoding.

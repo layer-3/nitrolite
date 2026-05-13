@@ -519,7 +519,7 @@ func TestSubmitSessionKeyState_SignatureMismatch(t *testing.T) {
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
-	assert.Contains(t, respErr.Error(), "signature does not match user_address")
+	assert.Contains(t, respErr.Error(), "user_sig does not match user_address")
 }
 
 func TestSubmitSessionKeyState_RejectsUserAddressEqualsSessionKey(t *testing.T) {

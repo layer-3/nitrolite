@@ -171,6 +171,25 @@ no funds can be permanently locked if it does.
 
 ---
 
+### ChannelClosed event orientation during abandoned migration
+
+`initiateMigration()` on the new home chain swaps `homeLedger` ↔ `nonHomeLedger` before storing the state, so that `homeLedger` always represents the chain where execution happens. A consequence of this swap is that `meta.lastState` on the new home chain is stored in opposite orientation from what both parties signed.
+
+If a migration is initiated but never finalized and both channel copies are subsequently challenged and closed after timeout, `ChannelClosed` can be emitted on **both chains** for the same `channelId` and state version, but with **opposite `homeLedger`/`nonHomeLedger` orientation** in `finalState`:
+
+- **Old home chain** (`OPERATING`/`DISPUTED`): `finalState.homeLedger` describes the old home chain (original orientation as signed).
+- **New home chain** (`MIGRATING_IN`/`DISPUTED`): `finalState.homeLedger` describes the new home chain (swapped orientation as stored).
+
+On-chain accounting is correct in both cases — each chain pays from its own locally stored allocations. The concern is for **off-chain consumers** of the `ChannelClosed` event:
+
+- Key `ChannelClosed` events by `(chainId, ChannelHub, channelId)`, never by `channelId` alone.
+- Treat each emission as a distinct local settlement; there is no single canonical `finalState` for an abandoned migration close.
+- Code that persists the emitted `finalState` must handle the swapped ledger orientation for channels in `MIGRATING_IN` status at close time.
+
+Under correct Node behavior this scenario does not occur: the Node stops issuing new states during migration and ensures either finalization or reversion before closing. The on-chain contract handles it safely so that no funds are permanently locked if it does occur.
+
+---
+
 ## Trust Assumptions
 
 Beyond the cryptographic and on-chain guarantees listed above, correct user fund protection depends on the following trust assumptions about Node behavior.

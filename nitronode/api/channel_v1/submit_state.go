@@ -235,6 +235,9 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				// }
 				// logger.Info("extra state issued", "userID", extraState.UserWallet, "asset", extraState.Asset, "version", extraState.Version)
 			case core.TransitionTypeFinalize:
+				if *channelStatus != core.ChannelStatusOpen {
+					return rpc.Errorf("home channel is not materialized onchain")
+				}
 				transaction, err = core.NewTransactionFromTransition(&incomingState, nil, incomingTransition)
 				if err != nil {
 					return rpc.Errorf("failed to create transaction: %v", err)

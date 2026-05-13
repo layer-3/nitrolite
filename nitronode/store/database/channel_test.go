@@ -533,6 +533,44 @@ func TestDBStore_CheckActiveChannel(t *testing.T) {
 		assert.Nil(t, status)
 		assert.Equal(t, "", approvedSigValidators)
 	})
+
+	// These two cases pin the status <= ChannelStatusOpen invariant: Closing and Challenged
+	// channels must not be returned as active, so post-finalize state submissions are rejected.
+	for _, tc := range []struct {
+		name   string
+		status core.ChannelStatus
+	}{
+		{"No active channel - channel is closing", core.ChannelStatusClosing},
+		{"No active channel - channel is challenged", core.ChannelStatusChallenged},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := SetupTestDB(t)
+			defer cleanup()
+
+			store := NewDBStore(db)
+
+			homeChannelID := "0xhomechannel123"
+
+			channel := core.Channel{
+				ChannelID:         homeChannelID,
+				UserWallet:        "0xuser123",
+				Asset:             "usdc",
+				Type:              core.ChannelTypeHome,
+				BlockchainID:      1,
+				TokenAddress:      "0xtoken123",
+				ChallengeDuration: 86400,
+				Nonce:             1,
+				Status:            tc.status,
+				StateVersion:      1,
+			}
+			require.NoError(t, store.CreateChannel(channel))
+
+			approvedSigValidators, status, err := store.CheckActiveChannel("0xuser123", "USDC")
+			require.NoError(t, err)
+			assert.Nil(t, status)
+			assert.Equal(t, "", approvedSigValidators)
+		})
+	}
 }
 
 func TestDBStore_UpdateChannel(t *testing.T) {

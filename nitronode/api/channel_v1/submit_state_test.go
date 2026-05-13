@@ -1849,6 +1849,91 @@ func TestSubmitState_EscrowLock_VoidHomeChannel_Rejected(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "ScheduleInitiateEscrowWithdrawal", mock.Anything, mock.Anything)
 }
 
+// TestSubmitState_ClosingChannel_Rejected verifies that SubmitState rejects any transition
+// when the channel is Closing or Challenged (status > ChannelStatusOpen), preventing new
+// states from being accepted on a channel that has already been finalized off-chain.
+func TestSubmitState_ClosingChannel_Rejected(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(h StoreTxHandler) error {
+			return h(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     3600,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+
+	currentState := core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, 1),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		},
+	}
+
+	incomingState := currentState.NextState()
+	_, err := incomingState.ApplyHomeDepositTransition(decimal.NewFromInt(100))
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	packedState, _ := core.PackState(*incomingState, mockAssetStore)
+	userSig, _ := userWalletSigner.Sign(packedState)
+	userSigStr := userSig.String()
+	incomingState.UserSig = &userSigStr
+
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	// CheckActiveChannel returns nil status for Closing/Challenged channels (status > ChannelStatusOpen).
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", userWallet, asset).Return("", nil, nil)
+
+	rpcState := toRPCState(*incomingState)
+	payload, err := rpc.NewPayload(rpc.ChannelsV1SubmitStateRequest{State: rpcState})
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "Expected error when channel is Closing")
+	assert.Contains(t, respErr.Error(), "user has no active channel")
+
+	mockTxStore.AssertNotCalled(t, "GetLastUserState", mock.Anything, mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+}
+
 // Helper function to create a string pointer
 func stringPtr(s string) *string {
 	return &s

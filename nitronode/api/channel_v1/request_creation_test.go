@@ -525,10 +525,9 @@ func TestRequestCreation_ChallengeTooHigh(t *testing.T) {
 	assert.Contains(t, err.Error(), "at most")
 }
 
-// TestRequestCreation_NonClosedChannelRejection verifies the security gate that prevents a
-// user from opening a new channel while a prior channel lifecycle is still in progress
-// (e.g., Closing after off-chain Finalize, or Open/Challenged). This is the primary
-// protection against the MF-C02 epoch-rebinding vulnerability.
+// TestRequestCreation_NonClosedChannelRejection verifies that opening a new channel is
+// rejected while a prior channel is still in progress (Closing, Open, or Challenged),
+// preventing epoch rebinding by ensuring only one channel lifecycle runs at a time.
 func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
 	mockTxStore := new(MockStore)
 	mockMemoryStore := new(MockMemoryStore)

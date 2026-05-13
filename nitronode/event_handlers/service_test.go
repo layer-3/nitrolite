@@ -236,6 +236,50 @@ func TestHandleHomeChannelChallenged_TypeMismatch(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleHomeChannelChallenged_FromClosingState(t *testing.T) {
+	// Closing → Challenged is an expected transition: a co-signed Finalize may race an
+	// on-chain challenge. The chain takes precedence; status must become Challenged.
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusClosing,
+		StateVersion: 3,
+	}
+
+	event := &core.HomeChannelChallengedEvent{
+		ChannelID:       channelID,
+		StateVersion:    4,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusChallenged &&
+			ch.StateVersion == 4 &&
+			ch.ChallengeExpiresAt != nil &&
+			ch.ChallengeExpiresAt.Unix() == int64(challengeExpiry)
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", channelID, uint64(4), "").Return(nil)
+
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleHomeChannelClosed_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

@@ -35,6 +35,13 @@ type EscrowDepositChallengedEvent channelChallengedEvent
 // EscrowDepositFinalizedEvent represents the EscrowDepositFinalized event
 type EscrowDepositFinalizedEvent channelEvent
 
+// EscrowDepositsPurgedEvent represents the EscrowDepositsPurged event emitted when expired
+// escrow deposits are finalized by the purge queue without a signed FINALIZE_ESCROW_DEPOSIT state.
+type EscrowDepositsPurgedEvent struct {
+	// EscrowIDs holds the hex-encoded escrow IDs (== channel_id in the channels table) that were purged.
+	EscrowIDs []string `json:"escrow_ids"`
+}
+
 // EscrowWithdrawalInitiatedEvent represents the EscrowWithdrawalInitiated event
 type EscrowWithdrawalInitiatedEvent channelEvent
 

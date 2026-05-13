@@ -424,6 +424,44 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 	return nil
 }
 
+// HandleEscrowDepositsPurged processes the EscrowDepositsPurged event emitted when expired escrow deposits
+// are finalized by the on-chain purge queue without a signed FINALIZE_ESCROW_DEPOSIT state. It marks each
+// corresponding escrow channel as Closed, preserving its existing StateVersion.
+//
+// TODO: consider scoping the DB transaction per channel update instead of wrapping the whole batch,
+// so a single failure does not roll back already-processed channels in the same purge event.
+func (s *EventHandlerService) HandleEscrowDepositsPurged(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.EscrowDepositsPurgedEvent) error {
+	logger := log.FromContext(ctx)
+	closedCount := 0
+
+	for _, escrowID := range event.EscrowIDs {
+		channel, err := tx.GetChannelByID(escrowID)
+		if err != nil {
+			return err
+		}
+		if channel == nil {
+			logger.Debug("channel not found in DB during EscrowDepositsPurged event", "escrowId", escrowID)
+			continue
+		}
+		if channel.Type != core.ChannelTypeEscrow {
+			logger.Warn("channel type mismatch during EscrowDepositsPurged event", "escrowId", escrowID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+			continue
+		}
+		if channel.Status == core.ChannelStatusClosed {
+			continue
+		}
+
+		channel.Status = core.ChannelStatusClosed
+		if err := tx.UpdateChannel(*channel); err != nil {
+			return err
+		}
+		closedCount++
+	}
+
+	logger.Info("handled EscrowDepositsPurged event", "purgedCount", len(event.EscrowIDs), "closedCount", closedCount)
+	return nil
+}
+
 // HandleEscrowWithdrawalInitiated processes the EscrowWithdrawalInitiated event emitted when an escrow
 // withdrawal operation begins on-chain. It updates the escrow channel status to Open and sets the state
 // version to reflect the initiated withdrawal.

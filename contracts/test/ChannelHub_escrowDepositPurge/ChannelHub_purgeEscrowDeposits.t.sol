@@ -56,10 +56,13 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
     function test_purges_whenSingleInitialized_unlockable() public {
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id;
+
         vm.expectEmit(true, true, true, true);
         emit ChannelHub.NodeBalanceUpdated(address(token), LOCKED_AMOUNT);
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1);
 
         _purge(type(uint256).max);
 
@@ -93,8 +96,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _addDisputed(uint64(block.timestamp) + 1 days);
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1);
 
         _purge(type(uint256).max);
 
@@ -107,8 +113,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _addFinalized();
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1);
 
         _purge(type(uint256).max);
 
@@ -134,12 +143,17 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         uint256 amount2 = 200;
         uint256 amount3 = 300;
 
-        _addUnlockable(amount1);
-        _addUnlockable(amount2);
-        _addUnlockable(amount3);
+        bytes32 id1 = _addUnlockable(amount1);
+        bytes32 id2 = _addUnlockable(amount2);
+        bytes32 id3 = _addUnlockable(amount3);
+
+        bytes32[] memory expectedIds = new bytes32[](3);
+        expectedIds[0] = id1;
+        expectedIds[1] = id2;
+        expectedIds[2] = id3;
 
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(3);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 3);
 
         _purge(type(uint256).max);
 
@@ -155,8 +169,12 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         bytes32 id2 = _addUnlockable(LOCKED_AMOUNT);
         bytes32 id3 = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](2);
+        expectedIds[0] = id1;
+        expectedIds[1] = id2;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(2);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 2);
 
         _purge(2);
 
@@ -182,8 +200,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _addDisputed(uint64(block.timestamp) + 1 days);
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1); // purgedCount=1, not steps=2
 
         _purge(2);
 
@@ -207,8 +228,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         _addFinalized();
         bytes32 id = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1); // purgedCount=1, not steps=2
 
         _purge(2);
 
@@ -234,8 +258,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         bytes32 id1 = _addUnlockable(LOCKED_AMOUNT);
         bytes32 id2 = _addUnlockable(LOCKED_AMOUNT);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id1;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1); // purgedCount=1, not steps=2
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1); // purgedCount=1, not steps=2
 
         _purge(2);
 
@@ -253,8 +280,11 @@ contract ChannelHubTest_purgeEscrowDeposits is ChannelHubTest_EscrowDepositPurge
         bytes32 id3 = _addUnlockable(LOCKED_AMOUNT);
         bytes32 id4 = _addNotYetUnlockable(LOCKED_AMOUNT * 2);
 
+        bytes32[] memory expectedIds = new bytes32[](1);
+        expectedIds[0] = id3;
+
         vm.expectEmit(true, true, true, true);
-        emit ChannelHub.EscrowDepositsPurged(1);
+        emit ChannelHub.EscrowDepositsPurged(expectedIds, 1);
 
         _purge(type(uint256).max);
 

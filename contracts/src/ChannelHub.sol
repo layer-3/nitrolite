@@ -62,7 +62,7 @@ contract ChannelHub is ReentrancyGuard {
     event Deposited(address indexed token, uint256 amount);
     event Withdrawn(address indexed token, uint256 amount);
 
-    event EscrowDepositsPurged(uint256 purgedCount);
+    event EscrowDepositsPurged(bytes32[] escrowIds, uint256 purgedCount);
 
     event ChannelCreated(
         bytes32 indexed channelId, address indexed user, ChannelDefinition definition, State initialState
@@ -459,6 +459,10 @@ contract ChannelHub is ReentrancyGuard {
         uint256 totalDeposits = _escrowDepositIds.length;
         uint256 escrowHeadTemp = escrowHead;
 
+        uint256 remaining = totalDeposits > escrowHeadTemp ? totalDeposits - escrowHeadTemp : 0;
+        uint256 maxPossible = maxSteps < remaining ? maxSteps : remaining;
+        bytes32[] memory purgedIds = new bytes32[](maxPossible);
+
         while (escrowHeadTemp < totalDeposits && steps < maxSteps) {
             bytes32 escrowId = _escrowDepositIds[escrowHeadTemp];
             EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
@@ -475,6 +479,7 @@ contract ChannelHub is ReentrancyGuard {
 
                 meta.status = EscrowStatus.FINALIZED;
                 meta.lockedAmount = 0;
+                purgedIds[purgedCount] = escrowId;
                 purgedCount++;
                 escrowHeadTemp++;
 
@@ -487,7 +492,11 @@ contract ChannelHub is ReentrancyGuard {
         escrowHead = escrowHeadTemp;
 
         if (purgedCount != 0) {
-            emit EscrowDepositsPurged(purgedCount);
+            // Trim the over-allocated memory array to the actual purged count.
+            assembly {
+                mstore(purgedIds, purgedCount)
+            }
+            emit EscrowDepositsPurged(purgedIds, purgedCount);
         }
     }
 

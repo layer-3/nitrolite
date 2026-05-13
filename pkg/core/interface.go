@@ -95,6 +95,7 @@ type ChannelHubEventHandler interface {
 	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
 	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
 	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error
+	HandleEscrowDepositsPurged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositsPurgedEvent) error
 	HandleEscrowWithdrawalInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalInitiatedEvent) error
 	HandleEscrowWithdrawalChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalChallengedEvent) error
 	HandleEscrowWithdrawalFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalFinalizedEvent) error

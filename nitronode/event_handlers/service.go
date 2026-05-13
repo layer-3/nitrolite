@@ -359,7 +359,19 @@ func (s *EventHandlerService) scheduleHomeChannelChallengeForEscrowDeposit(ctx c
 		return nil
 	}
 	if homeChannel.Status != core.ChannelStatusOpen {
-		logger.Warn("home channel not Open, skipping auto-challenge", "homeChannelId", *initiateState.HomeChannelID, "homeStatus", homeChannel.Status, "escrowChannelId", escrowChanID)
+		switch homeChannel.Status {
+		case core.ChannelStatusChallenged:
+			logger.Warn("home channel already Challenged, skipping auto-challenge", "homeChannelId", *initiateState.HomeChannelID, "escrowChannelId", escrowChanID)
+		case core.ChannelStatusClosed:
+			logger.Error("home channel Closed, defense window passed", "homeChannelId", *initiateState.HomeChannelID, "escrowChannelId", escrowChanID)
+		default:
+			logger.Warn("home channel not Open, skipping auto-challenge", "homeChannelId", *initiateState.HomeChannelID, "homeStatus", homeChannel.Status, "escrowChannelId", escrowChanID)
+		}
+		return nil
+	}
+
+	if initiateState.HomeLedger.BlockchainID == 0 {
+		logger.Error("INITIATE_ESCROW_DEPOSIT state has zero home BlockchainID, cannot defend home channel automatically", "homeChannelId", *initiateState.HomeChannelID, "escrowChannelId", escrowChanID)
 		return nil
 	}
 

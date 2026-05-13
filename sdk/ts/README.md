@@ -81,7 +81,7 @@ client.rebalanceAppSessions(signedUpdates)                      // Atomic rebala
 client.signSessionKeyState(state)                                       // Wallet user_sig over app session key state
 client.signAppSessionKeyOwnership(state, sessionKeySigner)              // Session-key holder's session_key_sig
 client.submitSessionKeyState(state)                                     // Register/update app session key (both sigs required)
-client.getLastKeyStates(userAddress, sessionKey?)                       // Get active app session key states
+client.getLastAppKeyStates(userAddress, sessionKey?, options?)          // Get app session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Channel Session Keys
@@ -89,7 +89,7 @@ client.getLastKeyStates(userAddress, sessionKey?)                       // Get a
 client.signChannelSessionKeyState(state)                                // Wallet user_sig over channel session key state
 client.signChannelSessionKeyOwnership(state, sessionKeySigner)          // Session-key holder's session_key_sig
 client.submitChannelSessionKeyState(state)                              // Register/update channel session key (both sigs required)
-client.getLastChannelKeyStates(userAddress, sessionKey?)                // Get active channel session key states
+client.getLastChannelKeyStates(userAddress, sessionKey?, options?)      // Get channel session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Shared Utilities
@@ -518,9 +518,12 @@ state.session_key_sig = await client.signAppSessionKeyOwnership(state, sessionKe
 
 await client.submitSessionKeyState(state);
 
-// Query active app session key states
-const states = await client.getLastKeyStates('0x1234...');
-const filtered = await client.getLastKeyStates('0x1234...', '0xSessionKey...');
+// Query app session key states (active-only by default)
+const states = await client.getLastAppKeyStates('0x1234...');
+const filtered = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ### Channel Session Keys
@@ -544,9 +547,12 @@ state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessi
 
 await client.submitChannelSessionKeyState(state);
 
-// Query active channel session key states
+// Query channel session key states (active-only by default)
 const states = await client.getLastChannelKeyStates('0x1234...');
 const filtered = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ## Key Concepts

@@ -187,11 +187,11 @@ helpers produce `session_key_sig`.
 | `signChannelSessionKeyState(state)` | Wallet `user_sig` over channel session-key state |
 | `signChannelSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for channel state |
 | `submitChannelSessionKeyState(state)` | Register/submit a channel session-key state (both sigs required) |
-| `getLastChannelKeyStates(userAddress, sessionKey?)` | Fetch channel session-key states for wallet/key |
+| `getLastChannelKeyStates(userAddress, sessionKey?, options?)` | Fetch channel session-key states (active-only by default; `{ includeInactive: true }` for expired/revoked) |
 | `signSessionKeyState(state)` | Wallet `user_sig` over app session-key state |
 | `signAppSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for app state |
 | `submitSessionKeyState(state)` | Register/submit an app-session key state (both sigs required) |
-| `getLastKeyStates(userAddress, sessionKey?)` | Fetch app-session key states for wallet/key |
+| `getLastAppKeyStates(userAddress, sessionKey?, options?)` | Fetch app-session key states (active-only by default; `{ includeInactive: true }` for expired/revoked) |
 
 ### Transfers
 

@@ -895,12 +895,12 @@ export class NitroliteClient {
         await this.innerClient.submitSessionKeyState(state);
     }
 
-    async getLastKeyStates(
+    async getLastAppKeyStates(
         userAddress: string,
         sessionKey?: string,
         options?: { includeInactive?: boolean },
     ): Promise<AppSessionKeyStateV1[]> {
-        return this.innerClient.getLastKeyStates(userAddress, sessionKey, options);
+        return this.innerClient.getLastAppKeyStates(userAddress, sessionKey, options);
     }
 
     // -----------------------------------------------------------------------

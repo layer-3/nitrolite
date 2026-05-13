@@ -1826,7 +1826,7 @@ export class Client {
    * @param options - Optional include-inactive flag
    * @returns List of app session key states matching the filter
    */
-  async getLastKeyStates(
+  async getLastAppKeyStates(
     userAddress: string,
     sessionKey?: string,
     options?: { includeInactive?: boolean }

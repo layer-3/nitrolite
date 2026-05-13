@@ -302,7 +302,7 @@ describe('Nitronode response transform drift guards', () => {
             clientLike,
             userAddress
         );
-        const appSessionKeyStates = await (Client.prototype.getLastKeyStates as any).call(
+        const appSessionKeyStates = await (Client.prototype.getLastAppKeyStates as any).call(
             clientLike,
             userAddress
         );
@@ -343,7 +343,7 @@ describe('Nitronode response transform drift guards', () => {
             sessionKeyAddress,
             { includeInactive: true }
         );
-        await (Client.prototype.getLastKeyStates as any).call(
+        await (Client.prototype.getLastAppKeyStates as any).call(
             clientLike,
             userAddress,
             sessionKeyAddress,
@@ -364,7 +364,7 @@ describe('Nitronode response transform drift guards', () => {
         // Default call (no options) must leave include_inactive undefined so the server
         // applies its active-only default rather than seeing an explicit `false`.
         await (Client.prototype.getLastChannelKeyStates as any).call(clientLike, userAddress);
-        await (Client.prototype.getLastKeyStates as any).call(clientLike, userAddress);
+        await (Client.prototype.getLastAppKeyStates as any).call(clientLike, userAddress);
 
         expect(channelsV1GetLastKeyStates).toHaveBeenLastCalledWith({
             user_address: userAddress,
@@ -394,7 +394,7 @@ describe('Nitronode response transform drift guards', () => {
             (Client.prototype.getLastChannelKeyStates as any).call(clientLike, userAddress)
         ).rejects.toThrow('Invalid channel key states response: expected states to be an array');
         await expect(
-            (Client.prototype.getLastKeyStates as any).call(clientLike, userAddress)
+            (Client.prototype.getLastAppKeyStates as any).call(clientLike, userAddress)
         ).rejects.toThrow('Invalid app key states response: expected states to be an array');
     });
 

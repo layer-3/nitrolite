@@ -1153,8 +1153,6 @@ contract ChannelHub is ReentrancyGuard {
         ChannelMeta storage meta = _channels[channelId];
         address token = candidate.homeLedger.token;
 
-        _requireMsgValueForUserFundsDelta(token, effects.userFundsDelta);
-
         meta.lastState = candidate;
 
         address user = def.user;
@@ -1164,6 +1162,8 @@ contract ChannelHub is ReentrancyGuard {
             uint256 amount = effects.userFundsDelta.toUint256();
             _pullFunds(user, token, amount);
             meta.lockedFunds += amount;
+        } else {
+            require(msg.value == 0, IncorrectValue());
         }
 
         if (effects.nodeFundsDelta > 0) {
@@ -1206,8 +1206,6 @@ contract ChannelHub is ReentrancyGuard {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
         address token = effects.updateInitState ? candidate.nonHomeLedger.token : meta.initState.nonHomeLedger.token;
 
-        _requireMsgValueForUserFundsDelta(token, effects.userFundsDelta);
-
         if (effects.newStatus != EscrowStatus.VOID) {
             meta.status = effects.newStatus;
         }
@@ -1229,10 +1227,13 @@ contract ChannelHub is ReentrancyGuard {
             uint256 amount = effects.userFundsDelta.toUint256();
             _pullFunds(user, token, amount);
             meta.lockedAmount += amount;
-        } else if (effects.userFundsDelta < 0) {
-            uint256 amount = (-effects.userFundsDelta).toUint256();
-            _nonRevertingPushFunds(user, token, amount);
-            meta.lockedAmount -= amount;
+        } else {
+            require(msg.value == 0, IncorrectValue());
+            if (effects.userFundsDelta < 0) {
+                uint256 amount = (-effects.userFundsDelta).toUint256();
+                _nonRevertingPushFunds(user, token, amount);
+                meta.lockedAmount -= amount;
+            }
         }
 
         // Handle node funds (positive = pull from node vault, negative = release to vault)
@@ -1378,11 +1379,7 @@ contract ChannelHub is ReentrancyGuard {
         return _escrowWithdrawals[escrowId].channelId == bytes32(0) && _isChannelHomeChain(channelId);
     }
 
-    function _requireMsgValueForUserFundsDelta(address token, int256 userFundsDelta) internal view {
-        uint256 amount = userFundsDelta > 0 ? userFundsDelta.toUint256() : 0;
-        _requireMsgValueForPull(token, amount);
-    }
-
+    /// @dev native token: requires msg.value == amount; ERC20: requires msg.value == 0.
     function _requireMsgValueForPull(address token, uint256 amount) internal view {
         if (token == address(0)) {
             require(msg.value == amount, IncorrectValue());
@@ -1392,9 +1389,9 @@ contract ChannelHub is ReentrancyGuard {
     }
 
     function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
-        _requireMsgValueForPull(token, amount);
-
         if (amount == 0) return;
+
+        _requireMsgValueForPull(token, amount);
 
         if (token != address(0)) {
             IERC20(token).safeTransferFrom(from, address(this), amount);

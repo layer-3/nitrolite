@@ -112,7 +112,7 @@ contract ChannelHubTest_challenge is ChannelHubTest_Base {
         cHub.challengeChannel{value: 1}(channelId, initState, challengerSig, ParticipantIndex.NODE);
     }
 
-    function test_revert_ifETHSent_initiateEscrowDeposit_homeChainChallenge() public {
+    function test_revert_challengeChannel_initiateEscrowDepositIntent_ifETHSent() public {
         bytes memory challengerSig = signChallengeEip191WithEcdsaValidator(channelId, escrowState, NODE_PK);
 
         vm.deal(node, 1);

@@ -433,6 +433,395 @@ func TestHandleEscrowDepositChallenged_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleEscrowDepositChallenged_NoFinalize_SchedulesHomeChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	homeChannelID := "0xHomeChannel456"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	homeChannel := &core.Channel{
+		ChannelID:    homeChannelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		BlockchainID: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			BlockchainID: 1,
+		},
+		EscrowLedger: &core.Ledger{
+			BlockchainID: 2,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == escrowChannelID &&
+			ch.Status == core.ChannelStatusChallenged &&
+			ch.StateVersion == 3
+	})).Return(nil)
+	// No newer signed FINALIZE state available locally — node only has the INITIATE state.
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("GetChannelByID", homeChannelID).Return(homeChannel, nil)
+	mockStore.On("ScheduleChallenge", "initiate-state-id", uint64(1)).Return(nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_NoFinalize_HomeChannelNotOpen_SkipsChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	homeChannelID := "0xHomeChannel456"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	homeChannel := &core.Channel{
+		ChannelID:    homeChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusChallenged,
+		BlockchainID: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			BlockchainID: 1,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("GetChannelByID", homeChannelID).Return(homeChannel, nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_NoLocalState_NoSchedule(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(nil, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(nil, nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_HomeChannelIDNil_SkipsChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: nil,
+		HomeLedger: core.Ledger{
+			BlockchainID: 1,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_HomeChannelNotFound_SkipsChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	homeChannelID := "0xHomeChannel456"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			BlockchainID: 1,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("GetChannelByID", homeChannelID).Return((*core.Channel)(nil), nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_GetStateByVersionError_Propagates(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	dbErr := errors.New("db boom")
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(nil, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(nil, dbErr)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.ErrorIs(t, err, dbErr)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateUserSigIfMissing", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_GetHomeChannelError_Propagates(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	homeChannelID := "0xHomeChannel456"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			BlockchainID: 1,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	dbErr := errors.New("db boom")
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("GetChannelByID", homeChannelID).Return((*core.Channel)(nil), dbErr)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.ErrorIs(t, err, dbErr)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateUserSigIfMissing", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestHandleEscrowDepositChallenged_HomeBlockchainIDZero_SkipsChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	service := &EventHandlerService{}
+
+	escrowChannelID := "0xEscrowChannel123"
+	homeChannelID := "0xHomeChannel456"
+	challengeExpiry := uint64(time.Now().Add(time.Hour).Unix())
+
+	escrowChannel := &core.Channel{
+		ChannelID:    escrowChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 1,
+	}
+
+	homeChannel := &core.Channel{
+		ChannelID:    homeChannelID,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		BlockchainID: 1,
+	}
+
+	initiateState := &core.State{
+		ID:            "initiate-state-id",
+		Version:       3,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			BlockchainID: 0,
+		},
+	}
+
+	event := &core.EscrowDepositChallengedEvent{
+		ChannelID:       escrowChannelID,
+		StateVersion:    3,
+		ChallengeExpiry: challengeExpiry,
+	}
+
+	mockStore.On("GetChannelByID", escrowChannelID).Return(escrowChannel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("GetLastStateByChannelID", escrowChannelID, true).Return(initiateState, nil)
+	mockStore.On("GetStateByChannelIDAndVersion", escrowChannelID, uint64(3)).Return(initiateState, nil)
+	mockStore.On("GetChannelByID", homeChannelID).Return(homeChannel, nil)
+	mockStore.On("UpdateStateUserSigIfMissing", escrowChannelID, uint64(3), "").Return(nil)
+
+	err := service.HandleEscrowDepositChallenged(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "ScheduleChallenge", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleFinalizeEscrowDeposit", mock.Anything, mock.Anything)
+}
+
 func TestHandleEscrowDepositFinalized_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

@@ -51,6 +51,12 @@ func (m *MockStore) ScheduleCheckpoint(stateID string, chainID uint64) error {
 	return args.Error(0)
 }
 
+// ScheduleChallenge mocks scheduling a challenge operation
+func (m *MockStore) ScheduleChallenge(stateID string, chainID uint64) error {
+	args := m.Called(stateID, chainID)
+	return args.Error(0)
+}
+
 // ScheduleInitiateEscrowDeposit mocks scheduling an escrow deposit checkpoint
 func (m *MockStore) ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error {
 	args := m.Called(stateID, chainID)

@@ -724,6 +724,25 @@ Subsequent operations accept both tiers, filtered by the bitmask stored at creat
 
 ---
 
+## Informational Events
+
+Several `ChannelHub` events are **informational** — emitted on a best-effort basis when a specific dedicated function path is taken, but not guaranteed to fire for every logical occurrence of the operation they name. Because the protocol allows any newer valid signed state to be enforced directly (e.g. a standard deposit or checkpoint on a `MIGRATING_IN` channel), intermediate cross-chain states can be bypassed without calling their dedicated functions, and therefore without emitting their events.
+
+External consumers such as indexers, SDKs, and analytics tooling **must not treat these events as exhaustive signals**. The canonical terminal events for each cross-chain flow remain reliable and are always emitted.
+
+The following events are informational:
+
+* **`MigrationInFinalized`** — not emitted if a `MIGRATING_IN` channel transitions to `OPERATING` via any standard operation (deposit, withdraw, checkpoint, challenge) rather than an explicit `finalizeMigration()` call. The canonical migration completion signal is `MigrationOutFinalized`, which is always emitted unconditionally on the old home chain.
+* **`MigrationOutInitiated`** — not emitted if a newer signed state is enforced on the old home channel that supersedes the explicit initiation state.
+* **`EscrowDepositFinalized`** — not emitted if the non-home channel advances past escrow finalization via a newer signed state.
+* **`EscrowDepositFinalizedOnHome`** — not emitted if the home channel advances past the escrow finalization acknowledgement via a newer signed state.
+* **`EscrowWithdrawalInitiatedOnHome`** — not emitted if the home channel advances past the escrow withdrawal initiation acknowledgement via a newer signed state.
+* **`EscrowWithdrawalFinalizedOnHome`** — not emitted if the home channel advances past the escrow withdrawal finalization acknowledgement via a newer signed state.
+
+The Nitronode does not rely on any of these informational events for its state machine. For migration, the Nitronode watches `MigrationInInitiated` (the on-chain signal establishing the new home chain) and `MigrationOutFinalized` (the unconditional completion signal on the old home chain).
+
+---
+
 ## Mental model
 
 * Off-chain protocol **decides what should happen**.

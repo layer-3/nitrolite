@@ -135,6 +135,8 @@ func channelStatusToString(s core.ChannelStatus) string {
 		return "open"
 	case core.ChannelStatusChallenged:
 		return "challenged"
+	case core.ChannelStatusClosing:
+		return "closing"
 	case core.ChannelStatusClosed:
 		return "closed"
 	default:

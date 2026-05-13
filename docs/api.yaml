@@ -29,7 +29,7 @@ types:
           description: Nonce for the channel
         - name: status
           type: string
-          description: Current status of the channel (void, open, challenged, closed)
+          description: Current status of the channel (void, open, challenged, closing, closed)
         - name: state_version
           type: string
           description: On-chain state version of the channel

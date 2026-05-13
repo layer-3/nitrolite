@@ -130,6 +130,8 @@ func transformChannel(channel rpc.ChannelV1) (core.Channel, error) {
 		channelStatus = core.ChannelStatusOpen
 	case "challenged":
 		channelStatus = core.ChannelStatusChallenged
+	case "closing":
+		channelStatus = core.ChannelStatusClosing
 	case "closed":
 		channelStatus = core.ChannelStatusClosed
 	}

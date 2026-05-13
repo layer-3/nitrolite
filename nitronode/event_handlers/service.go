@@ -154,6 +154,9 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 	}
 
 	channel.StateVersion = event.StateVersion
+	// Closing → Challenged is an expected transition: a co-signed Finalize may race an
+	// on-chain challenge. The chain takes precedence; the off-chain close flow is abandoned
+	// and the channel follows the Challenged → Closed path instead.
 	channel.Status = core.ChannelStatusChallenged
 	expirationTime := time.Unix(int64(event.ChallengeExpiry), 0)
 	channel.ChallengeExpiresAt = &expirationTime

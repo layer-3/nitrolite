@@ -823,6 +823,7 @@ exports[`compat public runtime API drift guard keeps root TypeScript public API 
       "Closed = 'closed'",
       "Resizing = 'resizing'",
       "Challenged = 'challenged'",
+      "Closing = 'closing'",
     ],
     "name": "RPCChannelStatus",
   },

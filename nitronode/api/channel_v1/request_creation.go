@@ -88,6 +88,17 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 			return rpc.Errorf("failed to lock user state: %v", err)
 		}
 
+		// Reject if any home channel for this (wallet, asset) is not fully closed on-chain.
+		// This enforces one in-flight channel per asset and prevents epoch rebinding while
+		// a prior channel lifecycle is still pending settlement.
+		hasNonClosed, err := tx.HasNonClosedHomeChannel(incomingState.UserWallet, incomingState.Asset)
+		if err != nil {
+			return rpc.Errorf("failed to check channel lifecycle: %v", err)
+		}
+		if hasNonClosed {
+			return rpc.Errorf("existing channel is not yet closed on-chain; wait for settlement before opening a new channel")
+		}
+
 		// Check if channel already exists
 		currentState, err := tx.GetLastUserState(incomingState.UserWallet, incomingState.Asset, false)
 		if err != nil {

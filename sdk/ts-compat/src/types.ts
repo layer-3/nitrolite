@@ -37,6 +37,7 @@ export enum RPCChannelStatus {
     Closed = 'closed',
     Resizing = 'resizing',
     Challenged = 'challenged',
+    Closing = 'closing',
 }
 
 export enum RPCProtocolVersion {

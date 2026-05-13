@@ -72,6 +72,19 @@ type Store interface {
 	// Returns nil if no home channel exists for the given wallet and asset.
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
+	// GetNotClosedHomeChannel retrieves the home channel regardless of status as long as it
+	// is not Closed. Used by GetHomeChannel so the endpoint stays functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	// The channel must already exist in the database.
+	UpdateChannel(channel core.Channel) error
+
+	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) has a
+	// status other than Closed, meaning a channel lifecycle is still in progress.
+	HasNonClosedHomeChannel(wallet, asset string) (bool, error)
+
 	// GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.
 	GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error)
 

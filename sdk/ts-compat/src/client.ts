@@ -598,7 +598,8 @@ export class NitroliteClient {
         0: 'void',
         1: 'open',
         2: 'challenged',
-        3: 'closed',
+        3: 'closing',
+        4: 'closed',
     };
 
     async getChannels(): Promise<LedgerChannel[]> {

@@ -235,9 +235,25 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				// }
 				// logger.Info("extra state issued", "userID", extraState.UserWallet, "asset", extraState.Asset, "version", extraState.Version)
 			case core.TransitionTypeFinalize:
+				if *channelStatus != core.ChannelStatusOpen {
+					return rpc.Errorf("home channel is not materialized onchain")
+				}
 				transaction, err = core.NewTransactionFromTransition(&incomingState, nil, incomingTransition)
 				if err != nil {
 					return rpc.Errorf("failed to create transaction: %v", err)
+				}
+				// Atomically mark the channel as Closing so no further user-initiated state
+				// transitions are accepted until the on-chain close event is confirmed.
+				channel, err := tx.GetChannelByID(*incomingState.HomeChannelID)
+				if err != nil {
+					return rpc.Errorf("failed to get channel for finalize: %v", err)
+				}
+				if channel == nil {
+					return rpc.Errorf("channel not found for finalize: %s", *incomingState.HomeChannelID)
+				}
+				channel.Status = core.ChannelStatusClosing
+				if err := tx.UpdateChannel(*channel); err != nil {
+					return rpc.Errorf("failed to update channel status to closing: %v", err)
 				}
 			case core.TransitionTypeMigrate:
 				return rpc.Errorf("transition is not supported yet")

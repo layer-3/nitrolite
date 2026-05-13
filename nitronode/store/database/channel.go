@@ -99,6 +99,41 @@ func (s *DBStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, err
 	return databaseChannelToCore(&dbChannel), nil
 }
 
+// GetNotClosedHomeChannel retrieves the home channel for a user's wallet and asset as long
+// as it has not reached ChannelStatusClosed. This is broader than GetActiveHomeChannel
+// (which stops at Open) and is intended for read paths that must remain functional after
+// an off-chain Finalize, such as fetching channel data before submitting an on-chain close.
+func (s *DBStore) GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error) {
+	var dbChannel Channel
+	err := s.db.
+		Where("user_wallet = ? AND asset = ?", strings.ToLower(wallet), strings.ToLower(asset)).
+		Where("status != ? AND type = ?", core.ChannelStatusClosed, core.ChannelTypeHome).
+		First(&dbChannel).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get non-closed home channel: %w", err)
+	}
+
+	return databaseChannelToCore(&dbChannel), nil
+}
+
+// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) has a
+// status other than Closed, meaning a channel lifecycle is still in progress.
+func (s *DBStore) HasNonClosedHomeChannel(wallet, asset string) (bool, error) {
+	var count int64
+	err := s.db.Model(&Channel{}).
+		Where("user_wallet = ? AND asset = ? AND type = ? AND status != ?",
+			strings.ToLower(wallet), strings.ToLower(asset),
+			core.ChannelTypeHome, core.ChannelStatusClosed).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check non-closed home channel: %w", err)
+	}
+	return count > 0, nil
+}
+
 // CheckActiveChannel verifies if a user has an active home channel for the given asset
 // and returns its approved signature validators along with the channel status.
 // "Active" includes Void (DB-only, awaiting onchain confirmation) and Open (materialized

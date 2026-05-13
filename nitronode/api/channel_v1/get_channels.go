@@ -16,6 +16,8 @@ func channelStatusFromString(s string) (core.ChannelStatus, error) {
 		return core.ChannelStatusOpen, nil
 	case "challenged":
 		return core.ChannelStatusChallenged, nil
+	case "closing":
+		return core.ChannelStatusClosing, nil
 	case "closed":
 		return core.ChannelStatusClosed, nil
 	default:

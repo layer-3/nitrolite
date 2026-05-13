@@ -377,6 +377,70 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 	})
 }
 
+func TestDBStore_GetNotClosedHomeChannel(t *testing.T) {
+	makeChannel := func(id, wallet, asset string, status core.ChannelStatus, chType core.ChannelType) core.Channel {
+		return core.Channel{
+			ChannelID:         id,
+			UserWallet:        wallet,
+			Asset:             asset,
+			Type:              chType,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            status,
+			StateVersion:      1,
+		}
+	}
+
+	for _, tc := range []struct {
+		name        string
+		status      core.ChannelStatus
+		expectFound bool
+	}{
+		{"returns Void channel", core.ChannelStatusVoid, true},
+		{"returns Open channel", core.ChannelStatusOpen, true},
+		{"returns Challenged channel", core.ChannelStatusChallenged, true},
+		{"returns Closing channel", core.ChannelStatusClosing, true},
+		{"returns nil for Closed channel", core.ChannelStatusClosed, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := SetupTestDB(t)
+			defer cleanup()
+			store := NewDBStore(db)
+
+			require.NoError(t, store.CreateChannel(makeChannel("0xch1", "0xuser123", "usdc", tc.status, core.ChannelTypeHome)))
+
+			result, err := store.GetNotClosedHomeChannel("0xuser123", "USDC")
+			require.NoError(t, err)
+			if tc.expectFound {
+				require.NotNil(t, result)
+				assert.Equal(t, tc.status, result.Status)
+			} else {
+				assert.Nil(t, result)
+			}
+		})
+	}
+
+	t.Run("returns nil when no channel exists", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		result, err := NewDBStore(db).GetNotClosedHomeChannel("0xuser123", "USDC")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("ignores escrow channels", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(makeChannel("0xesc1", "0xuser123", "usdc", core.ChannelStatusOpen, core.ChannelTypeEscrow)))
+		result, err := store.GetNotClosedHomeChannel("0xuser123", "USDC")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+}
+
 func TestDBStore_CheckActiveChannel(t *testing.T) {
 	t.Run("Success - Has open channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)
@@ -533,6 +597,44 @@ func TestDBStore_CheckActiveChannel(t *testing.T) {
 		assert.Nil(t, status)
 		assert.Equal(t, "", approvedSigValidators)
 	})
+
+	// These two cases pin the status <= ChannelStatusOpen invariant: Closing and Challenged
+	// channels must not be returned as active, so post-finalize state submissions are rejected.
+	for _, tc := range []struct {
+		name   string
+		status core.ChannelStatus
+	}{
+		{"No active channel - channel is closing", core.ChannelStatusClosing},
+		{"No active channel - channel is challenged", core.ChannelStatusChallenged},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := SetupTestDB(t)
+			defer cleanup()
+
+			store := NewDBStore(db)
+
+			homeChannelID := "0xhomechannel123"
+
+			channel := core.Channel{
+				ChannelID:         homeChannelID,
+				UserWallet:        "0xuser123",
+				Asset:             "usdc",
+				Type:              core.ChannelTypeHome,
+				BlockchainID:      1,
+				TokenAddress:      "0xtoken123",
+				ChallengeDuration: 86400,
+				Nonce:             1,
+				Status:            tc.status,
+				StateVersion:      1,
+			}
+			require.NoError(t, store.CreateChannel(channel))
+
+			approvedSigValidators, status, err := store.CheckActiveChannel("0xuser123", "USDC")
+			require.NoError(t, err)
+			assert.Nil(t, status)
+			assert.Equal(t, "", approvedSigValidators)
+		})
+	}
 }
 
 func TestDBStore_UpdateChannel(t *testing.T) {
@@ -905,5 +1007,101 @@ func TestDBStore_GetChannelsCountByLabels(t *testing.T) {
 
 		assert.Equal(t, uint64(1), countMap["usdc/"+core.ChannelStatusOpen.String()])
 		assert.Equal(t, uint64(1), countMap["usdc/"+core.ChannelStatusClosed.String()])
+	})
+}
+
+func TestDBStore_HasNonClosedHomeChannel(t *testing.T) {
+	newChannel := func(id, wallet, asset string, status core.ChannelStatus, nonce uint64) core.Channel {
+		return core.Channel{
+			ChannelID:         id,
+			UserWallet:        wallet,
+			Asset:             asset,
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken",
+			ChallengeDuration: 86400,
+			Nonce:             nonce,
+			Status:            status,
+		}
+	}
+
+	t.Run("no channels returns false", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		result, err := store.HasNonClosedHomeChannel("0xuser", "USDC")
+		require.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("only closed channel returns false", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		require.NoError(t, store.CreateChannel(newChannel("0xch1", "0xuser", "usdc", core.ChannelStatusClosed, 1)))
+
+		result, err := store.HasNonClosedHomeChannel("0xuser", "USDC")
+		require.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	for _, status := range []core.ChannelStatus{
+		core.ChannelStatusVoid,
+		core.ChannelStatusOpen,
+		core.ChannelStatusChallenged,
+		core.ChannelStatusClosing,
+	} {
+		status := status
+		t.Run("returns true for status "+status.String(), func(t *testing.T) {
+			db, cleanup := SetupTestDB(t)
+			defer cleanup()
+			store := NewDBStore(db)
+
+			require.NoError(t, store.CreateChannel(newChannel("0xch1", "0xuser", "usdc", status, 1)))
+
+			result, err := store.HasNonClosedHomeChannel("0xuser", "USDC")
+			require.NoError(t, err)
+			assert.True(t, result)
+		})
+	}
+
+	t.Run("escrow channel does not count", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		escrow := newChannel("0xch1", "0xuser", "usdc", core.ChannelStatusOpen, 1)
+		escrow.Type = core.ChannelTypeEscrow
+		require.NoError(t, store.CreateChannel(escrow))
+
+		result, err := store.HasNonClosedHomeChannel("0xuser", "USDC")
+		require.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("different wallet is not counted", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		require.NoError(t, store.CreateChannel(newChannel("0xch1", "0xother", "usdc", core.ChannelStatusOpen, 1)))
+
+		result, err := store.HasNonClosedHomeChannel("0xuser", "USDC")
+		require.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("wallet lookup is case-insensitive", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+
+		require.NoError(t, store.CreateChannel(newChannel("0xch1", "0xUser123", "usdc", core.ChannelStatusClosing, 1)))
+
+		result, err := store.HasNonClosedHomeChannel("0xuser123", "USDC")
+		require.NoError(t, err)
+		assert.True(t, result)
 	})
 }

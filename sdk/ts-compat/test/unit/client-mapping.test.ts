@@ -320,6 +320,30 @@ describe('NitroliteClient compat mappings', () => {
         expect(channels[0].status).toBe(expected);
     });
 
+    it('forwards includeInactive on session-key list methods through to the inner SDK', async () => {
+        const sessionKey = '0x0000000000000000000000000000000000000d01';
+        const { client, innerClient } = makeCompatClient({
+            getLastChannelKeyStates: jest.fn().mockResolvedValue([]),
+            getLastKeyStates: jest.fn().mockResolvedValue([]),
+        });
+
+        await client.getLastChannelKeyStates(USER, sessionKey, { includeInactive: true });
+        await client.getLastKeyStates(USER, sessionKey, { includeInactive: true });
+
+        expect(innerClient.getLastChannelKeyStates).toHaveBeenCalledWith(USER, sessionKey, {
+            includeInactive: true,
+        });
+        expect(innerClient.getLastKeyStates).toHaveBeenCalledWith(USER, sessionKey, {
+            includeInactive: true,
+        });
+
+        await client.getLastChannelKeyStates(USER);
+        await client.getLastKeyStates(USER);
+
+        expect(innerClient.getLastChannelKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+        expect(innerClient.getLastKeyStates).toHaveBeenLastCalledWith(USER, undefined, undefined);
+    });
+
     it('keeps unsupported legacy methods honest and getOpenChannels delegates to the current chain hub', async () => {
         const { client } = makeCompatClient();
         const readContract = jest.fn().mockResolvedValue(['0xabc', '0xdef']);

@@ -134,6 +134,11 @@ export interface ChannelsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /**
+   * When true, include latest states whose expires_at is in the past (expired or
+   * revoked). Defaults to false on the server when omitted, returning active-only.
+   */
+  include_inactive?: boolean;
   /** Pagination parameters */
   pagination?: PaginationParamsV1;
 }
@@ -246,6 +251,11 @@ export interface AppSessionsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /**
+   * When true, include latest states whose expires_at is in the past (expired or
+   * revoked). Defaults to false on the server when omitted, returning active-only.
+   */
+  include_inactive?: boolean;
   /** Pagination parameters */
   pagination?: PaginationParamsV1;
 }

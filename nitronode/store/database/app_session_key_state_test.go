@@ -624,6 +624,78 @@ func TestDBStore_GetLastAppSessionKeyStates(t *testing.T) {
 		assert.Equal(t, uint32(2), allTotal)
 	})
 
+	t.Run("Pagination - mixed active/expired with offset>0 keeps count and list consistent", func(t *testing.T) {
+		// Regression guard: with includeInactive=false the store must apply the
+		// expires_at filter to *both* the page slice and the unpaginated count
+		// (using the same `now` binding), otherwise pagination drifts when the
+		// caller walks past offset 0.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		const numActive = 3
+		const numExpired = 2
+		for i := 0; i < numActive; i++ {
+			state := app.AppSessionKeyStateV1{
+				UserAddress: testUser1,
+				SessionKey:  fakeSessionKey(i),
+				Version:     1,
+				ExpiresAt:   time.Now().Add(24 * time.Hour),
+				UserSig:     "0xsig",
+			}
+			require.NoError(t, store.StoreAppSessionKeyState(state))
+		}
+		for i := 0; i < numExpired; i++ {
+			state := app.AppSessionKeyStateV1{
+				UserAddress: testUser1,
+				SessionKey:  fakeSessionKey(numActive + i),
+				Version:     1,
+				ExpiresAt:   time.Now().Add(-1 * time.Hour),
+				UserSig:     "0xsig",
+			}
+			require.NoError(t, store.StoreAppSessionKeyState(state))
+		}
+
+		page1, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, false, 2, 0)
+		require.NoError(t, err)
+		assert.Len(t, page1, 2)
+		assert.Equal(t, uint32(numActive), total)
+
+		page2, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, false, 2, 2)
+		require.NoError(t, err)
+		assert.Len(t, page2, 1)
+		assert.Equal(t, uint32(numActive), total)
+
+		empty, total, err := store.GetLastAppSessionKeyStates(testUser1, nil, false, 2, 4)
+		require.NoError(t, err)
+		assert.Empty(t, empty)
+		assert.Equal(t, uint32(numActive), total)
+
+		seen := map[string]struct{}{}
+		for _, s := range append(append([]app.AppSessionKeyStateV1{}, page1...), page2...) {
+			assert.True(t, s.ExpiresAt.After(time.Now()), "expired state surfaced for %s", s.SessionKey)
+			_, dup := seen[s.SessionKey]
+			assert.False(t, dup, "duplicate session key %s across pages", s.SessionKey)
+			seen[s.SessionKey] = struct{}{}
+		}
+
+		allPage1, allTotal, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 0)
+		require.NoError(t, err)
+		assert.Len(t, allPage1, 2)
+		assert.Equal(t, uint32(numActive+numExpired), allTotal)
+
+		allPage2, allTotal, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 2)
+		require.NoError(t, err)
+		assert.Len(t, allPage2, 2)
+		assert.Equal(t, uint32(numActive+numExpired), allTotal)
+
+		allPage3, allTotal, err := store.GetLastAppSessionKeyStates(testUser1, nil, true, 2, 4)
+		require.NoError(t, err)
+		assert.Len(t, allPage3, 1)
+		assert.Equal(t, uint32(numActive+numExpired), allTotal)
+	})
+
 	t.Run("includeInactive=false combined with session_key filter excludes the expired match", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)
 		defer cleanup()

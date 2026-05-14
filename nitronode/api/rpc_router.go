@@ -150,6 +150,11 @@ func NewRPCRouter(
 	userV1Group.Handle(rpc.UserV1GetTransactionsMethod.String(), userV1Handler.GetTransactions)
 	userV1Group.Handle(rpc.UserV1GetActionAllowancesMethod.String(), userV1Handler.GetActionAllowances)
 
+	// Pre-publish per-method metric series at 0 so dashboards and absent()-style
+	// alerts have defined values before any traffic arrives. Must run after all
+	// group.Handle calls so RegisteredMethods is complete.
+	runtimeMetrics.SeedRPCMethodMetrics(r.Node.RegisteredMethods())
+
 	return r
 }
 

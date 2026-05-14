@@ -165,6 +165,27 @@ func (m *storeMetricExporter) SetUserBalanceReleasable(blockchainID, asset strin
 	m.userBalanceReleasable.WithLabelValues(blockchainID, asset).Set(value)
 }
 
+func (m *storeMetricExporter) ResetAppSessions()      { m.appSessionsTotal.Reset() }
+func (m *storeMetricExporter) ResetChannels()         { m.channelsTotal.Reset() }
+func (m *storeMetricExporter) ResetTotalValueLocked() { m.totalValueLocked.Reset() }
+func (m *storeMetricExporter) ResetNodeBalance()      { m.nodeBalance.Reset() }
+func (m *storeMetricExporter) ResetUserBalances() {
+	m.userBalanceTotal.Reset()
+	m.userBalanceUnderfunded.Reset()
+	m.userBalanceReleasable.Reset()
+}
+
+// ResetActiveUsers clears only the rows for the given timespan so a failure in one
+// window does not blank the gauges for windows that may still be succeeding.
+func (m *storeMetricExporter) ResetActiveUsers(timeSpanLabel string) {
+	m.usersActive.DeletePartialMatch(prometheus.Labels{"timespan": timeSpanLabel})
+}
+
+// ResetActiveAppSessions clears only the rows for the given timespan; see ResetActiveUsers.
+func (m *storeMetricExporter) ResetActiveAppSessions(timeSpanLabel string) {
+	m.appSessionsActive.DeletePartialMatch(prometheus.Labels{"timespan": timeSpanLabel})
+}
+
 // runtimeMetricExporter is the concrete implementation of the Metrics interface.
 type runtimeMetricExporter struct {
 	// Shared Metrics (Cross-Package)
@@ -380,7 +401,52 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 		return nil, fmt.Errorf("prometheus registerer not provided")
 	}
 
+	// Seed counters whose label space is fully resolved at construction time.
+	// Router and chain axes are seeded later via SeedRPCMethodMetrics /
+	// SeedBlockchainEventMetrics once that config is loaded.
+	for _, st := range core.ChannelSignerTypes {
+		for _, res := range allActionResults {
+			m.channelStateSigValidationsTotal.WithLabelValues(st.String(), res.String())
+		}
+	}
+
 	return m, nil
+}
+
+// allActionResults is the closed enum of result label values used by counters
+// whose outcome dimension is success/failed.
+var allActionResults = []ActionResult{ActionResultSuccess, ActionResultFailed}
+
+// SeedRPCMethodMetrics publishes 0-valued series for every (method, path="default",
+// result) and (msg_type, method) tuple, so per-method PromQL queries return defined
+// values immediately after boot. Methods whose request payload determines path
+// (intent/transition) are not enumerated here — those variants appear on first call
+// and are bounded by their respective enums.
+func (m *runtimeMetricExporter) SeedRPCMethodMetrics(methods []string) {
+	msgTypes := []rpc.MsgType{rpc.MsgTypeReq, rpc.MsgTypeResp, rpc.MsgTypeRespErr}
+	const defaultPath = "default"
+	for _, method := range methods {
+		for _, mt := range msgTypes {
+			m.rpcMessagesTotal.WithLabelValues(mt.String(), method)
+		}
+		for _, res := range allActionResults {
+			m.rpcRequestsTotal.WithLabelValues(method, defaultPath, res.String())
+			m.rpcRequestDurationSeconds.WithLabelValues(method, defaultPath, res.String())
+		}
+	}
+}
+
+// SeedBlockchainEventMetrics publishes 0-valued series for every (blockchain_id,
+// result) tuple, so a chain whose listener is wired but has not yet observed an
+// event still appears in queries — including absent()/rate() alerts watching for
+// stalled connections.
+func (m *runtimeMetricExporter) SeedBlockchainEventMetrics(blockchainIDs []uint64) {
+	for _, id := range blockchainIDs {
+		idStr := strconv.FormatUint(id, 10)
+		for _, res := range allActionResults {
+			m.blockchainEventsTotal.WithLabelValues(idStr, res.String())
+		}
+	}
 }
 
 // Shared

@@ -1,4 +1,4 @@
-import { Address, Hex, encodeAbiParameters, keccak256, pad, toHex } from 'viem';
+import { Address, Hex, encodeAbiParameters, keccak256, toHex } from 'viem';
 import {
   AppDefinitionV1,
   AppStateUpdateV1,
@@ -208,45 +208,19 @@ export function packAppV1(app: AppV1): `0x${string}` {
 }
 
 /**
- * hexToBytes32 converts a hex string to a 32-byte value, matching Go's common.HexToHash behavior.
- * - Strips "0x" prefix if present
- * - Decodes hex characters; non-hex strings produce zero bytes
- * - Right-aligns the result in 32 bytes (left-padded with zeros)
- */
-function hexToBytes32(s: string): Hex {
-  // Strip 0x prefix
-  let hex = s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s;
-  // Pad to even length
-  if (hex.length % 2 === 1) {
-    hex = '0' + hex;
-  }
-  // Validate hex characters - if any invalid char, return zero hash (matches Go behavior)
-  if (!/^[0-9a-fA-F]*$/.test(hex)) {
-    return pad('0x00', { size: 32 }) as Hex;
-  }
-  // If empty, return zero hash
-  if (hex.length === 0) {
-    return pad('0x00', { size: 32 }) as Hex;
-  }
-  // Truncate to 32 bytes max (64 hex chars)
-  if (hex.length > 64) {
-    hex = hex.slice(hex.length - 64);
-  }
-  // Left-pad to 64 hex chars (32 bytes)
-  const padded = hex.padStart(64, '0');
-  return `0x${padded}` as Hex;
-}
-
-/**
  * PackAppSessionKeyStateV1 packs the app session key state for signing using ABI encoding.
  * Matches Go SDK's PackAppSessionKeyStateV1.
+ *
+ * Application and app-session IDs are hashed with keccak256(utf8(id)) so that every
+ * distinct string produces a unique bytes32 — human-readable IDs like "app-1" and
+ * "app-2" can no longer collide in the signed payload.
  *
  * @param state - The app session key state to pack
  * @returns Keccak256 hash of the ABI-encoded state (excluding user_sig)
  */
 export function packAppSessionKeyStateV1(state: AppSessionKeyStateV1): `0x${string}` {
-  const applicationIDHashes = state.application_ids.map(hexToBytes32);
-  const appSessionIDHashes = state.app_session_ids.map(hexToBytes32);
+  const applicationIDHashes = state.application_ids.map((id) => keccak256(toHex(id)));
+  const appSessionIDHashes = state.app_session_ids.map((id) => keccak256(toHex(id)));
 
   const packed = encodeAbiParameters(
     [

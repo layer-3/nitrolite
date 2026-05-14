@@ -37,6 +37,20 @@ Given the 3 and 4, an invariant:
 Invariant:
 > No different states with the same `version` can exist for the same channel.
 
+---
+
+6. While a channel is in `CHALLENGED` (on-chain `DISPUTED`) status, the Node does not co-sign "receive" states for that channel. Incoming off-chain transfer credits and app-session release credits targeting the channel are appended as unsigned entries to the channel's state history (a per-channel queue). On challenge clearance, the queued entries are signed by the Node and offered for user acknowledgement. On channel closure after challenge expiry, the queued entries are squashed into a single state and committed to the user's next epoch.
+
+Invariant:
+> A channel in `CHALLENGED` status has no co-signed "receive" states; therefore, its dispute cannot be cleared by enforcing a receive-credit checkpoint.
+
+---
+
+7. While a channel is in `CHALLENGED` status, all user-initiated operations on the channel are blocked except receiving funds (which the Node queues per rule 6). This includes opening a new channel on the same chain for the same asset. These restrictions persist after the challenge timer expires, until the channel is explicitly closed and `ChannelClosed` event is seen by the Node.
+
+Invariant:
+> Credits accrued while a channel was in `CHALLENGED` status are preserved — either reintegrated into the channel on challenge clearance, or carried into the next epoch on closure — and cannot be shadowed by a concurrently-opened replacement channel.
+
 ## Invariants
 
 ---

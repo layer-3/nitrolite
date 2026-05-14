@@ -290,6 +290,23 @@ Invariant:
 
 ---
 
+### Off-chain behaviour during dispute
+
+While a channel is in `CHALLENGED` (i.e. on-chain `DISPUTED`) status, the Node and the user follow additional off-chain rules:
+
+* **Node stops signing receive states.** Incoming off-chain transfer credits and app-session release credits targeting the channel are not co-signed. They are appended as unsigned entries to the channel's state history (a per-channel queue).
+* **User-initiated operations are blocked.** The user cannot deposit, withdraw, transfer, or lock funds into an app session. Only receiving funds (which the Node queues per the previous rule) is permitted.
+* **Operations remain blocked even after the challenge timer expires**, until the channel is explicitly closed and `ChannelClosed` event is seen by the Node.
+
+Two resolution paths:
+
+* **Challenge cleared** (a newer mutually signed state is enforced, returning the channel to `OPERATING`): the Node signs the queued "receive" states in order; the user countersigns and acknowledges. Normal flow resumes with no gap.
+* **Challenge expires and the channel is closed**: queued "receive" states are squashed into a single state and committed to the user's next epoch — equivalent to the funds arriving while the user did not have a channel. Credits are preserved.
+
+The purpose of these rules is to ensure that a `CHALLENGED` channel cannot have its dispute cleared as a side effect of incoming third-party transfers, and that no accrued credit is lost regardless of which resolution path is taken.
+
+---
+
 ## Channel closure
 
 A channel can be closed:

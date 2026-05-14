@@ -394,8 +394,9 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 
 func TestSubmitAppState_WithdrawIntent_ReceiverHomeChannelChallenged_NoNodeSig(t *testing.T) {
 	// When the receiver's home channel is Challenged, the release receiver state must be
-	// persisted without a node signature. Mirrors the channel_v1 protection in security
-	// finding MF2-H01.
+	// persisted without a node signature. Mirrors the channel_v1 protection: otherwise an
+	// attacker holding an expired or out-of-scope session key could checkpoint a
+	// node-signed release-credit state and reset the dispute timer.
 	mockStore := new(MockStore)
 	mockSigner := NewMockChannelSigner()
 	nodeAddress := strings.ToLower(mockSigner.PublicKey().Address().String())

@@ -231,8 +231,10 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 
 func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *testing.T) {
 	// When the receiver's home channel is in Challenged status the node must persist the
-	// receiver state row but must NOT node-sign it. This prevents the dust-credit checkpoint
-	// reset described in security finding MF2-H01.
+	// receiver state row but must NOT node-sign it. Otherwise an attacker holding an
+	// expired or out-of-scope session key for the receiver could turn a dust transfer into
+	// a freshly node-signed state and use it to checkpoint the channel back to OPERATING,
+	// resetting the dispute timer indefinitely.
 	mockTxStore := new(MockStore)
 	mockMemoryStore := new(MockMemoryStore)
 	mockAssetStore := new(MockAssetStore)

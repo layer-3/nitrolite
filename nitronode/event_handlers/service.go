@@ -29,8 +29,10 @@ func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker c
 	}
 }
 
-// HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when a node's balance is updated on-chain.
-// It updates the user's staked balance for the specified blockchain in the database.
+// HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when the node's
+// on-chain liquidity changes. It records the new node liquidity for the (blockchain, asset)
+// pair via SetNodeBalance; this is observability data only and does not affect user staking
+// state.
 func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.NodeBalanceUpdatedEvent) error {
 	logger := log.FromContext(ctx)
 

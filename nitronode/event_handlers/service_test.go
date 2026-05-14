@@ -96,6 +96,8 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
+	// No co-signed Finalize → status restored to Open (not Closing).
+	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	// Off-chain head missing → no head-sig backfill.
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
@@ -242,8 +244,12 @@ func TestHandleHomeChannelChallenged_TypeMismatch(t *testing.T) {
 }
 
 func TestHandleHomeChannelChallenged_FromClosingState(t *testing.T) {
-	// Closing → Challenged is an expected transition: a co-signed Finalize may race an
-	// on-chain challenge. The chain takes precedence; status must become Challenged.
+	// Closing → Challenged is an expected transition when a co-signed Finalize races an
+	// on-chain challenge: the chain takes precedence while the dispute is live and the
+	// status field is intentionally overwritten. The post-Finalize fact survives in
+	// channel_states; HandleHomeChannelCheckpointed restores Closing from there. See
+	// TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize for the
+	// completing half of the round-trip.
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
@@ -1201,6 +1207,8 @@ func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	// User-sig backfill at the on-chain version.
 	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, checkpointUserSig, "").Return(nil)
+	// No co-signed Finalize → Challenged restores to Open.
+	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	// Off-chain head lookup returns the higher unsigned receiver state.
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
 
@@ -1281,6 +1289,8 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, "0xusersig", "").Return(nil)
+	// No co-signed Finalize → Challenged restores to Open.
+	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
 
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
@@ -1288,6 +1298,81 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string"))
+}
+
+// TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize exercises the post-Finalize
+// regression scenario: a Closing channel (node signed Finalize off-chain) was flipped to
+// Challenged by a stale on-chain challenge for a lower version. When a subsequent Checkpointed
+// event clears the dispute, the handler must NOT drop the status back to Open, because the local
+// DB still holds a co-signed Finalize. Restoring Closing keeps CheckActiveChannel excluding the
+// channel and prevents the user from advancing past the finalized state via SubmitState.
+func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "usdc"
+	homeChannelIDPtr := channelID
+	finalizeVersion := uint64(7)
+	checkpointVersion := uint64(6)
+	userSig := "0xusersig"
+	nodeSig := "0xnodesig"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        asset,
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusChallenged,
+		StateVersion: 5,
+	}
+
+	// Co-signed Finalize sitting above the checkpointed on-chain version.
+	finalizeState := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, finalizeVersion),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       finalizeVersion,
+		HomeChannelID: &homeChannelIDPtr,
+		Transition:    core.Transition{Type: core.TransitionTypeFinalize},
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xtoken",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(100),
+		},
+		UserSig: &userSig,
+		NodeSig: &nodeSig,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: checkpointVersion,
+		UserSig:      userSig,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusClosing &&
+			ch.StateVersion == checkpointVersion
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, userSig, "").Return(nil)
+	// Node-signed Finalize exists → status restored to Closing.
+	mockStore.On("HasSignedFinalize", channelID).Return(true, nil)
+	// Backfill path: off-chain head is the same already-signed Finalize state — no-op.
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(finalizeState, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	// Head already node-signed → no second backfill call.
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", channelID, finalizeVersion, mock.Anything, mock.Anything)
 }
 
 // TestHandleHomeChannelClosed_ChallengeRescue_Squash exercises the path where a channel

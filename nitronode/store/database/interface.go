@@ -108,6 +108,11 @@ type DatabaseStore interface {
 	// empty to skip that side.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel. Used by event handlers to detect the post-Finalize lifecycle when the
+	// channel status field has been temporarily overwritten by an on-chain challenge.
+	HasSignedFinalize(channelID string) (bool, error)
+
 	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver
 	// state rows (transfer_receive, release) attached to the given home channel that
 	// have node_sig NULL and a strictly greater version than minVersion. Used to

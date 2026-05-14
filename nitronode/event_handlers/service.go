@@ -91,7 +91,11 @@ func (s *EventHandlerService) HandleHomeChannelMigrated(ctx context.Context, tx 
 
 // HandleHomeChannelCheckpointed processes the HomeChannelCheckpointed event emitted when a channel
 // state is successfully checkpointed on-chain. It updates the channel's state version and clears
-// the Challenged status if present, returning the channel to Open status.
+// the Challenged status if present, returning the channel to Open — unless the local DB already
+// holds a co-signed Finalize for this channel, in which case the post-Finalize Closing marker
+// is restored instead. Without that restore, a Closing → Challenged → Open sequence driven by
+// on-chain events would erase the fact that the node has already signed a finalized state, and
+// CheckActiveChannel would let the user submit further transitions past the finalized state.
 func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCheckpointedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -111,7 +115,19 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 	if wasChallenged {
-		channel.Status = core.ChannelStatusOpen
+		// Reconstruct the post-Finalize Closing marker from channel_states: if the node
+		// has already signed a Finalize state for this channel, the off-chain close is
+		// still pending and the channel must not return to Open. See the doc comment on
+		// HandleHomeChannelChallenged for the round-trip rationale.
+		finalized, err := tx.HasSignedFinalize(chanID)
+		if err != nil {
+			return err
+		}
+		if finalized {
+			channel.Status = core.ChannelStatusClosing
+		} else {
+			channel.Status = core.ChannelStatusOpen
+		}
 	}
 
 	err = tx.UpdateChannel(*channel)
@@ -206,8 +222,12 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 
 	channel.StateVersion = event.StateVersion
 	// Closing → Challenged is an expected transition: a co-signed Finalize may race an
-	// on-chain challenge. The chain takes precedence; the off-chain close flow is abandoned
-	// and the channel follows the Challenged → Closed path instead.
+	// on-chain challenge. The status field is intentionally overwritten — the chain takes
+	// precedence while the dispute is live. The post-Finalize fact is not lost: it is
+	// shadowed in channel_states (the latest fully-signed row carries TransitionTypeFinalize)
+	// and HandleHomeChannelCheckpointed restores ChannelStatusClosing from there when the
+	// challenge resolves, so the off-chain close flow resumes instead of silently regressing
+	// to Open.
 	channel.Status = core.ChannelStatusChallenged
 	expirationTime := time.Unix(int64(event.ChallengeExpiry), 0)
 	channel.ChallengeExpiresAt = &expirationTime

@@ -156,9 +156,9 @@ func (s *DBStore) StoreUserState(state core.State, applicationID string) error {
 	err = s.db.Model(&UserBalance{}).
 		Where("user_wallet = ? AND asset = ?", wallet, state.Asset).
 		Updates(map[string]interface{}{
-			"balance":             balance,
-			"home_blockchain_id":  state.HomeLedger.BlockchainID,
-			"updated_at":          time.Now(),
+			"balance":            balance,
+			"home_blockchain_id": state.HomeLedger.BlockchainID,
+			"updated_at":         time.Now(),
 		}).Error
 
 	if err != nil {
@@ -248,6 +248,25 @@ func (s *DBStore) UpdateStateSigsIfMissing(channelID string, version uint64, use
 		}
 	}
 	return nil
+}
+
+// HasSignedFinalize reports whether a Finalize state exists for the given home channel.
+// Used by event handlers to detect the post-Finalize lifecycle without loading the state
+// row: the channels.status field can be temporarily overwritten by Challenged on a stale
+// on-chain challenge, but the Finalize row persists here and is the authoritative marker.
+// Finalize rows are only ever written via SubmitState after the node signs, so a plain
+// existence check is equivalent to checking node_sig IS NOT NULL.
+func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
+	var count int64
+	err := s.db.Model(&State{}).
+		Where("home_channel_id = ? AND transition_type = ?",
+			strings.ToLower(channelID), uint8(core.TransitionTypeFinalize)).
+		Limit(1).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check signed finalize: %w", err)
+	}
+	return count > 0, nil
 }
 
 // SumUnsignedReceiverStateAmountsAfterVersion returns the sum of transition amounts on

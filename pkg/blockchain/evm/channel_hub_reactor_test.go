@@ -100,6 +100,11 @@ func (m *mockChannelHubStore) SumUnsignedReceiverStateAmountsAfterVersion(channe
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+func (m *mockChannelHubStore) HasSignedFinalize(channelID string) (bool, error) {
+	args := m.Called(channelID)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)
 	return args.Error(0)

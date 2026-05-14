@@ -107,6 +107,12 @@ func (m *MockStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+// HasSignedFinalize mocks the existence check for a node-signed Finalize state on the given home channel.
+func (m *MockStore) HasSignedFinalize(channelID string) (bool, error) {
+	args := m.Called(channelID)
+	return args.Bool(0), args.Error(1)
+}
+
 // StoreUserState mocks persisting a user state row.
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)

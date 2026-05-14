@@ -1125,6 +1125,82 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 	})
 }
 
+func TestDBStore_HasSignedFinalize(t *testing.T) {
+	const wallet = "0xuser123"
+	const asset = "USDC"
+	const homeChannelID = "0xhomechannel123"
+
+	setupChannel := func(t *testing.T, store DatabaseStore) {
+		t.Helper()
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        wallet,
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusChallenged,
+			StateVersion:      5,
+		}))
+	}
+
+	storeState := func(t *testing.T, store DatabaseStore, version uint64, transitionType core.TransitionType, hasNodeSig bool) {
+		t.Helper()
+		channelIDLocal := homeChannelID
+		s := core.State{
+			ID:            core.GetStateID(wallet, asset, 1, version),
+			Asset:         asset,
+			UserWallet:    wallet,
+			Epoch:         1,
+			Version:       version,
+			HomeChannelID: &channelIDLocal,
+			Transition: core.Transition{
+				Type:      transitionType,
+				TxID:      "0xtx",
+				AccountID: "0xacct",
+				Amount:    decimal.Zero,
+			},
+		}
+		userSig := "0xusersig"
+		s.UserSig = &userSig
+		if hasNodeSig {
+			nodeSig := "0xnodesig"
+			s.NodeSig = &nodeSig
+		}
+		require.NoError(t, store.StoreUserState(s, ""))
+	}
+
+	t.Run("True when node-signed Finalize exists", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		storeState(t, store, 6, core.TransitionTypeTransferReceive, true)
+		storeState(t, store, 7, core.TransitionTypeFinalize, true)
+
+		got, err := store.HasSignedFinalize(homeChannelID)
+		require.NoError(t, err)
+		assert.True(t, got)
+	})
+
+	t.Run("False when no Finalize state exists", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		storeState(t, store, 6, core.TransitionTypeTransferReceive, true)
+		storeState(t, store, 7, core.TransitionTypeTransferReceive, true)
+
+		got, err := store.HasSignedFinalize(homeChannelID)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+}
+
 func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 	const wallet = "0xuser123"
 	const asset = "USDC"

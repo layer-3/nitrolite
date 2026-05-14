@@ -122,12 +122,12 @@ func PackAppSessionKeyStateV1(state AppSessionKeyStateV1) ([]byte, error) {
 
 	applicationIDHashes := make([][32]byte, len(state.ApplicationIDs))
 	for i, id := range state.ApplicationIDs {
-		applicationIDHashes[i] = common.HexToHash(id)
+		applicationIDHashes[i] = crypto.Keccak256Hash([]byte(id))
 	}
 
 	appSessionIDHashes := make([][32]byte, len(state.AppSessionIDs))
 	for i, id := range state.AppSessionIDs {
-		appSessionIDHashes[i] = common.HexToHash(id)
+		appSessionIDHashes[i] = crypto.Keccak256Hash([]byte(id))
 	}
 
 	packed, err := args.Pack(

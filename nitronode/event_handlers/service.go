@@ -128,6 +128,9 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		} else {
 			channel.Status = core.ChannelStatusOpen
 		}
+		// The challenge is resolved on chain; the expiry timestamp is no longer relevant
+		// and would otherwise surface as a stale deadline through the channel API.
+		channel.ChallengeExpiresAt = nil
 	}
 
 	err = tx.UpdateChannel(*channel)
@@ -283,6 +286,8 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err
@@ -564,6 +569,8 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err
@@ -730,6 +737,8 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err

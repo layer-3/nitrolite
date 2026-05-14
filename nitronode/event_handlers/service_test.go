@@ -92,7 +92,8 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusOpen &&
-			ch.StateVersion == 5
+			ch.StateVersion == 5 &&
+			ch.ChallengeExpiresAt == nil
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
@@ -843,14 +844,16 @@ func TestHandleEscrowDepositFinalized_Success(t *testing.T) {
 	// Test data
 	channelID := "0xEscrowChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        "usdc",
-		Type:         core.ChannelTypeEscrow,
-		Status:       core.ChannelStatusOpen,
-		StateVersion: 3,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeEscrow,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       3,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	event := &core.EscrowDepositFinalizedEvent{
@@ -858,12 +861,13 @@ func TestHandleEscrowDepositFinalized_Success(t *testing.T) {
 		StateVersion: 5,
 	}
 
-	// Mock expectations
+	// Mock expectations — Finalized resolves any pending challenge and clears its expiry.
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusClosed &&
-			ch.StateVersion == 5
+			ch.StateVersion == 5 &&
+			ch.ChallengeExpiresAt == nil
 	})).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
 
@@ -982,14 +986,16 @@ func TestHandleEscrowWithdrawalFinalized_Success(t *testing.T) {
 	// Test data
 	channelID := "0xEscrowChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        "usdc",
-		Type:         core.ChannelTypeEscrow,
-		Status:       core.ChannelStatusOpen,
-		StateVersion: 3,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeEscrow,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       3,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	event := &core.EscrowWithdrawalFinalizedEvent{
@@ -997,12 +1003,13 @@ func TestHandleEscrowWithdrawalFinalized_Success(t *testing.T) {
 		StateVersion: 5,
 	}
 
-	// Mock expectations
+	// Mock expectations — Finalized resolves any pending challenge and clears its expiry.
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusClosed &&
-			ch.StateVersion == 5
+			ch.StateVersion == 5 &&
+			ch.ChallengeExpiresAt == nil
 	})).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
 
@@ -1165,14 +1172,16 @@ func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 	checkpointVersion := uint64(5)
 	headVersion := uint64(7)
 	checkpointUserSig := "0xusersighex"
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusChallenged,
-		StateVersion: 4,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       4,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	// Off-chain head is a during-challenge receiver state above the on-chain checkpoint.
@@ -1202,7 +1211,9 @@ func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
-		return ch.Status == core.ChannelStatusOpen && ch.StateVersion == checkpointVersion
+		return ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == checkpointVersion &&
+			ch.ChallengeExpiresAt == nil
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	// User-sig backfill at the on-chain version.
@@ -1250,14 +1261,16 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 	checkpointVersion := uint64(5)
 	headVersion := uint64(5)
 	existingNodeSig := "0xnodesigalreadyhere"
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusChallenged,
-		StateVersion: 4,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       4,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	headState := &core.State{
@@ -1286,7 +1299,11 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 	}
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == checkpointVersion &&
+			ch.ChallengeExpiresAt == nil
+	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, "0xusersig", "").Return(nil)
 	// No co-signed Finalize → Challenged restores to Open.
@@ -1320,14 +1337,16 @@ func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testi
 	checkpointVersion := uint64(6)
 	userSig := "0xusersig"
 	nodeSig := "0xnodesig"
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusChallenged,
-		StateVersion: 5,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       5,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	// Co-signed Finalize sitting above the checkpointed on-chain version.
@@ -1358,7 +1377,8 @@ func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testi
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusClosing &&
-			ch.StateVersion == checkpointVersion
+			ch.StateVersion == checkpointVersion &&
+			ch.ChallengeExpiresAt == nil
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, userSig, "").Return(nil)
@@ -1492,14 +1512,16 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	blockchainID := uint64(1)
 	closureVersion := uint64(7)
 	homeChannelIDPtr := channelID
+	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusChallenged,
-		StateVersion: 5,
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       5,
+		ChallengeExpiresAt: &expiryTime,
 	}
 
 	prevState := &core.State{
@@ -1523,7 +1545,12 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	}
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	// Terminal Close clears any lingering challenge expiry alongside the status flip.
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.Status == core.ChannelStatusClosed &&
+			ch.StateVersion == closureVersion &&
+			ch.ChallengeExpiresAt == nil
+	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
 	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion).Return(decimal.Zero, nil)

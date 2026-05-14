@@ -1464,12 +1464,10 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// TestHandleHomeChannelClosed_FinalizeIntent_NoRescue verifies that when a Challenged
-// channel closes via a cooperative Finalize state, the rescue path is skipped. Today the
-// handler does not load the closing state's transition type and instead keys off
-// "channel was Challenged before this event"; if a Finalize race ever lands on a
-// Challenged channel, no receiver-state credits should be in flight either, so the sum
-// query naturally returns zero. This test pins that behavior.
+// TestHandleHomeChannelClosed_OpenChannel_NoRescue pins behavior for the normal
+// Open → Closed path: the channel was never Challenged before the close event, so the
+// rescue branch is short-circuited entirely. The unsigned-receiver-sum query, rescue
+// state store, and rescue transaction record are never issued.
 func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())

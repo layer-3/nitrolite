@@ -299,6 +299,11 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
 	logger := log.FromContext(ctx)
 
+	// SumUnsignedReceiverStateAmountsAfterVersion uses strict `>` against closureVersion:
+	// the row at the closure version itself is the closing state (or the prior head) and
+	// must be excluded — only receiver credits issued strictly after the dispute version
+	// belong in the squash. When the sum is non-zero, those contributing rows imply the
+	// off-chain head fetched below sits at prev.Version > closureVersion.
 	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion)
 	if err != nil {
 		return err
@@ -312,10 +317,10 @@ func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.
 		return err
 	}
 	if prev == nil {
-		// Should not happen: receiver-state rows contributed to the sum above, so at
-		// least one state must exist. Surface the inconsistency rather than silently
-		// dropping the rescue.
-		return fmt.Errorf("no state found for closed challenged channel %s while pending receiver credits exist", channel.ChannelID)
+		// Should not happen for a channel that reached Challenged → Closed: at least the
+		// closure state itself must be on file. Surface the inconsistency rather than
+		// silently dropping the rescue.
+		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
 	}
 
 	rescue, err := core.NewChallengeRescueState(*prev, total)

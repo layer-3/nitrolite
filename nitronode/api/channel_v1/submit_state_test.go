@@ -237,7 +237,8 @@ func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *tes
 	mockMemoryStore := new(MockMemoryStore)
 	mockAssetStore := new(MockAssetStore)
 	mockSigner := NewMockSigner()
-	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeSigner, err := core.NewChannelDefaultSigner(mockSigner)
+	require.NoError(t, err)
 	nodeAddress := mockSigner.PublicKey().Address().String()
 	minChallenge := uint32(3600)
 	mockStatePacker := new(MockStatePacker)
@@ -258,7 +259,8 @@ func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *tes
 	}
 
 	userSigner := NewMockSigner()
-	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	userWalletSigner, err := core.NewChannelDefaultSigner(userSigner)
+	require.NoError(t, err)
 	senderWallet := userSigner.PublicKey().Address().String()
 	receiverWallet := "0x0987654321098765432109876543210987654321"
 	asset := "USDC"

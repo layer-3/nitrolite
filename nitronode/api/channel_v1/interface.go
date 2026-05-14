@@ -68,6 +68,10 @@ type Store interface {
 	// Returns nil if the channel doesn't exist.
 	GetChannelByID(channelID string) (*core.Channel, error)
 
+	// GetHomeChannelStatus returns the current status of a home channel by ID.
+	// Returns nil if no home channel exists for the given ID.
+	GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error)
+
 	// GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
 	// Returns nil if no home channel exists for the given wallet and asset.
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)

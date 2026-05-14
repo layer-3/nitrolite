@@ -166,6 +166,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
 	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil)
+	mockTxStore.On("GetHomeChannelStatus", homeChannelID).Return(core.ChannelStatusOpen, nil)
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		// Verify receiver state
 		return state.UserWallet == receiverWallet &&
@@ -225,6 +226,129 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	VerifyNodeSignature(t, nodeAddress, packedSenderState, response.Signature)
 
 	// Verify all mock expectations
+	mockTxStore.AssertExpectations(t)
+}
+
+func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *testing.T) {
+	// When the receiver's home channel is in Challenged status the node must persist the
+	// receiver state row but must NOT node-sign it. This prevents the dust-credit checkpoint
+	// reset described in security finding MF2-H01.
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	minChallenge := uint32(3600)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     minChallenge,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	senderWallet := userSigner.PublicKey().Address().String()
+	receiverWallet := "0x0987654321098765432109876543210987654321"
+	asset := "USDC"
+	senderHomeChannel := "0xSenderHome"
+	receiverHomeChannel := "0xReceiverHome"
+	transferAmount := decimal.NewFromInt(100)
+
+	currentSenderState := core.State{
+		ID:            core.GetStateID(senderWallet, asset, 1, 1),
+		Asset:         asset,
+		UserWallet:    senderWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &senderHomeChannel,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+		},
+	}
+
+	incomingSenderState := currentSenderState.NextState()
+	transferSendTransition, err := incomingSenderState.ApplyTransferSendTransition(receiverWallet, transferAmount)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	packedSenderState, _ := core.PackState(*incomingSenderState, mockAssetStore)
+	userSig, _ := userWalletSigner.Sign(packedSenderState)
+	userSigStr := userSig.String()
+	incomingSenderState.UserSig = &userSigStr
+
+	currentReceiverState := core.State{
+		ID:            core.GetStateID(receiverWallet, asset, 1, 1),
+		Asset:         asset,
+		UserWallet:    receiverWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &receiverHomeChannel,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(200),
+			UserNetFlow:  decimal.NewFromInt(200),
+		},
+	}
+
+	expectedReceiverState := currentReceiverState.NextState()
+	_, err = expectedReceiverState.ApplyTransferReceiveTransition(senderWallet, transferAmount, transferSendTransition.TxID)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
+	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
+	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
+
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == senderWallet && state.NodeSig != nil
+	}), mock.Anything).Return(nil)
+
+	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
+	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil)
+	mockTxStore.On("GetHomeChannelStatus", receiverHomeChannel).Return(core.ChannelStatusChallenged, nil)
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == receiverWallet &&
+			state.Version == expectedReceiverState.Version &&
+			state.Transition.Type == core.TransitionTypeTransferReceive &&
+			state.NodeSig == nil
+	}), mock.Anything).Return(nil)
+
+	mockTxStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		return tx.TxType == core.TransactionTypeTransfer && tx.Amount.Equal(transferAmount)
+	}), mock.Anything).Return(nil)
+
+	rpcState := toRPCState(*incomingSenderState)
+	reqPayload := rpc.ChannelsV1SubmitStateRequest{State: rpcState}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.Nil(t, ctx.Response.Error())
 	mockTxStore.AssertExpectations(t)
 }
 

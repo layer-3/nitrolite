@@ -115,17 +115,31 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 	}
 
 	if newState.HomeChannelID != nil {
-		packedState, err := h.statePacker.PackState(*newState)
+		channelStatus, err := tx.GetHomeChannelStatus(*newState.HomeChannelID)
 		if err != nil {
-			return nil, rpc.Errorf("failed to pack receiver state: %v", err)
+			return nil, rpc.Errorf("failed to get receiver home channel status: %v", err)
 		}
 
-		_nodeSig, err := h.nodeSigner.Sign(packedState)
-		if err != nil {
-			return nil, rpc.Errorf("failed to sign receiver state")
+		// While the receiver's home channel is challenged the node must not advance the
+		// channel head by node-signing further receiver states; the state row is still
+		// persisted (unsigned) so amounts accrued during the challenge can be reconciled
+		// when the dispute is resolved.
+		if channelStatus == nil || *channelStatus != core.ChannelStatusChallenged {
+			packedState, err := h.statePacker.PackState(*newState)
+			if err != nil {
+				return nil, rpc.Errorf("failed to pack receiver state: %v", err)
+			}
+
+			_nodeSig, err := h.nodeSigner.Sign(packedState)
+			if err != nil {
+				return nil, rpc.Errorf("failed to sign receiver state")
+			}
+			nodeSig := _nodeSig.String()
+			newState.NodeSig = &nodeSig
+		} else {
+			logger.Info("skipping node signature on receiver state for challenged home channel",
+				"homeChannelID", *newState.HomeChannelID)
 		}
-		nodeSig := _nodeSig.String()
-		newState.NodeSig = &nodeSig
 	}
 	if err := tx.StoreUserState(*newState, applicationID); err != nil {
 		return nil, rpc.Errorf("failed to store receiver state")

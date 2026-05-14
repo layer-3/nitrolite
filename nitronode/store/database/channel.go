@@ -167,6 +167,36 @@ func (s *DBStore) CheckActiveChannel(wallet, asset string) (string, *core.Channe
 	return row.ApprovedSigValidators, &row.Status, nil
 }
 
+// GetHomeChannelStatus returns the current status of a home channel by its ID.
+// Returns nil if no home channel with the given ID exists. The lookup is type-restricted
+// to home channels; callers asking about escrow or other channel kinds must use a
+// different accessor.
+func (s *DBStore) GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error) {
+	channelID = strings.ToLower(channelID)
+	if !strings.HasPrefix(channelID, "0x") {
+		channelID = "0x" + channelID
+	}
+
+	var row struct {
+		Status core.ChannelStatus `gorm:"column:status"`
+	}
+	result := s.db.Raw(`
+		SELECT status
+		FROM channels
+		WHERE channel_id = ?
+			AND type = ?
+		LIMIT 1
+	`, channelID, core.ChannelTypeHome).Scan(&row)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get home channel status: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	return &row.Status, nil
+}
+
 // GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.
 func (s *DBStore) GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error) {
 	query := s.db.Model(&Channel{}).Where("user_wallet = ?", strings.ToLower(wallet))

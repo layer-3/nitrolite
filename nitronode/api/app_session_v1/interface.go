@@ -40,6 +40,11 @@ type Store interface {
 	// and Open (materialized onchain); callers needing onchain materialization must additionally
 	// require Status == core.ChannelStatusOpen.
 	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
+
+	// GetHomeChannelStatus returns the current status of a home channel by ID.
+	// Returns nil if no home channel exists for the given ID.
+	GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error)
+
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
 	// StoreUserState persists a user state. applicationID is the client-declared
 	// origin tag (rpc.ApplicationIDQueryParam); empty string is persisted as NULL.

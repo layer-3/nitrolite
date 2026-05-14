@@ -2,6 +2,7 @@ package event_handlers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -234,6 +235,11 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // HandleHomeChannelClosed processes the HomeChannelClosed event emitted when a home channel is
 // finalized and closed on-chain. It updates the channel status to Closed and sets the final state version.
 // Once closed, no further state updates are possible for this channel.
+//
+// Additionally, when the closing path was a challenge resolution (channel was Challenged
+// and the closing state is not a finalize), the handler issues a single ChallengeRescue
+// state for the user that squashes the sum of receiver-state credits accrued during the
+// challenge window into an off-channel ledger entry tied to the closed channel's ID.
 func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -250,6 +256,8 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
+	wasChallenged := channel.Status == core.ChannelStatusChallenged
+
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
 
@@ -265,7 +273,76 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return err
 	}
 
+	if wasChallenged {
+		if err := s.issueChallengeRescueIfNeeded(ctx, tx, channel, event.StateVersion); err != nil {
+			return err
+		}
+	}
+
 	logger.Info("handled HomeChannelClosed event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
+	return nil
+}
+
+// issueChallengeRescueIfNeeded squashes any unsigned receiver states (transfer_receive,
+// release) that accumulated against the closed channel during the challenge window into a
+// single ChallengeRescue state on the user's ledger. Unsigned states from earlier epochs,
+// or any signed states, are intentionally left untouched. The rescue state is structured
+// like a credit to a user with no open home channel: HomeChannelID is nil, AccountID is
+// the closed channel's ID, and the amount is the sum of credits being rescued.
+func (s *EventHandlerService) issueChallengeRescueIfNeeded(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
+	logger := log.FromContext(ctx)
+
+	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion)
+	if err != nil {
+		return err
+	}
+	if total.IsZero() {
+		return nil
+	}
+	if total.IsNegative() {
+		return fmt.Errorf("unexpected negative challenge rescue sum: %s", total.String())
+	}
+
+	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		// Should not happen: receiver-state rows contributed to the sum above, so at
+		// least one state must exist. Surface the inconsistency rather than silently
+		// dropping the rescue.
+		return fmt.Errorf("no state found for closed challenged channel %s while pending receiver credits exist", channel.ChannelID)
+	}
+
+	rescue, err := core.NewChallengeRescueState(*prev, total)
+	if err != nil {
+		return err
+	}
+
+	// The rescue state is off-channel (HomeChannelID == nil) and is therefore not
+	// node-signed via the channel packer. It is treated like a credit to a user with no
+	// open home channel: the value is recorded in the user's state chain and will be
+	// folded into a properly signed state when the user next opens a channel.
+	if err := tx.StoreUserState(*rescue, ""); err != nil {
+		return err
+	}
+
+	txn, err := core.NewTransactionFromTransition(nil, rescue, rescue.Transition)
+	if err != nil {
+		return err
+	}
+	if err := tx.RecordTransaction(*txn, ""); err != nil {
+		return err
+	}
+
+	logger.Info("issued challenge_rescue state",
+		"channelId", channel.ChannelID,
+		"userWallet", channel.UserWallet,
+		"asset", channel.Asset,
+		"amount", total.String(),
+		"newStateID", rescue.ID,
+		"txID", txn.ID,
+	)
 	return nil
 }
 

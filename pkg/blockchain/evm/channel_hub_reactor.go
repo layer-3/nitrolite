@@ -76,6 +76,18 @@ type ChannelHubReactorStore interface {
 	// empty to skip that side.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
+	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver
+	// state rows (transfer_receive, release) attached to the given home channel that
+	// have node_sig NULL and a strictly greater version than minVersion.
+	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+
+	// StoreUserState persists a user state row. Used to record a ChallengeRescue squash
+	// state derived from a closed challenged channel.
+	StoreUserState(state core.State, applicationID string) error
+
+	// RecordTransaction creates a transaction row linking state transitions.
+	RecordTransaction(tx core.Transaction, applicationID string) error
+
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
 }

@@ -250,6 +250,30 @@ func (s *DBStore) UpdateStateSigsIfMissing(channelID string, version uint64, use
 	return nil
 }
 
+// SumUnsignedReceiverStateAmountsAfterVersion returns the sum of transition amounts on
+// rows whose home_channel_id matches channelID, whose version is strictly greater than
+// minVersion, whose node_sig is NULL, and whose transition type is one of the receiver-
+// credit kinds (transfer_receive, release). Used to compute the squashed credit for a
+// ChallengeRescue when a challenged channel is closed onchain.
+func (s *DBStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+	cid := strings.ToLower(channelID)
+	var row struct {
+		Total decimal.Decimal `gorm:"column:total"`
+	}
+	err := s.db.Raw(`
+		SELECT COALESCE(SUM(transition_amount), 0) AS total
+		FROM channel_states
+		WHERE home_channel_id = ?
+			AND version > ?
+			AND node_sig IS NULL
+			AND transition_type IN (?, ?)
+	`, cid, minVersion, uint8(core.TransitionTypeTransferReceive), uint8(core.TransitionTypeRelease)).Scan(&row).Error
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("failed to sum unsigned receiver state amounts: %w", err)
+	}
+	return row.Total, nil
+}
+
 // GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
 // Uses UNION ALL of two indexed queries instead of OR for better performance.
 func (s *DBStore) GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error) {

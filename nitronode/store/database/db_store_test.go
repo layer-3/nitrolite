@@ -1036,6 +1036,95 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 	})
 }
 
+func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
+	const wallet = "0xuser123"
+	const asset = "USDC"
+	const homeChannelID = "0xhomechannel123"
+
+	setupChannel := func(t *testing.T, store DatabaseStore) {
+		t.Helper()
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        wallet,
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusChallenged,
+			StateVersion:      5,
+		}))
+	}
+
+	storeState := func(t *testing.T, store DatabaseStore, version uint64, transitionType core.TransitionType, amount decimal.Decimal, hasNodeSig bool) {
+		t.Helper()
+		channelIDLocal := homeChannelID
+		s := core.State{
+			ID:            core.GetStateID(wallet, asset, 1, version),
+			Asset:         asset,
+			UserWallet:    wallet,
+			Epoch:         1,
+			Version:       version,
+			HomeChannelID: &channelIDLocal,
+			Transition: core.Transition{
+				Type:      transitionType,
+				TxID:      "0xtx",
+				AccountID: "0xacct",
+				Amount:    amount,
+			},
+			HomeLedger: core.Ledger{
+				UserBalance: amount,
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+		}
+		userSig := "0xusersig"
+		s.UserSig = &userSig
+		if hasNodeSig {
+			nodeSig := "0xnodesig"
+			s.NodeSig = &nodeSig
+		}
+		require.NoError(t, store.StoreUserState(s, ""))
+	}
+
+	t.Run("Sums only unsigned receiver states strictly above version", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// Below the cutoff — must be ignored.
+		storeState(t, store, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(10), false)
+		// At the cutoff — must be ignored (strictly greater than minVersion).
+		storeState(t, store, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(20), false)
+		// Above cutoff, unsigned receive — included.
+		storeState(t, store, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
+		// Above cutoff, unsigned release — included.
+		storeState(t, store, 8, core.TransitionTypeRelease, decimal.NewFromInt(40), false)
+		// Above cutoff, but already node-signed — must be ignored.
+		storeState(t, store, 9, core.TransitionTypeTransferReceive, decimal.NewFromInt(100), true)
+		// Above cutoff, unsigned but wrong transition type — must be ignored.
+		storeState(t, store, 10, core.TransitionTypeHomeDeposit, decimal.NewFromInt(500), false)
+
+		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 6)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(70).Equal(total), "want 70, got %s", total.String())
+	})
+
+	t.Run("Returns zero when no matches", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 0)
+		require.NoError(t, err)
+		assert.True(t, total.IsZero())
+	})
+}
+
 func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 	const wallet = "0xuser123"
 	const asset = "USDC"

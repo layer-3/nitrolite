@@ -194,6 +194,72 @@ func TestState_ApplyReleaseTransition(t *testing.T) {
 	assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
 }
 
+func TestNewChallengeRescueState(t *testing.T) {
+	t.Parallel()
+
+	closedChannelID := "0xClosedChannel"
+	makePrev := func() State {
+		channelID := closedChannelID
+		return State{
+			Asset:         "USDC",
+			UserWallet:    "0xUser",
+			Epoch:         3,
+			Version:       7,
+			HomeChannelID: &channelID,
+			HomeLedger: Ledger{
+				TokenAddress: "0xToken",
+				BlockchainID: 1,
+				UserBalance:  decimal.NewFromInt(50),
+				UserNetFlow:  decimal.NewFromInt(50),
+			},
+		}
+	}
+
+	t.Run("Success - opens fresh epoch at version 1 with no channel context", func(t *testing.T) {
+		prev := makePrev()
+		amount := decimal.NewFromInt(42)
+
+		rescue, err := NewChallengeRescueState(prev, amount)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+
+		assert.Equal(t, prev.Asset, rescue.Asset)
+		assert.Equal(t, prev.UserWallet, rescue.UserWallet)
+		assert.Equal(t, prev.Epoch+1, rescue.Epoch)
+		assert.Equal(t, uint64(1), rescue.Version)
+		assert.Nil(t, rescue.HomeChannelID)
+		assert.Empty(t, rescue.HomeLedger.TokenAddress)
+		assert.Equal(t, uint64(0), rescue.HomeLedger.BlockchainID)
+		assert.True(t, amount.Equal(rescue.HomeLedger.UserBalance))
+		assert.True(t, amount.Equal(rescue.HomeLedger.NodeNetFlow))
+		assert.True(t, rescue.HomeLedger.UserNetFlow.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeBalance.IsZero())
+
+		assert.Equal(t, TransitionTypeChallengeRescue, rescue.Transition.Type)
+		assert.Equal(t, closedChannelID, rescue.Transition.AccountID)
+		assert.True(t, amount.Equal(rescue.Transition.Amount))
+
+		expectedTxID, err := GetReceiverTransactionID(closedChannelID, rescue.ID)
+		require.NoError(t, err)
+		assert.Equal(t, expectedTxID, rescue.Transition.TxID)
+	})
+
+	t.Run("Rejects zero or negative amount", func(t *testing.T) {
+		prev := makePrev()
+		_, err := NewChallengeRescueState(prev, decimal.Zero)
+		require.Error(t, err)
+		_, err = NewChallengeRescueState(prev, decimal.NewFromInt(-1))
+		require.Error(t, err)
+	})
+
+	t.Run("Rejects prev state without home channel", func(t *testing.T) {
+		prev := makePrev()
+		prev.HomeChannelID = nil
+		_, err := NewChallengeRescueState(prev, decimal.NewFromInt(1))
+		require.Error(t, err)
+	})
+}
+
 func TestState_ApplyMutualLockTransition(t *testing.T) {
 	t.Parallel()
 	state := NewVoidState("USDC", "0xUser")

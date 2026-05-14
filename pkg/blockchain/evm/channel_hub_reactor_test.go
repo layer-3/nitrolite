@@ -95,6 +95,21 @@ func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version
 	return args.Error(0)
 }
 
+func (m *mockChannelHubStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
+	return args.Error(0)
+}
+
 // mockChannelHubEventHandler captures events dispatched by the reactor.
 type mockChannelHubEventHandler struct {
 	mock.Mock

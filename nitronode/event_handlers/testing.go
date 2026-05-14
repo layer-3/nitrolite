@@ -99,3 +99,22 @@ func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, u
 	args := m.Called(channelID, version, userSig, nodeSig)
 	return args.Error(0)
 }
+
+// SumUnsignedReceiverStateAmountsAfterVersion mocks summing unsigned receiver-state
+// transition amounts for the given home channel above the supplied version.
+func (m *MockStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+// StoreUserState mocks persisting a user state row.
+func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
+	return args.Error(0)
+}
+
+// RecordTransaction mocks recording a transaction row.
+func (m *MockStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
+	return args.Error(0)
+}

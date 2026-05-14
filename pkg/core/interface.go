@@ -150,6 +150,20 @@ type ChannelHubEventHandlerStore interface {
 	// an on-chain event proves the state was enforced. Either signature may be empty to skip
 	// that side; existing values are never overwritten and the call is idempotent on event replay.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
+
+	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver state
+	// rows (transfer_receive, release) attached to the given home channel that have node_sig
+	// NULL and a strictly greater version than minVersion. Used to compute the
+	// ChallengeRescue squash amount when a challenged channel is closed.
+	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+
+	// StoreUserState persists a user state row. Used by the event handler to record a
+	// ChallengeRescue squash state derived from a closed challenged channel.
+	StoreUserState(state State, applicationID string) error
+
+	// RecordTransaction creates a transaction row linking state transitions. Used by the
+	// event handler to record the ChallengeRescue transaction associated with the squash.
+	RecordTransaction(tx Transaction, applicationID string) error
 }
 
 type LockingContractEventHandler interface {

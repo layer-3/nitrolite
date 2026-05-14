@@ -93,8 +93,9 @@ func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount 
 	return args.Error(0)
 }
 
-// UpdateStateUserSigIfMissing mocks backfilling a user signature for a stored state.
-func (m *MockStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	args := m.Called(channelID, version, userSig)
+// UpdateStateSigsIfMissing mocks backfilling missing user and/or node signatures
+// for a stored state.
+func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	args := m.Called(channelID, version, userSig, nodeSig)
 	return args.Error(0)
 }

@@ -14,11 +14,18 @@ var _ core.LockingContractEventHandler = &EventHandlerService{}
 // EventHandlerService processes blockchain events and updates the local database state accordingly.
 // It handles events from both home channels (user state channels) and escrow channels (temporary lock channels).
 type EventHandlerService struct {
+	nodeSigner  *core.ChannelDefaultSigner
+	statePacker core.StatePacker
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
-func NewEventHandlerService() *EventHandlerService {
-	return &EventHandlerService{}
+// nodeSigner and statePacker are used to backfill the node signature on the
+// checkpointed head state when it is missing from the local record.
+func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker) *EventHandlerService {
+	return &EventHandlerService{
+		nodeSigner:  nodeSigner,
+		statePacker: statePacker,
+	}
 }
 
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when a node's balance is updated on-chain.
@@ -64,7 +71,7 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -101,7 +108,8 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	}
 	channel.StateVersion = event.StateVersion
 
-	if channel.Status == core.ChannelStatusChallenged {
+	wasChallenged := channel.Status == core.ChannelStatusChallenged
+	if wasChallenged {
 		channel.Status = core.ChannelStatusOpen
 	}
 
@@ -114,12 +122,51 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	// When a challenge is resolved by checkpoint, the head state row may have been
+	// persisted without a node signature (e.g. a receiver state stored unsigned during
+	// the dispute window that is now the highest version at or below the checkpointed
+	// version). Backfill the node signature locally so future flows treat the head as
+	// fully co-signed. On normal Open→Open checkpoints the row is already node-signed
+	// via the standard RPC path, so this work is skipped. Higher-version unsigned
+	// receiver states are intentionally left untouched and reconciled on close.
+	nodeSig := ""
+	if wasChallenged {
+		nodeSig, err = s.buildHeadNodeSig(ctx, tx, event.ChannelID, event.StateVersion)
+		if err != nil {
+			return err
+		}
+	}
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, nodeSig); err != nil {
 		return err
 	}
 
 	logger.Info("handled HomeChannelCheckpointed event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
+}
+
+// buildHeadNodeSig returns a node signature for the stored state at (channelID, version)
+// when the row is present and lacks a node signature. Returns an empty string when the
+// state row is missing or already node-signed; callers pass the result straight through
+// to UpdateStateSigsIfMissing which no-ops on empty input.
+func (s *EventHandlerService) buildHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string, version uint64) (string, error) {
+	state, err := tx.GetStateByChannelIDAndVersion(channelID, version)
+	if err != nil {
+		return "", err
+	}
+	if state == nil || state.NodeSig != nil {
+		return "", nil
+	}
+	packed, err := s.statePacker.PackState(*state)
+	if err != nil {
+		return "", err
+	}
+	sig, err := s.nodeSigner.Sign(packed)
+	if err != nil {
+		return "", err
+	}
+	log.FromContext(ctx).Info("backfilled missing node signature on head state",
+		"channelId", channelID, "stateVersion", version)
+	return sig.String(), nil
 }
 
 // HandleHomeChannelChallenged processes the HomeChannelChallenged event emitted when a potentially
@@ -169,7 +216,7 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -214,7 +261,7 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -260,7 +307,7 @@ func (s *EventHandlerService) HandleEscrowDepositInitiated(ctx context.Context, 
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -325,7 +372,7 @@ func (s *EventHandlerService) HandleEscrowDepositChallenged(ctx context.Context,
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -416,7 +463,7 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -488,7 +535,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalInitiated(ctx context.Contex
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -548,7 +595,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalChallenged(ctx context.Conte
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -582,7 +629,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 

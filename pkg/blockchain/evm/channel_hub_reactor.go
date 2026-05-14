@@ -71,8 +71,10 @@ type ChannelHubReactorStore interface {
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
 
-	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
+	// state when the corresponding column is currently NULL. Either signature may be
+	// empty to skip that side.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error

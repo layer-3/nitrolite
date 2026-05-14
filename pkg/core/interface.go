@@ -145,10 +145,11 @@ type ChannelHubEventHandlerStore interface {
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
 
-	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-	// Used to repair the local record after an on-chain event proves the state was bilaterally enforced.
-	// No-op when userSig is empty or no row matches; existing user_sig is never overwritten.
-	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state
+	// when the corresponding column is currently NULL. Used to repair the local record after
+	// an on-chain event proves the state was enforced. Either signature may be empty to skip
+	// that side; existing values are never overwritten and the call is idempotent on event replay.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 }
 
 type LockingContractEventHandler interface {

@@ -811,7 +811,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 	})
 }
 
-func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
+func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 	t.Run("Backfills user_sig when null and unblocks gate", func(t *testing.T) {
 		// This is the wedge-recovery path: a node-only state was checkpointed on chain
 		// (e.g. recipient submitted a transfer_receive state directly). After the event
@@ -894,7 +894,7 @@ func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
 
 		// Backfill the user signature recovered from the on-chain event.
 		recoveredSig := "0xrecovered"
-		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 2, recoveredSig))
+		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 2, recoveredSig, ""))
 
 		got, err := store.GetStateByID("state2")
 		require.NoError(t, err)
@@ -956,7 +956,7 @@ func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
 		require.NoError(t, store.StoreUserState(state, ""))
 
 		// Replayed event would carry a different (or any) sig; existing one must not be overwritten.
-		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 1, "0xshould-not-overwrite"))
+		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 1, "0xshould-not-overwrite", "0xshould-not-overwrite-node"))
 
 		got, err := store.GetStateByID("state1")
 		require.NoError(t, err)
@@ -972,7 +972,7 @@ func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
 		store := NewDBStore(db)
 
 		homeChannelID := "0xhomechannel123"
-		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 1, ""))
+		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 1, "", ""))
 	})
 
 	t.Run("Unknown version returns no error", func(t *testing.T) {
@@ -982,7 +982,57 @@ func TestDBStore_UpdateStateUserSigIfMissing(t *testing.T) {
 		store := NewDBStore(db)
 
 		homeChannelID := "0xhomechannel123"
-		require.NoError(t, store.UpdateStateUserSigIfMissing(homeChannelID, 99, "0xanything"))
+		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 99, "0xanything", "0xanything-node"))
+	})
+
+	t.Run("Backfills node_sig when user_sig already present", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		require.NoError(t, store.CreateChannel(core.Channel{
+			ChannelID:         homeChannelID,
+			UserWallet:        "0xuser123",
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      1,
+		}))
+
+		userSig := "0xusersigonly"
+		state := core.State{
+			ID:            "state-user-only",
+			Asset:         "USDC",
+			UserWallet:    "0xuser123",
+			Epoch:         1,
+			Version:       1,
+			HomeChannelID: &homeChannelID,
+			Transition:    core.Transition{Type: core.TransitionTypeHomeDeposit},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(100),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+			UserSig: &userSig,
+		}
+		require.NoError(t, store.StoreUserState(state, ""))
+
+		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 1, "0xshould-not-overwrite-user", "0xrecoverednode"))
+
+		got, err := store.GetStateByID("state-user-only")
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.NotNil(t, got.UserSig)
+		assert.Equal(t, userSig, *got.UserSig, "existing user_sig must be preserved")
+		require.NotNil(t, got.NodeSig)
+		assert.Equal(t, "0xrecoverednode", *got.NodeSig)
 	})
 }
 

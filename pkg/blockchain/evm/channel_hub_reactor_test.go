@@ -90,8 +90,8 @@ func (m *mockChannelHubStore) StoreContractEvent(ev core.BlockchainEvent) error 
 	return args.Error(0)
 }
 
-func (m *mockChannelHubStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	args := m.Called(channelID, version, userSig)
+func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	args := m.Called(channelID, version, userSig, nodeSig)
 	return args.Error(0)
 }
 

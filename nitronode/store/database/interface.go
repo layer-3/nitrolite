@@ -103,8 +103,10 @@ type DatabaseStore interface {
 	// that would prevent issuing a receiver-side state.
 	EnsureNoOngoingEscrowOperation(wallet, asset string) error
 
-	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
+	// state when the corresponding column is currently NULL. Either signature may be
+	// empty to skip that side.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
 	// --- Blockchain Action Operations ---
 

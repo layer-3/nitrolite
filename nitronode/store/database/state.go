@@ -221,20 +221,31 @@ func (s *DBStore) GetLastStateByChannelID(channelID string, signed bool) (*core.
 	return databaseStateToCore(&state)
 }
 
-// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-// Used by the on-chain event reactor to repair the local record once a state has been bilaterally
-// enforced on chain. The IS NULL guard makes the call idempotent on event replay and prevents
-// overwriting a signature already populated by the user-facing RPC path.
-func (s *DBStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	if userSig == "" {
+// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state when
+// the corresponding column is currently NULL. Used by the on-chain event reactor to repair
+// the local record once a state has been enforced on chain. Either signature may be empty,
+// in which case that side is skipped. The IS NULL guard keeps the call idempotent on event
+// replay and prevents overwriting a signature already populated by the user-facing RPC path.
+func (s *DBStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	if userSig == "" && nodeSig == "" {
 		return nil
 	}
 	cid := strings.ToLower(channelID)
-	res := s.db.Model(&State{}).
-		Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND user_sig IS NULL", cid, cid, version).
-		Update("user_sig", userSig)
-	if res.Error != nil {
-		return fmt.Errorf("failed to backfill user_sig: %w", res.Error)
+	if userSig != "" {
+		res := s.db.Model(&State{}).
+			Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND user_sig IS NULL", cid, cid, version).
+			Update("user_sig", userSig)
+		if res.Error != nil {
+			return fmt.Errorf("failed to backfill user_sig: %w", res.Error)
+		}
+	}
+	if nodeSig != "" {
+		res := s.db.Model(&State{}).
+			Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND node_sig IS NULL", cid, cid, version).
+			Update("node_sig", nodeSig)
+		if res.Error != nil {
+			return fmt.Errorf("failed to backfill node_sig: %w", res.Error)
+		}
 	}
 	return nil
 }

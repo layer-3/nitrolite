@@ -123,51 +123,54 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		return err
 	}
 
-	// When a challenge is resolved by checkpoint, the head state row may have been
-	// persisted without a node signature (e.g. a receiver state stored unsigned during
-	// the dispute window that is now the highest version at or below the checkpointed
-	// version). Backfill the node signature locally so future flows treat the head as
-	// fully co-signed. On normal Open→Open checkpoints the row is already node-signed
-	// via the standard RPC path, so this work is skipped. Higher-version unsigned
-	// receiver states are intentionally left untouched and reconciled on close.
-	nodeSig := ""
+	// Always backfill the user signature at the on-chain checkpointed version so the
+	// row matches what is enforced on chain.
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
+		return err
+	}
+
+	// When a challenge is cleared, the off-chain head may sit above event.StateVersion:
+	// any receiver state issued during the challenge was stored unsigned and is now the
+	// channel's actual latest state. Backfill the node signature on that head so future
+	// flows treat it as fully co-signed. On normal Open→Open checkpoints the head row
+	// is already node-signed via the RPC path and this is a no-op.
 	if wasChallenged {
-		nodeSig, err = s.buildHeadNodeSig(ctx, tx, event.ChannelID, event.StateVersion)
-		if err != nil {
+		if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
 			return err
 		}
-	}
-	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, nodeSig); err != nil {
-		return err
 	}
 
 	logger.Info("handled HomeChannelCheckpointed event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
 	return nil
 }
 
-// buildHeadNodeSig returns a node signature for the stored state at (channelID, version)
-// when the row is present and lacks a node signature. Returns an empty string when the
-// state row is missing or already node-signed; callers pass the result straight through
-// to UpdateStateSigsIfMissing which no-ops on empty input.
-func (s *EventHandlerService) buildHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string, version uint64) (string, error) {
-	state, err := tx.GetStateByChannelIDAndVersion(channelID, version)
+// backfillOffChainHeadNodeSig loads the off-chain head state for channelID (the highest
+// stored version, regardless of signature status) and node-signs it when the row is
+// present and the node signature is missing. The user signature is intentionally left
+// untouched: when the head was created during a challenge it carries no user signature,
+// and the user must countersign and acknowledge it via the regular RPC flow.
+func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string) error {
+	head, err := tx.GetLastStateByChannelID(channelID, false)
 	if err != nil {
-		return "", err
+		return err
 	}
-	if state == nil || state.NodeSig != nil {
-		return "", nil
+	if head == nil || head.NodeSig != nil {
+		return nil
 	}
-	packed, err := s.statePacker.PackState(*state)
+	packed, err := s.statePacker.PackState(*head)
 	if err != nil {
-		return "", err
+		return err
 	}
 	sig, err := s.nodeSigner.Sign(packed)
 	if err != nil {
-		return "", err
+		return err
 	}
-	log.FromContext(ctx).Info("backfilled missing node signature on head state",
-		"channelId", channelID, "stateVersion", version)
-	return sig.String(), nil
+	if err := tx.UpdateStateSigsIfMissing(channelID, head.Version, "", sig.String()); err != nil {
+		return err
+	}
+	log.FromContext(ctx).Info("backfilled missing node signature on off-chain head state",
+		"channelId", channelID, "stateVersion", head.Version)
+	return nil
 }
 
 // HandleHomeChannelChallenged processes the HomeChannelChallenged event emitted when a potentially

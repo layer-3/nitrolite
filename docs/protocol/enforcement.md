@@ -128,7 +128,7 @@ While a channel is in `CHALLENGED` (i.e. on-chain `DISPUTED`) status, the Node a
 
 Two resolution paths:
 
-- **Challenge cleared** (a newer mutually signed state is enforced, returning the channel to `OPERATING`): the Node signs the queued "receive" states in order; the user countersigns and acknowledges. Normal flow resumes with no gap.
+- **Challenge cleared** (a newer mutually signed state is enforced, returning the channel to `OPERATING`): the Node signs only the off-chain head — the highest-version queued "receive" state — so the channel's actual latest state is fully co-signed; the user countersigns and acknowledges. Earlier queued entries remain unsigned in history; the head carries forward their cumulative balance impact, so normal flow resumes with no gap and no credit lost.
 - **Challenge expires and the channel is closed**: queued "receive" states are squashed into a single state and committed to the user's next epoch — equivalent to the funds arriving while the user did not have a channel. Credits are preserved.
 
 The purpose of these rules is to ensure that a `CHALLENGED` channel cannot have its dispute cleared as a side effect of incoming third-party transfers, and that no accrued credit is lost regardless of which resolution path is taken.

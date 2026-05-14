@@ -95,8 +95,9 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 			ch.StateVersion == 5
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
-	mockStore.On("GetStateByChannelIDAndVersion", channelID, uint64(5)).Return(nil, nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
+	// Off-chain head missing → no head-sig backfill.
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
 	// Execute
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
@@ -1078,7 +1079,7 @@ func TestHandleHomeChannelCheckpointed_BackfillsUserSig(t *testing.T) {
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "GetStateByChannelIDAndVersion", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
 }
 
 // TestHandleHomeChannelCheckpointed_BackfillError surfaces store errors from the backfill so
@@ -1139,12 +1140,13 @@ func newTestEventHandlerService(t *testing.T) (*EventHandlerService, string) {
 	return NewEventHandlerService(nodeSigner, packer), signer.PublicKey().Address().String()
 }
 
-// TestHandleHomeChannelCheckpointed_BackfillsNodeSig covers the case where the stored row
-// at the checkpointed version is missing the node signature (e.g. the row was persisted via
-// the during-challenge no-sign path and then promoted via a subsequent onchain checkpoint).
-// The handler re-signs the canonical state with the node key so future flows treat the head
-// as fully co-signed.
-func TestHandleHomeChannelCheckpointed_BackfillsNodeSig(t *testing.T) {
+// TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig covers the case where a
+// challenge is cleared while the off-chain head sits above the checkpointed onchain
+// version: a receiver state stored unsigned during the challenge window is now the
+// channel's actual latest state. The handler must node-sign that head so future flows
+// treat it as fully co-signed; the user signature backfill targets the on-chain version
+// separately.
+func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
@@ -1154,6 +1156,9 @@ func TestHandleHomeChannelCheckpointed_BackfillsNodeSig(t *testing.T) {
 	userWallet := "0x1234567890123456789012345678901234567890"
 	asset := "USDC"
 	homeChannelIDPtr := channelID
+	checkpointVersion := uint64(5)
+	headVersion := uint64(7)
+	checkpointUserSig := "0xusersighex"
 
 	channel := &core.Channel{
 		ChannelID:    channelID,
@@ -1164,13 +1169,13 @@ func TestHandleHomeChannelCheckpointed_BackfillsNodeSig(t *testing.T) {
 		StateVersion: 4,
 	}
 
-	userSig := "0xusersighex"
+	// Off-chain head is a during-challenge receiver state above the on-chain checkpoint.
 	headState := &core.State{
-		ID:            core.GetStateID(userWallet, asset, 1, 5),
+		ID:            core.GetStateID(userWallet, asset, 1, headVersion),
 		Asset:         asset,
 		UserWallet:    userWallet,
 		Epoch:         1,
-		Version:       5,
+		Version:       headVersion,
 		HomeChannelID: &homeChannelIDPtr,
 		Transition:    core.Transition{Type: core.TransitionTypeTransferReceive},
 		HomeLedger: core.Ledger{
@@ -1181,24 +1186,26 @@ func TestHandleHomeChannelCheckpointed_BackfillsNodeSig(t *testing.T) {
 			NodeBalance:  decimal.Zero,
 			NodeNetFlow:  decimal.Zero,
 		},
-		UserSig: &userSig,
 	}
 
 	event := &core.HomeChannelCheckpointedEvent{
 		ChannelID:    channelID,
-		StateVersion: 5,
-		UserSig:      userSig,
+		StateVersion: checkpointVersion,
+		UserSig:      checkpointUserSig,
 	}
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
-		return ch.Status == core.ChannelStatusOpen && ch.StateVersion == 5
+		return ch.Status == core.ChannelStatusOpen && ch.StateVersion == checkpointVersion
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
-	mockStore.On("GetStateByChannelIDAndVersion", channelID, uint64(5)).Return(headState, nil)
+	// User-sig backfill at the on-chain version.
+	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, checkpointUserSig, "").Return(nil)
+	// Off-chain head lookup returns the higher unsigned receiver state.
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
 
 	var capturedNodeSig string
-	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), userSig, mock.AnythingOfType("string")).
+	mockStore.On("UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string")).
 		Run(func(args mock.Arguments) {
 			capturedNodeSig = args.String(3)
 		}).Return(nil)
@@ -1217,6 +1224,70 @@ func TestHandleHomeChannelCheckpointed_BackfillsNodeSig(t *testing.T) {
 	require.NoError(t, validator.Verify(nodeAddress, packed, sigBytes))
 
 	mockStore.AssertExpectations(t)
+}
+
+// TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill verifies that when
+// a challenge clears and the off-chain head is already node-signed (typical case if
+// no receiver states were issued during the challenge), the handler does not re-sign.
+func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	homeChannelIDPtr := channelID
+	checkpointVersion := uint64(5)
+	headVersion := uint64(5)
+	existingNodeSig := "0xnodesigalreadyhere"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        asset,
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusChallenged,
+		StateVersion: 4,
+	}
+
+	headState := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, headVersion),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       headVersion,
+		HomeChannelID: &homeChannelIDPtr,
+		Transition:    core.Transition{Type: core.TransitionTypeTransferReceive},
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xtoken",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(100),
+			UserNetFlow:  decimal.Zero,
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		},
+		NodeSig: &existingNodeSig,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: checkpointVersion,
+		UserSig:      "0xusersig",
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, "0xusersig", "").Return(nil)
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	require.NoError(t, err)
+
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string"))
 }
 
 // TestHandleHomeChannelClosed_ChallengeRescue_Squash exercises the path where a channel

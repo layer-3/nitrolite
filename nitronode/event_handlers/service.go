@@ -277,7 +277,7 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	}
 
 	if wasChallenged {
-		if err := s.issueChallengeRescueIfNeeded(ctx, tx, channel, event.StateVersion); err != nil {
+		if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
 			return err
 		}
 	}
@@ -286,21 +286,22 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	return nil
 }
 
-// issueChallengeRescueIfNeeded squashes any unsigned receiver states (transfer_receive,
-// release) that accumulated against the closed channel during the challenge window into a
-// single ChallengeRescue state on the user's ledger. Unsigned states from earlier epochs,
-// or any signed states, are intentionally left untouched. The rescue state is structured
-// like a credit to a user with no open home channel: HomeChannelID is nil, AccountID is
-// the closed channel's ID, and the amount is the sum of credits being rescued.
-func (s *EventHandlerService) issueChallengeRescueIfNeeded(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
+// issueChallengeRescue emits a ChallengeRescue state on the user's ledger after a
+// challenged-channel close. The state is issued unconditionally so the user's latest
+// stored state moves to a fresh epoch with HomeChannelID nil; without it future
+// receiver-state issuance and channels.v1.request_creation would stay wedged on the
+// closed channel. When unsigned receiver states (transfer_receive, release) accrued
+// during the dispute window, their amounts are squashed into the rescue state;
+// otherwise the rescue carries zero credit and serves purely to detach the chain.
+// Unsigned states from earlier epochs, or any signed states, are intentionally left
+// untouched. AccountID is the closed channel's ID; HomeChannelID is nil — the shape
+// of a credit to a user with no open home channel.
+func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
 	logger := log.FromContext(ctx)
 
 	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion)
 	if err != nil {
 		return err
-	}
-	if total.IsZero() {
-		return nil
 	}
 	if total.IsNegative() {
 		return fmt.Errorf("unexpected negative challenge rescue sum: %s", total.String())

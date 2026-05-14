@@ -39,7 +39,7 @@ Invariant:
 
 ---
 
-6. While a channel is in `CHALLENGED` (on-chain `DISPUTED`) status, the Node does not co-sign "receive" states for that channel. Incoming off-chain transfer credits and app-session release credits targeting the channel are appended as unsigned entries to the channel's state history (a per-channel queue). On challenge clearance, the queued entries are signed by the Node and offered for user acknowledgement. On channel closure after challenge expiry, the queued entries are squashed into a single state and committed to the user's next epoch.
+6. While a channel is in `CHALLENGED` (on-chain `DISPUTED`) status, the Node does not co-sign "receive" states for that channel. Incoming off-chain transfer credits and app-session release credits targeting the channel are appended as unsigned entries to the channel's state history (a per-channel queue). On challenge clearance, the queued entries are signed by the Node and offered for user acknowledgement. On channel closure, a single state is committed to the user's next epoch detached from the closed channel; when queued entries exist their amounts are squashed into that state, otherwise it carries zero credit and serves only to advance the state chain off the closed channel.
 
 Invariant:
 > A channel in `CHALLENGED` status has no co-signed "receive" states; therefore, its dispute cannot be cleared by enforcing a receive-credit checkpoint.

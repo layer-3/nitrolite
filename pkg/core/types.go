@@ -186,8 +186,8 @@ func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error)
 	if prev.HomeChannelID == nil {
 		return nil, fmt.Errorf("prev state has no home channel ID")
 	}
-	if amount.IsNegative() || amount.IsZero() {
-		return nil, fmt.Errorf("challenge rescue amount must be positive")
+	if amount.IsNegative() {
+		return nil, fmt.Errorf("challenge rescue amount must be non-negative")
 	}
 
 	closedChannelID := *prev.HomeChannelID

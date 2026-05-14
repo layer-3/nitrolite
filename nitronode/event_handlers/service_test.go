@@ -1390,8 +1390,10 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 }
 
 // TestHandleHomeChannelClosed_ChallengeRescue_NoCredits covers the path where a channel
-// is closed while Challenged but no unsigned receiver credits accrued. No rescue state
-// should be emitted.
+// is closed while Challenged but no unsigned receiver credits accrued. A zero-amount
+// rescue state is still emitted so the user's latest stored state moves to a fresh
+// epoch with HomeChannelID nil; without it, future receiver-state issuance and
+// channels.v1.request_creation would stay wedged on the closed channel.
 func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
@@ -1400,15 +1402,34 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	tokenAddress := "0xtoken"
+	blockchainID := uint64(1)
 	closureVersion := uint64(7)
+	homeChannelIDPtr := channelID
 
 	channel := &core.Channel{
 		ChannelID:    channelID,
 		UserWallet:   userWallet,
-		Asset:        "USDC",
+		Asset:        asset,
 		Type:         core.ChannelTypeHome,
 		Status:       core.ChannelStatusChallenged,
 		StateVersion: 5,
+	}
+
+	prevState := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, closureVersion),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       closureVersion,
+		HomeChannelID: &homeChannelIDPtr,
+		HomeLedger: core.Ledger{
+			TokenAddress: tokenAddress,
+			BlockchainID: blockchainID,
+			UserBalance:  decimal.NewFromInt(50),
+			UserNetFlow:  decimal.NewFromInt(50),
+		},
 	}
 
 	event := &core.HomeChannelClosedEvent{
@@ -1418,16 +1439,29 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 
 	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
-	mockStore.On("RefreshUserEnforcedBalance", userWallet, "USDC").Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
 	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion).Return(decimal.Zero, nil)
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
+
+	var capturedState core.State
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		capturedState = state
+		return true
+	}), "").Return(nil)
+	mockStore.On("RecordTransaction", mock.Anything, "").Return(nil)
 
 	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
 	require.NoError(t, err)
 
+	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
+	require.True(t, capturedState.Transition.Amount.IsZero())
+	require.True(t, capturedState.HomeLedger.UserBalance.IsZero())
+	require.Nil(t, capturedState.HomeChannelID)
+	require.Equal(t, prevState.Epoch+1, capturedState.Epoch)
+	require.Equal(t, uint64(1), capturedState.Version)
+
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
 
 // TestHandleHomeChannelClosed_FinalizeIntent_NoRescue verifies that when a Challenged

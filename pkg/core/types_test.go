@@ -244,11 +244,19 @@ func TestNewChallengeRescueState(t *testing.T) {
 		assert.Equal(t, expectedTxID, rescue.Transition.TxID)
 	})
 
-	t.Run("Rejects zero or negative amount", func(t *testing.T) {
+	t.Run("Accepts zero amount", func(t *testing.T) {
 		prev := makePrev()
-		_, err := NewChallengeRescueState(prev, decimal.Zero)
-		require.Error(t, err)
-		_, err = NewChallengeRescueState(prev, decimal.NewFromInt(-1))
+		rescue, err := NewChallengeRescueState(prev, decimal.Zero)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+		assert.True(t, rescue.Transition.Amount.IsZero())
+		assert.True(t, rescue.HomeLedger.UserBalance.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeNetFlow.IsZero())
+	})
+
+	t.Run("Rejects negative amount", func(t *testing.T) {
+		prev := makePrev()
+		_, err := NewChallengeRescueState(prev, decimal.NewFromInt(-1))
 		require.Error(t, err)
 	})
 

@@ -60,6 +60,57 @@ func TestHandleHomeChannelCreated_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleHomeChannelCreated_IgnoresReplayOnInitializedChannel(t *testing.T) {
+	// HomeChannelCreated must fire only once per channel (Void → Open). Any later replay —
+	// indexer restart, chain reorg, block reprocessing — would otherwise clobber the current
+	// status, including resetting a Closing channel back to Open and re-arming the submission
+	// gate past a co-signed Finalize. The handler must short-circuit when the channel is no
+	// longer in Void.
+	cases := []struct {
+		name   string
+		status core.ChannelStatus
+	}{
+		{"Open", core.ChannelStatusOpen},
+		{"Challenged", core.ChannelStatusChallenged},
+		{"Closing", core.ChannelStatusClosing},
+		{"Closed", core.ChannelStatusClosed},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+			service := &EventHandlerService{}
+
+			channelID := "0xHomeChannel123"
+			channel := &core.Channel{
+				ChannelID:    channelID,
+				UserWallet:   "0x1234567890123456789012345678901234567890",
+				Asset:        "usdc",
+				Type:         core.ChannelTypeHome,
+				Status:       tc.status,
+				StateVersion: 5,
+			}
+
+			event := &core.HomeChannelCreatedEvent{
+				ChannelID:    channelID,
+				StateVersion: 1,
+			}
+
+			mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+			err := service.HandleHomeChannelCreated(ctx, mockStore, event)
+
+			require.NoError(t, err)
+			mockStore.AssertExpectations(t)
+			mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+			mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
+			mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+}
+
 func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

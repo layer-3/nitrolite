@@ -47,6 +47,11 @@ func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx c
 // HandleHomeChannelCreated processes the HomeChannelCreated event emitted when a home channel
 // is successfully created on-chain. It updates the channel status to Open and sets the state version.
 // The channel must exist in the database with type ChannelTypeHome, otherwise a warning is logged.
+// A legitimate Created event is observed exactly once per channel, when the local row is still in
+// the ChannelStatusVoid state seeded by CreateChannel. If the channel has already advanced past
+// Void, this handler is being re-fired (indexer replay, chain reorg, block reprocessing) and any
+// mutation here would regress the post-Open lifecycle — most importantly resetting a Closing
+// channel back to Open and erasing the Finalize marker that gates CheckActiveChannel.
 func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCreatedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -60,6 +65,11 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 	}
 	if channel.Type != core.ChannelTypeHome {
 		logger.Warn("channel type mismatch during HomeChannelCreated event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
+		return nil
+	}
+	if channel.Status >= core.ChannelStatusOpen {
+		logger.Warn("ignoring replayed HomeChannelCreated event on already-initialized channel",
+			"channelId", chanID, "currentStatus", channel.Status, "currentStateVersion", channel.StateVersion, "eventStateVersion", event.StateVersion)
 		return nil
 	}
 	channel.StateVersion = event.StateVersion

@@ -31,8 +31,10 @@ func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker c
 	}
 }
 
-// HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when a node's balance is updated on-chain.
-// It updates the user's staked balance for the specified blockchain in the database.
+// HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when the node's
+// on-chain liquidity changes. It records the new node liquidity for the (blockchain, asset)
+// pair via SetNodeBalance; this is observability data only and does not affect user staking
+// state.
 func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.NodeBalanceUpdatedEvent) error {
 	logger := log.FromContext(ctx)
 
@@ -47,6 +49,11 @@ func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx c
 // HandleHomeChannelCreated processes the HomeChannelCreated event emitted when a home channel
 // is successfully created on-chain. It updates the channel status to Open and sets the state version.
 // The channel must exist in the database with type ChannelTypeHome, otherwise a warning is logged.
+// A legitimate Created event is observed exactly once per channel, when the local row is still in
+// the ChannelStatusVoid state seeded by CreateChannel. If the channel has already advanced past
+// Void, this handler is being re-fired (indexer replay, chain reorg, block reprocessing) and any
+// mutation here would regress the post-Open lifecycle — most importantly resetting a Closing
+// channel back to Open and erasing the Finalize marker that gates CheckActiveChannel.
 func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCreatedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -60,6 +67,11 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 	}
 	if channel.Type != core.ChannelTypeHome {
 		logger.Warn("channel type mismatch during HomeChannelCreated event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
+		return nil
+	}
+	if channel.Status >= core.ChannelStatusOpen {
+		logger.Warn("ignoring replayed HomeChannelCreated event on already-initialized channel",
+			"channelId", chanID, "currentStatus", channel.Status, "currentStateVersion", channel.StateVersion, "eventStateVersion", event.StateVersion)
 		return nil
 	}
 	channel.StateVersion = event.StateVersion
@@ -93,7 +105,11 @@ func (s *EventHandlerService) HandleHomeChannelMigrated(ctx context.Context, tx 
 
 // HandleHomeChannelCheckpointed processes the HomeChannelCheckpointed event emitted when a channel
 // state is successfully checkpointed on-chain. It updates the channel's state version and clears
-// the Challenged status if present, returning the channel to Open status.
+// the Challenged status if present, returning the channel to Open — unless the local DB already
+// holds a co-signed Finalize for this channel, in which case the post-Finalize Closing marker
+// is restored instead. Without that restore, a Closing → Challenged → Open sequence driven by
+// on-chain events would erase the fact that the node has already signed a finalized state, and
+// CheckActiveChannel would let the user submit further transitions past the finalized state.
 func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCheckpointedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -113,7 +129,22 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 	if wasChallenged {
-		channel.Status = core.ChannelStatusOpen
+		// Reconstruct the post-Finalize Closing marker from channel_states: if the node
+		// has already signed a Finalize state for this channel, the off-chain close is
+		// still pending and the channel must not return to Open. See the doc comment on
+		// HandleHomeChannelChallenged for the round-trip rationale.
+		finalized, err := tx.HasSignedFinalize(chanID)
+		if err != nil {
+			return err
+		}
+		if finalized {
+			channel.Status = core.ChannelStatusClosing
+		} else {
+			channel.Status = core.ChannelStatusOpen
+		}
+		// The challenge is resolved on chain; the expiry timestamp is no longer relevant
+		// and would otherwise surface as a stale deadline through the channel API.
+		channel.ChallengeExpiresAt = nil
 	}
 
 	err = tx.UpdateChannel(*channel)
@@ -222,8 +253,12 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 
 	channel.StateVersion = event.StateVersion
 	// Closing → Challenged is an expected transition: a co-signed Finalize may race an
-	// on-chain challenge. The chain takes precedence; the off-chain close flow is abandoned
-	// and the channel follows the Challenged → Closed path instead.
+	// on-chain challenge. The status field is intentionally overwritten — the chain takes
+	// precedence while the dispute is live. The post-Finalize fact is not lost: it is
+	// shadowed in channel_states (the latest fully-signed row carries TransitionTypeFinalize)
+	// and HandleHomeChannelCheckpointed restores ChannelStatusClosing from there when the
+	// challenge resolves, so the off-chain close flow resumes instead of silently regressing
+	// to Open.
 	channel.Status = core.ChannelStatusChallenged
 	expirationTime := time.Unix(int64(event.ChallengeExpiry), 0)
 	channel.ChallengeExpiresAt = &expirationTime
@@ -289,6 +324,8 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err
@@ -593,6 +630,8 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err
@@ -759,6 +798,8 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
+	// Channel is terminal; any pending challenge deadline is no longer meaningful.
+	channel.ChallengeExpiresAt = nil
 
 	if err := tx.UpdateChannel(*channel); err != nil {
 		return err

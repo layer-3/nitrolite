@@ -309,7 +309,7 @@ func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.
 		return err
 	}
 	if total.IsNegative() {
-		return fmt.Errorf("unexpected negative challenge rescue sum: %s", total.String())
+		return fmt.Errorf("unexpected negative challenge_rescue sum of receive states: %s", total.String())
 	}
 
 	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)

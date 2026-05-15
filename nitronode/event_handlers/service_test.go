@@ -65,7 +65,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service := &EventHandlerService{}
+	service, _ := newTestEventHandlerService(t)
 
 	// Test data
 	channelID := "0xHomeChannel123"

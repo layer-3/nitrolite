@@ -100,6 +100,11 @@ func (m *mockChannelHubStore) SumUnsignedReceiverStateAmountsAfterVersion(channe
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+func (m *mockChannelHubStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
+	args := m.Called(wallet, asset)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
 func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)
 	return args.Error(0)

@@ -71,6 +71,12 @@ type ChannelHubReactorStore interface {
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
 
+	// LockUserState acquires SELECT ... FOR UPDATE on the user's balance row so the
+	// caller's transaction serializes against concurrent RPC paths that already lock
+	// the same row before issuing receiver states. Postgres-only; SQLite is a no-op
+	// in tests.
+	LockUserState(wallet, asset string) (decimal.Decimal, error)
+
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
 	// state when the corresponding column is currently NULL. Either signature may be
 	// empty to skip that side.

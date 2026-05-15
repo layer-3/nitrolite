@@ -273,6 +273,16 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
+	// Acquire the user's balance-row lock before mutating channel status or summing
+	// receiver credits. issueTransferReceiverState / issueReleaseReceiverState lock
+	// the same row up front, so this serializes the close against any in-flight RPC
+	// receiver-issuance for the same user: either the RPC commits its unsigned row
+	// before we sum (it lands in the rescue), or it blocks until we set the channel
+	// to Closed and then sees that via its own re-check.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 
 	channel.StateVersion = event.StateVersion

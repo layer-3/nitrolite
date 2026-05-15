@@ -107,6 +107,12 @@ func (m *MockStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+// LockUserState mocks acquiring SELECT ... FOR UPDATE on a user's balance row.
+func (m *MockStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
+	args := m.Called(wallet, asset)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
 // StoreUserState mocks persisting a user state row.
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)

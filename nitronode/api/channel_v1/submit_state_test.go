@@ -166,7 +166,7 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
 	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil)
-	mockTxStore.On("GetHomeChannelStatus", homeChannelID).Return(core.ChannelStatusOpen, nil)
+	mockTxStore.On("CheckActiveChannel", receiverWallet, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		// Verify receiver state
 		return state.UserWallet == receiverWallet &&
@@ -328,7 +328,10 @@ func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *tes
 	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(currentReceiverState, nil)
 	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil)
-	mockTxStore.On("GetHomeChannelStatus", receiverHomeChannel).Return(core.ChannelStatusChallenged, nil)
+	// Challenged status falls through CheckActiveChannel (status > Open) as a nil
+	// status pointer, so the issuance path stores the receiver row unsigned — the
+	// dust-credit checkpoint reset described in MF2-H01 stays blocked.
+	mockTxStore.On("CheckActiveChannel", receiverWallet, asset).Return("", nil, nil).Once()
 	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
 		return state.UserWallet == receiverWallet &&
 			state.Version == expectedReceiverState.Version &&

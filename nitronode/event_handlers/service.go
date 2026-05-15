@@ -157,6 +157,20 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 	if head == nil || head.NodeSig != nil {
 		return nil
 	}
+	// Per the challenge-clearance spec the only states accumulated during the dispute
+	// window are receiver credits (transfer_receive, release) — user-initiated ops are
+	// rejected upstream while the channel is Challenged. If the head is some other
+	// transition kind, the invariant has broken upstream and we must not silently
+	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
+	if head.Transition.Type != core.TransitionTypeTransferReceive &&
+		head.Transition.Type != core.TransitionTypeRelease {
+		log.FromContext(ctx).Debug("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+			"channelId", channelID,
+			"transitionType", head.Transition.Type,
+			"version", head.Version,
+		)
+		return nil
+	}
 	packed, err := s.statePacker.PackState(*head)
 	if err != nil {
 		return err

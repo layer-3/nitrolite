@@ -62,10 +62,6 @@ type DatabaseStore interface {
 	// require Status == core.ChannelStatusOpen.
 	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 
-	// GetHomeChannelStatus returns the current status of a home channel by ID.
-	// Returns nil if no home channel exists for the given ID.
-	GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error)
-
 	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) exists
 	// with a status other than Closed, indicating an in-progress channel lifecycle.
 	HasNonClosedHomeChannel(wallet, asset string) (bool, error)

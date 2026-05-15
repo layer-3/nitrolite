@@ -2,7 +2,10 @@ package event_handlers
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -14,11 +17,18 @@ var _ core.LockingContractEventHandler = &EventHandlerService{}
 // EventHandlerService processes blockchain events and updates the local database state accordingly.
 // It handles events from both home channels (user state channels) and escrow channels (temporary lock channels).
 type EventHandlerService struct {
+	nodeSigner  *core.ChannelDefaultSigner
+	statePacker core.StatePacker
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
-func NewEventHandlerService() *EventHandlerService {
-	return &EventHandlerService{}
+// nodeSigner and statePacker are used to backfill the node signature on the
+// checkpointed head state when it is missing from the local record.
+func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker) *EventHandlerService {
+	return &EventHandlerService{
+		nodeSigner:  nodeSigner,
+		statePacker: statePacker,
+	}
 }
 
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when a node's balance is updated on-chain.
@@ -64,7 +74,7 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -101,7 +111,8 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	}
 	channel.StateVersion = event.StateVersion
 
-	if channel.Status == core.ChannelStatusChallenged {
+	wasChallenged := channel.Status == core.ChannelStatusChallenged
+	if wasChallenged {
 		channel.Status = core.ChannelStatusOpen
 	}
 
@@ -114,11 +125,67 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	// Always backfill the user signature at the on-chain checkpointed version so the
+	// row matches what is enforced on chain.
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
+	// When a challenge is cleared, the off-chain head may sit above event.StateVersion:
+	// any receiver state issued during the challenge was stored unsigned and is now the
+	// channel's actual latest state. Backfill the node signature on that head so future
+	// flows treat it as fully co-signed. On normal Open→Open checkpoints the head row
+	// is already node-signed via the RPC path and this is a no-op.
+	if wasChallenged {
+		if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
+			return err
+		}
+	}
+
 	logger.Info("handled HomeChannelCheckpointed event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
+	return nil
+}
+
+// backfillOffChainHeadNodeSig loads the off-chain head state for channelID (the highest
+// stored version, regardless of signature status) and node-signs it when the row is
+// present and the node signature is missing. The user signature is intentionally left
+// untouched: when the head was created during a challenge it carries no user signature,
+// and the user must countersign and acknowledge it via the regular RPC flow.
+func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string) error {
+	head, err := tx.GetLastStateByChannelID(channelID, false)
+	if err != nil {
+		return err
+	}
+	if head == nil || head.NodeSig != nil {
+		return nil
+	}
+	// Per the challenge-clearance spec the only states accumulated during the dispute
+	// window are receiver credits (transfer_receive, release) — user-initiated ops are
+	// rejected upstream while the channel is Challenged. If the head is some other
+	// transition kind, the invariant has broken upstream and we must not silently
+	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
+	if head.Transition.Type != core.TransitionTypeTransferReceive &&
+		head.Transition.Type != core.TransitionTypeRelease {
+		log.FromContext(ctx).Debug("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+			"channelId", channelID,
+			"transitionType", head.Transition.Type,
+			"version", head.Version,
+		)
+		return nil
+	}
+	packed, err := s.statePacker.PackState(*head)
+	if err != nil {
+		return err
+	}
+	sig, err := s.nodeSigner.Sign(packed)
+	if err != nil {
+		return err
+	}
+	if err := tx.UpdateStateSigsIfMissing(channelID, head.Version, "", sig.String()); err != nil {
+		return err
+	}
+	log.FromContext(ctx).Info("backfilled missing node signature on off-chain head state",
+		"channelId", channelID, "stateVersion", head.Version)
 	return nil
 }
 
@@ -169,7 +236,7 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -187,6 +254,11 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // HandleHomeChannelClosed processes the HomeChannelClosed event emitted when a home channel is
 // finalized and closed on-chain. It updates the channel status to Closed and sets the final state version.
 // Once closed, no further state updates are possible for this channel.
+//
+// Additionally, when the closing path was a challenge resolution (channel was Challenged
+// and the closing state is not a finalize), the handler issues a single ChallengeRescue
+// state for the user that squashes the sum of receiver-state credits accrued during the
+// challenge window into an off-channel ledger entry tied to the closed channel's ID.
 func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -203,6 +275,18 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
+	// Acquire the user's balance-row lock before mutating channel status or summing
+	// receiver credits. issueTransferReceiverState / issueReleaseReceiverState lock
+	// the same row up front, so this serializes the close against any in-flight RPC
+	// receiver-issuance for the same user: either the RPC commits its unsigned row
+	// before we sum (it lands in the rescue), or it blocks until we set the channel
+	// to Closed and then sees that via its own re-check.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
+	wasChallenged := channel.Status == core.ChannelStatusChallenged
+
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
 
@@ -214,11 +298,109 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
+	if wasChallenged {
+		if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
+			return err
+		}
+	}
+
 	logger.Info("handled HomeChannelClosed event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
+	return nil
+}
+
+// issueChallengeRescue emits a ChallengeRescue state on the user's ledger after a
+// challenged-channel close. The state is issued unconditionally so the user's latest
+// stored state moves to a fresh epoch with HomeChannelID nil; without it future
+// receiver-state issuance and channels.v1.request_creation would stay wedged on the
+// closed channel. The rescue amount is the NET effect on the user's home-channel
+// balance of transitions stored strictly above closureVersion — receives
+// (TransferReceive, Release) credit the user, sends (TransferSend, Commit) debit,
+// everything else is excluded because it requires onchain backing the chain didn't
+// enforce or belongs to a different ledger. Signed (Open-time) and unsigned
+// (during-challenge) rows both contribute. The result is clamped at zero so an
+// adversarial close at a version where the user's own balance was higher than the
+// off-chain head can't dock the user further. AccountID is the closed channel's ID;
+// HomeChannelID is nil — the shape of a credit to a user with no open home channel.
+func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
+	logger := log.FromContext(ctx)
+
+	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		// Should not happen for a channel that reached Challenged → Closed: at least the
+		// closure state itself must be on file. Surface the inconsistency rather than
+		// silently dropping the rescue.
+		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
+	}
+
+	// Strict `>` against closureVersion: the row at the closure version itself is the
+	// closing state and must be excluded — only transitions issued strictly after the
+	// dispute version are unenforced. The epoch filter pins the sum to prev.Epoch (the
+	// closed channel's epoch) as a defense against any future DB inconsistency.
+	net, err := tx.SumNetTransitionAmountAfterVersion(channel.ChannelID, closureVersion, prev.Epoch)
+	if err != nil {
+		return err
+	}
+
+	// Negative net is only reachable when the user closed at a version where her own
+	// channel balance was higher than the off-chain head (adversarial rollback of her
+	// own sends/commits). Onchain has already paid her above the head value; rescue
+	// must not dock further. Honest challenges typically have receives dominating,
+	// net >= 0. Clamp defensively and log.
+	total := net
+	if net.IsNegative() {
+		logger.Warn("challenge_rescue net is negative, clamping to zero",
+			"channelId", channel.ChannelID,
+			"netAmount", net.String(),
+			"closureVersion", closureVersion,
+			"prevVersion", prev.Version,
+		)
+		total = decimal.Zero
+	}
+
+	// Invariant: any row included in the sum sits strictly above closureVersion, so the
+	// channel's off-chain head must too. A non-zero net with prev at or below closure
+	// means the state chain disagrees with itself — surface it before issuing the rescue.
+	if !total.IsZero() && prev.Version <= closureVersion {
+		return fmt.Errorf("challenge_rescue: non-zero net (%s) but prev v=%d <= closure v=%d on channel %s",
+			total.String(), prev.Version, closureVersion, channel.ChannelID)
+	}
+
+	rescue, err := core.NewChallengeRescueState(*prev, total)
+	if err != nil {
+		return err
+	}
+
+	// The rescue state is off-channel (HomeChannelID == nil) and is therefore not
+	// node-signed via the channel packer. It is treated like a credit to a user with no
+	// open home channel: the value is recorded in the user's state chain and will be
+	// folded into a properly signed state when the user next opens a channel.
+	if err := tx.StoreUserState(*rescue, ""); err != nil {
+		return err
+	}
+
+	txn, err := core.NewTransactionFromTransition(nil, rescue, rescue.Transition)
+	if err != nil {
+		return err
+	}
+	if err := tx.RecordTransaction(*txn, ""); err != nil {
+		return err
+	}
+
+	logger.Info("issued challenge_rescue state",
+		"channelId", channel.ChannelID,
+		"userWallet", channel.UserWallet,
+		"asset", channel.Asset,
+		"amount", total.String(),
+		"newStateID", rescue.ID,
+		"txID", txn.ID,
+	)
 	return nil
 }
 
@@ -260,7 +442,7 @@ func (s *EventHandlerService) HandleEscrowDepositInitiated(ctx context.Context, 
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -325,7 +507,7 @@ func (s *EventHandlerService) HandleEscrowDepositChallenged(ctx context.Context,
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -416,7 +598,7 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -488,7 +670,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalInitiated(ctx context.Contex
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -548,7 +730,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalChallenged(ctx context.Conte
 		}
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 
@@ -582,7 +764,7 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 		return err
 	}
 
-	if err := tx.UpdateStateUserSigIfMissing(event.ChannelID, event.StateVersion, event.UserSig); err != nil {
+	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
 		return err
 	}
 

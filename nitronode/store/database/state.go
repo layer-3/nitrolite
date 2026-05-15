@@ -221,22 +221,75 @@ func (s *DBStore) GetLastStateByChannelID(channelID string, signed bool) (*core.
 	return databaseStateToCore(&state)
 }
 
-// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-// Used by the on-chain event reactor to repair the local record once a state has been bilaterally
-// enforced on chain. The IS NULL guard makes the call idempotent on event replay and prevents
-// overwriting a signature already populated by the user-facing RPC path.
-func (s *DBStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	if userSig == "" {
+// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state when
+// the corresponding column is currently NULL. Used by the on-chain event reactor to repair
+// the local record once a state has been enforced on chain. Either signature may be empty,
+// in which case that side is skipped. The IS NULL guard keeps the call idempotent on event
+// replay and prevents overwriting a signature already populated by the user-facing RPC path.
+func (s *DBStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	if userSig == "" && nodeSig == "" {
 		return nil
 	}
 	cid := strings.ToLower(channelID)
-	res := s.db.Model(&State{}).
-		Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND user_sig IS NULL", cid, cid, version).
-		Update("user_sig", userSig)
-	if res.Error != nil {
-		return fmt.Errorf("failed to backfill user_sig: %w", res.Error)
+	if userSig != "" {
+		res := s.db.Model(&State{}).
+			Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND user_sig IS NULL", cid, cid, version).
+			Update("user_sig", userSig)
+		if res.Error != nil {
+			return fmt.Errorf("failed to backfill user_sig: %w", res.Error)
+		}
+	}
+	if nodeSig != "" {
+		res := s.db.Model(&State{}).
+			Where("(home_channel_id = ? OR escrow_channel_id = ?) AND version = ? AND node_sig IS NULL", cid, cid, version).
+			Update("node_sig", nodeSig)
+		if res.Error != nil {
+			return fmt.Errorf("failed to backfill node_sig: %w", res.Error)
+		}
 	}
 	return nil
+}
+
+// SumNetTransitionAmountAfterVersion returns the net effect on the user's home-channel
+// balance of transitions stored against channelID strictly above minVersion at the
+// supplied epoch. Receiver credits (TransferReceive, Release) contribute positively;
+// sender debits (TransferSend, Commit) contribute negatively. Other transition kinds
+// (HomeDeposit, HomeWithdrawal, escrow ops, migrate, finalize, acknowledgement) are
+// excluded because they either require onchain backing the chain didn't enforce at
+// this closure or belong to a different ledger.
+//
+// Used to compute the ChallengeRescue amount when a challenged channel is closed:
+// onchain payout reflects the closure version, anything strictly above didn't enforce,
+// and the net amount the user is still owed by the node is the receives minus the
+// sends in that interval. Signed (Open-time) and unsigned (during-challenge) rows
+// both contribute — both are real value the state-advancer validated at submit time.
+// The caller clamps the result at zero before issuing the rescue.
+func (s *DBStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+	cid := strings.ToLower(channelID)
+	var row struct {
+		Net decimal.Decimal `gorm:"column:net"`
+	}
+	err := s.db.Raw(`
+		SELECT COALESCE(SUM(CASE
+			WHEN transition_type IN (?, ?) THEN transition_amount
+			WHEN transition_type IN (?, ?) THEN -transition_amount
+			ELSE 0
+		END), 0) AS net
+		FROM channel_states
+		WHERE home_channel_id = ?
+			AND epoch = ?
+			AND version > ?
+	`,
+		uint8(core.TransitionTypeTransferReceive),
+		uint8(core.TransitionTypeRelease),
+		uint8(core.TransitionTypeTransferSend),
+		uint8(core.TransitionTypeCommit),
+		cid, epoch, minVersion,
+	).Scan(&row).Error
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("failed to compute net transition amount: %w", err)
+	}
+	return row.Net, nil
 }
 
 // GetStateByChannelIDAndVersion retrieves a specific state version for a channel.

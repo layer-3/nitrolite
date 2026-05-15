@@ -49,6 +49,7 @@ types:
         - escrow_withdraw
         - migrate
         - finalize
+        - challenge_rescue
 
   - transition:
       description: Represents a state transition
@@ -298,6 +299,7 @@ types:
         - migrate
         - rebalance
         - finalize
+        - challenge_rescue
 
   - transaction:
       description: Transaction record

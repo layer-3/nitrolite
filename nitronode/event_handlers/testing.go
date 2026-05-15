@@ -93,8 +93,34 @@ func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount 
 	return args.Error(0)
 }
 
-// UpdateStateUserSigIfMissing mocks backfilling a user signature for a stored state.
-func (m *MockStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	args := m.Called(channelID, version, userSig)
+// UpdateStateSigsIfMissing mocks backfilling missing user and/or node signatures
+// for a stored state.
+func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	args := m.Called(channelID, version, userSig, nodeSig)
+	return args.Error(0)
+}
+
+// SumNetTransitionAmountAfterVersion mocks the net-change query used to compute
+// challenge-rescue amounts on a closed channel.
+func (m *MockStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion, epoch)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+// LockUserState mocks acquiring SELECT ... FOR UPDATE on a user's balance row.
+func (m *MockStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
+	args := m.Called(wallet, asset)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+// StoreUserState mocks persisting a user state row.
+func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
+	return args.Error(0)
+}
+
+// RecordTransaction mocks recording a transaction row.
+func (m *MockStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
 	return args.Error(0)
 }

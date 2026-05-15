@@ -157,11 +157,13 @@ type ChannelHubEventHandlerStore interface {
 	// that side; existing values are never overwritten and the call is idempotent on event replay.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
-	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver state
-	// rows (transfer_receive, release) attached to the given home channel that have node_sig
-	// NULL, match the supplied epoch, and have a strictly greater version than minVersion.
-	// Used to compute the ChallengeRescue squash amount when a challenged channel is closed.
-	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
+	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
+	// Other transition kinds are excluded. Used to compute the ChallengeRescue amount
+	// when a challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// StoreUserState persists a user state row. Used by the event handler to record a
 	// ChallengeRescue squash state derived from a closed challenged channel.

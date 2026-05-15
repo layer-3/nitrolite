@@ -95,7 +95,7 @@ func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version
 	return args.Error(0)
 }
 
-func (m *mockChannelHubStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+func (m *mockChannelHubStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
 	args := m.Called(channelID, minVersion, epoch)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }

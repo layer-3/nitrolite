@@ -100,9 +100,9 @@ func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, u
 	return args.Error(0)
 }
 
-// SumUnsignedReceiverStateAmountsAfterVersion mocks summing unsigned receiver-state
-// transition amounts for the given home channel and epoch above the supplied version.
-func (m *MockStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+// SumNetTransitionAmountAfterVersion mocks the net-change query used to compute
+// challenge-rescue amounts on a closed channel.
+func (m *MockStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
 	args := m.Called(channelID, minVersion, epoch)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }

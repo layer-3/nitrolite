@@ -82,11 +82,11 @@ type ChannelHubReactorStore interface {
 	// empty to skip that side.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
-	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver
-	// state rows (transfer_receive, release) attached to the given home channel that
-	// have node_sig NULL, match the supplied epoch, and have a strictly greater version
-	// than minVersion.
-	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
+	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// StoreUserState persists a user state row. Used to record a ChallengeRescue squash
 	// state derived from a closed challenged channel.

@@ -250,18 +250,17 @@ func (s *DBStore) UpdateStateSigsIfMissing(channelID string, version uint64, use
 	return nil
 }
 
-// HasSignedFinalize reports whether a Finalize state exists for the given home channel.
-// Used by event handlers to detect the post-Finalize lifecycle without loading the state
-// row: the channels.status field can be temporarily overwritten by Challenged on a stale
-// on-chain challenge, but the Finalize row persists here and is the authoritative marker.
-// Finalize rows are only ever written via SubmitState after the node signs, so a plain
-// existence check is equivalent to checking node_sig IS NOT NULL.
+// HasSignedFinalize reports whether a node-signed Finalize state exists for the given home
+// channel. Used by event handlers to detect the post-Finalize lifecycle without loading the
+// state row: the channels.status field can be temporarily overwritten by Challenged on a
+// stale on-chain challenge, but the Finalize row persists here and is the authoritative
+// marker. node_sig IS NOT NULL is checked explicitly so the contract holds even if a future
+// path ever stores a Finalize row before the node signs.
 func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
 	var count int64
 	err := s.db.Model(&State{}).
-		Where("home_channel_id = ? AND transition_type = ?",
+		Where("home_channel_id = ? AND transition_type = ? AND node_sig IS NOT NULL",
 			strings.ToLower(channelID), uint8(core.TransitionTypeFinalize)).
-		Limit(1).
 		Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("failed to check signed finalize: %w", err)

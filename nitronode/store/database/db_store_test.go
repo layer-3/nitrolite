@@ -1199,6 +1199,23 @@ func TestDBStore_HasSignedFinalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, got)
 	})
+
+	t.Run("False when Finalize exists without node sig", func(t *testing.T) {
+		// Pins the documented invariant: a Finalize row whose node_sig is NULL must not
+		// be treated as node-signed, even though SubmitState today never stores one in
+		// that shape. Guards against a regression that drops the node_sig predicate or
+		// a future path that writes Finalize rows ahead of the node signature.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		storeState(t, store, 7, core.TransitionTypeFinalize, false)
+
+		got, err := store.HasSignedFinalize(homeChannelID)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
 }
 
 func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {

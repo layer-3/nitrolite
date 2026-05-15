@@ -1348,8 +1348,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion).Return(rescueAmount, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
+	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion, prevState.Epoch).Return(rescueAmount, nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1441,8 +1441,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion).Return(decimal.Zero, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
+	mockStore.On("SumUnsignedReceiverStateAmountsAfterVersion", channelID, closureVersion, prevState.Epoch).Return(decimal.Zero, nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1501,7 +1501,7 @@ func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 	require.NoError(t, err)
 
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "SumUnsignedReceiverStateAmountsAfterVersion", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "SumUnsignedReceiverStateAmountsAfterVersion", mock.Anything, mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }

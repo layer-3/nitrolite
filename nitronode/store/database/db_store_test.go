@@ -1057,14 +1057,14 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		}))
 	}
 
-	storeState := func(t *testing.T, store DatabaseStore, version uint64, transitionType core.TransitionType, amount decimal.Decimal, hasNodeSig bool) {
+	storeState := func(t *testing.T, store DatabaseStore, epoch, version uint64, transitionType core.TransitionType, amount decimal.Decimal, hasNodeSig bool) {
 		t.Helper()
 		channelIDLocal := homeChannelID
 		s := core.State{
-			ID:            core.GetStateID(wallet, asset, 1, version),
+			ID:            core.GetStateID(wallet, asset, epoch, version),
 			Asset:         asset,
 			UserWallet:    wallet,
-			Epoch:         1,
+			Epoch:         epoch,
 			Version:       version,
 			HomeChannelID: &channelIDLocal,
 			Transition: core.Transition{
@@ -1096,19 +1096,19 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		setupChannel(t, store)
 
 		// Below the cutoff — must be ignored.
-		storeState(t, store, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(10), false)
+		storeState(t, store, 1, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(10), false)
 		// At the cutoff — must be ignored (strictly greater than minVersion).
-		storeState(t, store, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(20), false)
+		storeState(t, store, 1, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(20), false)
 		// Above cutoff, unsigned receive — included.
-		storeState(t, store, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
+		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
 		// Above cutoff, unsigned release — included.
-		storeState(t, store, 8, core.TransitionTypeRelease, decimal.NewFromInt(40), false)
+		storeState(t, store, 1, 8, core.TransitionTypeRelease, decimal.NewFromInt(40), false)
 		// Above cutoff, but already node-signed — must be ignored.
-		storeState(t, store, 9, core.TransitionTypeTransferReceive, decimal.NewFromInt(100), true)
+		storeState(t, store, 1, 9, core.TransitionTypeTransferReceive, decimal.NewFromInt(100), true)
 		// Above cutoff, unsigned but wrong transition type — must be ignored.
-		storeState(t, store, 10, core.TransitionTypeHomeDeposit, decimal.NewFromInt(500), false)
+		storeState(t, store, 1, 10, core.TransitionTypeHomeDeposit, decimal.NewFromInt(500), false)
 
-		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 6)
+		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 6, 1)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(70).Equal(total), "want 70, got %s", total.String())
 	})
@@ -1119,9 +1119,25 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		store := NewDBStore(db)
 		setupChannel(t, store)
 
-		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 0)
+		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 0, 1)
 		require.NoError(t, err)
 		assert.True(t, total.IsZero())
+	})
+
+	t.Run("Excludes rows in other epochs", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// Two rows above cutoff: one in epoch 1, one in epoch 2. Caller asks for epoch 1
+		// only; the epoch-2 row must be excluded even though every other predicate matches.
+		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
+		storeState(t, store, 2, 8, core.TransitionTypeTransferReceive, decimal.NewFromInt(999), false)
+
+		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 6, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(30).Equal(total), "want 30, got %s", total.String())
 	})
 }
 

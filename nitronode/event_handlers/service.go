@@ -299,19 +299,6 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
 	logger := log.FromContext(ctx)
 
-	// SumUnsignedReceiverStateAmountsAfterVersion uses strict `>` against closureVersion:
-	// the row at the closure version itself is the closing state (or the prior head) and
-	// must be excluded — only receiver credits issued strictly after the dispute version
-	// belong in the squash. When the sum is non-zero, those contributing rows imply the
-	// off-chain head fetched below sits at prev.Version > closureVersion.
-	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion)
-	if err != nil {
-		return err
-	}
-	if total.IsNegative() {
-		return fmt.Errorf("unexpected negative challenge_rescue sum of receive states: %s", total.String())
-	}
-
 	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)
 	if err != nil {
 		return err
@@ -321,6 +308,26 @@ func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.
 		// closure state itself must be on file. Surface the inconsistency rather than
 		// silently dropping the rescue.
 		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
+	}
+
+	// SumUnsignedReceiverStateAmountsAfterVersion uses strict `>` against closureVersion:
+	// the row at the closure version itself is the closing state and must be excluded —
+	// only receiver credits issued strictly after the dispute version belong in the
+	// squash. The epoch filter pins the sum to prev.Epoch (the closed channel's epoch)
+	// as a defense against any future DB inconsistency.
+	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion, prev.Epoch)
+	if err != nil {
+		return err
+	}
+	if total.IsNegative() {
+		return fmt.Errorf("unexpected negative challenge_rescue sum of receive states: %s", total.String())
+	}
+	// Invariant: any row included in the sum sits strictly above closureVersion, so the
+	// channel's off-chain head must too. A non-zero sum with prev at or below closure
+	// means the state chain disagrees with itself — surface it before issuing the rescue.
+	if !total.IsZero() && prev.Version <= closureVersion {
+		return fmt.Errorf("challenge_rescue: non-zero sum (%s) but prev v=%d <= closure v=%d on channel %s",
+			total.String(), prev.Version, closureVersion, channel.ChannelID)
 	}
 
 	rescue, err := core.NewChallengeRescueState(*prev, total)

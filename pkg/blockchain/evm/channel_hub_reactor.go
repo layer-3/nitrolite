@@ -78,8 +78,9 @@ type ChannelHubReactorStore interface {
 
 	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver
 	// state rows (transfer_receive, release) attached to the given home channel that
-	// have node_sig NULL and a strictly greater version than minVersion.
-	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+	// have node_sig NULL, match the supplied epoch, and have a strictly greater version
+	// than minVersion.
+	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// StoreUserState persists a user state row. Used to record a ChallengeRescue squash
 	// state derived from a closed challenged channel.

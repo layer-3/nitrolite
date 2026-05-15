@@ -1036,7 +1036,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 	})
 }
 
-func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
+func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 	const wallet = "0xuser123"
 	const asset = "USDC"
 	const homeChannelID = "0xhomechannel123"
@@ -1057,14 +1057,14 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		}))
 	}
 
-	storeState := func(t *testing.T, store DatabaseStore, version uint64, transitionType core.TransitionType, amount decimal.Decimal, hasNodeSig bool) {
+	storeState := func(t *testing.T, store DatabaseStore, epoch, version uint64, transitionType core.TransitionType, amount decimal.Decimal, hasNodeSig bool) {
 		t.Helper()
 		channelIDLocal := homeChannelID
 		s := core.State{
-			ID:            core.GetStateID(wallet, asset, 1, version),
+			ID:            core.GetStateID(wallet, asset, epoch, version),
 			Asset:         asset,
 			UserWallet:    wallet,
-			Epoch:         1,
+			Epoch:         epoch,
 			Version:       version,
 			HomeChannelID: &channelIDLocal,
 			Transition: core.Transition{
@@ -1089,28 +1089,115 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		require.NoError(t, store.StoreUserState(s, ""))
 	}
 
-	t.Run("Sums only unsigned receiver states strictly above version", func(t *testing.T) {
+	t.Run("Scenario 3 - dust during challenge (unsigned receive only)", func(t *testing.T) {
+		// Pure MF2-H01 path: attacker sends dust during challenge window, the row is
+		// stored unsigned per the suppression rule. Sum should equal the dust amount.
 		db, cleanup := SetupTestDB(t)
 		defer cleanup()
 		store := NewDBStore(db)
 		setupChannel(t, store)
 
-		// Below the cutoff — must be ignored.
-		storeState(t, store, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(10), false)
-		// At the cutoff — must be ignored (strictly greater than minVersion).
-		storeState(t, store, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(20), false)
-		// Above cutoff, unsigned receive — included.
-		storeState(t, store, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
-		// Above cutoff, unsigned release — included.
-		storeState(t, store, 8, core.TransitionTypeRelease, decimal.NewFromInt(40), false)
-		// Above cutoff, but already node-signed — must be ignored.
-		storeState(t, store, 9, core.TransitionTypeTransferReceive, decimal.NewFromInt(100), true)
-		// Above cutoff, unsigned but wrong transition type — must be ignored.
-		storeState(t, store, 10, core.TransitionTypeHomeDeposit, decimal.NewFromInt(500), false)
+		storeState(t, store, 1, 2, core.TransitionTypeTransferReceive, decimal.NewFromFloat(0.001), false)
 
-		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 6)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1, 1)
 		require.NoError(t, err)
-		assert.True(t, decimal.NewFromInt(70).Equal(total), "want 70, got %s", total.String())
+		assert.True(t, decimal.NewFromFloat(0.001).Equal(net), "want 0.001, got %s", net.String())
+	})
+
+	t.Run("Scenario 2 - signed pre-challenge receives stranded by stale-state close", func(t *testing.T) {
+		// User went TS, TR, TS, TR while channel was Open (all rows node-signed), then
+		// challenged with the early TS state. Onchain payout reflects the early state;
+		// the offchain net change above closure (the two TR minus the second TS) is what
+		// the rescue must credit.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// closureVersion = 2; v3 TR +1, v4 TS -1, v5 TR +1.
+		storeState(t, store, 1, 3, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
+		storeState(t, store, 1, 4, core.TransitionTypeTransferSend, decimal.NewFromInt(1), true)
+		storeState(t, store, 1, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(1).Equal(net), "want 1, got %s", net.String())
+	})
+
+	t.Run("Scenario 1 - HomeDeposit poison is excluded, real receive counted", func(t *testing.T) {
+		// Attacker tricks user into signing a fake HomeDeposit that has no onchain
+		// backing; user challenges with an earlier clean state. The poison row must not
+		// contribute to the rescue (otherwise the node pays out a phantom credit). The
+		// legitimate TR that landed above closure still does.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// closureVersion = 2; v3 poisoned HomeDeposit +300000, v4 real TR +1.
+		storeState(t, store, 1, 3, core.TransitionTypeHomeDeposit, decimal.NewFromInt(300000), true)
+		storeState(t, store, 1, 4, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(1).Equal(net), "want 1, got %s", net.String())
+	})
+
+	t.Run("Adversarial rollback produces negative net (caller clamps)", func(t *testing.T) {
+		// User picks a closure version where her own offchain balance was higher than
+		// the head — she's rolling back a big send to retain the funds onchain. Sum
+		// reports the true negative net; clamp is the caller's job.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// closureVersion = 1; v2 TR +1, v3 TS -50.
+		storeState(t, store, 1, 2, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
+		storeState(t, store, 1, 3, core.TransitionTypeTransferSend, decimal.NewFromInt(50), true)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(-49).Equal(net), "want -49, got %s", net.String())
+	})
+
+	t.Run("Commit transitions deduct from net like sends", func(t *testing.T) {
+		// User committed funds to an app session above closure: the commit moves value
+		// from the home ledger to the session. If the session also released some of it
+		// back, release contributes positively. Both must net out.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		storeState(t, store, 1, 3, core.TransitionTypeTransferReceive, decimal.NewFromInt(5), true)
+		storeState(t, store, 1, 4, core.TransitionTypeCommit, decimal.NewFromInt(3), true)
+		storeState(t, store, 1, 5, core.TransitionTypeRelease, decimal.NewFromInt(1), false)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(3).Equal(net), "want 3, got %s", net.String())
+	})
+
+	t.Run("Excluded transition kinds contribute zero", func(t *testing.T) {
+		// HomeDeposit / HomeWithdrawal / EscrowDeposit / EscrowWithdraw / Migrate /
+		// Finalize / Acknowledgement either need onchain backing the chain didn't enforce
+		// or belong to a different ledger; none should affect the rescue sum.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		storeState(t, store, 1, 3, core.TransitionTypeHomeDeposit, decimal.NewFromInt(100), true)
+		storeState(t, store, 1, 4, core.TransitionTypeHomeWithdrawal, decimal.NewFromInt(50), true)
+		storeState(t, store, 1, 5, core.TransitionTypeEscrowDeposit, decimal.NewFromInt(10), true)
+		storeState(t, store, 1, 6, core.TransitionTypeEscrowWithdraw, decimal.NewFromInt(20), true)
+		storeState(t, store, 1, 7, core.TransitionTypeMigrate, decimal.NewFromInt(5), true)
+		storeState(t, store, 1, 8, core.TransitionTypeFinalize, decimal.NewFromInt(0), true)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		require.NoError(t, err)
+		assert.True(t, net.IsZero(), "want 0, got %s", net.String())
 	})
 
 	t.Run("Returns zero when no matches", func(t *testing.T) {
@@ -1119,9 +1206,41 @@ func TestDBStore_SumUnsignedReceiverStateAmountsAfterVersion(t *testing.T) {
 		store := NewDBStore(db)
 		setupChannel(t, store)
 
-		total, err := store.SumUnsignedReceiverStateAmountsAfterVersion(homeChannelID, 0)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 0, 1)
 		require.NoError(t, err)
-		assert.True(t, total.IsZero())
+		assert.True(t, net.IsZero())
+	})
+
+	t.Run("Strict > excludes rows at the closure version itself", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// closureVersion = 6; a TR exactly at v6 must not contribute.
+		storeState(t, store, 1, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(99), true)
+		storeState(t, store, 1, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(99), true)
+		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(3), false)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 6, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(3).Equal(net), "want 3, got %s", net.String())
+	})
+
+	t.Run("Excludes rows in other epochs", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+		store := NewDBStore(db)
+		setupChannel(t, store)
+
+		// Two rows above cutoff: one in epoch 1, one in epoch 2. Caller asks for epoch 1
+		// only; the epoch-2 row must be excluded even though every other predicate matches.
+		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
+		storeState(t, store, 2, 8, core.TransitionTypeTransferReceive, decimal.NewFromInt(999), false)
+
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 6, 1)
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromInt(30).Equal(net), "want 30, got %s", net.String())
 	})
 }
 

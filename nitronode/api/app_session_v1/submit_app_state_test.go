@@ -352,7 +352,7 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
 	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil)
-	mockStore.On("GetHomeChannelStatus", homeChannelID).Return(core.ChannelStatusOpen, nil)
+	mockStore.On("CheckActiveChannel", participant1, "USDC").Return("0x03", core.ChannelStatusOpen, nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
@@ -488,7 +488,10 @@ func TestSubmitAppState_WithdrawIntent_ReceiverHomeChannelChallenged_NoNodeSig(t
 	mockStore.On("LockUserState", participant1, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant1, "USDC", false).Return(existingUserState, nil)
 	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil)
-	mockStore.On("GetHomeChannelStatus", homeChannelID).Return(core.ChannelStatusChallenged, nil)
+	// Challenged receiver channel returns nil status from CheckActiveChannel
+	// (status > Open), so the receiver state is stored unsigned and the squash
+	// at HomeChannelClosed will pick it up.
+	mockStore.On("CheckActiveChannel", participant1, "USDC").Return("", nil, nil)
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
 
 	var capturedState core.State
@@ -759,13 +762,14 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	mockStore.On("EnsureNoOngoingEscrowOperation", participant1, "USDC").Return(nil)
 	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
 	mockStore.On("RecordTransaction", mock.Anything, mock.Anything).Return(nil)
-	mockStore.On("GetHomeChannelStatus", homeChannelID).Return(core.ChannelStatusOpen, nil)
+	mockStore.On("CheckActiveChannel", participant1, "USDC").Return("0x03", core.ChannelStatusOpen, nil)
 
 	// Participant 2: 50 USDC
 	mockStore.On("RecordLedgerEntry", participant2, appSessionID, "USDC", decimal.NewFromInt(-50)).Return(nil)
 	mockStore.On("LockUserState", participant2, "USDC").Return(decimal.Zero, nil)
 	mockStore.On("GetLastUserState", participant2, "USDC", false).Return(existingUserState2, nil)
 	mockStore.On("EnsureNoOngoingEscrowOperation", participant2, "USDC").Return(nil)
+	mockStore.On("CheckActiveChannel", participant2, "USDC").Return("0x03", core.ChannelStatusOpen, nil)
 
 	// Capture stored states to verify node signatures
 	var capturedStates []core.State

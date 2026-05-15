@@ -268,28 +268,46 @@ func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
 	return count > 0, nil
 }
 
-// SumUnsignedReceiverStateAmountsAfterVersion returns the sum of transition amounts on
-// rows whose home_channel_id matches channelID, whose version is strictly greater than
-// minVersion, whose node_sig is NULL, and whose transition type is one of the receiver-
-// credit kinds (transfer_receive, release). Used to compute the squashed credit for a
-// ChallengeRescue when a challenged channel is closed onchain.
-func (s *DBStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+// SumNetTransitionAmountAfterVersion returns the net effect on the user's home-channel
+// balance of transitions stored against channelID strictly above minVersion at the
+// supplied epoch. Receiver credits (TransferReceive, Release) contribute positively;
+// sender debits (TransferSend, Commit) contribute negatively. Other transition kinds
+// (HomeDeposit, HomeWithdrawal, escrow ops, migrate, finalize, acknowledgement) are
+// excluded because they either require onchain backing the chain didn't enforce at
+// this closure or belong to a different ledger.
+//
+// Used to compute the ChallengeRescue amount when a challenged channel is closed:
+// onchain payout reflects the closure version, anything strictly above didn't enforce,
+// and the net amount the user is still owed by the node is the receives minus the
+// sends in that interval. Signed (Open-time) and unsigned (during-challenge) rows
+// both contribute — both are real value the state-advancer validated at submit time.
+// The caller clamps the result at zero before issuing the rescue.
+func (s *DBStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
 	cid := strings.ToLower(channelID)
 	var row struct {
-		Total decimal.Decimal `gorm:"column:total"`
+		Net decimal.Decimal `gorm:"column:net"`
 	}
 	err := s.db.Raw(`
-		SELECT COALESCE(SUM(transition_amount), 0) AS total
+		SELECT COALESCE(SUM(CASE
+			WHEN transition_type IN (?, ?) THEN transition_amount
+			WHEN transition_type IN (?, ?) THEN -transition_amount
+			ELSE 0
+		END), 0) AS net
 		FROM channel_states
 		WHERE home_channel_id = ?
+			AND epoch = ?
 			AND version > ?
-			AND node_sig IS NULL
-			AND transition_type IN (?, ?)
-	`, cid, minVersion, uint8(core.TransitionTypeTransferReceive), uint8(core.TransitionTypeRelease)).Scan(&row).Error
+	`,
+		uint8(core.TransitionTypeTransferReceive),
+		uint8(core.TransitionTypeRelease),
+		uint8(core.TransitionTypeTransferSend),
+		uint8(core.TransitionTypeCommit),
+		cid, epoch, minVersion,
+	).Scan(&row).Error
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("failed to sum unsigned receiver state amounts: %w", err)
+		return decimal.Zero, fmt.Errorf("failed to compute net transition amount: %w", err)
 	}
-	return row.Total, nil
+	return row.Net, nil
 }
 
 // GetStateByChannelIDAndVersion retrieves a specific state version for a channel.

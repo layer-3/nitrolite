@@ -145,6 +145,12 @@ type ChannelHubEventHandlerStore interface {
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
 
+	// LockUserState acquires SELECT ... FOR UPDATE on the user's balance row so the
+	// caller's transaction serializes against concurrent RPC paths that already lock
+	// the same row before issuing receiver states. Postgres-only; SQLite is a no-op
+	// in tests.
+	LockUserState(wallet, asset string) (decimal.Decimal, error)
+
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state
 	// when the corresponding column is currently NULL. Used to repair the local record after
 	// an on-chain event proves the state was enforced. Either signature may be empty to skip
@@ -156,11 +162,13 @@ type ChannelHubEventHandlerStore interface {
 	// has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
-	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver state
-	// rows (transfer_receive, release) attached to the given home channel that have node_sig
-	// NULL and a strictly greater version than minVersion. Used to compute the
-	// ChallengeRescue squash amount when a challenged channel is closed.
-	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
+	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
+	// Other transition kinds are excluded. Used to compute the ChallengeRescue amount
+	// when a challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// StoreUserState persists a user state row. Used by the event handler to record a
 	// ChallengeRescue squash state derived from a closed challenged channel.

@@ -756,7 +756,7 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	// Transition validator is expected to make sure that all the fields are present and valid.
 
 	if transition.Type != TransitionTypeRelease && transition.Type != TransitionTypeChallengeRescue && senderState == nil {
-		return nil, fmt.Errorf("sender state must not be nil for non-release transitions")
+		return nil, fmt.Errorf("sender state must not be nil for non-release / non-challenge-rescue transitions")
 	}
 
 	var senderStateID *string

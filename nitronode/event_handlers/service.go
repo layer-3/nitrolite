@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
@@ -188,6 +190,20 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 	if head == nil || head.NodeSig != nil {
 		return nil
 	}
+	// Per the challenge-clearance spec the only states accumulated during the dispute
+	// window are receiver credits (transfer_receive, release) — user-initiated ops are
+	// rejected upstream while the channel is Challenged. If the head is some other
+	// transition kind, the invariant has broken upstream and we must not silently
+	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
+	if head.Transition.Type != core.TransitionTypeTransferReceive &&
+		head.Transition.Type != core.TransitionTypeRelease {
+		log.FromContext(ctx).Debug("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+			"channelId", channelID,
+			"transitionType", head.Transition.Type,
+			"version", head.Version,
+		)
+		return nil
+	}
 	packed, err := s.statePacker.PackState(*head)
 	if err != nil {
 		return err
@@ -294,6 +310,16 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
+	// Acquire the user's balance-row lock before mutating channel status or summing
+	// receiver credits. issueTransferReceiverState / issueReleaseReceiverState lock
+	// the same row up front, so this serializes the close against any in-flight RPC
+	// receiver-issuance for the same user: either the RPC commits its unsigned row
+	// before we sum (it lands in the rescue), or it blocks until we set the channel
+	// to Closed and then sees that via its own re-check.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 
 	channel.StateVersion = event.StateVersion
@@ -327,27 +353,17 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 // challenged-channel close. The state is issued unconditionally so the user's latest
 // stored state moves to a fresh epoch with HomeChannelID nil; without it future
 // receiver-state issuance and channels.v1.request_creation would stay wedged on the
-// closed channel. When unsigned receiver states (transfer_receive, release) accrued
-// during the dispute window, their amounts are squashed into the rescue state;
-// otherwise the rescue carries zero credit and serves purely to detach the chain.
-// Unsigned states from earlier epochs, or any signed states, are intentionally left
-// untouched. AccountID is the closed channel's ID; HomeChannelID is nil — the shape
-// of a credit to a user with no open home channel.
+// closed channel. The rescue amount is the NET effect on the user's home-channel
+// balance of transitions stored strictly above closureVersion — receives
+// (TransferReceive, Release) credit the user, sends (TransferSend, Commit) debit,
+// everything else is excluded because it requires onchain backing the chain didn't
+// enforce or belongs to a different ledger. Signed (Open-time) and unsigned
+// (during-challenge) rows both contribute. The result is clamped at zero so an
+// adversarial close at a version where the user's own balance was higher than the
+// off-chain head can't dock the user further. AccountID is the closed channel's ID;
+// HomeChannelID is nil — the shape of a credit to a user with no open home channel.
 func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
 	logger := log.FromContext(ctx)
-
-	// SumUnsignedReceiverStateAmountsAfterVersion uses strict `>` against closureVersion:
-	// the row at the closure version itself is the closing state (or the prior head) and
-	// must be excluded — only receiver credits issued strictly after the dispute version
-	// belong in the squash. When the sum is non-zero, those contributing rows imply the
-	// off-chain head fetched below sits at prev.Version > closureVersion.
-	total, err := tx.SumUnsignedReceiverStateAmountsAfterVersion(channel.ChannelID, closureVersion)
-	if err != nil {
-		return err
-	}
-	if total.IsNegative() {
-		return fmt.Errorf("unexpected negative challenge rescue sum: %s", total.String())
-	}
 
 	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)
 	if err != nil {
@@ -358,6 +374,39 @@ func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.
 		// closure state itself must be on file. Surface the inconsistency rather than
 		// silently dropping the rescue.
 		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
+	}
+
+	// Strict `>` against closureVersion: the row at the closure version itself is the
+	// closing state and must be excluded — only transitions issued strictly after the
+	// dispute version are unenforced. The epoch filter pins the sum to prev.Epoch (the
+	// closed channel's epoch) as a defense against any future DB inconsistency.
+	net, err := tx.SumNetTransitionAmountAfterVersion(channel.ChannelID, closureVersion, prev.Epoch)
+	if err != nil {
+		return err
+	}
+
+	// Negative net is only reachable when the user closed at a version where her own
+	// channel balance was higher than the off-chain head (adversarial rollback of her
+	// own sends/commits). Onchain has already paid her above the head value; rescue
+	// must not dock further. Honest challenges typically have receives dominating,
+	// net >= 0. Clamp defensively and log.
+	total := net
+	if net.IsNegative() {
+		logger.Warn("challenge_rescue net is negative, clamping to zero",
+			"channelId", channel.ChannelID,
+			"netAmount", net.String(),
+			"closureVersion", closureVersion,
+			"prevVersion", prev.Version,
+		)
+		total = decimal.Zero
+	}
+
+	// Invariant: any row included in the sum sits strictly above closureVersion, so the
+	// channel's off-chain head must too. A non-zero net with prev at or below closure
+	// means the state chain disagrees with itself — surface it before issuing the rescue.
+	if !total.IsZero() && prev.Version <= closureVersion {
+		return fmt.Errorf("challenge_rescue: non-zero net (%s) but prev v=%d <= closure v=%d on channel %s",
+			total.String(), prev.Version, closureVersion, channel.ChannelID)
 	}
 
 	rescue, err := core.NewChallengeRescueState(*prev, total)

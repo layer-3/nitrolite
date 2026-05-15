@@ -62,10 +62,6 @@ type DatabaseStore interface {
 	// require Status == core.ChannelStatusOpen.
 	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 
-	// GetHomeChannelStatus returns the current status of a home channel by ID.
-	// Returns nil if no home channel exists for the given ID.
-	GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error)
-
 	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) exists
 	// with a status other than Closed, indicating an in-progress channel lifecycle.
 	HasNonClosedHomeChannel(wallet, asset string) (bool, error)
@@ -113,11 +109,13 @@ type DatabaseStore interface {
 	// channel status field has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
-	// SumUnsignedReceiverStateAmountsAfterVersion sums transition amounts on receiver
-	// state rows (transfer_receive, release) attached to the given home channel that
-	// have node_sig NULL and a strictly greater version than minVersion. Used to
-	// compute the ChallengeRescue squash amount when a challenged channel is closed.
-	SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
+	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
+	// Other transition kinds are excluded. Used to compute the ChallengeRescue amount
+	// when a challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// --- Blockchain Action Operations ---
 

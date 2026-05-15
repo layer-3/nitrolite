@@ -89,16 +89,6 @@ func (m *MockStore) CheckActiveChannel(wallet, asset string) (string, *core.Chan
 	return args.String(0), status, args.Error(2)
 }
 
-func (m *MockStore) GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error) {
-	args := m.Called(channelID)
-	var status *core.ChannelStatus
-	if v := args.Get(0); v != nil {
-		s := v.(core.ChannelStatus)
-		status = &s
-	}
-	return status, args.Error(1)
-}
-
 func (m *MockStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
 	args := m.Called(wallet, asset)
 	return args.Get(0).(decimal.Decimal), args.Error(1)

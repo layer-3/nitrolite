@@ -95,8 +95,13 @@ func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version
 	return args.Error(0)
 }
 
-func (m *mockChannelHubStore) SumUnsignedReceiverStateAmountsAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
-	args := m.Called(channelID, minVersion)
+func (m *mockChannelHubStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion, epoch)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+func (m *mockChannelHubStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
+	args := m.Called(wallet, asset)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 

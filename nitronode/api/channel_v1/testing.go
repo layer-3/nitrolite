@@ -89,16 +89,6 @@ func (m *MockStore) GetChannelByID(channelID string) (*core.Channel, error) {
 	return args.Get(0).(*core.Channel), args.Error(1)
 }
 
-func (m *MockStore) GetHomeChannelStatus(channelID string) (*core.ChannelStatus, error) {
-	args := m.Called(channelID)
-	var status *core.ChannelStatus
-	if v := args.Get(0); v != nil {
-		s := v.(core.ChannelStatus)
-		status = &s
-	}
-	return status, args.Error(1)
-}
-
 func (m *MockStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, error) {
 	args := m.Called(wallet, asset)
 	if args.Get(0) == nil {

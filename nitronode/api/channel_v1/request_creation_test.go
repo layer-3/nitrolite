@@ -622,6 +622,164 @@ func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 }
 
+// TestRequestCreation_TransferSend_Success verifies that a TransferSend transition
+// on initial channel creation passes the action gateway and produces both
+// sender-side and receiver-side state effects. Covers the happy path opposite
+// TestRequestCreation_ActionGatewayRejection.
+func TestRequestCreation_TransferSend_Success(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     uint32(3600),
+		maxChallenge:     uint32(604800),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWalletSigner, _ := core.NewChannelDefaultSigner(userSigner)
+	senderWallet := userSigner.PublicKey().Address().String()
+	receiverWallet := "0x0987654321098765432109876543210987654321"
+	asset := "USDC"
+	tokenAddress := "0xTokenAddress"
+	blockchainID := uint64(1)
+	nonce := uint64(12345)
+	challenge := uint32(86400)
+	transferAmount := decimal.NewFromInt(100)
+
+	// Sender's prior state: positive offchain balance from a prior transfer_receive,
+	// no active home channel. This is the bypass scenario MF2-L01 closes.
+	currentSenderState := core.State{
+		ID:            core.GetStateID(senderWallet, asset, 0, 1),
+		Asset:         asset,
+		UserWallet:    senderWallet,
+		Epoch:         0,
+		Version:       1,
+		HomeChannelID: nil,
+		HomeLedger: core.Ledger{
+			TokenAddress: tokenAddress,
+			BlockchainID: blockchainID,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.Zero,
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.NewFromInt(500),
+		},
+		Transition: core.Transition{Type: core.TransitionTypeTransferReceive},
+	}
+
+	// Build proposed sender state: NextState + ApplyChannelCreation + ApplyTransferSend.
+	incomingSenderState := currentSenderState.NextState()
+	channelDef := core.ChannelDefinition{
+		Nonce:                 nonce,
+		Challenge:             challenge,
+		ApprovedSigValidators: "0x03",
+	}
+	_, err := incomingSenderState.ApplyChannelCreation(channelDef, blockchainID, tokenAddress, nodeAddress)
+	require.NoError(t, err)
+	_, err = incomingSenderState.ApplyTransferSendTransition(receiverWallet, transferAmount)
+	require.NoError(t, err)
+
+	mockAssetStore.On("GetTokenDecimals", blockchainID, tokenAddress).Return(uint8(6), nil)
+	packedState, err := core.PackState(*incomingSenderState, mockAssetStore)
+	require.NoError(t, err)
+	userSig, err := userWalletSigner.Sign(packedState)
+	require.NoError(t, err)
+	userSigStr := userSig.String()
+	incomingSenderState.UserSig = &userSigStr
+
+	// Handler-side mocks.
+	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil).Once()
+	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", senderWallet, asset).Return(false, nil).Once()
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil).Once()
+	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
+	mockTxStore.On("CreateChannel", mock.MatchedBy(func(channel core.Channel) bool {
+		return channel.UserWallet == senderWallet &&
+			channel.Type == core.ChannelTypeHome &&
+			channel.BlockchainID == blockchainID &&
+			channel.TokenAddress == tokenAddress &&
+			channel.Nonce == nonce &&
+			channel.ChallengeDuration == challenge
+	})).Return(nil).Once()
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == senderWallet &&
+			state.Asset == asset &&
+			state.Transition.Type == core.TransitionTypeTransferSend &&
+			state.NodeSig != nil &&
+			state.HomeChannelID != nil
+	}), mock.Anything).Return(nil).Once()
+
+	// Receiver-side: fresh user, no prior state, no home channel.
+	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("GetLastUserState", receiverWallet, asset, false).Return(nil, nil).Once()
+	mockTxStore.On("EnsureNoOngoingEscrowOperation", receiverWallet, asset).Return(nil).Once()
+	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == receiverWallet &&
+			state.Asset == asset &&
+			state.Transition.Type == core.TransitionTypeTransferReceive
+	}), mock.Anything).Return(nil).Once()
+
+	mockTxStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		return tx.TxType == core.TransactionTypeTransfer &&
+			tx.Amount.Equal(transferAmount) &&
+			tx.FromAccount == senderWallet &&
+			tx.ToAccount == receiverWallet
+	}), mock.Anything).Return(nil).Once()
+
+	rpcState := toRPCState(*incomingSenderState)
+	reqPayload := rpc.ChannelsV1RequestCreationRequest{
+		State: rpcState,
+		ChannelDefinition: rpc.ChannelDefinitionV1{
+			Nonce:                 strconv.FormatUint(nonce, 10),
+			Challenge:             challenge,
+			ApprovedSigValidators: "0x03",
+		},
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{
+			RequestID: 1,
+			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
+			Payload:   payload,
+		},
+	}
+
+	handler.RequestCreation(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("Unexpected error response: %v", respErr)
+	}
+	var response rpc.ChannelsV1RequestCreationResponse
+	err = ctx.Response.Payload.Translate(&response)
+	require.NoError(t, err)
+	assert.NotEmpty(t, response.Signature)
+	VerifyNodeSignature(t, nodeAddress, packedState, response.Signature)
+
+	mockMemoryStore.AssertExpectations(t)
+	mockAssetStore.AssertExpectations(t)
+	mockTxStore.AssertExpectations(t)
+}
+
 // TestRequestCreation_ActionGatewayRejection verifies that an exhausted gated
 // action (e.g. transfer_send) is rejected at the gateway before any state is
 // signed, stored, or receiver-side state is issued. Mirrors the SubmitState
@@ -720,4 +878,5 @@ func TestRequestCreation_ActionGatewayRejection(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
 	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+	mockMemoryStore.AssertExpectations(t)
 }

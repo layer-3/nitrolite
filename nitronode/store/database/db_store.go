@@ -244,8 +244,12 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 //
 // Validation logic by latest signed transition type:
 //   - escrow_lock / mutual_lock: always considered ongoing (no finalization yet)
-//   - escrow_deposit / escrow_withdraw: only considered ongoing when the on-chain
-//     escrow channel state version has not caught up with the signed state version
+//   - escrow_deposit: considered settled when the on-chain escrow channel version
+//     equals the signed state version (finalize landed) or is exactly one behind
+//     (initiate state; finalize or on-chain purge has not landed yet, but the purge
+//     queue makes it terminal — do not block receiver-side state issuance)
+//   - escrow_withdraw: considered ongoing while the on-chain escrow channel state
+//     version has not caught up with the signed state version
 //   - any other transition: not an escrow operation, allow
 func (s *DBStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
 	wallet = strings.ToLower(wallet)
@@ -287,7 +291,13 @@ func (s *DBStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
 		return fmt.Errorf("mutual lock is still ongoing")
 
 	case core.TransitionTypeEscrowDeposit:
-		if result.EscrowChannelVersion == nil || result.StateVersion != *result.EscrowChannelVersion {
+		// Accept escrow channel at signed state version (finalize landed) or one
+		// behind (initiate state; finalize/purge has not landed yet, but is terminal
+		// per on-chain purge queue, so do not block receiver-side state issuance).
+		// Compare via *v + 1 == StateVersion to avoid uint underflow when version is 0.
+		if result.EscrowChannelVersion == nil ||
+			(*result.EscrowChannelVersion != result.StateVersion &&
+				*result.EscrowChannelVersion+1 != result.StateVersion) {
 			return fmt.Errorf("escrow deposit finalization is still ongoing")
 		}
 

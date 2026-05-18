@@ -109,6 +109,7 @@ type DatabaseStore interface {
 	// channel status field has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
+
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)

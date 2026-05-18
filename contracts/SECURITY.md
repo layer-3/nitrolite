@@ -438,6 +438,24 @@ Session keys cannot be used for challenge signatures. `SessionKeyValidator.valid
 
 **Rationale**: A session key authorization — once signed by the user — is permanently valid on-chain because the contract only checks the cryptographic signature, not expiration or revocation. If session keys were allowed to challenge, an expired or revoked key could put any channel (where the validator is approved) into `DISPUTED` state unilaterally, bypassing Nitronode's off-chain enforcement and causing a DoS on the channel.
 
+#### Accepted Limitation: Off-Chain Session Key Scope Enforcement Does Not Apply to Direct Receive-State Acknowledgement
+
+Session key expiration and asset-scope restrictions are enforced **off-chain** by the Nitronode only. The `SessionKeyValidator` contract validates cryptographic signatures alone — it has no on-chain representation of expiration timestamps or allowed assets.
+
+**Receive-state background**: When a user receives funds off-chain, the node produces a state reflecting the increased allocation and signs it unilaterally. This node-only-signed state must be *acknowledged* by the user — signed by the user's key — to become mutually signed and enforceable on-chain. The Nitronode's `acknowledge` endpoint enforces session key validity (expiration, scope) before accepting the acknowledgement.
+
+**The bypass**: A user — or any third party in possession of the session key, including keys that have expired, been revoked off-chain, or explicitly retired — can skip the `acknowledge` endpoint entirely by:
+
+1. Fetching the node-signed receive state directly.
+2. Signing it manually with the session key.
+3. Submitting the mutually-signed state directly to the ChannelHub contract.
+
+The contract accepts the submission because both signatures are cryptographically valid. The on-chain contract has no mechanism to enforce off-chain session key constraints.
+
+**Accepted risk**: This inconsistency is acknowledged and accepted. Receive states can only increase the user's allocation — they cannot redirect funds away from the user. Earlier on-chain enforcement of receive states is always in the user's interest: if the node becomes unavailable before pending receive states are acknowledged, submitting them directly on-chain is the only remaining recovery path. Because the outcome is strictly beneficial to the user, this bypass does not constitute a financial risk.
+
+**User guidance**: Any party in possession of a session key that was ever authorized on a channel — regardless of whether the key has since expired, been revoked, or been retired — can acknowledge pending receive states and enforce them on-chain. Users should treat session key material accordingly even after decommissioning a key.
+
 ---
 
 ## Unsupported Token Types

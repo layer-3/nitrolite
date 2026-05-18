@@ -119,6 +119,7 @@ func (m *MockStore) HasSignedFinalize(channelID string) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
+
 // StoreUserState mocks persisting a user state row.
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)

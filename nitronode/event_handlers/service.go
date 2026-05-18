@@ -125,6 +125,17 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		logger.Warn("channel type mismatch during HomeChannelCheckpointed event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
 		return nil
 	}
+
+	// Acquire the user's balance-row lock before mutating channel status or
+	// backfilling the off-chain head. Receiver issuance paths lock the same row
+	// and then re-check Status; without this lock an RPC can read Status=Challenged,
+	// decide to store an unsigned receiver row, but commit after we flip to Open
+	// and backfill the prior head — leaving the latest head unsigned on an Open
+	// channel. See HandleHomeChannelClosed for the same pattern.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	channel.StateVersion = event.StateVersion
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
@@ -242,6 +253,17 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 	if channel.Type != core.ChannelTypeHome {
 		logger.Warn("channel type mismatch during HomeChannelChallenged event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
 		return nil
+	}
+
+	// Acquire the user's balance-row lock before mutating channel status. Receiver
+	// issuance paths (issueTransferReceiverState / issueReleaseReceiverState) lock
+	// the same row up front and then re-check Status via CheckActiveChannel; without
+	// this lock an in-flight RPC can read Status=Open, node-sign a receiver state,
+	// and commit after we flip to Challenged — leaving a node-signed higher-version
+	// receiver state on a disputed channel. See HandleHomeChannelClosed for the same
+	// pattern.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
 	}
 
 	if event.StateVersion < channel.StateVersion {

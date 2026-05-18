@@ -82,6 +82,11 @@ type ChannelHubReactorStore interface {
 	// empty to skip that side.
 	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
 
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel.
+	HasSignedFinalize(channelID string) (bool, error)
+
+
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)

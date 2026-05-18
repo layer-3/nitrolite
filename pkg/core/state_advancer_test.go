@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -241,4 +242,77 @@ func TestValidateAdvancement_RejectsInvalidAmount(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestValidateAdvancement_RejectsOverflowDeposit regression-tests the bug
+// described in YNU-XXX: a home_deposit whose scaled amount exceeds uint256
+// would previously be accepted offchain while the signed payload truncated to
+// the low 256 bits. ValidateAdvancement now rejects such states before storage.
+func TestValidateAdvancement_RejectsOverflowDeposit(t *testing.T) {
+	t.Parallel()
+
+	store := newMockAssetStore()
+	store.AddToken(1, "0xToken", 0) // decimals=0 so amount maps 1:1 to scaled
+	advancer := NewStateAdvancerV1(store)
+
+	userWallet := "0xUser"
+	asset := "USDC"
+	chanID := "0xHomeChannelId"
+	sig := "0xSig"
+
+	current := NewVoidState(asset, userWallet)
+	current.HomeChannelID = &chanID
+	current.ID = GetStateID(userWallet, asset, 0, 0)
+	current.HomeLedger.TokenAddress = "0xToken"
+	current.HomeLedger.BlockchainID = 1
+
+	// scaled = 2^256, one above the uint256 range.
+	overflow := new(big.Int).Lsh(big.NewInt(1), 256)
+	amount := decimal.NewFromBigInt(overflow, 0)
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(amount)
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid home ledger")
+	assert.Contains(t, err.Error(), "uint256")
+}
+
+// TestValidateAdvancement_RejectsOverflowNetFlow checks that net-flow values
+// exceeding the int256 range are rejected. Reached by combining balances that
+// fit uint256 with a net flow that would overflow int256 (the signed type).
+func TestValidateAdvancement_RejectsOverflowNetFlow(t *testing.T) {
+	t.Parallel()
+
+	store := newMockAssetStore()
+	store.AddToken(1, "0xToken", 0)
+	advancer := NewStateAdvancerV1(store)
+
+	userWallet := "0xUser"
+	asset := "USDC"
+	chanID := "0xHomeChannelId"
+	sig := "0xSig"
+
+	current := NewVoidState(asset, userWallet)
+	current.HomeChannelID = &chanID
+	current.ID = GetStateID(userWallet, asset, 0, 0)
+	current.HomeLedger.TokenAddress = "0xToken"
+	current.HomeLedger.BlockchainID = 1
+
+	// 2^255, one above max int256
+	overInt := new(big.Int).Lsh(big.NewInt(1), 255)
+	amount := decimal.NewFromBigInt(overInt, 0)
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(amount)
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid home ledger")
+	assert.Contains(t, err.Error(), "int256")
 }

@@ -7,9 +7,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
 )
+
+// maxInt256 = 2^255 - 1, the largest value representable as Solidity int256.
+var maxInt256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(1))
+
+// minInt256 = -2^255, the smallest value representable as Solidity int256.
+var minInt256 = new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(1), 255))
 
 const (
 	// ChannelHubVersion is the version of the ChannelHub contract that this code is compatible with.
@@ -85,22 +92,54 @@ func ValidateDecimalPrecision(amount decimal.Decimal, maxDecimals uint8) error {
 	return nil
 }
 
-// DecimalToBigInt converts a decimal.Decimal amount to *big.Int scaled to the token's smallest unit.
-// For example, 1.23 USDC (6 decimals) becomes 1230000.
-// This is used when preparing amounts for smart contract calls.
-func DecimalToBigInt(amount decimal.Decimal, decimals uint8) (*big.Int, error) {
-	// 1. Calculate the multiplier (e.g., 10^6)
+// decimalToBigInt scales a decimal amount to the token's smallest unit and
+// returns an unbounded *big.Int. Internal helper for DecimalToUint256 /
+// DecimalToInt256; callers outside this file must use the bounded variants so
+// values exceeding the Solidity ABI range are rejected rather than silently
+// truncated.
+func decimalToBigInt(amount decimal.Decimal, decimals uint8) (*big.Int, error) {
 	multiplier := decimal.New(1, int32(decimals))
-
-	// 2. Scale the amount
 	scaled := amount.Mul(multiplier)
 
 	if !scaled.IsInteger() {
 		return nil, fmt.Errorf("amount %s exceeds maximum decimal precision: max %d decimals allowed", amount.String(), decimals)
 	}
 
-	// 4. Safe to convert
 	return scaled.BigInt(), nil
+}
+
+// DecimalToUint256 scales amount to the token's smallest unit and rejects values
+// outside the Solidity uint256 range [0, 2^256 - 1]. Use for allocation/balance
+// fields that are ABI-encoded as uint256 prior to signing or onchain submission.
+func DecimalToUint256(amount decimal.Decimal, decimals uint8) (*big.Int, error) {
+	scaled, err := decimalToBigInt(amount, decimals)
+	if err != nil {
+		return nil, err
+	}
+	if scaled.Sign() < 0 {
+		return nil, fmt.Errorf("amount %s is negative, expected uint256 range [0, 2^256-1]", amount.String())
+	}
+	if scaled.Cmp(ethmath.MaxBig256) > 0 {
+		return nil, fmt.Errorf("amount %s exceeds uint256 max (2^256-1)", amount.String())
+	}
+	return scaled, nil
+}
+
+// DecimalToInt256 scales amount to the token's smallest unit and rejects values
+// outside the Solidity int256 range [-2^255, 2^255 - 1]. Use for net-flow fields
+// that are ABI-encoded as int256 prior to signing or onchain submission.
+func DecimalToInt256(amount decimal.Decimal, decimals uint8) (*big.Int, error) {
+	scaled, err := decimalToBigInt(amount, decimals)
+	if err != nil {
+		return nil, err
+	}
+	if scaled.Cmp(maxInt256) > 0 {
+		return nil, fmt.Errorf("amount %s exceeds int256 max (2^255-1)", amount.String())
+	}
+	if scaled.Cmp(minInt256) < 0 {
+		return nil, fmt.Errorf("amount %s below int256 min (-2^255)", amount.String())
+	}
+	return scaled, nil
 }
 
 // getHomeChannelID is the internal implementation that generates a unique identifier for a primary channel

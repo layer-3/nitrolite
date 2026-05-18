@@ -370,26 +370,26 @@ func TestLedger_Equal_Validate(t *testing.T) {
 	}
 	l2 := l1
 	assert.NoError(t, l1.Equal(l2))
-	assert.NoError(t, l1.Validate())
+	assert.NoError(t, l1.Validate(6))
 
 	l2.TokenAddress = "0xOther"
 	assert.Error(t, l1.Equal(l2))
 
 	lInvalid := l1
 	lInvalid.TokenAddress = ""
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.BlockchainID = 0
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.UserBalance = decimal.NewFromInt(-1)
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.UserNetFlow = decimal.NewFromInt(999) // Mismatch
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 }
 
 func TestTransactionType_String(t *testing.T) {

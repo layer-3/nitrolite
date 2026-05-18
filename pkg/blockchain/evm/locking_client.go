@@ -100,7 +100,7 @@ func (c *LockingClient) Lock(targetWalletAddress string, amount decimal.Decimal)
 		return "", errors.New("transaction signer not configured")
 	}
 
-	amountBig, err := core.DecimalToBigInt(amount, c.tokenDecimals)
+	amountBig, err := core.DecimalToUint256(amount, c.tokenDecimals)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to convert amount with decimal precision")
 	}
@@ -182,7 +182,7 @@ func (c *LockingClient) ApproveToken(amount decimal.Decimal) (string, error) {
 		return "", errors.New("transaction signer not configured")
 	}
 
-	amountBig, err := core.DecimalToBigInt(amount, c.tokenDecimals)
+	amountBig, err := core.DecimalToUint256(amount, c.tokenDecimals)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to convert amount with decimal precision")
 	}

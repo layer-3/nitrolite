@@ -251,7 +251,7 @@ func (c *BlockchainClient) Deposit(token string, amount decimal.Decimal) (string
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get token decimals for token %s", token)
 	}
-	amountBig, err := core.DecimalToBigInt(amount, decimals)
+	amountBig, err := core.DecimalToUint256(amount, decimals)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to convert amount %s to big.Int", amount.String())
 	}
@@ -280,7 +280,7 @@ func (c *BlockchainClient) Withdraw(to, token string, amount decimal.Decimal) (s
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get token decimals for token %s", token)
 	}
-	amountBig, err := core.DecimalToBigInt(amount, decimals)
+	amountBig, err := core.DecimalToUint256(amount, decimals)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to convert amount %s to big.Int", amount.String())
 	}
@@ -315,7 +315,7 @@ func (c *BlockchainClient) Approve(asset string, amount decimal.Decimal) (string
 		return "", errors.Wrapf(err, "failed to get token decimals for %s", asset)
 	}
 
-	amountBig, err := core.DecimalToBigInt(amount, decimals)
+	amountBig, err := core.DecimalToUint256(amount, decimals)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to convert amount %s to big.Int", amount.String())
 	}
@@ -375,7 +375,7 @@ func (c *BlockchainClient) Create(def core.ChannelDefinition, initCCS core.State
 		}
 
 		if contractState.HomeLedger.Token == (common.Address{}) {
-			value, err := core.DecimalToBigInt(initCCS.Transition.Amount, contractState.HomeLedger.Decimals)
+			value, err := core.DecimalToUint256(initCCS.Transition.Amount, contractState.HomeLedger.Decimals)
 			if err != nil {
 				return "", errors.Wrap(err, "failed to convert native deposit amount to wei")
 			}
@@ -468,7 +468,7 @@ func (c *BlockchainClient) Checkpoint(candidate core.State) (string, error) {
 		}
 
 		if contractCandidate.HomeLedger.Token == (common.Address{}) {
-			value, valueErr := core.DecimalToBigInt(candidate.Transition.Amount, contractCandidate.HomeLedger.Decimals)
+			value, valueErr := core.DecimalToUint256(candidate.Transition.Amount, contractCandidate.HomeLedger.Decimals)
 			if valueErr != nil {
 				return "", errors.Wrap(valueErr, "failed to convert native deposit amount to wei")
 			}

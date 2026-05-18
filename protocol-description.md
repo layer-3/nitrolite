@@ -434,6 +434,8 @@ Migration enables moving the channel's "home" security chain from one blockchain
 
 Like other cross-chain operations, migration is **two-phase** and **optimistic**.
 
+> **NOTE:** Home chain migration is **not yet active in the Nitronode off-chain implementation**. The on-chain `ChannelHub` contract fully implements both `initiateMigration()` and `finalizeMigration()`, and the migration protocol is fully specified below. The Nitronode off-chain flow — including the `migrate` transition type, two-chain event coordination, and the `MigrationInInitiated` / `MigrationOutFinalized` lifecycle — has not yet been implemented. Submitting a `migrate` transition via the `channels.v1.submit_state` RPC method returns an error. This section documents the intended design for future implementation.
+
 ---
 
 ### Preparation phase (INITIATE_MIGRATION)

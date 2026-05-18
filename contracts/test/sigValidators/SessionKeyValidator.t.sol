@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 
 import {TestUtils} from "../TestUtils.sol";
 
 import {
     SessionKeyValidator,
     SessionKeyAuthorization,
+    SESSION_KEY_AUTH_TYPEHASH,
     toSigningData
 } from "../../src/sigValidators/SessionKeyValidator.sol";
 import {ValidationResult, VALIDATION_SUCCESS, VALIDATION_FAILURE} from "../../src/interfaces/ISignatureValidator.sol";
@@ -207,6 +208,34 @@ contract SessionKeyValidatorTest_validateSignature is SessionKeyValidatorTest_Ba
 
         ValidationResult result = validator.validateSignature(CHANNEL_ID, SIGNING_DATA, signature, user);
         assertEq(ValidationResult.unwrap(result), ValidationResult.unwrap(VALIDATION_FAILURE));
+    }
+
+    function test_log_toSigningData() public pure {
+        address FIXED_SESSION_KEY = address(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF);
+        bytes32 FIXED_METADATA_HASH =
+        bytes32(uint256(0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890));
+
+
+        SessionKeyAuthorization memory skAuth = SessionKeyAuthorization({
+            sessionKey: FIXED_SESSION_KEY, metadataHash: FIXED_METADATA_HASH, authSignature: ""
+        });
+
+        bytes memory encoded = toSigningData(skAuth);
+
+        // Verify typehash is the first 32 bytes of the encoded payload.
+        bytes32 typehashWord;
+        assembly {
+            typehashWord := mload(add(encoded, 32))
+        }
+        assertEq(typehashWord, SESSION_KEY_AUTH_TYPEHASH);
+
+        console.log("SESSION_KEY_AUTH_TYPEHASH:");
+        // 0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c
+        console.logBytes32(SESSION_KEY_AUTH_TYPEHASH);
+
+        console.log("toSigningData output (96 bytes: typehash || sessionKey || metadataHash):");
+        // 0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c000000000000000000000000deadbeefdeadbeefdeadbeefdeadbeefdeadbeefabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+        console.logBytes(encoded);
     }
 }
 

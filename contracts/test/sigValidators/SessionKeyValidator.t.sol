@@ -213,8 +213,7 @@ contract SessionKeyValidatorTest_validateSignature is SessionKeyValidatorTest_Ba
     function test_log_toSigningData() public pure {
         address FIXED_SESSION_KEY = address(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF);
         bytes32 FIXED_METADATA_HASH =
-        bytes32(uint256(0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890));
-
+            bytes32(uint256(0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890));
 
         SessionKeyAuthorization memory skAuth = SessionKeyAuthorization({
             sessionKey: FIXED_SESSION_KEY, metadataHash: FIXED_METADATA_HASH, authSignature: ""

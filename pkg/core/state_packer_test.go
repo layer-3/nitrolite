@@ -116,6 +116,9 @@ func TestPackState_RejectsOutOfRangeValues(t *testing.T) {
 	overflow256 := new(big.Int).Lsh(big.NewInt(1), 256) // 2^256
 	overflow255 := new(big.Int).Lsh(big.NewInt(1), 255) // 2^255
 
+	homeToken := "0x90b7E285ab6cf4e3A2487669dba3E339dB8a3320"
+	escrowToken := "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
 	newBaseState := func() State {
 		return State{
 			Version:       1,
@@ -124,7 +127,7 @@ func TestPackState_RejectsOutOfRangeValues(t *testing.T) {
 			Transition:    *NewTransition(TransitionTypeHomeDeposit, "tx", "acct", decimal.NewFromInt(1)),
 			HomeLedger: Ledger{
 				BlockchainID: 42,
-				TokenAddress: "0x90b7E285ab6cf4e3A2487669dba3E339dB8a3320",
+				TokenAddress: homeToken,
 				UserBalance:  decimal.Zero,
 				UserNetFlow:  decimal.Zero,
 				NodeBalance:  decimal.Zero,
@@ -133,31 +136,71 @@ func TestPackState_RejectsOutOfRangeValues(t *testing.T) {
 		}
 	}
 
+	newEscrowLedger := func() *Ledger {
+		return &Ledger{
+			BlockchainID: 4242,
+			TokenAddress: escrowToken,
+			UserBalance:  decimal.Zero,
+			UserNetFlow:  decimal.Zero,
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		}
+	}
+
+	newStore := func() *mockAssetStore {
+		store := newMockAssetStore()
+		store.AddToken(42, homeToken, 0)
+		store.AddToken(4242, escrowToken, 0)
+		return store
+	}
+
 	t.Run("user_balance_overflows_uint256", func(t *testing.T) {
 		t.Parallel()
-		store := newMockAssetStore()
-		store.AddToken(42, "0x90b7E285ab6cf4e3A2487669dba3E339dB8a3320", 0)
 
 		state := newBaseState()
 		state.HomeLedger.UserBalance = decimal.NewFromBigInt(overflow256, 0)
 		state.HomeLedger.UserNetFlow = decimal.NewFromBigInt(overflow256, 0)
 
-		_, err := NewStatePackerV1(store).PackState(state)
+		_, err := NewStatePackerV1(newStore()).PackState(state)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "uint256")
 	})
 
 	t.Run("user_net_flow_overflows_int256", func(t *testing.T) {
 		t.Parallel()
-		store := newMockAssetStore()
-		store.AddToken(42, "0x90b7E285ab6cf4e3A2487669dba3E339dB8a3320", 0)
 
 		state := newBaseState()
 		// balance fits uint256 but net flow exceeds int256
 		state.HomeLedger.UserBalance = decimal.NewFromBigInt(overflow255, 0)
 		state.HomeLedger.UserNetFlow = decimal.NewFromBigInt(overflow255, 0)
 
-		_, err := NewStatePackerV1(store).PackState(state)
+		_, err := NewStatePackerV1(newStore()).PackState(state)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "int256")
+	})
+
+	t.Run("escrow_user_balance_overflows_uint256", func(t *testing.T) {
+		t.Parallel()
+
+		state := newBaseState()
+		state.EscrowLedger = newEscrowLedger()
+		state.EscrowLedger.UserBalance = decimal.NewFromBigInt(overflow256, 0)
+		state.EscrowLedger.UserNetFlow = decimal.NewFromBigInt(overflow256, 0)
+
+		_, err := NewStatePackerV1(newStore()).PackState(state)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "uint256")
+	})
+
+	t.Run("escrow_user_net_flow_overflows_int256", func(t *testing.T) {
+		t.Parallel()
+
+		state := newBaseState()
+		state.EscrowLedger = newEscrowLedger()
+		state.EscrowLedger.UserBalance = decimal.NewFromBigInt(overflow255, 0)
+		state.EscrowLedger.UserNetFlow = decimal.NewFromBigInt(overflow255, 0)
+
+		_, err := NewStatePackerV1(newStore()).PackState(state)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "int256")
 	})

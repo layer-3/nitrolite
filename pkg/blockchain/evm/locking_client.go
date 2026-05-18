@@ -1,8 +1,6 @@
 package evm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -223,10 +221,4 @@ func (c *LockingClient) GetBalance(user string) (decimal.Decimal, error) {
 	}
 
 	return decimal.NewFromBigInt(balance, -int32(c.tokenDecimals)), nil
-}
-
-// decimalToBigInt converts a decimal amount to *big.Int given token decimals.
-func decimalToBigInt(amount decimal.Decimal, decimals int32) *big.Int {
-	shifted := amount.Shift(decimals)
-	return shifted.BigInt()
 }

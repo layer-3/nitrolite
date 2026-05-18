@@ -169,6 +169,45 @@ func TestCoreLedgerToContractLedger_Success(t *testing.T) {
 	require.Equal(t, expectedNodeNetFlow, result.NodeNetFlow)
 }
 
+func TestCoreLedgerToContractLedger_RejectsOutOfRangeValues(t *testing.T) {
+	t.Parallel()
+
+	tokenAddr := "0x1234567890123456789012345678901234567890"
+	overflow256 := new(big.Int).Lsh(big.NewInt(1), 256) // 2^256
+	overflow255 := new(big.Int).Lsh(big.NewInt(1), 255) // 2^255
+
+	newBaseLedger := func() core.Ledger {
+		return core.Ledger{
+			BlockchainID: 1,
+			TokenAddress: tokenAddr,
+			UserBalance:  decimal.Zero,
+			UserNetFlow:  decimal.Zero,
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		}
+	}
+
+	t.Run("user_balance_overflows_uint256", func(t *testing.T) {
+		t.Parallel()
+		ledger := newBaseLedger()
+		ledger.UserBalance = decimal.NewFromBigInt(overflow256, 0)
+
+		_, err := coreLedgerToContractLedger(ledger, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "uint256")
+	})
+
+	t.Run("user_net_flow_overflows_int256", func(t *testing.T) {
+		t.Parallel()
+		ledger := newBaseLedger()
+		ledger.UserNetFlow = decimal.NewFromBigInt(overflow255, 0)
+
+		_, err := coreLedgerToContractLedger(ledger, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "int256")
+	})
+}
+
 // ========= contractLedgerToCoreLedger Tests =========
 
 func TestContractLedgerToCoreLedger_Success(t *testing.T) {

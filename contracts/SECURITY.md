@@ -37,6 +37,20 @@ Given the 3 and 4, an invariant:
 Invariant:
 > No different states with the same `version` can exist for the same channel.
 
+---
+
+6. While a channel is in `CHALLENGED` (on-chain `DISPUTED`) status, the Node does not co-sign "receive" states for that channel. Incoming off-chain transfer credits and app-session release credits targeting the channel are appended as unsigned entries to the channel's state history (a per-channel queue). On challenge clearance, the off-chain head is signed by the Node and offered for user acknowledgement. On channel closure, a single `challenge_rescue` state is committed to the user's next epoch detached from the closed channel. Its amount is the net effect on the home-channel balance of transitions stored strictly above the closure version: receives (`transfer_receive`, `release`) contribute positively; sends (`transfer_send`, `commit`) contribute negatively; other transition kinds are excluded because they require onchain backing the chain did not enforce. Signed pre-challenge and unsigned during-challenge rows both contribute. The result is clamped at zero so an adversarial close at a version where the user's own balance was higher than the off-chain head cannot dock the user further; when no relevant transitions exist above closure, the rescue carries zero credit and serves only to advance the state chain off the closed channel.
+
+Invariant:
+> A channel in `CHALLENGED` status has no co-signed "receive" states; therefore, its dispute cannot be cleared by enforcing a receive-credit checkpoint.
+
+---
+
+7. While a channel is in `CHALLENGED` status, all user-initiated operations on the channel are blocked except receiving funds (which the Node queues per rule 6). This includes opening a new channel on the same chain for the same asset. These restrictions persist after the challenge timer expires, until the channel is explicitly closed and `ChannelClosed` event is seen by the Node.
+
+Invariant:
+> Credits accrued while a channel was in `CHALLENGED` status are preserved — either reintegrated into the channel on challenge clearance, or carried into the next epoch on closure — and cannot be shadowed by a concurrently-opened replacement channel.
+
 ## Invariants
 
 ---
@@ -423,6 +437,24 @@ When a **node** employs SessionKeyValidator (NOT RECOMMENDED):
 Session keys cannot be used for challenge signatures. `SessionKeyValidator.validateChallengeSignature` always reverts with `ChallengeWithSessionKeyNotSupported`.
 
 **Rationale**: A session key authorization — once signed by the user — is permanently valid on-chain because the contract only checks the cryptographic signature, not expiration or revocation. If session keys were allowed to challenge, an expired or revoked key could put any channel (where the validator is approved) into `DISPUTED` state unilaterally, bypassing Nitronode's off-chain enforcement and causing a DoS on the channel.
+
+#### Accepted Limitation: Off-Chain Session Key Scope Enforcement Does Not Apply to Direct Receive-State Acknowledgement
+
+Session key expiration and asset-scope restrictions are enforced **off-chain** by the Nitronode only. The `SessionKeyValidator` contract validates cryptographic signatures alone — it has no on-chain representation of expiration timestamps or allowed assets.
+
+**Receive-state background**: When a user receives funds off-chain, the node produces a state reflecting the increased allocation and signs it unilaterally. This node-only-signed state must be *acknowledged* by the user — signed by the user's key — to become mutually signed and enforceable on-chain. The Nitronode's `acknowledge` endpoint enforces session key validity (expiration, scope) before accepting the acknowledgement.
+
+**The bypass**: A user — or any third party in possession of the session key, including keys that have expired, been revoked off-chain, or explicitly retired — can skip the `acknowledge` endpoint entirely by:
+
+1. Fetching the node-signed receive state directly.
+2. Signing it manually with the session key.
+3. Submitting the mutually-signed state directly to the ChannelHub contract.
+
+The contract accepts the submission because both signatures are cryptographically valid. The on-chain contract has no mechanism to enforce off-chain session key constraints.
+
+**Accepted risk**: This inconsistency is acknowledged and accepted. Receive states can only increase the user's allocation — they cannot redirect funds away from the user. Earlier on-chain enforcement of receive states is always in the user's interest: if the node becomes unavailable before pending receive states are acknowledged, submitting them directly on-chain is the only remaining recovery path. Because the outcome is strictly beneficial to the user, this bypass does not constitute a financial risk.
+
+**User guidance**: Any party in possession of a session key that was ever authorized on a channel — regardless of whether the key has since expired, been revoked, or been retired — can acknowledge pending receive states and enforce them on-chain. Users should treat session key material accordingly even after decommissioning a key.
 
 ---
 

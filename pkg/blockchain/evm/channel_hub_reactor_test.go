@@ -90,8 +90,28 @@ func (m *mockChannelHubStore) StoreContractEvent(ev core.BlockchainEvent) error 
 	return args.Error(0)
 }
 
-func (m *mockChannelHubStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
-	args := m.Called(channelID, version, userSig)
+func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
+	args := m.Called(channelID, version, userSig, nodeSig)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion, epoch)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+func (m *mockChannelHubStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
+	args := m.Called(wallet, asset)
+	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID string) error {
+	args := m.Called(state, applicationID)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) RecordTransaction(tx core.Transaction, applicationID string) error {
+	args := m.Called(tx, applicationID)
 	return args.Error(0)
 }
 

@@ -73,13 +73,14 @@ Participants do not need to trust nodes for:
 
 ## Known Limitations
 
-The following capabilities are not yet implemented:
+The following capabilities are not yet implemented or have acknowledged design trade-offs:
 
 - Trustless off-chain state operations (node liquidity enforcement)
 - Validator network for monitoring node behaviour and enforcing correctness
 - Watchtower services for automated enforcement
 - Support for non-EVM blockchains
 - Formal verification of protocol rules
+- Session key off-chain scope enforcement does not apply to direct receive-state acknowledgement. Session key expiration and asset-scope restrictions are enforced by the Nitronode off-chain only; the `SessionKeyValidator` contract validates cryptographic signatures alone. A party holding a session key — even one that has expired, been revoked, or been retired — can bypass the `acknowledge` endpoint, manually sign a pending node-issued receive state, and submit it directly to the contract. This is accepted: receive states exclusively increase the user's allocation and cannot redirect funds away from the user, so out-of-scope acknowledgement carries no financial risk and preserves a recovery path when the node is unavailable.
 
 ## Future Improvements
 

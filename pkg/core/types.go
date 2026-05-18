@@ -175,6 +175,44 @@ func NewVoidState(asset, userWallet string) *State {
 	}
 }
 
+// NewChallengeRescueState constructs a fully-formed ChallengeRescue state derived from
+// prev — the user's last known state for the asset whose home channel is being closed
+// after a challenge. The rescue state opens a fresh epoch at version 1 with no home
+// channel and no token/blockchain context (the closed channel is gone); it credits the
+// user the rescued amount as a standalone ledger entry referencing the closed channel
+// (taken from prev.HomeChannelID) via the transition's AccountID. The rescue state is
+// meant to be stored unsigned, like a credit to a user with no open home channel.
+func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error) {
+	if prev.HomeChannelID == nil {
+		return nil, fmt.Errorf("prev state has no home channel ID")
+	}
+	if amount.IsNegative() {
+		return nil, fmt.Errorf("challenge rescue amount must be non-negative")
+	}
+
+	closedChannelID := *prev.HomeChannelID
+	rescue := &State{
+		Asset:      prev.Asset,
+		UserWallet: prev.UserWallet,
+		Epoch:      prev.Epoch + 1,
+		Version:    1,
+		HomeLedger: Ledger{
+			UserBalance: amount,
+			UserNetFlow: decimal.Zero,
+			NodeBalance: decimal.Zero,
+			NodeNetFlow: amount,
+		},
+	}
+	rescue.ID = GetStateID(rescue.UserWallet, rescue.Asset, rescue.Epoch, rescue.Version)
+
+	txID, err := GetReceiverTransactionID(closedChannelID, rescue.ID)
+	if err != nil {
+		return nil, err
+	}
+	rescue.Transition = *NewTransition(TransitionTypeChallengeRescue, txID, closedChannelID, amount)
+	return rescue, nil
+}
+
 func (state State) NextState() *State {
 	var nextState *State
 	if state.IsFinal() {
@@ -643,6 +681,10 @@ const (
 	TransactionTypeMutualLock TransactionType = 120
 
 	TransactionTypeFinalize = 200
+
+	// TransactionTypeChallengeRescue mirrors TransitionTypeChallengeRescue and records
+	// the squashed credit produced when a challenged home channel is closed onchain.
+	TransactionTypeChallengeRescue TransactionType = 201
 )
 
 // String returns the human-readable name of the transaction type
@@ -672,6 +714,8 @@ func (t TransactionType) String() string {
 		return "rebalance"
 	case TransactionTypeFinalize:
 		return "finalize"
+	case TransactionTypeChallengeRescue:
+		return "challenge_rescue"
 	default:
 		return "unknown"
 	}
@@ -711,8 +755,8 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	var toAccount, fromAccount string
 	// Transition validator is expected to make sure that all the fields are present and valid.
 
-	if transition.Type != TransitionTypeRelease && senderState == nil {
-		return nil, fmt.Errorf("sender state must not be nil for non-release transitions")
+	if transition.Type != TransitionTypeRelease && transition.Type != TransitionTypeChallengeRescue && senderState == nil {
+		return nil, fmt.Errorf("sender state must not be nil for non-release / non-challenge-rescue transitions")
 	}
 
 	var senderStateID *string
@@ -815,6 +859,13 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 		txType = TransactionTypeFinalize
 		fromAccount = senderState.UserWallet
 		toAccount = *senderState.HomeChannelID
+	case TransitionTypeChallengeRescue:
+		if receiverState == nil {
+			return nil, fmt.Errorf("receiver state must not be nil for 'challenge_rescue' transition")
+		}
+		txType = TransactionTypeChallengeRescue
+		fromAccount = transition.AccountID
+		toAccount = receiverState.UserWallet
 	default:
 		return nil, fmt.Errorf("invalid transition type")
 	}
@@ -868,6 +919,13 @@ const (
 	TransitionTypeMutualLock TransitionType = 120 // AccountID: EscrowChannelID
 
 	TransitionTypeFinalize TransitionType = 200 // AccountID: HomeChannelID
+
+	// TransitionTypeChallengeRescue is issued by the node when a challenged home channel
+	// is closed onchain with a non-finalize transition. It squashes the sum of receiver
+	// states accrued under the no-sign-while-challenged rule into a single credit on the
+	// user's ledger, with AccountID set to the closed channel ID and HomeChannelID nil.
+	// Only the node can produce this transition; it has no state-advancer validation rule.
+	TransitionTypeChallengeRescue TransitionType = 201 // AccountID: closed HomeChannelID
 )
 
 // String returns the human-readable name of the transition type
@@ -901,6 +959,8 @@ func (t TransitionType) String() string {
 		return "migrate"
 	case TransitionTypeFinalize:
 		return "finalize"
+	case TransitionTypeChallengeRescue:
+		return "challenge_rescue"
 	default:
 		return "unknown"
 	}

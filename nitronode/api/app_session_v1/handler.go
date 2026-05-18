@@ -164,19 +164,33 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 	}
 
 	if newState.HomeChannelID != nil {
-		// Pack and sign the state
-		packedState, err := h.statePacker.PackState(*newState)
+		// Same rule as channel_v1.issueTransferReceiverState: sign only when the
+		// receiver's home channel is Open. CheckActiveChannel returns nil status for
+		// Challenged / Closing / Closed channels, in which case the state is stored
+		// unsigned so the challenge-rescue squash at close (Challenged path) can pick
+		// it up, and so terminal-status channels never receive a node-signed credit
+		// that won't settle.
+		_, channelStatus, err := tx.CheckActiveChannel(receiverWallet, asset)
 		if err != nil {
-			return rpc.Errorf("failed to pack receiver state: %v", err)
+			return rpc.Errorf("failed to check receiver active channel: %v", err)
 		}
+		if channelStatus != nil && *channelStatus == core.ChannelStatusOpen {
+			packedState, err := h.statePacker.PackState(*newState)
+			if err != nil {
+				return rpc.Errorf("failed to pack receiver state: %v", err)
+			}
 
-		nodeSig, err := h.signer.Sign(packedState)
-		if err != nil {
-			return rpc.Errorf("failed to sign receiver state: %v", err)
+			nodeSig, err := h.signer.Sign(packedState)
+			if err != nil {
+				return rpc.Errorf("failed to sign receiver state: %v", err)
+			}
+
+			nodeSigStr := nodeSig.String()
+			newState.NodeSig = &nodeSigStr
+		} else {
+			logger.Info("skipping node signature on receiver state for non-open home channel",
+				"homeChannelID", *newState.HomeChannelID)
 		}
-
-		nodeSigStr := nodeSig.String()
-		newState.NodeSig = &nodeSigStr
 	}
 
 	// Store the new state

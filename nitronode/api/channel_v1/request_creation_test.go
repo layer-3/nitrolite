@@ -1001,3 +1001,112 @@ func TestRequestCreation_RejectReusedHomeChannelID(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
 	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 }
+
+// TestRequestCreation_ChannelAlreadyInitialized covers the guard that rejects a creation
+// request when the user's prior state still has a non-nil, non-final HomeChannelID and
+// the computed channel ID is not yet stored. This is the in-flight-channel case: the
+// previous lifecycle has not been finalized off-chain, so a new creation must not start.
+func TestRequestCreation_ChannelAlreadyInitialized(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     uint32(3600),
+		maxChallenge:     uint32(604800),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	tokenAddress := "0xTokenAddress"
+	blockchainID := uint64(1)
+	priorNonce := uint64(7)
+	newNonce := uint64(8)
+	challenge := uint32(86400)
+
+	priorHomeChannelID, err := core.GetHomeChannelID(nodeAddress, userWallet, asset, priorNonce, challenge, "0x03")
+	require.NoError(t, err)
+	newHomeChannelID, err := core.GetHomeChannelID(nodeAddress, userWallet, asset, newNonce, challenge, "0x03")
+	require.NoError(t, err)
+
+	// Prior state: in-flight channel — HomeChannelID set, transition is not Finalize.
+	priorState := core.State{
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &priorHomeChannelID,
+		Transition:    core.Transition{Type: core.TransitionTypeHomeDeposit},
+	}
+
+	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
+	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(priorState, nil).Once()
+	// New nonce → fresh channel ID, no row yet in channels.
+	mockTxStore.On("GetChannelByID", mock.AnythingOfType("string")).Return((*core.Channel)(nil), nil).Once()
+
+	reqPayload := rpc.ChannelsV1RequestCreationRequest{
+		State: rpc.StateV1{
+			ID:            core.GetStateID(userWallet, asset, 2, 1),
+			UserWallet:    userWallet,
+			Asset:         asset,
+			Epoch:         "2",
+			Version:       "1",
+			HomeChannelID: &newHomeChannelID,
+			Transition:    rpc.TransitionV1{Amount: "0"},
+			HomeLedger: rpc.LedgerV1{
+				TokenAddress: tokenAddress,
+				BlockchainID: "1",
+				UserBalance:  "0",
+				UserNetFlow:  "0",
+				NodeBalance:  "0",
+				NodeNetFlow:  "0",
+			},
+		},
+		ChannelDefinition: rpc.ChannelDefinitionV1{
+			Nonce:                 strconv.FormatUint(newNonce, 10),
+			Challenge:             challenge,
+			ApprovedSigValidators: "0x03",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{
+			RequestID: 1,
+			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
+			Payload:   payload,
+		},
+	}
+
+	handler.RequestCreation(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.Error(t, respErr)
+	assert.Contains(t, respErr.Error(), "channel is already initialized")
+
+	mockTxStore.AssertExpectations(t)
+	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+}

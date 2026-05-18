@@ -141,7 +141,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 		// the prior state has no HomeChannelID (e.g., after a ChallengeRescue squash).
 		existingChannel, err := tx.GetChannelByID(homeChannelID)
 		if err != nil {
-			return rpc.Errorf("failed to check existing channel: %v", err)
+			return rpc.Errorf("failed to look up channel by computed id: %v", err)
 		}
 		if existingChannel != nil {
 			return rpc.Errorf("cannot use same home channel id")

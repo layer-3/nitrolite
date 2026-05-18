@@ -208,6 +208,28 @@ func TestGenerateSessionKeyStateIDV1(t *testing.T) {
 	assert.NotEqual(t, id1, id3)
 }
 
+// TestPackChannelKeyStateV1_Typehash verifies the SessionKeyAuthTypehash matches the
+// Solidity constant SESSION_KEY_AUTH_TYPEHASH in SessionKeyValidator.sol so that
+// off-chain authorization payloads are accepted on-chain.
+func TestPackChannelKeyStateV1_Typehash(t *testing.T) {
+	t.Parallel()
+	expected := common.HexToHash("0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c")
+	assert.Equal(t, expected, SessionKeyAuthTypehash)
+}
+
+func TestPackChannelKeyStateV1(t *testing.T) {
+	t.Parallel()
+	sessionKey := "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+	metadataHash := common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+	packed, err := PackChannelKeyStateV1(sessionKey, metadataHash)
+	require.NoError(t, err)
+	assert.Len(t, packed, 96, "payload must be 96 bytes: typehash || padded address || metadataHash")
+
+	expected := common.FromHex("0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c000000000000000000000000deadbeefdeadbeefdeadbeefdeadbeefdeadbeefabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+	assert.Equal(t, expected, packed)
+}
+
 func TestEncodeDecodeChannelSessionKeySignature(t *testing.T) {
 	t.Parallel()
 	skAuth := channelSessionKeyAuthorization{

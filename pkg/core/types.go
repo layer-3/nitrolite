@@ -177,11 +177,16 @@ func NewVoidState(asset, userWallet string) *State {
 
 // NewChallengeRescueState constructs a fully-formed ChallengeRescue state derived from
 // prev — the user's last known state for the asset whose home channel is being closed
-// after a challenge. The rescue state opens a fresh epoch at version 1 with no home
+// after a challenge. The rescue state opens a fresh epoch at version 0 with no home
 // channel and no token/blockchain context (the closed channel is gone); it credits the
 // user the rescued amount as a standalone ledger entry referencing the closed channel
 // (taken from prev.HomeChannelID) via the transition's AccountID. The rescue state is
 // meant to be stored unsigned, like a credit to a user with no open home channel.
+//
+// Version 0 matches the NextState() post-final convention: any in-protocol fresh-epoch
+// state starts at version 0. Callers must guarantee no other (epoch+1, version=0) row
+// already exists for this (wallet, asset) — for the rescue path this is enforced by
+// only invoking it on non-Finalize challenge closes (see HandleHomeChannelClosed).
 func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error) {
 	if prev.HomeChannelID == nil {
 		return nil, fmt.Errorf("prev state has no home channel ID")
@@ -195,7 +200,7 @@ func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error)
 		Asset:      prev.Asset,
 		UserWallet: prev.UserWallet,
 		Epoch:      prev.Epoch + 1,
-		Version:    1,
+		Version:    0,
 		HomeLedger: Ledger{
 			UserBalance: amount,
 			UserNetFlow: decimal.Zero,

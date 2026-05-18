@@ -118,6 +118,21 @@ Additionally, it is possible to close the channel unilaterally by submitting a v
 
 After the challenge period expires without being resolved, the disputed state becomes **final**. However, a separate **close call** is still required to release the channel's locked funds. Such close call does not require any state to be submitted alongside, only the id of a channel, and can be invoked by anyone.
 
+### Off-chain behaviour during dispute
+
+While a channel is in `CHALLENGED` (i.e. on-chain `DISPUTED`) status, the Node and the user follow additional off-chain rules:
+
+- **Node stops signing receive states.** Incoming off-chain transfer credits and app-session release credits targeting the channel are not co-signed. They are appended as unsigned entries to the channel's state history (a per-channel queue).
+- **User-initiated operations are blocked.** The user cannot deposit, withdraw, transfer, or lock funds into an app session. Only receiving funds (which the Node queues per the previous rule) is permitted.
+- **Operations remain blocked even after the challenge timer expires**, until the channel is explicitly closed and `ChannelClosed` event is seen by the Node.
+
+Two resolution paths:
+
+- **Challenge cleared** (a newer mutually signed state is enforced, returning the channel to `OPERATING`): the Node signs only the off-chain head — the highest-version queued "receive" state — so the channel's actual latest state is fully co-signed; the user countersigns and acknowledges. Earlier queued entries remain unsigned in history; the head carries forward their cumulative balance impact, so normal flow resumes with no gap and no credit lost.
+- **Challenge expires and the channel is closed**: a single `challenge_rescue` state is committed to the user's next epoch, detached from the closed channel — equivalent to the funds arriving while the user did not have a channel. Its amount is the **net effect on the home-channel balance of transitions stored strictly above the closure version** at the closed channel's epoch: receives (`transfer_receive`, `release`) contribute positively; sends (`transfer_send`, `commit`) contribute negatively; other transition kinds (deposit, withdrawal, escrow, migrate, finalize) are excluded because they require onchain backing the chain did not enforce. Signed (pre-challenge) and unsigned (during-challenge) rows both contribute. The result is clamped at zero so an adversarial close at a version where the user's own balance was higher than the off-chain head cannot dock the user further. When no relevant transitions exist above closure, the state carries zero credit and serves only to advance the state chain off the closed channel so future operations are not wedged on it.
+
+The purpose of these rules is to ensure that a `CHALLENGED` channel cannot have its dispute cleared as a side effect of incoming third-party transfers, and that the user is made whole for net real value owed by the Node regardless of which resolution path is taken.
+
 ## Close Operation
 
 A close releases the channel's locked funds and terminates the channel lifecycle.

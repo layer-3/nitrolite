@@ -150,8 +150,58 @@ func TestPackAppSessionKeyStateV1(t *testing.T) {
 
 	// Strengthen assertion: validate content by comparing against pre-calculated hash
 	// This ensures that if the packing logic changes, the test will fail.
-	expectedHash := "0x9fedfbcd577c5e677b95b1273e38f52ffdeee096e98f731c5455e4c73e0274aa"
+	expectedHash := "0x6d404fa628918dbe4abec4ae2808c7ea01dc880ad4ad392ca2d0c4ce21f706c1"
 	assert.Equal(t, expectedHash, hexutil.Encode(packed))
+}
+
+func TestPackAppSessionKeyStateV1_NoIDCollision(t *testing.T) {
+	t.Parallel()
+	base := AppSessionKeyStateV1{
+		UserAddress: "0x1111111111111111111111111111111111111111",
+		SessionKey:  "0x2222222222222222222222222222222222222222",
+		Version:     1,
+		ExpiresAt:   time.Unix(1739812234, 0),
+	}
+
+	// Human-readable (non-hex) IDs must each produce a distinct packed hash.
+	ids := []string{"app-1", "app-2", "trading", "gaming", "defi"}
+	hashes := make(map[string]string)
+	for _, id := range ids {
+		s := base
+		s.ApplicationIDs = []string{id}
+		packed, err := PackAppSessionKeyStateV1(s)
+		require.NoError(t, err)
+		h := hexutil.Encode(packed)
+		if prev, seen := hashes[h]; seen {
+			t.Fatalf("collision: %q and %q produced the same hash %s", prev, id, h)
+		}
+		hashes[h] = id
+	}
+
+	// Same uniqueness requirement holds for AppSessionIDs.
+	sessionHashes := make(map[string]string)
+	for _, id := range ids {
+		s := base
+		s.AppSessionIDs = []string{id}
+		packed, err := PackAppSessionKeyStateV1(s)
+		require.NoError(t, err)
+		h := hexutil.Encode(packed)
+		if prev, seen := sessionHashes[h]; seen {
+			t.Fatalf("appSessionID collision: %q and %q produced the same hash %s", prev, id, h)
+		}
+		sessionHashes[h] = id
+	}
+
+	// An empty ID and a whitespace ID must also be distinct.
+	sEmpty := base
+	sEmpty.ApplicationIDs = []string{""}
+	sSpace := base
+	sSpace.ApplicationIDs = []string{" "}
+	hashEmpty, err := PackAppSessionKeyStateV1(sEmpty)
+	require.NoError(t, err)
+	hashSpace, err := PackAppSessionKeyStateV1(sSpace)
+	require.NoError(t, err)
+	assert.NotEqual(t, hexutil.Encode(hashEmpty), hexutil.Encode(hashSpace))
 }
 
 func TestAppSessionSignerV1(t *testing.T) {

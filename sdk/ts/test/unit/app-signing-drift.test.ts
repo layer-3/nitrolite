@@ -130,7 +130,7 @@ describe('Go/TS app signing drift vectors', () => {
 
     it('matches Go PackAppSessionKeyStateV1 vector', () => {
         expect(packAppSessionKeyStateV1(sessionKeyState)).toBe(
-            '0x9fedfbcd577c5e677b95b1273e38f52ffdeee096e98f731c5455e4c73e0274aa'
+            '0x6d404fa628918dbe4abec4ae2808c7ea01dc880ad4ad392ca2d0c4ce21f706c1'
         );
     });
 
@@ -236,6 +236,40 @@ describe('Go/TS app signing drift vectors', () => {
         });
 
         expect(normalized).not.toBe(canonical);
+    });
+
+    it('proves human-readable application IDs produce distinct hashes (no collision)', () => {
+        const base: AppSessionKeyStateV1 = {
+            user_address: user,
+            session_key: app,
+            version: '1',
+            application_ids: [],
+            app_session_ids: [],
+            expires_at: '1739812234',
+            user_sig: '',
+            session_key_sig: '',
+        };
+
+        const ids = ['app-1', 'app-2', 'trading', 'gaming', 'defi'];
+        const appIdHashes = new Set<string>();
+        for (const id of ids) {
+            const h = packAppSessionKeyStateV1({ ...base, application_ids: [id] });
+            expect(appIdHashes.has(h)).toBe(false);
+            appIdHashes.add(h);
+        }
+
+        // Same uniqueness requirement holds for app_session_ids.
+        const sessionIdHashes = new Set<string>();
+        for (const id of ids) {
+            const h = packAppSessionKeyStateV1({ ...base, app_session_ids: [id] });
+            expect(sessionIdHashes.has(h)).toBe(false);
+            sessionIdHashes.add(h);
+        }
+
+        // Empty string and whitespace must also be distinct.
+        const hashEmpty = packAppSessionKeyStateV1({ ...base, application_ids: [''] });
+        const hashSpace = packAppSessionKeyStateV1({ ...base, application_ids: [' '] });
+        expect(hashEmpty).not.toBe(hashSpace);
     });
 
     it('proves adversarial session-key ID placement changes the signed hash', () => {

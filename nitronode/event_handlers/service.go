@@ -377,7 +377,7 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 			return err
 		}
 		if finalized {
-			logger.Info("skipping challenge_rescue for post-Finalize close",
+			logger.Debug("skipping challenge_rescue for post-Finalize close",
 				"channelId", chanID,
 				"userWallet", channel.UserWallet,
 				"closureVersion", event.StateVersion)

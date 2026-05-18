@@ -187,6 +187,12 @@ func NewVoidState(asset, userWallet string) *State {
 // state starts at version 0. Callers must guarantee no other (epoch+1, version=0) row
 // already exists for this (wallet, asset) — for the rescue path this is enforced by
 // only invoking it on non-Finalize challenge closes (see HandleHomeChannelClosed).
+//
+// Not a general-purpose constructor: the sole authorized callsite is
+// EventHandlerService.issueChallengeRescue, which gates invocation on
+// HasSignedFinalize=false. Adding a second callsite without an equivalent guard will
+// cause StoreUserState to fail with a deterministic GetStateID collision against an
+// existing (epoch+1, version=0) row.
 func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error) {
 	if prev.HomeChannelID == nil {
 		return nil, fmt.Errorf("prev state has no home channel ID")

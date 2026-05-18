@@ -1888,6 +1888,10 @@ func TestHandleHomeChannelClosed_PostFinalize_SkipsRescue(t *testing.T) {
 //
 // With the guard, HasSignedFinalize=true short-circuits the entire branch before any
 // of those DB calls fire. The mock asserts none of them are reached.
+//
+// Intentional twin of TestHandleHomeChannelClosed_PostFinalize_SkipsRescue: setup and
+// AssertNotCalled set are identical at the mock level; this case exists to document the
+// specific collision failure modes the guard prevents. Do not collapse the two.
 func TestHandleHomeChannelClosed_PostFinalize_CollisionRegression(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())

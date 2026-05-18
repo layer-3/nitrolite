@@ -20,6 +20,10 @@ const (
 	MetricNamespace = "nitronode"
 )
 
+// allActionResults is the closed enum of result label values used by counters
+// whose outcome dimension is success/failed.
+var allActionResults = []ActionResult{ActionResultSuccess, ActionResultFailed}
+
 var (
 	_ RuntimeMetricExporter = (*runtimeMetricExporter)(nil)
 	_ StoreMetricExporter   = (*storeMetricExporter)(nil)
@@ -409,15 +413,11 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 	return m, nil
 }
 
-// allActionResults is the closed enum of result label values used by counters
-// whose outcome dimension is success/failed.
-var allActionResults = []ActionResult{ActionResultSuccess, ActionResultFailed}
-
 // SeedRPCMethodMetrics publishes 0-valued series for every (method, path="default",
-// result) and (msg_type, method) tuple, so per-method PromQL queries return defined
-// values immediately after boot. Methods whose request payload determines path
-// (intent/transition) are not enumerated here — those variants appear on first call
-// and are bounded by their respective enums.
+// result), (msg_type, method) and (method) tuple, so per-method PromQL queries
+// return defined values immediately after boot. Methods whose request payload
+// determines path (intent/transition) are not enumerated here — those variants
+// appear on first call and are bounded by their respective enums.
 func (m *runtimeMetricExporter) SeedRPCMethodMetrics(methods []string) {
 	msgTypes := []rpc.MsgType{rpc.MsgTypeReq, rpc.MsgTypeResp, rpc.MsgTypeRespErr}
 	const defaultPath = "default"
@@ -429,6 +429,7 @@ func (m *runtimeMetricExporter) SeedRPCMethodMetrics(methods []string) {
 			m.rpcRequestsTotal.WithLabelValues(method, defaultPath, res.String())
 			m.rpcRequestDurationSeconds.WithLabelValues(method, defaultPath, res.String())
 		}
+		m.rpcInflight.WithLabelValues(method)
 	}
 }
 

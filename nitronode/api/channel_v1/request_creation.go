@@ -128,14 +128,19 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 			return rpc.Errorf("incoming state home_channel_id is invalid")
 		}
 
-		if currentState.HomeChannelID != nil {
-			isFinal := currentState.IsFinal()
-			if !isFinal {
-				return rpc.Errorf("channel is already initialized")
-			}
-			if isFinal && strings.EqualFold(*incomingState.HomeChannelID, *currentState.HomeChannelID) {
-				return rpc.Errorf("cannot use same home channel id")
-			}
+		// Reject reuse of an already-known channel ID. Enforced at the handler rather than
+		// relying on the channels.channel_id primary key, so the invariant holds even when
+		// the prior state has no HomeChannelID (e.g., after a ChallengeRescue squash).
+		existingChannel, err := tx.GetChannelByID(homeChannelID)
+		if err != nil {
+			return rpc.Errorf("failed to check existing channel: %v", err)
+		}
+		if existingChannel != nil {
+			return rpc.Errorf("cannot use same home channel id")
+		}
+
+		if currentState.HomeChannelID != nil && !currentState.IsFinal() {
+			return rpc.Errorf("channel is already initialized")
 		}
 
 		logger.Debug("processing channel creation request", "incomingVersion", incomingState.Version)

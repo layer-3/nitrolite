@@ -93,6 +93,7 @@ func TestRequestCreation_Success(t *testing.T) {
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
 	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil).Once()
+	mockTxStore.On("GetChannelByID", mock.AnythingOfType("string")).Return((*core.Channel)(nil), nil).Once()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("CreateChannel", mock.MatchedBy(func(channel core.Channel) bool {
 		return channel.UserWallet == userWallet &&
@@ -248,6 +249,7 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
 	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
 	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil).Once()
+	mockTxStore.On("GetChannelByID", mock.AnythingOfType("string")).Return((*core.Channel)(nil), nil).Once()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedState, nil)
 	mockTxStore.On("CreateChannel", mock.MatchedBy(func(channel core.Channel) bool {
 		return channel.UserWallet == userWallet &&
@@ -617,6 +619,124 @@ func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
 	mockTxStore.AssertExpectations(t)
 	// GetLastUserState, CreateChannel, StoreUserState must NOT be called.
 	mockTxStore.AssertNotCalled(t, "GetLastUserState", mock.Anything, mock.Anything, mock.Anything)
+	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+}
+
+// TestRequestCreation_RejectReusedHomeChannelID covers the case where the user's last
+// state has no HomeChannelID (e.g., it is a ChallengeRescue squash on a fresh epoch),
+// but the computed channel ID matches a previously stored channel record. The handler
+// must reject the request explicitly rather than deferring the duplicate detection to
+// the channels.channel_id primary key in CreateChannel.
+func TestRequestCreation_RejectReusedHomeChannelID(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      nodeAddress,
+		minChallenge:     uint32(3600),
+		maxChallenge:     uint32(604800),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	userSigner := NewMockSigner()
+	userWallet := userSigner.PublicKey().Address().String()
+	asset := "USDC"
+	tokenAddress := "0xTokenAddress"
+	blockchainID := uint64(1)
+	nonce := uint64(7)
+	challenge := uint32(86400)
+
+	homeChannelID, err := core.GetHomeChannelID(nodeAddress, userWallet, asset, nonce, challenge, "0x03")
+	require.NoError(t, err)
+
+	// Simulate the post-rescue ledger head: a state whose HomeChannelID is nil because
+	// it was issued by issueChallengeRescue() after the prior home channel was closed.
+	rescueHead := core.State{
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: nil,
+	}
+
+	// Channel record from the closed epoch still lives in the channels table.
+	priorChannel := &core.Channel{
+		ChannelID:    homeChannelID,
+		UserWallet:   userWallet,
+		Asset:        asset,
+		Type:         core.ChannelTypeHome,
+		BlockchainID: blockchainID,
+		TokenAddress: tokenAddress,
+		Status:       core.ChannelStatusClosed,
+		Nonce:        nonce,
+	}
+
+	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
+	mockTxStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil).Once()
+	mockTxStore.On("HasNonClosedHomeChannel", userWallet, asset).Return(false, nil).Once()
+	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(rescueHead, nil).Once()
+	mockTxStore.On("GetChannelByID", mock.AnythingOfType("string")).Return(priorChannel, nil).Once()
+
+	reqPayload := rpc.ChannelsV1RequestCreationRequest{
+		State: rpc.StateV1{
+			ID:            core.GetStateID(userWallet, asset, 2, 1),
+			UserWallet:    userWallet,
+			Asset:         asset,
+			Epoch:         "2",
+			Version:       "1",
+			HomeChannelID: &homeChannelID,
+			Transition:    rpc.TransitionV1{Amount: "0"},
+			HomeLedger: rpc.LedgerV1{
+				TokenAddress: tokenAddress,
+				BlockchainID: "1",
+				UserBalance:  "0",
+				UserNetFlow:  "0",
+				NodeBalance:  "0",
+				NodeNetFlow:  "0",
+			},
+		},
+		ChannelDefinition: rpc.ChannelDefinitionV1{
+			Nonce:                 strconv.FormatUint(nonce, 10),
+			Challenge:             challenge,
+			ApprovedSigValidators: "0x03",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{
+			RequestID: 1,
+			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
+			Payload:   payload,
+		},
+	}
+
+	handler.RequestCreation(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.Error(t, respErr)
+	assert.Contains(t, respErr.Error(), "cannot use same home channel id")
+
+	mockTxStore.AssertExpectations(t)
 	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
 	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 }

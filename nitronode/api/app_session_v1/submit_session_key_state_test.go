@@ -485,6 +485,92 @@ func TestSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing.T) {
 	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
 }
 
+func TestSubmitSessionKeyState_RejectsNonLowercaseApplicationID(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeyAddress := "0x3333333333333333333333333333333333333333"
+
+	reqPayload := rpc.AppSessionsV1SubmitSessionKeyStateRequest{
+		State: rpc.AppSessionKeyStateV1{
+			UserAddress:    userAddress,
+			SessionKey:     sessionKeyAddress,
+			Version:        "1",
+			ApplicationIDs: []string{"App-1"},
+			AppSessionIDs:  []string{},
+			ExpiresAt:      strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:        "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "application_ids must be lowercase, got: App-1")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestSubmitSessionKeyState_RejectsNonLowercaseAppSessionID(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeyAddress := "0x3333333333333333333333333333333333333333"
+
+	reqPayload := rpc.AppSessionsV1SubmitSessionKeyStateRequest{
+		State: rpc.AppSessionKeyStateV1{
+			UserAddress:    userAddress,
+			SessionKey:     sessionKeyAddress,
+			Version:        "1",
+			ApplicationIDs: []string{},
+			AppSessionIDs:  []string{"Session-ABC"},
+			ExpiresAt:      strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:        "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "app_session_ids must be lowercase, got: Session-ABC")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestSubmitSessionKeyState_SignatureMismatch(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()

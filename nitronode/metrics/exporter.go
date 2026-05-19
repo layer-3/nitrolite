@@ -413,21 +413,29 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 	return m, nil
 }
 
-// SeedRPCMethodMetrics publishes 0-valued series for every (method, path="default",
-// result), (msg_type, method) and (method) tuple, so per-method PromQL queries
-// return defined values immediately after boot. Methods whose request payload
-// determines path (intent/transition) are not enumerated here — those variants
-// appear on first call and are bounded by their respective enums.
-func (m *runtimeMetricExporter) SeedRPCMethodMetrics(methods []string) {
+// SeedRPCMethodMetrics publishes 0-valued series for every (msg_type, method),
+// (method, path, result) and (method) tuple, so per-method PromQL queries return
+// defined values immediately after boot. The path domain per method comes from
+// methodPaths; methods absent from the map (or mapped to an empty slice) get
+// path="default" only. Methods whose request payload determines path should be
+// listed in methodPaths with their full bounded enum, so absent()-style alerts
+// don't flap on the first request of each variant.
+func (m *runtimeMetricExporter) SeedRPCMethodMetrics(methods []string, methodPaths map[string][]string) {
 	msgTypes := []rpc.MsgType{rpc.MsgTypeReq, rpc.MsgTypeResp, rpc.MsgTypeRespErr}
 	const defaultPath = "default"
 	for _, method := range methods {
 		for _, mt := range msgTypes {
 			m.rpcMessagesTotal.WithLabelValues(mt.String(), method)
 		}
-		for _, res := range allActionResults {
-			m.rpcRequestsTotal.WithLabelValues(method, defaultPath, res.String())
-			m.rpcRequestDurationSeconds.WithLabelValues(method, defaultPath, res.String())
+		paths := methodPaths[method]
+		if len(paths) == 0 {
+			paths = []string{defaultPath}
+		}
+		for _, p := range paths {
+			for _, res := range allActionResults {
+				m.rpcRequestsTotal.WithLabelValues(method, p, res.String())
+				m.rpcRequestDurationSeconds.WithLabelValues(method, p, res.String())
+			}
 		}
 		m.rpcInflight.WithLabelValues(method)
 	}

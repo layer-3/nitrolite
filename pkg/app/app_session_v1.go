@@ -23,6 +23,17 @@ const (
 	AppStateUpdateIntentRebalance
 )
 
+// AllAppStateUpdateIntents enumerates every defined intent. Kept beside the
+// const block so adding a new intent here is the natural place to update
+// consumers that iterate the full domain (metrics seeding, drift tests).
+var AllAppStateUpdateIntents = []AppStateUpdateIntent{
+	AppStateUpdateIntentOperate,
+	AppStateUpdateIntentDeposit,
+	AppStateUpdateIntentWithdraw,
+	AppStateUpdateIntentClose,
+	AppStateUpdateIntentRebalance,
+}
+
 func (intent AppStateUpdateIntent) String() string {
 	switch intent {
 	case AppStateUpdateIntentOperate:

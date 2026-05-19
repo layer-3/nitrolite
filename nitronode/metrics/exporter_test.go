@@ -241,7 +241,7 @@ func TestSeedRPCMethodMetrics_PublishesZeroValuedSeries(t *testing.T) {
 
 	rt := exp.(*runtimeMetricExporter)
 	methods := []string{"channels.v1.submit_state", "app_sessions.v1.create_app_session"}
-	rt.SeedRPCMethodMetrics(methods)
+	rt.SeedRPCMethodMetrics(methods, nil)
 
 	// rpc_messages_emitted_total: 3 msg_types × N methods, all at 0.
 	msgs := gatherSeriesValues(t, reg, "nitronode_rpc_messages_emitted_total")
@@ -290,11 +290,52 @@ func TestSeedRPCMethodMetrics_EmptyMethodsIsNoop(t *testing.T) {
 	require.NoError(t, err)
 
 	rt := exp.(*runtimeMetricExporter)
-	rt.SeedRPCMethodMetrics(nil)
+	rt.SeedRPCMethodMetrics(nil, nil)
 
 	assert.Empty(t, gatherSeriesValues(t, reg, "nitronode_rpc_messages_emitted_total"))
 	assert.Empty(t, gatherSeriesValues(t, reg, "nitronode_rpc_requests_total"))
 	assert.Empty(t, gatherSeriesValues(t, reg, "nitronode_rpc_inflight"))
+}
+
+func TestSeedRPCMethodMetrics_EnumeratesBoundedPaths(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	exp, err := NewRuntimeMetricExporter(reg)
+	require.NoError(t, err)
+
+	rt := exp.(*runtimeMetricExporter)
+	const boundedMethod = "channels.v1.submit_state"
+	const defaultMethod = "app_sessions.v1.create_app_session"
+	paths := []string{"escrow_lock", "void", "commit"}
+	methods := []string{boundedMethod, defaultMethod}
+
+	rt.SeedRPCMethodMetrics(methods, map[string][]string{boundedMethod: paths})
+
+	reqs := gatherSeriesValues(t, reg, "nitronode_rpc_requests_total")
+	// boundedMethod: len(paths) × len(allActionResults). defaultMethod: 1 × len(allActionResults).
+	require.Len(t, reqs, (len(paths)+1)*len(allActionResults))
+
+	// Every (boundedMethod, path, result) tuple from the map appears.
+	for _, p := range paths {
+		for _, res := range allActionResults {
+			key := "method=" + boundedMethod + ",path=" + p + ",result=" + res.String()
+			_, ok := reqs[key]
+			assert.True(t, ok, "missing series %s", key)
+		}
+	}
+
+	// boundedMethod has no path="default" series — caller declared the full domain.
+	for _, res := range allActionResults {
+		key := "method=" + boundedMethod + ",path=default,result=" + res.String()
+		_, ok := reqs[key]
+		assert.False(t, ok, "unexpected default-path series for bounded method: %s", key)
+	}
+
+	// Method absent from the map falls back to path="default".
+	for _, res := range allActionResults {
+		key := "method=" + defaultMethod + ",path=default,result=" + res.String()
+		_, ok := reqs[key]
+		assert.True(t, ok, "missing default-path series %s", key)
+	}
 }
 
 func TestSeedBlockchainEventMetrics_PublishesZeroValuedSeries(t *testing.T) {

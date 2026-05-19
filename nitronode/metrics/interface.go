@@ -57,7 +57,7 @@ type RuntimeMetricExporter interface {
 	// Seeders publish 0-valued series for label tuples whose full domain is known at
 	// startup, so PromQL queries (and absent()-style alerts) return defined values
 	// during the cold-start window before any traffic or chain event has arrived.
-	SeedRPCMethodMetrics(methods []string)
+	SeedRPCMethodMetrics(methods []string, methodPaths map[string][]string)
 	SeedBlockchainEventMetrics(blockchainIDs []uint64)
 }
 
@@ -84,7 +84,7 @@ func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool)            {}
 func (noopRuntimeMetricExporter) IncRPCInflight(string)                      {}
 func (noopRuntimeMetricExporter) DecRPCInflight(string)                      {}
 func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration) {}
-func (noopRuntimeMetricExporter) SeedRPCMethodMetrics([]string)                {}
+func (noopRuntimeMetricExporter) SeedRPCMethodMetrics([]string, map[string][]string) {}
 func (noopRuntimeMetricExporter) SeedBlockchainEventMetrics([]uint64)          {}
 
 // StoreMetricExporter defines the interface for setting metrics that are stored and updated by a separate metric worker.

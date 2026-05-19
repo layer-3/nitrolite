@@ -1,0 +1,14 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0xf74c93a176794337fb43c951cc0f6cef9a6723f6",
+  "transactionHash": "0x15f0ed3d4aec486dc7a17ef3c4c77e54567f36ca0f6a8135aa7ab7d088e95bac",
+  "commit": "df4e110a",
+  "timestamp": 1779194593,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0x708B3CA8b7Dc0f89Ea5a06709C3b92Dd5843B662",
+    "0x2B6dc5BB33F3eaAbfd3A8d17fDb7BdB8fEf331f9"
+  ],
+  "comment": "stress v1.3.0"
+}

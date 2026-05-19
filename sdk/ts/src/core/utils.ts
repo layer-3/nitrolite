@@ -443,7 +443,7 @@ export function getChannelSessionKeyAuthMetadataHashV1(
  * abi.encode(address, bytes32) signatures as session-key authorizations.
  */
 export const SESSION_KEY_AUTH_TYPEHASH: Hex = keccak256(
-    toHex('Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)')
+  toHex('Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)')
 );
 
 /**

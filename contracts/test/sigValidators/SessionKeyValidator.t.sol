@@ -221,6 +221,13 @@ contract SessionKeyValidatorTest_validateSignature is SessionKeyValidatorTest_Ba
 
         bytes memory encoded = toSigningData(skAuth);
 
+        // Verify full 96-byte golden value: typehash || padded address || metadataHash.
+        bytes memory expected = hex"251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c"
+            hex"000000000000000000000000deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            hex"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        assertEq(encoded.length, 96);
+        assertEq(encoded, expected);
+
         // Verify typehash is the first 32 bytes of the encoded payload.
         bytes32 typehashWord;
         assembly {

@@ -239,6 +239,7 @@ func TestGetLatestState_NormalizesWallet(t *testing.T) {
 	mockTxStore.AssertExpectations(t)
 }
 
+// TestGetLatestState_NotFound verifies absent state returns a successful response with nil state payload.
 func TestGetLatestState_NotFound(t *testing.T) {
 	mockTxStore := new(MockStore)
 
@@ -263,8 +264,8 @@ func TestGetLatestState_NotFound(t *testing.T) {
 	handler.GetLatestState(ctx)
 
 	// Absence is a successful response with state == nil.
-	assert.NotNil(t, ctx.Response.Payload)
-	assert.Nil(t, ctx.Response.Error())
+	require.NotNil(t, ctx.Response.Payload)
+	require.NoError(t, ctx.Response.Error())
 
 	var response rpc.ChannelsV1GetLatestStateResponse
 	err = ctx.Response.Payload.Translate(&response)

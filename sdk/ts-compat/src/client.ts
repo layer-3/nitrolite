@@ -525,18 +525,30 @@ export class NitroliteClient {
 
     async getChannelData(_channelId: string): Promise<any> {
         await this.ensureAssets();
+        let lookupError: unknown = null;
+        let sawSuccessfulLookup = false;
         for (const [, info] of this.assetsBySymbol) {
+            let ch;
             try {
-                const ch = await this.innerClient.getHomeChannel(this.userAddress, info.symbol);
-                if (ch && ch.channelId === _channelId) {
-                    return {
-                        channel: ch,
-                        state: await this.innerClient.getLatestState(this.userAddress, info.symbol, false),
-                    };
-                }
-            } catch {
-                // transient RPC failure for this asset — skip
+                ch = await this.innerClient.getHomeChannel(this.userAddress, info.symbol);
+                sawSuccessfulLookup = true;
+            } catch (err) {
+                lookupError = err;
+                continue;
             }
+            if (!ch || ch.channelId !== _channelId) {
+                continue;
+            }
+            const state = await this.innerClient.getLatestState(this.userAddress, info.symbol, false);
+            if (!state) {
+                throw new Error(`Channel ${_channelId} has no latest state`);
+            }
+            return { channel: ch, state };
+        }
+        if (!sawSuccessfulLookup && lookupError) {
+            throw lookupError instanceof Error
+                ? lookupError
+                : new Error(`failed to query channels: ${String(lookupError)}`);
         }
         throw new Error(`Channel ${_channelId} not found`);
     }

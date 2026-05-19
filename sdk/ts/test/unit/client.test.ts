@@ -206,6 +206,90 @@ describe('Client.acknowledge', () => {
     });
 });
 
+describe('Client absence semantics for GET methods', () => {
+    it('getHomeChannel returns null when the RPC response has no channel', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            channelsV1GetHomeChannel: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getHomeChannel(USER_WALLET, 'usdc');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.channelsV1GetHomeChannel).toHaveBeenCalledWith({
+            wallet: USER_WALLET,
+            asset: 'usdc',
+        });
+    });
+
+    it('getEscrowChannel returns null when the RPC response has no channel', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            channelsV1GetEscrowChannel: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getEscrowChannel('0xEscrow');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.channelsV1GetEscrowChannel).toHaveBeenCalledWith({
+            escrow_channel_id: '0xEscrow',
+        });
+    });
+
+    it('getAppDefinition returns null when the RPC response has no definition', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            appSessionsV1GetAppDefinition: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getAppDefinition('0xSession');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.appSessionsV1GetAppDefinition).toHaveBeenCalledWith({
+            app_session_id: '0xSession',
+        });
+    });
+});
+
+describe('Client nil-state guards', () => {
+    it('closeHomeChannel throws when no latest state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        await expect(client.closeHomeChannel('usdc')).rejects.toThrow(
+            'no channel exists for asset usdc'
+        );
+    });
+
+    it('checkpoint throws when no signed state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        await expect(client.checkpoint('usdc')).rejects.toThrow(
+            'no signed state exists for asset usdc'
+        );
+    });
+
+    it('submitAppSessionDeposit throws when no current state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        const appStateUpdate = {
+            appSessionId: '0xSession',
+            intent: 'deposit',
+            version: 2n,
+            allocations: [],
+        } as any;
+
+        await expect(
+            client.submitAppSessionDeposit(appStateUpdate, ['sig1'], 'usdc', new Decimal(10))
+        ).rejects.toThrow('no channel state to advance for AppSession');
+    });
+});
+
 describe('Client.transfer', () => {
     it('creates a channel with transfer when no latest state exists', async () => {
         const client = createHighLevelClient(null);

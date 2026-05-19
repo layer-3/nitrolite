@@ -8,7 +8,8 @@ import {ChannelHub} from "../src/ChannelHub.sol";
 
 contract ChannelHubTest_depositToNode is ChannelHubTest_Base {
     // TODO:
-}
+
+    }
 
 contract ChannelHubTest_withdrawFromNode is ChannelHubTest_Base {
     RevertingEthReceiver public revertingReceiver;

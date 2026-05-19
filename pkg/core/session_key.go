@@ -72,10 +72,14 @@ func (s *ChannelSessionKeySignerV1) Type() ChannelSignerType {
 	return ChannelSignerType_SessionKey
 }
 
-// SessionKeyAuthTypehash is the type hash prepended to the session key authorization payload.
+var sessionKeyAuthTypehash = crypto.Keccak256Hash([]byte("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)"))
+
+// SessionKeyAuthTypehash returns the type hash prepended to the session key authorization payload.
 // It matches the Solidity constant SESSION_KEY_AUTH_TYPEHASH and
 // prevents unrelated abi.encode(address, bytes32) signatures from being reused as authorizations.
-var SessionKeyAuthTypehash = crypto.Keccak256Hash([]byte("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)"))
+func SessionKeyAuthTypehash() common.Hash {
+	return sessionKeyAuthTypehash
+}
 
 // PackChannelKeyStateV1 packs the session key authorization payload for signing using ABI encoding.
 func PackChannelKeyStateV1(sessionKey string, metadataHash common.Hash) ([]byte, error) {
@@ -86,7 +90,7 @@ func PackChannelKeyStateV1(sessionKey string, metadataHash common.Hash) ([]byte,
 	}
 
 	packed, err := args.Pack(
-		SessionKeyAuthTypehash,
+		sessionKeyAuthTypehash,
 		common.HexToAddress(sessionKey),
 		metadataHash,
 	)

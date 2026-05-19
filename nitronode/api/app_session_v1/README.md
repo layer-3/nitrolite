@@ -831,7 +831,7 @@ The implementation uses Ethereum ABI encoding for deterministic hashing and sign
 #### `PackAppSessionKeyStateV1(state AppSessionKeyStateV1) ([]byte, error)`
 - Packs session key state for signature verification using ABI encoding
 - Encodes: user_address (address), session_key (address), version (uint64), application_ids (bytes32[]), app_session_ids (bytes32[]), expires_at (uint64)
-- Each `application_id` and `app_session_id` string is converted to bytes32 via `keccak256(utf8(id))`, so every distinct string — including human-readable IDs like `"app-1"` — produces a unique hash with no collisions
+- Each `application_id` and `app_session_id` string is converted to bytes32 via `keccak256(utf8(id))`, providing deterministic, collision-resistant identifiers in practice
 - Excludes the `user_sig` field (it is the signature itself)
 - Returns Keccak256 hash of ABI-encoded data
 - Used in `submit_session_key_state` to verify the user's signature

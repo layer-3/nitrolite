@@ -1005,6 +1005,8 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			StateVersion:      1,
 		}))
 
+		_, err := store.LockUserState("0xuser123", "USDC")
+		require.NoError(t, err)
 		userSig := "0xusersigonly"
 		state := core.State{
 			ID:            "state-user-only",
@@ -1086,6 +1088,8 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 			nodeSig := "0xnodesig"
 			s.NodeSig = &nodeSig
 		}
+		_, err := store.LockUserState(wallet, asset)
+		require.NoError(t, err)
 		require.NoError(t, store.StoreUserState(s, ""))
 	}
 
@@ -1288,6 +1292,8 @@ func TestDBStore_HasSignedFinalize(t *testing.T) {
 			nodeSig := "0xnodesig"
 			s.NodeSig = &nodeSig
 		}
+		_, err := store.LockUserState(wallet, asset)
+		require.NoError(t, err)
 		require.NoError(t, store.StoreUserState(s, ""))
 	}
 

@@ -208,7 +208,7 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
 	if head.Transition.Type != core.TransitionTypeTransferReceive &&
 		head.Transition.Type != core.TransitionTypeRelease {
-		log.FromContext(ctx).Debug("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+		log.FromContext(ctx).Warn("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
 			"channelId", channelID,
 			"transitionType", head.Transition.Type,
 			"version", head.Version,

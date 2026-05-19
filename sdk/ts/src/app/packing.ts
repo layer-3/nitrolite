@@ -1,4 +1,4 @@
-import { Address, Hex, encodeAbiParameters, keccak256, toHex } from 'viem';
+import { Address, encodeAbiParameters, keccak256, toHex } from 'viem';
 import {
   AppDefinitionV1,
   AppStateUpdateV1,

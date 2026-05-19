@@ -214,7 +214,7 @@ func TestGenerateSessionKeyStateIDV1(t *testing.T) {
 func TestPackChannelKeyStateV1_Typehash(t *testing.T) {
 	t.Parallel()
 	expected := common.HexToHash("0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c")
-	assert.Equal(t, expected, SessionKeyAuthTypehash)
+	assert.Equal(t, expected, SessionKeyAuthTypehash())
 }
 
 func TestPackChannelKeyStateV1(t *testing.T) {

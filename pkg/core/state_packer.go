@@ -12,6 +12,64 @@ type StatePackerV1 struct {
 	assetStore AssetStore
 }
 
+// contractLedger mirrors the Solidity Ledger struct used inside the signed state
+// payload. Allocation fields are encoded as uint256 and must fit [0, 2^256-1];
+// net-flow fields are encoded as int256 and must fit [-2^255, 2^255-1].
+type contractLedger struct {
+	ChainId        uint64
+	Token          common.Address
+	Decimals       uint8
+	UserAllocation *big.Int
+	UserNetFlow    *big.Int
+	NodeAllocation *big.Int
+	NodeNetFlow    *big.Int
+}
+
+// Validate guards against any caller that constructs a contractLedger without
+// going through the bounds-checking decimal helpers, so values that would be
+// silently truncated by ABI encoding are rejected before signing.
+func (l contractLedger) Validate() error {
+	if err := checkUint256(l.UserAllocation); err != nil {
+		return fmt.Errorf("user allocation: %w", err)
+	}
+	if err := checkUint256(l.NodeAllocation); err != nil {
+		return fmt.Errorf("node allocation: %w", err)
+	}
+	if err := checkInt256(l.UserNetFlow); err != nil {
+		return fmt.Errorf("user net flow: %w", err)
+	}
+	if err := checkInt256(l.NodeNetFlow); err != nil {
+		return fmt.Errorf("node net flow: %w", err)
+	}
+	return nil
+}
+
+func checkUint256(v *big.Int) error {
+	if v == nil {
+		return fmt.Errorf("value is nil")
+	}
+	if v.Sign() < 0 {
+		return fmt.Errorf("value %s is negative", v.String())
+	}
+	if v.BitLen() > 256 {
+		return fmt.Errorf("value %s exceeds uint256 max (2^256-1)", v.String())
+	}
+	return nil
+}
+
+func checkInt256(v *big.Int) error {
+	if v == nil {
+		return fmt.Errorf("value is nil")
+	}
+	if v.Cmp(maxInt256) > 0 {
+		return fmt.Errorf("value %s exceeds int256 max (2^255-1)", v.String())
+	}
+	if v.Cmp(minInt256) < 0 {
+		return fmt.Errorf("value %s below int256 min (-2^255)", v.String())
+	}
+	return nil
+}
+
 func NewStatePackerV1(assetStore AssetStore) *StatePackerV1 {
 	return &StatePackerV1{
 		assetStore: assetStore,
@@ -62,36 +120,26 @@ func (p *StatePackerV1) packSigningData(state State) (common.Hash, []byte, error
 		{Type: ledgerType},  // nonHomeState
 	}
 
-	type contractLedger struct {
-		ChainId        uint64
-		Token          common.Address
-		Decimals       uint8
-		UserAllocation *big.Int
-		UserNetFlow    *big.Int
-		NodeAllocation *big.Int
-		NodeNetFlow    *big.Int
-	}
-
 	homeDecimals, err := p.assetStore.GetTokenDecimals(state.HomeLedger.BlockchainID, state.HomeLedger.TokenAddress)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}
 
-	userBalanceBI, err := DecimalToBigInt(state.HomeLedger.UserBalance, homeDecimals)
+	userBalanceBI, err := DecimalToUint256(state.HomeLedger.UserBalance, homeDecimals)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, nil, fmt.Errorf("home user balance: %w", err)
 	}
-	userNetFlowBI, err := DecimalToBigInt(state.HomeLedger.UserNetFlow, homeDecimals)
+	userNetFlowBI, err := DecimalToInt256(state.HomeLedger.UserNetFlow, homeDecimals)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, nil, fmt.Errorf("home user net flow: %w", err)
 	}
-	nodeBalanceBI, err := DecimalToBigInt(state.HomeLedger.NodeBalance, homeDecimals)
+	nodeBalanceBI, err := DecimalToUint256(state.HomeLedger.NodeBalance, homeDecimals)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, nil, fmt.Errorf("home node balance: %w", err)
 	}
-	nodeNetFlowBI, err := DecimalToBigInt(state.HomeLedger.NodeNetFlow, homeDecimals)
+	nodeNetFlowBI, err := DecimalToInt256(state.HomeLedger.NodeNetFlow, homeDecimals)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, nil, fmt.Errorf("home node net flow: %w", err)
 	}
 
 	homeLedger := contractLedger{
@@ -112,21 +160,21 @@ func (p *StatePackerV1) packSigningData(state State) (common.Hash, []byte, error
 			return common.Hash{}, nil, err
 		}
 
-		escrowUserBalanceBI, err := DecimalToBigInt(state.EscrowLedger.UserBalance, escrowDecimals)
+		escrowUserBalanceBI, err := DecimalToUint256(state.EscrowLedger.UserBalance, escrowDecimals)
 		if err != nil {
-			return common.Hash{}, nil, err
+			return common.Hash{}, nil, fmt.Errorf("escrow user balance: %w", err)
 		}
-		escrowUserNetFlowBI, err := DecimalToBigInt(state.EscrowLedger.UserNetFlow, escrowDecimals)
+		escrowUserNetFlowBI, err := DecimalToInt256(state.EscrowLedger.UserNetFlow, escrowDecimals)
 		if err != nil {
-			return common.Hash{}, nil, err
+			return common.Hash{}, nil, fmt.Errorf("escrow user net flow: %w", err)
 		}
-		escrowNodeBalanceBI, err := DecimalToBigInt(state.EscrowLedger.NodeBalance, escrowDecimals)
+		escrowNodeBalanceBI, err := DecimalToUint256(state.EscrowLedger.NodeBalance, escrowDecimals)
 		if err != nil {
-			return common.Hash{}, nil, err
+			return common.Hash{}, nil, fmt.Errorf("escrow node balance: %w", err)
 		}
-		escrowNodeNetFlowBI, err := DecimalToBigInt(state.EscrowLedger.NodeNetFlow, escrowDecimals)
+		escrowNodeNetFlowBI, err := DecimalToInt256(state.EscrowLedger.NodeNetFlow, escrowDecimals)
 		if err != nil {
-			return common.Hash{}, nil, err
+			return common.Hash{}, nil, fmt.Errorf("escrow node net flow: %w", err)
 		}
 
 		nonHomeLedger = contractLedger{
@@ -148,6 +196,13 @@ func (p *StatePackerV1) packSigningData(state State) (common.Hash, []byte, error
 			NodeAllocation: big.NewInt(0),
 			NodeNetFlow:    big.NewInt(0),
 		}
+	}
+
+	if err := homeLedger.Validate(); err != nil {
+		return common.Hash{}, nil, fmt.Errorf("invalid home ledger for signing: %w", err)
+	}
+	if err := nonHomeLedger.Validate(); err != nil {
+		return common.Hash{}, nil, fmt.Errorf("invalid escrow ledger for signing: %w", err)
 	}
 
 	intent := TransitionToIntent(state.Transition)

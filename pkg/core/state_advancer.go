@@ -175,7 +175,11 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 	if err := expectedState.HomeLedger.Equal(proposedState.HomeLedger); err != nil {
 		return fmt.Errorf("home ledger mismatch: %w", err)
 	}
-	if err := proposedState.HomeLedger.Validate(); err != nil {
+	homeDecimals, err := v.assetStore.GetTokenDecimals(proposedState.HomeLedger.BlockchainID, proposedState.HomeLedger.TokenAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get home token decimals: %w", err)
+	}
+	if err := proposedState.HomeLedger.Validate(homeDecimals); err != nil {
 		return fmt.Errorf("invalid home ledger: %w", err)
 	}
 
@@ -197,7 +201,11 @@ func (v *StateAdvancerV1) ValidateAdvancement(currentState, proposedState State)
 		if err := expectedState.EscrowLedger.Equal(*proposedState.EscrowLedger); err != nil {
 			return fmt.Errorf("escrow ledger mismatch: %w", err)
 		}
-		if err := proposedState.EscrowLedger.Validate(); err != nil {
+		escrowDecimals, err := v.assetStore.GetTokenDecimals(proposedState.EscrowLedger.BlockchainID, proposedState.EscrowLedger.TokenAddress)
+		if err != nil {
+			return fmt.Errorf("failed to get escrow token decimals: %w", err)
+		}
+		if err := proposedState.EscrowLedger.Validate(escrowDecimals); err != nil {
 			return fmt.Errorf("invalid escrow ledger: %w", err)
 		}
 

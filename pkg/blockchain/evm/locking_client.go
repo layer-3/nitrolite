@@ -1,8 +1,6 @@
 package evm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -100,7 +98,7 @@ func (c *LockingClient) Lock(targetWalletAddress string, amount decimal.Decimal)
 		return "", errors.New("transaction signer not configured")
 	}
 
-	amountBig, err := core.DecimalToBigInt(amount, c.tokenDecimals)
+	amountBig, err := core.DecimalToUint256(amount, c.tokenDecimals)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to convert amount with decimal precision")
 	}
@@ -182,7 +180,7 @@ func (c *LockingClient) ApproveToken(amount decimal.Decimal) (string, error) {
 		return "", errors.New("transaction signer not configured")
 	}
 
-	amountBig, err := core.DecimalToBigInt(amount, c.tokenDecimals)
+	amountBig, err := core.DecimalToUint256(amount, c.tokenDecimals)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to convert amount with decimal precision")
 	}
@@ -223,10 +221,4 @@ func (c *LockingClient) GetBalance(user string) (decimal.Decimal, error) {
 	}
 
 	return decimal.NewFromBigInt(balance, -int32(c.tokenDecimals)), nil
-}
-
-// decimalToBigInt converts a decimal amount to *big.Int given token decimals.
-func decimalToBigInt(amount decimal.Decimal, decimals int32) *big.Int {
-	shifted := amount.Shift(decimals)
-	return shifted.BigInt()
 }

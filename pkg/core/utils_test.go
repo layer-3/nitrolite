@@ -370,7 +370,7 @@ func TestDecimalToBigInt(t *testing.T) {
 			amount, err := decimal.NewFromString(tt.amount)
 			assert.NoError(t, err, "Test setup error: invalid amount string")
 
-			result, err := DecimalToBigInt(amount, tt.decimals)
+			result, err := decimalToBigInt(amount, tt.decimals)
 			assert.NoError(t, err)
 
 			expected, ok := new(big.Int).SetString(tt.expected, 10)
@@ -386,7 +386,7 @@ func TestDecimalToBigInt_NegativeAmounts(t *testing.T) {
 	t.Run("negative_usdc", func(t *testing.T) {
 		t.Parallel()
 		amount := decimal.NewFromFloat(-1.23)
-		result, err := DecimalToBigInt(amount, 6)
+		result, err := decimalToBigInt(amount, 6)
 		assert.NoError(t, err)
 		expected := big.NewInt(-1230000)
 		assert.Equal(t, expected.String(), result.String(), "Negative amounts should be handled correctly")
@@ -395,7 +395,7 @@ func TestDecimalToBigInt_NegativeAmounts(t *testing.T) {
 	t.Run("negative_eth", func(t *testing.T) {
 		t.Parallel()
 		amount := decimal.NewFromFloat(-0.5)
-		result, err := DecimalToBigInt(amount, 18)
+		result, err := decimalToBigInt(amount, 18)
 		assert.NoError(t, err)
 		expected, _ := new(big.Int).SetString("-500000000000000000", 10)
 		assert.Equal(t, expected.String(), result.String(), "Negative ETH amount should convert correctly")
@@ -404,7 +404,7 @@ func TestDecimalToBigInt_NegativeAmounts(t *testing.T) {
 	t.Run("negative_zero", func(t *testing.T) {
 		t.Parallel()
 		amount := decimal.NewFromInt(0)
-		result, err := DecimalToBigInt(amount, 6)
+		result, err := decimalToBigInt(amount, 6)
 		assert.NoError(t, err)
 		expected := big.NewInt(0)
 		assert.Equal(t, expected.String(), result.String(), "Zero should always be zero")
@@ -418,7 +418,7 @@ func TestDecimalToBigInt_EdgeCases(t *testing.T) {
 		// Test with a very large amount
 		amount, err := decimal.NewFromString("999999999999999999.123456")
 		assert.NoError(t, err)
-		result, err := DecimalToBigInt(amount, 6)
+		result, err := decimalToBigInt(amount, 6)
 		assert.NoError(t, err)
 		// 999999999999999999.123456 * 10^6 = 999999999999999999123456
 		expected, ok := new(big.Int).SetString("999999999999999999123456", 10)
@@ -430,7 +430,7 @@ func TestDecimalToBigInt_EdgeCases(t *testing.T) {
 		t.Parallel()
 		// Test with an amount that has more decimals than supported
 		amount := decimal.NewFromFloat(0.0000001) // 7 decimals
-		_, err := DecimalToBigInt(amount, 6)      // Only 6 decimal precision
+		_, err := decimalToBigInt(amount, 6)      // Only 6 decimal precision
 		// This should return an error because the amount has more decimal places than allowed
 		// After scaling: 0.0000001 * 10^6 = 0.1, which still has a fractional part
 		assert.Error(t, err, "Amount with more decimals than supported should return an error")
@@ -441,7 +441,7 @@ func TestDecimalToBigInt_EdgeCases(t *testing.T) {
 		t.Parallel()
 		// Test with maximum uint8 value for decimals (not practical, but edge case)
 		amount := decimal.NewFromInt(1)
-		result, err := DecimalToBigInt(amount, 255)
+		result, err := decimalToBigInt(amount, 255)
 		assert.NoError(t, err)
 		// 1 * 10^255 should work
 		expected := new(big.Int).Exp(big.NewInt(10), big.NewInt(255), nil)
@@ -453,7 +453,7 @@ func TestDecimalToBigInt_EdgeCases(t *testing.T) {
 		// Test that we don't lose precision during conversion
 		amount, err := decimal.NewFromString("123.456789")
 		assert.NoError(t, err)
-		result, err := DecimalToBigInt(amount, 6)
+		result, err := decimalToBigInt(amount, 6)
 		assert.NoError(t, err)
 		// 123.456789 * 10^6 = 123456789
 		expected := big.NewInt(123456789)
@@ -471,7 +471,7 @@ func TestDecimalToBigInt_RoundTrip(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Convert to big.Int
-		bigIntValue, err := DecimalToBigInt(amount, 6)
+		bigIntValue, err := decimalToBigInt(amount, 6)
 		assert.NoError(t, err)
 		// Convert back to decimal
 		divisor := decimal.New(1, 6) // 10^6
@@ -722,5 +722,111 @@ func TestGetStateTransitionsHash(t *testing.T) {
 			"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",                         // 20-byte address
 			decimal.NewFromInt(-100)))
 		assert.NoError(t, err)
+	})
+}
+
+func TestDecimalToUint256(t *testing.T) {
+	t.Parallel()
+
+	// 2^256 - 1, max uint256
+	maxUint256, ok := new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
+	require.True(t, ok)
+	// 2^256, one above the limit
+	overflow := new(big.Int).Add(maxUint256, big.NewInt(1))
+
+	t.Run("zero", func(t *testing.T) {
+		t.Parallel()
+		got, err := DecimalToUint256(decimal.Zero, 18)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), got.Int64())
+	})
+
+	t.Run("small_positive", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromInt(1234)
+		got, err := DecimalToUint256(amount, 0)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1234), got.Int64())
+	})
+
+	t.Run("max_uint256_accepted", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(maxUint256, 0)
+		got, err := DecimalToUint256(amount, 0)
+		require.NoError(t, err)
+		assert.Equal(t, 0, got.Cmp(maxUint256))
+	})
+
+	t.Run("one_over_uint256_rejected", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(overflow, 0)
+		_, err := DecimalToUint256(amount, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds uint256 max")
+	})
+
+	t.Run("scaling_pushes_over_uint256", func(t *testing.T) {
+		t.Parallel()
+		// value at uint256 max with 1 extra decimal of scale exceeds the range.
+		amount := decimal.NewFromBigInt(maxUint256, 0)
+		_, err := DecimalToUint256(amount, 1)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds uint256 max")
+	})
+
+	t.Run("negative_rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := DecimalToUint256(decimal.NewFromInt(-1), 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "negative")
+	})
+}
+
+func TestDecimalToInt256(t *testing.T) {
+	t.Parallel()
+
+	maxInt, ok := new(big.Int).SetString("57896044618658097711785492504343953926634992332820282019728792003956564819967", 10) // 2^255 - 1
+	require.True(t, ok)
+	minInt := new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(1), 255)) // -2^255
+	overMax := new(big.Int).Add(maxInt, big.NewInt(1))
+	underMin := new(big.Int).Sub(minInt, big.NewInt(1))
+
+	t.Run("zero", func(t *testing.T) {
+		t.Parallel()
+		got, err := DecimalToInt256(decimal.Zero, 18)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), got.Int64())
+	})
+
+	t.Run("max_int256_accepted", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(maxInt, 0)
+		got, err := DecimalToInt256(amount, 0)
+		require.NoError(t, err)
+		assert.Equal(t, 0, got.Cmp(maxInt))
+	})
+
+	t.Run("min_int256_accepted", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(minInt, 0)
+		got, err := DecimalToInt256(amount, 0)
+		require.NoError(t, err)
+		assert.Equal(t, 0, got.Cmp(minInt))
+	})
+
+	t.Run("one_over_max_rejected", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(overMax, 0)
+		_, err := DecimalToInt256(amount, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds int256 max")
+	})
+
+	t.Run("one_under_min_rejected", func(t *testing.T) {
+		t.Parallel()
+		amount := decimal.NewFromBigInt(underMin, 0)
+		_, err := DecimalToInt256(amount, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "below int256 min")
 	})
 }

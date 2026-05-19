@@ -638,7 +638,12 @@ func (l1 Ledger) Equal(l2 Ledger) error {
 	return nil
 }
 
-func (l Ledger) Validate() error {
+// Validate checks ledger invariants and ensures all four scaled values fit the
+// Solidity ABI ranges used for signing and onchain calls. Balances must fit
+// uint256 ([0, 2^256-1]); net flows must fit int256 ([-2^255, 2^255-1]).
+// assetDecimals is the token's decimal exponent, used to scale decimal values
+// to their smallest onchain units before the range check.
+func (l Ledger) Validate(assetDecimals uint8) error {
 	if l.TokenAddress == "" {
 		return fmt.Errorf("invalid token address")
 	}
@@ -655,6 +660,19 @@ func (l Ledger) Validate() error {
 	sumNetFlows := l.UserNetFlow.Add(l.NodeNetFlow)
 	if !sumBalances.Equal(sumNetFlows) {
 		return fmt.Errorf("ledger balances do not match net flows: balances=%s, net_flows=%s", sumBalances.String(), sumNetFlows.String())
+	}
+
+	if _, err := DecimalToUint256(l.UserBalance, assetDecimals); err != nil {
+		return fmt.Errorf("user balance out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToUint256(l.NodeBalance, assetDecimals); err != nil {
+		return fmt.Errorf("node balance out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(l.UserNetFlow, assetDecimals); err != nil {
+		return fmt.Errorf("user net flow out of int256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(l.NodeNetFlow, assetDecimals); err != nil {
+		return fmt.Errorf("node net flow out of int256 range: %w", err)
 	}
 
 	return nil

@@ -229,7 +229,14 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 		}
 
 	case core.TransitionTypeMigrate:
-		// Verify last_state.version == home_channel.state_version
+		// NOTE: Migration flows are not yet active off-chain. This case is currently unreachable
+		// because submit_state.go rejects TransitionTypeMigrate before EnsureNoOngoingStateTransitions
+		// is called. When migration is implemented, this check must be extended: verifying that
+		// last_state.version == home_channel.state_version confirms only that the preparation state
+		// was enforced on the OLD home chain. A complete gate must also confirm that
+		// initiateMigration() was submitted on the NEW home chain (i.e. a MIGRATING_IN channel
+		// exists with a matching state version), matching the MigrationInInitiated lifecycle step
+		// documented in protocol-description.md.
 		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
 			return fmt.Errorf("home chain migration is still ongoing")
 		}

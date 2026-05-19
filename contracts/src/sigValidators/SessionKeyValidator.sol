@@ -10,6 +10,10 @@ import {
 import {EcdsaSignatureUtils} from "./EcdsaSignatureUtils.sol";
 import {Utils} from "../Utils.sol";
 
+/// @dev Type hash for `SessionKeyAuthorization`, included in the authorization payload to prevent
+///      reuse of unrelated `abi.encode(address, bytes32)` signatures as session-key authorizations.
+bytes32 constant SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)");
+
 /**
  * @notice Authorization struct for delegating signing authority to a session key
  * @dev The participant signs this authorization to allow the session key to sign on their behalf
@@ -25,6 +29,7 @@ struct SessionKeyAuthorization {
 
 function toSigningData(SessionKeyAuthorization memory skAuth) pure returns (bytes memory) {
     return abi.encode(
+        SESSION_KEY_AUTH_TYPEHASH,
         skAuth.sessionKey,
         skAuth.metadataHash
         // omit authSignature

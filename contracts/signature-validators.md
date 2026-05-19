@@ -191,7 +191,8 @@ bytes sigBody = abi.encode(SessionKeyAuthorization, bytes sessionKeySignature)
 
 **Two checks:**
 
-1. Participant authorized the session key: `authData = abi.encode(sessionKey, metadataHash)`
+1. Participant authorized the session key: `authData = abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash)`
+   where `SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")`
 2. Session key signed the state
 
 Both use EIP-191 first, then raw ECDSA if that fails.

@@ -178,7 +178,7 @@ func (s *ChannelSigValidator) Recover(data, sig []byte) (string, error) {
 		}
 
 		// Step 1: Verify participant authorized this session key
-		// authMessage = _toSigningData(skAuth) = abi.encode(skAuth.sessionKey, skAuth.metadataHash)
+		// authMessage = toSigningData(skAuth) = abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash)
 		packedAuth, err := PackChannelKeyStateV1(skAuth.SessionKey.Hex(), skAuth.MetadataHash)
 		if err != nil {
 			return "", fmt.Errorf("failed to pack auth data: %w", err)

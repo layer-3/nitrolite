@@ -72,16 +72,21 @@ func (s *ChannelSessionKeySignerV1) Type() ChannelSignerType {
 	return ChannelSignerType_SessionKey
 }
 
-// PackChannelKeyStateV1 packs the session key state for signing using ABI encoding.
-// This is used to generate a deterministic hash that the user signs when registering/updating a session key.
-// The user_sig field is excluded from packing since it is the signature itself.
+// SessionKeyAuthTypehash is the type hash prepended to the session key authorization payload.
+// It matches the Solidity constant SESSION_KEY_AUTH_TYPEHASH and
+// prevents unrelated abi.encode(address, bytes32) signatures from being reused as authorizations.
+var SessionKeyAuthTypehash = crypto.Keccak256Hash([]byte("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)"))
+
+// PackChannelKeyStateV1 packs the session key authorization payload for signing using ABI encoding.
 func PackChannelKeyStateV1(sessionKey string, metadataHash common.Hash) ([]byte, error) {
 	args := abi.Arguments{
+		{Type: abi.Type{T: abi.FixedBytesTy, Size: 32}}, // SESSION_KEY_AUTH_TYPEHASH
 		{Type: abi.Type{T: abi.AddressTy}},              // session_key
 		{Type: abi.Type{T: abi.FixedBytesTy, Size: 32}}, // hashed metadata
 	}
 
 	packed, err := args.Pack(
+		SessionKeyAuthTypehash,
 		common.HexToAddress(sessionKey),
 		metadataHash,
 	)

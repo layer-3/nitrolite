@@ -1955,6 +1955,11 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     ],
   },
   {
+    "kind": "const",
+    "name": "SESSION_KEY_AUTH_TYPEHASH",
+    "type": "\`0x\${string}\`",
+  },
+  {
     "kind": "interface",
     "name": "SessionKey",
     "properties": [
@@ -2577,6 +2582,7 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "NodeV1PingMethod",
   "RPCClient",
   "RPCError",
+  "SESSION_KEY_AUTH_TYPEHASH",
   "StateAdvancerV1",
   "StatePackerV1",
   "TransactionType",

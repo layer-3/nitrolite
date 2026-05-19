@@ -1126,10 +1126,10 @@ func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("EscrowDeposit - chain one version behind (finalize/purge pending) - allow", func(t *testing.T) {
-		// Signed finalize state is N+1; on-chain escrow channel may still be at
-		// initiate version N until finalize or purge lands. Purge queue makes
-		// this terminal, so receiver-side state issuance must not be blocked.
+	t.Run("EscrowDeposit - Open one-behind (pre-purge happy path) - allow", func(t *testing.T) {
+		// Signed finalize state is N+1; on-chain escrow channel is at initiate
+		// version N with Status=Open. This is the protocol-intended steady state
+		// until the purge queue fires, so receiver-side issuance must not block.
 		db, cleanup := SetupTestDB(t)
 		defer cleanup()
 
@@ -1141,6 +1141,26 @@ func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 
 		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
 		require.NoError(t, err)
+	})
+
+	t.Run("EscrowDeposit - Challenged one-behind - block", func(t *testing.T) {
+		// Signed finalize state is N+1; on-chain channel is Challenged at N.
+		// Resolution is racing (finalize tx may not land, escrow chain may settle
+		// at INITIATE) — block receiver-side issuance until status clears.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+		require.NoError(t, store.CreateChannel(homeChannel))
+		challengedEscrow := newEscrowChannel(1)
+		challengedEscrow.Status = core.ChannelStatusChallenged
+		require.NoError(t, store.CreateChannel(challengedEscrow))
+
+		storeState(t, store, newSignedState(2, core.TransitionTypeEscrowDeposit, true))
+
+		err := store.EnsureNoOngoingEscrowOperation(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "escrow deposit finalization is still ongoing")
 	})
 
 	t.Run("EscrowDeposit - chain more than one version behind - block", func(t *testing.T) {

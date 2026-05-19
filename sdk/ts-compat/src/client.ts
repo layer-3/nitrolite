@@ -526,12 +526,10 @@ export class NitroliteClient {
     async getChannelData(_channelId: string): Promise<any> {
         await this.ensureAssets();
         let lookupError: unknown = null;
-        let sawSuccessfulLookup = false;
         for (const [, info] of this.assetsBySymbol) {
             let ch;
             try {
                 ch = await this.innerClient.getHomeChannel(this.userAddress, info.symbol);
-                sawSuccessfulLookup = true;
             } catch (err) {
                 lookupError = err;
                 continue;
@@ -545,7 +543,9 @@ export class NitroliteClient {
             }
             return { channel: ch, state };
         }
-        if (!sawSuccessfulLookup && lookupError) {
+        // Any uninspected asset (caught exception) invalidates a not-found conclusion,
+        // since genuine absence comes back as null under the nullable contract.
+        if (lookupError) {
             throw lookupError instanceof Error
                 ? lookupError
                 : new Error(`failed to query channels: ${String(lookupError)}`);

@@ -99,3 +99,24 @@ export type EscrowWithdrawalChallengedEvent = ChannelChallengedEvent;
  * EscrowWithdrawalFinalizedEvent represents the EscrowWithdrawalFinalized event
  */
 export type EscrowWithdrawalFinalizedEvent = ChannelEvent;
+
+// ============================================================================
+// Validator Events
+// ============================================================================
+
+/**
+ * Emitted when the node registers a new signature validator on ChannelHub.
+ * Users must react to unexpected registrations by revoking ERC20 approvals
+ * granted to ChannelHub — see contracts/SECURITY.md.
+ *
+ * `validator` is always EIP-55 checksummed. Compare with getAddress(ev.validator)
+ * to avoid silent mismatches against lowercase or non-checksummed config values.
+ *
+ * Pass `blockNumber + 1n` as `fromBlock` on reconnect for gap-free monitoring.
+ */
+export interface ValidatorRegisteredEvent {
+    blockchainId: bigint;
+    validatorId: number; // uint8
+    validator: Address; // EIP-55 checksummed
+    blockNumber: bigint; // use as fromBlock on reconnect
+}

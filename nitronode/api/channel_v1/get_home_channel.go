@@ -23,7 +23,7 @@ func (h *Handler) GetHomeChannel(c *rpc.Context) {
 	var channel *core.Channel
 	err = h.useStoreInTx(func(tx Store) error {
 		var err error
-		channel, err = tx.GetActiveHomeChannel(req.Wallet, req.Asset)
+		channel, err = tx.GetNotClosedHomeChannel(req.Wallet, req.Asset)
 		if err != nil {
 			return rpc.Errorf("failed to get home channel: %v", err)
 		}

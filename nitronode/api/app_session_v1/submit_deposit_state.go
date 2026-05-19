@@ -104,12 +104,12 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			return rpc.Errorf("user state transition must have 'commit' type, got '%s'", lastTransition.Type.String())
 		}
 
-		approvedSigValidators, userHasOpenChannel, err := tx.CheckOpenChannel(userState.UserWallet, userState.Asset)
+		approvedSigValidators, channelStatus, err := tx.CheckActiveChannel(userState.UserWallet, userState.Asset)
 		if err != nil {
-			return rpc.Errorf("failed to check open channel: %v", err)
+			return rpc.Errorf("failed to check active channel: %v", err)
 		}
-		if !userHasOpenChannel {
-			return rpc.Errorf("user has no open channel")
+		if channelStatus == nil {
+			return rpc.Errorf("user has no active channel")
 		}
 
 		if lastTransition.AccountID != appStateUpd.AppSessionID {

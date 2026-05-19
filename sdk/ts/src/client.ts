@@ -39,7 +39,7 @@ import * as blockchain from './blockchain/index.js';
 import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state.js';
 import { newVoidState } from './core/types.js';
 import { packState, packChallengeState } from './core/state_packer.js';
-import { StateSigner, TransactionSigner } from './signers.js';
+import { EthereumMsgSigner, StateSigner, TransactionSigner } from './signers.js';
 
 /**
  * Default challenge period for channels (1 day in seconds)
@@ -1680,13 +1680,16 @@ export class Client {
   /**
    * Sign a channel session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitChannelSessionKeyState.
+   * user_sig field before submitting via submitChannelSessionKeyState. The matching
+   * session_key_sig (see signChannelSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The channel session key state to sign (user_sig field is excluded from signing)
+   * @param state - The channel session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<Hex> {
     const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
       BigInt(state.version),
       state.assets,
       BigInt(state.expires_at)
@@ -1700,8 +1703,43 @@ export class Client {
   }
 
   /**
+   * Produce the session-key holder's ownership signature for a channel session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. session_key is
+   * bound into the metadata hash so a signature minted for one key cannot be replayed for
+   * another.
+   *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. ChannelDefaultSigner, ChannelSessionKeyStateSigner)
+   * that the server rejects.
+   *
+   * @param state - The channel session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signChannelSessionKeyOwnership(
+    state: ChannelSessionKeyStateV1,
+    sessionKeySigner: EthereumMsgSigner
+  ): Promise<Hex> {
+    const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
+      BigInt(state.version),
+      state.assets,
+      BigInt(state.expires_at)
+    );
+    const packed = core.packChannelKeyStateV1(
+      state.session_key as Address,
+      metadataHash
+    );
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
    * Submit a channel session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered). Submits without a valid session_key_sig are rejected.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1713,19 +1751,25 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest channel session key states for a user.
+   * Retrieve the latest channel session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active channel session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of channel session key states matching the filter
    */
   async getLastChannelKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<ChannelSessionKeyStateV1[]> {
     const req: API.ChannelsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.channelsV1GetLastKeyStates(req);
     if (!Array.isArray(resp.states)) {
@@ -1743,9 +1787,11 @@ export class Client {
   /**
    * Sign an app session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitSessionKeyState.
+   * user_sig field before submitting via submitSessionKeyState. The matching
+   * session_key_sig (see signAppSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The app session key state to sign (user_sig field is excluded from signing)
+   * @param state - The app session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signSessionKeyState(state: app.AppSessionKeyStateV1): Promise<Hex> {
@@ -1755,8 +1801,33 @@ export class Client {
   }
 
   /**
+   * Produce the session-key holder's ownership signature for an app session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. The packed
+   * app-session state already binds user_address, so the same packed bytes are used for
+   * both the wallet's user_sig and the session-key holder's session_key_sig.
+   *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. AppSessionWalletSignerV1) that the server rejects.
+   *
+   * @param state - The app session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signAppSessionKeyOwnership(
+    state: app.AppSessionKeyStateV1,
+    sessionKeySigner: EthereumMsgSigner
+  ): Promise<Hex> {
+    const packed = app.packAppSessionKeyStateV1(state);
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
    * Submit an app session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered). Submits without a valid session_key_sig are rejected.
    *
    * @param state - The session key state containing delegation information
    */
@@ -1768,19 +1839,25 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest session key states for a user.
+   * Retrieve the latest app session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of app session key states matching the filter
    */
-  async getLastKeyStates(
+  async getLastAppKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<app.AppSessionKeyStateV1[]> {
     const req: API.AppSessionsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.appSessionsV1GetLastKeyStates(req);
     if (!Array.isArray(resp.states)) {
@@ -1789,6 +1866,62 @@ export class Client {
     return resp.states.map((state, index) =>
       transformAppSessionKeyState(state, `app session key state[${index}]`)
     );
+  }
+
+  // ============================================================================
+  // On-Chain Event Watching
+  // ============================================================================
+
+  /**
+   * Subscribes to ValidatorRegistered events emitted by the ChannelHub contract
+   * on the given chain and yields them as an async stream.
+   *
+   * Gap-free monitoring: pass fromBlock = 0n on the first call. On reconnect,
+   * pass lastEvent.blockNumber + 1n so any events emitted during the outage
+   * are replayed before live events resume. This preserves the 1-day
+   * VALIDATOR_ACTIVATION_DELAY safety window across network interruptions.
+   *
+   * The generator completes when the AbortSignal fires or the subscription is
+   * lost. Reconnect by calling watchValidatorRegistered again with the last
+   * received blockNumber + 1n as fromBlock.
+   *
+   * The RPC URL configured via withBlockchainRPC for chainId should be a
+   * WebSocket endpoint (wss://) for push-based delivery. With an HTTP endpoint
+   * viem falls back to polling getLogs at a 4-second interval.
+   *
+   * @example
+   * ```ts
+   * const ac = new AbortController();
+   * let fromBlock = 0n;
+   * while (!ac.signal.aborted) {
+   *   for await (const ev of client.watchValidatorRegistered(chainId, fromBlock, ac.signal)) {
+   *     console.warn(`Unexpected validator ${ev.validatorId} at block ${ev.blockNumber}`);
+   *     fromBlock = ev.blockNumber + 1n;
+   *   }
+   *   await new Promise(r => setTimeout(r, 5_000)); // back off before reconnect
+   * }
+   * ```
+   */
+  async *watchValidatorRegistered(
+      chainId: bigint,
+      fromBlock: bigint = 0n,
+      signal?: AbortSignal,
+  ): AsyncGenerator<core.ValidatorRegisteredEvent> {
+      const { rpcUrl, blockchainInfo } = await this.getBlockchainRPCInfo(chainId);
+
+      if (!blockchainInfo.channelHubAddress) {
+          throw new Error(`channel hub address not configured for blockchain ${chainId}`);
+      }
+
+      const { publicClient } = this.createEVMClients(chainId, rpcUrl);
+
+      yield* blockchain.evm.watchValidatorRegistered(
+          blockchainInfo.channelHubAddress as Address,
+          publicClient,
+          chainId,
+          fromBlock,
+          signal,
+      );
   }
 
   // ============================================================================

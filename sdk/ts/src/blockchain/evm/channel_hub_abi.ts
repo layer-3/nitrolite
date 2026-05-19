@@ -50,6 +50,19 @@ export const ChannelHubAbi = [
   },
   {
     type: 'function',
+    name: 'MAX_CHALLENGE_DURATION',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'uint32',
+        internalType: 'uint32'
+      }
+    ],
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
     name: 'MAX_DEPOSIT_ESCROW_STEPS',
     inputs: [],
     outputs: [
@@ -4143,6 +4156,12 @@ export const ChannelHubAbi = [
     type: 'event',
     name: 'EscrowDepositsPurged',
     inputs: [
+      {
+        name: 'escrowIds',
+        type: 'bytes32[]',
+        indexed: false,
+        internalType: 'bytes32[]'
+      },
       {
         name: 'purgedCount',
         type: 'uint256',

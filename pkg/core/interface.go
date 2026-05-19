@@ -95,6 +95,7 @@ type ChannelHubEventHandler interface {
 	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
 	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
 	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error
+	HandleEscrowDepositsPurged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositsPurgedEvent) error
 	HandleEscrowWithdrawalInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalInitiatedEvent) error
 	HandleEscrowWithdrawalChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalChallengedEvent) error
 	HandleEscrowWithdrawalFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalFinalizedEvent) error
@@ -122,6 +123,10 @@ type ChannelHubEventHandlerStore interface {
 	// This queues the state to be submitted on-chain to update the channel's on-chain state.
 	ScheduleCheckpoint(stateID string, chainID uint64) error
 
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
 	// ScheduleInitiateEscrowDeposit schedules an initiate for an escrow deposit operation.
 	// This queues the state to be submitted on-chain to finalize an escrow deposit.
 	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
@@ -139,6 +144,11 @@ type ChannelHubEventHandlerStore interface {
 
 	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
 	RefreshUserEnforcedBalance(wallet, asset string) error
+
+	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
+	// Used to repair the local record after an on-chain event proves the state was bilaterally enforced.
+	// No-op when userSig is empty or no row matches; existing user_sig is never overwritten.
+	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
 }
 
 type LockingContractEventHandler interface {

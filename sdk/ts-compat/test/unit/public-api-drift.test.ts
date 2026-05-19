@@ -197,10 +197,13 @@ describe('compat public runtime API drift guard', () => {
         expect(client?.properties).toEqual(
             expect.arrayContaining([
                 expect.stringContaining('signChannelSessionKeyState:'),
+                expect.stringContaining('signChannelSessionKeyOwnership:'),
                 expect.stringContaining('submitChannelSessionKeyState:'),
                 expect.stringContaining('getLastChannelKeyStates:'),
                 expect.stringContaining('signSessionKeyState:'),
+                expect.stringContaining('signAppSessionKeyOwnership:'),
                 expect.stringContaining('submitSessionKeyState:'),
+                expect.stringContaining('getLastAppKeyStates:'),
                 expect.stringContaining('getLastKeyStates:'),
             ])
         );

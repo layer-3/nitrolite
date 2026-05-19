@@ -55,6 +55,11 @@ func (m *mockChannelHubStore) ScheduleCheckpoint(stateID string, chainID uint64)
 	return args.Error(0)
 }
 
+func (m *mockChannelHubStore) ScheduleChallenge(stateID string, chainID uint64) error {
+	args := m.Called(stateID, chainID)
+	return args.Error(0)
+}
+
 func (m *mockChannelHubStore) ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error {
 	args := m.Called(stateID, chainID)
 	return args.Error(0)
@@ -82,6 +87,11 @@ func (m *mockChannelHubStore) RefreshUserEnforcedBalance(wallet, asset string) e
 
 func (m *mockChannelHubStore) StoreContractEvent(ev core.BlockchainEvent) error {
 	args := m.Called(ev)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error {
+	args := m.Called(channelID, version, userSig)
 	return args.Error(0)
 }
 
@@ -131,6 +141,11 @@ func (m *mockChannelHubEventHandler) HandleEscrowDepositChallenged(ctx context.C
 }
 
 func (m *mockChannelHubEventHandler) HandleEscrowDepositFinalized(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.EscrowDepositFinalizedEvent) error {
+	args := m.Called(ctx, tx, ev)
+	return args.Error(0)
+}
+
+func (m *mockChannelHubEventHandler) HandleEscrowDepositsPurged(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.EscrowDepositsPurgedEvent) error {
 	args := m.Called(ctx, tx, ev)
 	return args.Error(0)
 }
@@ -363,6 +378,46 @@ func TestChannelHubReactor_HandleHomeChannelCheckpointed(t *testing.T) {
 	})).Return(nil)
 
 	expectStoreContractEvent(store, "ChannelCheckpointed", 400, blockchainID)
+
+	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+	handler.AssertExpectations(t)
+	store.AssertExpectations(t)
+}
+
+// TestChannelHubReactor_HandleHomeChannelCheckpointed_ForwardsUserSig confirms the reactor
+// hex-encodes Candidate.UserSig from the parsed event payload and surfaces it to the handler.
+// Without this the wedge-recovery backfill in HandleHomeChannelCheckpointed has nothing to write.
+func TestChannelHubReactor_HandleHomeChannelCheckpointed_ForwardsUserSig(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	channelID := common.HexToHash("0xcc02ff")
+
+	state := makeState(7)
+	state.UserSig = []byte{0xde, 0xad, 0xbe, 0xef}
+	data := packNonIndexed(t, "ChannelCheckpointed", state)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["ChannelCheckpointed"].ID,
+			channelID,
+		},
+		Data:        data,
+		BlockNumber: 401,
+		TxHash:      common.HexToHash("0x112"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+		return ev.UserSig == hexutil.Encode([]byte{0xde, 0xad, 0xbe, 0xef})
+	})).Return(nil)
+
+	expectStoreContractEvent(store, "ChannelCheckpointed", 401, blockchainID)
 
 	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
 	err := reactor.HandleEvent(context.Background(), logEntry)
@@ -895,6 +950,46 @@ func TestChannelHubReactor_HandleEscrowWithdrawalFinalizedOnHome(t *testing.T) {
 	})).Return(nil)
 
 	expectStoreContractEvent(store, "EscrowWithdrawalFinalizedOnHome", 1800, blockchainID)
+
+	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+	handler.AssertExpectations(t)
+	store.AssertExpectations(t)
+}
+
+func TestChannelHubReactor_HandleEscrowDepositsPurged(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+
+	escrowID1 := common.HexToHash("0xee10")
+	escrowID2 := common.HexToHash("0xee11")
+	escrowIds := [][32]byte{escrowID1, escrowID2}
+	purgedCount := big.NewInt(2)
+
+	data := packNonIndexed(t, "EscrowDepositsPurged", escrowIds, purgedCount)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["EscrowDepositsPurged"].ID,
+		},
+		Data:        data,
+		BlockNumber: 1200,
+		TxHash:      common.HexToHash("0x999"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	handler.On("HandleEscrowDepositsPurged", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.EscrowDepositsPurgedEvent) bool {
+		return len(ev.EscrowIDs) == 2 &&
+			ev.EscrowIDs[0] == hexutil.Encode(escrowID1[:]) &&
+			ev.EscrowIDs[1] == hexutil.Encode(escrowID2[:])
+	})).Return(nil)
+
+	expectStoreContractEvent(store, "EscrowDepositsPurged", 1200, blockchainID)
 
 	reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
 	err := reactor.HandleEvent(context.Background(), logEntry)

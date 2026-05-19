@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 )
@@ -27,9 +28,12 @@ type Store interface {
 	// Returns nil state if no matching state exists.
 	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
 
-	// CheckOpenChannel verifies if a user has an active channel for the given asset
-	// and returns the approved signature validators if such a channel exists.
-	CheckOpenChannel(wallet, asset string) (string, bool, error)
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
 
 	// StoreUserState persists a new user state to the database.
 	// applicationID is the client-declared origin tag (rpc.ApplicationIDQueryParam);
@@ -39,6 +43,11 @@ type Store interface {
 	// EnsureNoOngoingStateTransitions validates that no blockchain operations are pending
 	// that would conflict with submitting a new state transition.
 	EnsureNoOngoingStateTransitions(wallet, asset string) error
+
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
 
 	// ScheduleInitiateEscrowWithdrawal queues a blockchain action to initiate
 	// withdrawal from an escrow channel (triggered by escrow_lock transition).
@@ -63,10 +72,31 @@ type Store interface {
 	// Returns nil if no home channel exists for the given wallet and asset.
 	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
 
+	// GetNotClosedHomeChannel retrieves the home channel regardless of status as long as it
+	// is not Closed. Used by GetHomeChannel so the endpoint stays functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	// The channel must already exist in the database.
+	UpdateChannel(channel core.Channel) error
+
+	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) has a
+	// status other than Closed, meaning a channel lifecycle is still in progress.
+	HasNonClosedHomeChannel(wallet, asset string) (bool, error)
+
 	// GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.
 	GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error)
 
 	// Session key state operations
+
+	// LockSessionKeyState locks the (user, session_key, kind) pointer row for the surrounding
+	// transaction, returning the current version (0 if newly created).
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+
+	// CountSessionKeysForUser returns the number of distinct session keys for the wallet
+	// across both kinds, used to enforce the per-user cap at submit time.
+	CountSessionKeysForUser(userAddress string) (uint32, error)
 
 	// StoreChannelSessionKeyState persists a channel session key state.
 	StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV1) error
@@ -76,8 +106,10 @@ type Store interface {
 	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
 
 	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
-	// optionally filtered by session key.
-	GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error)
+	// optionally filtered by session key. When includeInactive is false, only non-expired latest
+	// states are returned; when true, all latest states are returned regardless of expiry.
+	// Results are paginated.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
 
 	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
 	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,

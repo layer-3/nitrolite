@@ -2,7 +2,7 @@
 
 Nitrolite is a state channel protocol that enables high-speed off-chain interactions between users while preserving on-chain security guarantees.
 
-Users exchange signed state updates off-chain with Nodes that act as a hub connecting network participants. Any user can enforce the latest agreed state on the blockchain layer at any time.
+Users exchange signed state updates off-chain with Nodes that act as a hub connecting network participants. Any user can enforce the latest agreed state on the blockchain layer, provided a valid execution path exists for that state's intent in the current channel context.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Users exchange signed state updates off-chain with Nodes that act as a hub conne
 The protocol is designed to achieve:
 
 - **Off-chain scalability** — minimize on-chain transactions by moving state advancement off-chain
-- **Blockchain security guarantees** — any user can fall back to the blockchain layer to enforce the latest state
+- **Blockchain security guarantees** — any user can fall back to the blockchain layer to enforce the latest state, provided a valid execution path exists for that state's intent
 - **Cross-chain asset interaction** — operate on assets across multiple blockchains through a unified model
 - **Extensibility** — support additional functionality through protocol extensions without modifying the core protocol
 
@@ -60,7 +60,7 @@ A state represents the current agreed asset allocations and metadata shared betw
 User and a node advance states off-chain by exchanging signed state transitions. Each new state MUST have a version exactly one greater than the previous state. Transitions include deposits, withdrawals, transfers, commits, releases, escrow operations, and migrations.
 
 **State Enforcement**
-Any party MAY submit the latest signed state to the blockchain layer for on-chain enforcement. The blockchain layer validates signatures, version ordering, and ledger invariants before accepting a state.
+Any party MAY submit the latest mutually signed state to the blockchain layer for on-chain enforcement, provided that state's intent has a valid execution path in the current channel context. The blockchain layer validates signatures, version ordering, and ledger invariants before accepting a state.
 
 **Unified Assets**
 The same asset from multiple blockchains is represented in a unified model, enabling cross-chain operations among users and apps. The protocol normalizes amounts by decimal precision when comparing allocations across chains.

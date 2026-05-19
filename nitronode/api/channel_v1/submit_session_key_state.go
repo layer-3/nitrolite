@@ -1,8 +1,11 @@
 package channel_v1
 
 import (
+	"errors"
+	"strings"
 	"time"
 
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
@@ -44,6 +47,11 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 
+	if strings.EqualFold(coreState.UserAddress, coreState.SessionKey) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key must differ from user_address"), "")
+		return
+	}
+
 	if coreState.Version == 0 {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
@@ -60,19 +68,52 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
+	if coreState.SessionKeySig == "" {
+		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+		return
+	}
 
-	// Validate user's signature over the session key state
-	if err := core.ValidateChannelSessionKeyAuthSigV1(coreState); err != nil {
+	// Validate both signatures: wallet's user_sig and session-key holder's session_key_sig.
+	if err := core.ValidateChannelSessionKeyStateV1(coreState); err != nil {
 		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
 		return
 	}
 
 	// Validate version and store the session key state
 	err = h.useStoreInTx(func(tx Store) error {
-		// Check the latest version for this (user_address, session_key) pair; 0 means no state exists
-		latestVersion, err := tx.GetLastChannelSessionKeyVersion(coreState.UserAddress, coreState.SessionKey)
+		// Lock the (user, session_key, channel) pointer row for the duration of the tx so that
+		// concurrent submits for the same (user, session_key) serialize cleanly and report a
+		// proper "expected version" error rather than racing on the history UNIQUE constraint.
+		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindChannel)
 		if err != nil {
-			return rpc.Errorf("failed to check existing session key state: %v", err)
+			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
+				logger.Warn("session key registration collision",
+					"userAddress", coreState.UserAddress,
+					"sessionKey", coreState.SessionKey,
+					"kind", database.SessionKeyKindChannel)
+				return rpc.Errorf("invalid_session_key_state: session_key not allowed")
+			}
+			return rpc.Errorf("failed to lock session key state: %v", err)
+		}
+
+		// Enforce the per-user cap when registering a new session key. Existing keys (latestVersion > 0)
+		// can always be updated regardless of the cap so that legitimate rotation is never blocked.
+		//
+		// TODO(MF-H01-followup): the row lock above only serializes submits for the same
+		// (user, session_key, kind), so two concurrent submits registering *different* new keys
+		// for the same user can both observe the same count and both pass the check, ending up
+		// at most maxSessionKeysPerUser + (concurrent new-key writers - 1) keys. The cap is a
+		// soft DOS bound, not a hard quota — a small over-shoot under genuine concurrency is
+		// acceptable. If a hard quota is ever required, take a per-user advisory lock here
+		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
+		if latestVersion == 0 && h.maxSessionKeysPerUser > 0 {
+			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
+			if err != nil {
+				return rpc.Errorf("failed to count session keys for user: %v", err)
+			}
+			if count >= uint32(h.maxSessionKeysPerUser) {
+				return rpc.Errorf("invalid_session_key_state: user has reached the session key limit of %d", h.maxSessionKeysPerUser)
+			}
 		}
 
 		if coreState.Version != latestVersion+1 {

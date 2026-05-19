@@ -270,6 +270,7 @@ func unmapSessionKeyStateV1(state *rpc.AppSessionKeyStateV1) (app.AppSessionKeyS
 		AppSessionIDs:  appSessionIDs,
 		ExpiresAt:      time.Unix(expiresAtUnix, 0),
 		UserSig:        state.UserSig,
+		SessionKeySig:  state.SessionKeySig,
 	}, nil
 }
 
@@ -283,6 +284,7 @@ func mapSessionKeyStateV1(state *app.AppSessionKeyStateV1) rpc.AppSessionKeyStat
 		AppSessionIDs:  state.AppSessionIDs,
 		ExpiresAt:      strconv.FormatInt(state.ExpiresAt.Unix(), 10),
 		UserSig:        state.UserSig,
+		SessionKeySig:  state.SessionKeySig,
 	}
 }
 

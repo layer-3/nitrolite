@@ -9,6 +9,9 @@ config:
     port: 5432
     name: nitronode_stress_v1
     user: nitronode_stress_v1_admin
+    # pgbouncer runs in-cluster on a private network, so TLS is not required
+    # here. Override the chart's `require` default explicitly.
+    sslmode: disable
   envSecret: nitronode-secret-env
   extraEnvs:
     NITRONODE_DATABASE_MAX_OPEN_CONNS: "{{ $p.database.maxOpenConns }}"
@@ -21,6 +24,13 @@ config:
     NITRONODE_MAX_SESSION_DATA_LEN: "1024"
     NITRONODE_MAX_SIGNED_UPDATES: "0"
     NITRONODE_MAX_SESSION_KEY_IDS: "256"
+    # WebSocket DoS hardening.
+    # Frame cap: largest legit v1 RPC ≈ a few KB; 128 KiB leaves headroom.
+    # Byte budget: 256 KiB/s steady, 1 MiB burst. Comfortably absorbs reload
+    # reconnect storms (auth + subscribe ≈ 20 KB / tab) without throttling.
+    NITRONODE_WS_MAX_MESSAGE_SIZE: "131072"
+    NITRONODE_WS_BYTES_PER_SEC: "262144"
+    NITRONODE_WS_BYTES_BURST: "1048576"
 
 image:
   repository: ghcr.io/layer-3/nitrolite/nitronode
@@ -66,6 +76,20 @@ networking:
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      # ── DoS hardening (per-IP, NGINX-level) ──────────────────────────────
+      # Caps abusive sources before WebSocket upgrade and JSON decode.
+      # Effective only when ingress-nginx sees real client IPs — see chart
+      # README "WebSocket DoS hardening" for required ConfigMap settings.
+      # stress-v1 has no Cloudflare in front; source IP comes from the GCP
+      # LB. Verify externalTrafficPolicy=Local on the ingress-nginx Service
+      # before relying on per-IP limits.
+      nginx.ingress.kubernetes.io/limit-connections: "50"        # concurrent / IP
+      nginx.ingress.kubernetes.io/limit-rps: "20"                # new conns/s / IP
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+      # Note: nginx proxy-body-size applies to HTTP request bodies only. After
+      # the WebSocket upgrade, ingress-nginx proxies the TCP stream transparently
+      # and cannot enforce a per-frame size limit. The frame cap is enforced at
+      # the application layer via NITRONODE_WS_MAX_MESSAGE_SIZE / SetReadLimit.
 
 stressTest:
   enabled: false

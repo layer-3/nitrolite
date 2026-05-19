@@ -102,6 +102,7 @@ contract ChannelHubTest_RegisterNodeValidator is ChannelHubTest_SigValidator_Bas
 contract ChannelHubTest_ExtractValidator is ChannelHubTest_SigValidator_Base {
     /// @dev approvedSignatureValidators bitmask with bit `id` set.
     function _approved(uint8 id) internal pure returns (uint256) {
+        // forge-lint: disable-next-line(incorrect-shift) -- intentional bitmask: 1 << N sets bit N
         return 1 << id;
     }
 

@@ -29,7 +29,7 @@ types:
           description: Nonce for the channel
         - name: status
           type: string
-          description: Current status of the channel (void, open, challenged, closed)
+          description: Current status of the channel (void, open, challenged, closing, closed)
         - name: state_version
           type: string
           description: On-chain state version of the channel
@@ -380,6 +380,9 @@ types:
         - name: user_sig
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
+        - name: session_key_sig
+          type: string
+          description: Session-key holder's signature over PackChannelKeyStateV1(session_key, metadata_hash) — the same packed bytes user_sig signs, where metadata_hash binds user_address — proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -409,6 +412,9 @@ types:
         - name: user_sig
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
+        - name: session_key_sig
+          type: string
+          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app:
       description: Application definition
@@ -636,7 +642,7 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: user_address
                   type: string
@@ -645,12 +651,23 @@ api:
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
+                  optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
-                    type: app_session_key_state
-                  description: List of active session key states for the user
+                    type: channel_session_key_state
+                  description: Latest session key states for the user, filtered by `include_inactive`.
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found
@@ -823,21 +840,32 @@ api:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
-                - field_name: wallet
+                - field_name: user_address
                   type: string
                   description: User's wallet address
                 - field_name: session_key
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
+                  optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
                     type: app_session_key_state
-                  description: List of active session key states for the user
+                  description: Latest session key states for the user, filtered by `include_inactive`.
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found

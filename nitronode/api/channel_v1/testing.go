@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
+	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
 )
@@ -40,9 +41,14 @@ func (m *MockStore) GetLastUserState(wallet, asset string, signed bool) (*core.S
 	return &state, args.Error(1)
 }
 
-func (m *MockStore) CheckOpenChannel(wallet, asset string) (string, bool, error) {
+func (m *MockStore) CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error) {
 	args := m.Called(wallet, asset)
-	return args.String(0), args.Bool(1), args.Error(2)
+	var status *core.ChannelStatus
+	if v := args.Get(1); v != nil {
+		s := v.(core.ChannelStatus)
+		status = &s
+	}
+	return args.String(0), status, args.Error(2)
 }
 
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {
@@ -51,6 +57,11 @@ func (m *MockStore) StoreUserState(state core.State, applicationID string) error
 }
 
 func (m *MockStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
+	args := m.Called(wallet, asset)
+	return args.Error(0)
+}
+
+func (m *MockStore) EnsureNoOngoingEscrowOperation(wallet, asset string) error {
 	args := m.Called(wallet, asset)
 	return args.Error(0)
 }
@@ -86,12 +97,40 @@ func (m *MockStore) GetActiveHomeChannel(wallet, asset string) (*core.Channel, e
 	return args.Get(0).(*core.Channel), args.Error(1)
 }
 
+func (m *MockStore) GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error) {
+	args := m.Called(wallet, asset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
+func (m *MockStore) UpdateChannel(channel core.Channel) error {
+	args := m.Called(channel)
+	return args.Error(0)
+}
+
+func (m *MockStore) HasNonClosedHomeChannel(wallet, asset string) (bool, error) {
+	args := m.Called(wallet, asset)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockStore) GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error) {
 	args := m.Called(wallet, status, asset, channelType, limit, offset)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]core.Channel), args.Get(1).(uint32), args.Error(2)
+}
+
+func (m *MockStore) LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error) {
+	args := m.Called(userAddress, sessionKey, kind)
+	return uint64(args.Int(0)), args.Error(1)
+}
+
+func (m *MockStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
+	args := m.Called(userAddress)
+	return uint32(args.Int(0)), args.Error(1)
 }
 
 func (m *MockStore) StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV1) error {
@@ -104,12 +143,12 @@ func (m *MockStore) GetLastChannelSessionKeyVersion(wallet, sessionKey string) (
 	return args.Get(0).(uint64), args.Error(1)
 }
 
-func (m *MockStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string) ([]core.ChannelSessionKeyStateV1, error) {
-	args := m.Called(wallet, sessionKey)
+func (m *MockStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error) {
+	args := m.Called(wallet, sessionKey, includeInactive, limit, offset)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, uint32(args.Int(1)), args.Error(2)
 	}
-	return args.Get(0).([]core.ChannelSessionKeyStateV1), args.Error(1)
+	return args.Get(0).([]core.ChannelSessionKeyStateV1), uint32(args.Int(1)), args.Error(2)
 }
 
 func (m *MockStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error) {

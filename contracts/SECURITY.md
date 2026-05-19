@@ -41,17 +41,6 @@ Invariant:
 
 ---
 
-- (NOT TRUE) only less-or-equal amount of internally-accounted funds can be withdrawn (NOT TRUE for states that include "receive" off-chain ops)
-
-The absence of the aforementioned invariant creates a huge risk of an attacker draining the Node.
-To protect from this, the Node should keep CORRECT track of off-chain user funds.
-CAUTION IS REQUIRED.
-
-P.S. This invariant still can be enforced by updating `lockedFunds` per channel meta-variable during on-chain state processing,
-e.g. when processing "receive X, withdraw Y", increase `lockedFunds` (and "lock" Node's funds in channel) by X, and then decrease by Y.
-
----
-
 - User funds can be withdrawn only after channel is finalized (closed or challenged) or during WITHDRAW action
 - any action is valid only with a Node's signature (for now, but this condition may be loosened to improve UX by making protocol more complex)
 - a state with `version` <= `latestKnownVersion` per chain cannot be accepted as valid
@@ -182,6 +171,58 @@ no funds can be permanently locked if it does.
 
 ---
 
+### ChannelClosed event orientation during abandoned migration
+
+`initiateMigration()` on the new home chain swaps `homeLedger` ↔ `nonHomeLedger` before storing the state, so that `homeLedger` always represents the chain where execution happens. A consequence of this swap is that `meta.lastState` on the new home chain is stored in opposite orientation from what both parties signed.
+
+If a migration is initiated but never finalized and both channel copies are subsequently challenged and closed after timeout, `ChannelClosed` can be emitted on **both chains** for the same `channelId` and state version, but with **opposite `homeLedger`/`nonHomeLedger` orientation** in `finalState`:
+
+- **Old home chain** (`OPERATING`/`DISPUTED`): `finalState.homeLedger` describes the old home chain (original orientation as signed).
+- **New home chain** (`MIGRATING_IN`/`DISPUTED`): `finalState.homeLedger` describes the new home chain (swapped orientation as stored).
+
+On-chain accounting is correct in both cases — each chain pays from its own locally stored allocations. The concern is for **off-chain consumers** of the `ChannelClosed` event:
+
+- Key `ChannelClosed` events by `(chainId, ChannelHub, channelId)`, never by `channelId` alone.
+- Treat each emission as a distinct local settlement; there is no single canonical `finalState` for an abandoned migration close.
+- Code that persists the emitted `finalState` must handle the swapped ledger orientation for channels in `MIGRATING_IN` status at close time.
+
+Under correct Node behavior this scenario does not occur: the Node stops issuing new states during migration and ensures either finalization or reversion before closing. The on-chain contract handles it safely so that no funds are permanently locked if it does occur.
+
+---
+
+## Trust Assumptions
+
+Beyond the cryptographic and on-chain guarantees listed above, correct user fund protection depends on the following trust assumptions about Node behavior.
+
+### Node as off-chain transfer intermediary
+
+When a user sends funds off-chain to another party, the protocol requires two independent state updates that the Node must countersign:
+
+1. The sender's channel state: user allocation decreases, encoding the transfer.
+2. The receiver's channel state: receiver allocation increases.
+
+A malicious Node could countersign the sender's state (making the reduction in user allocation on-chain enforceable) while withholding the receiver's credit state — pocketing the transferred funds. The on-chain contract has no visibility into independent per-channel state updates and cannot enforce atomicity between them.
+
+**Users must trust the Node to faithfully execute both legs of every off-chain transfer.** This extends the existing Node trust relationship (liquidity management, cross-chain relay) to include off-chain transfer routing. If the Node behaves maliciously, the user's recourse is to challenge the channel and close it, recovering whatever funds remain in their on-chain allocation at the last enforced state.
+
+### Node off-chain credit accounting
+
+The protocol does not bound on-chain withdrawals to the amount explicitly deposited. States that include "receive" off-chain operations can increase a user's allocation beyond what was deposited, reflecting credit extended by the Node. A Node that over-issues credits may have insufficient vault funds to honour those allocations when they are enforced on-chain.
+
+**Users must trust the Node to extend only credit that is backed by actual vault funds.** The Node is solely responsible for maintaining correct off-chain accounting of all user balances and ensuring no signed state represents an allocation the Node cannot fund.
+
+### Signature validator selection
+
+In the single-node deployment model, the ChannelHub is deployed by the Node operator, who also chooses the `defaultSigValidator`. The following trust properties apply:
+
+- **Default validator trust**: All participants using the default validator (0x00) trust the ChannelHub deployer's choice of default validator.
+- **User validator control**: Users control which additional validators (beyond the always-available default) can verify their signatures via the `approvedSignatureValidators` bitmask in `ChannelDefinition`. This prevents nodes from forging user signatures by registering malicious validators.
+- **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator), preventing unilateral changes to signature validation schemes.
+- **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. Signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
+- **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+
+---
+
 ## Signature Validation Security
 
 The Nitrolite protocol uses a pluggable signature validation system to support flexible authorization schemes. This section describes the security model and considerations for signature validators.
@@ -243,15 +284,15 @@ The protocol maintains clear separation between protocol concerns (ChannelHub) a
 
 See `signature-validators.md` for detailed documentation on each validator.
 
-### Trust Model
+### On-Chain vs Off-Chain Signature Domain Asymmetry
 
-- **Default validator trust**: All participants using the default validator (0x00) trust the ChannelHub deployer's choice of default validator.
-- **User validator control**: Users control which additional validators (beyond the always-available default) can verify signatures via the `approvedSignatureValidators` bitmask in `ChannelDefinition`. This prevents nodes from forging user signatures by registering malicious validators. Users can approve specific validators from the node's registry by setting the corresponding bits.
-- **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator). This ensures that validators are mutually agreed upon and prevents unilateral changes to signature validation schemes.
-- **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. This ensures that signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
-- **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+The default ECDSA validator (`EcdsaSignatureUtils.validateEcdsaSigner`) accepts **both EIP-191 and raw ECDSA** signatures on-chain: it first attempts EIP-191 recovery (the `"\x19Ethereum Signed Message:\n"` prefix used by `eth_sign`), then falls back to raw `keccak256(message)` recovery if EIP-191 fails.
 
----
+The Nitronode off-chain validator (`ChannelSigValidator`) uses **EIP-191 only** — no raw-ECDSA fallback.
+
+**Consequence:** A channel state signature produced with raw `keccak256` (no EIP-191 prefix) will pass on-chain validation but be rejected off-chain by the Nitronode. Under correct protocol operation this cannot occur, because the Nitronode only countersigns states it has already verified off-chain. However, implementations building custom signers or relayers must be aware of this asymmetry.
+
+**All client implementations must use EIP-191 (`eth_sign`) for channel state signatures** to ensure round-trip validity on both the off-chain (Nitronode) and on-chain (ChannelHub) validation paths. The raw-ECDSA fallback exists in the on-chain contract as a compatibility measure and should not be relied upon for new integrations.
 
 ### Bootstrap vulnerability: initial user signature at `createChannel`
 
@@ -292,6 +333,22 @@ The registration is an observable on-chain event, and with monitoring in place, 
 **Residual risk:** After the activation delay, the bound node can still exploit the vulnerability. This risk is accepted under the per-node deployment trust model.
 
 **Operational consequence:** Each node requires its own ChannelHub deployment and its own set of ERC20 approvals from users. A single deployment cannot serve multiple independent nodes. Validators must be registered 1 day before first use (one-time cost per validator).
+
+**User responsibilities and monitoring requirement:**
+
+The `VALIDATOR_ACTIVATION_DELAY` is only effective if users actively monitor on-chain validator registrations within the 1-day window. The delay provides no protection for users who are not watching. Key points every user must understand:
+
+1. **Validators are permanent.** Once a validator is registered at a given ID, it cannot be deactivated or overwritten. If a malicious validator becomes active, it remains active for the lifetime of the ChannelHub deployment. There is no on-chain recovery mechanism after the delay expires.
+
+2. **The 1-day window is the entire response budget.** After `VALIDATOR_ACTIVATION_DELAY` elapses, the validator is active and any outstanding ERC20 approvals to ChannelHub are immediately exploitable via a forged `createChannel`.
+
+3. **Users must subscribe to `ValidatorRegistered` events.** Monitor the `ValidatorRegistered(uint8 indexed validatorId, address indexed validator)` event on the ChannelHub contract. Any unexpected registration should be treated as a potential compromise. Upon detecting an unrecognised validator:
+   - Revoke all ERC20 approvals granted to ChannelHub immediately (protects undeposited funds).
+   - Exit any open escrow positions via `initiateEscrowWithdrawal` before the delay expires — funds already in escrow remain exposed until withdrawn, since a malicious validator can forge user signatures for any on-chain operation, not only `createChannel`.
+
+4. **Avoid large standing ERC20 approvals.** Do not grant unlimited (`type(uint256).max`) or long-lived ERC20 allowances to ChannelHub. Prefer exact-amount approvals per operation. A standing approval only becomes exploitable once a malicious validator activates, so minimising the approved amount caps the worst-case loss.
+
+The Go SDK exposes `Client.WatchValidatorRegistered` and the TypeScript SDK exposes `Client.watchValidatorRegistered`, both delivering events as streams. The two implementations differ in transport requirements: the Go watcher uses `SubscribeFilterLogs` and requires a WebSocket or IPC endpoint (`wss://`); the TypeScript watcher uses viem's `watchContractEvent` which falls back to polling `getLogs` over HTTP when no WebSocket endpoint is configured.
 
 #### Stronger alternatives
 
@@ -382,6 +439,12 @@ Use non-rebasing equivalents where available (e.g. wstETH instead of stETH).
 ### Fee-on-transfer tokens
 
 Fee-on-transfer tokens are **not supported**. The amount received by the contract is less than the amount recorded in the ledger, causing it to overstate holdings from the very first deposit. This produces the same class of insolvency as a negative rebase: late withdrawers may receive less than recorded or nothing at all.
+
+### Tokens without `decimals()`
+
+ERC-20 defines `decimals()` as an **optional** extension (via `IERC20Metadata`), not a core requirement. However, during token decimals validation a `IERC20Metadata(token).decimals()` is called, which will revert the outer transaction if the call fails. This check runs on every channel state transition, escrow deposit, and escrow withdrawal — meaning tokens that omit `decimals()` **cannot be used at all**, even for otherwise supported operations.
+
+Tokens must implement `IERC20Metadata.decimals()`. Unlike the rebasing and fee-on-transfer restrictions (which are accounting-correctness requirements), this is a hard on-chain gate: the contract will reject the transaction immediately rather than silently misaccount.
 
 ---
 
@@ -565,5 +628,26 @@ Critically, DISPUTED entries still consume a step. Without this, an actor could 
 ### Formal invariant
 
 > **Bounded purge iteration** (complements invariant 22): `_purgeEscrowDeposits(maxSteps)` inspects at most `maxSteps` queue entries per call. Every inspected entry, regardless of disposition (skipped, purged, or halting), counts against the budget. The per-operation automatic budget is `MAX_DEPOSIT_ESCROW_STEPS = 64`.
+
+---
+
+## Informational Events
+
+Several `ChannelHub` events are **informational** — they are emitted on a best-effort basis when a specific dedicated function path is taken, but are not guaranteed to fire for every logical occurrence of the operation they name. A newer signed state that supersedes an intermediate cross-chain step can be enforced directly through a standard channel operation (deposit, withdraw, checkpoint, challenge), bypassing the dedicated function and therefore skipping its event. This is intentional: for example, `MIGRATING_IN` channels are treated as fully operational home-chain channels, and similarly, channel states involved in escrow flows can be advanced by any valid newer state.
+
+External consumers — indexers, SDKs, analytics — **must not treat these events as exhaustive signals**. The canonical, always-guaranteed terminal events for each cross-chain flow (`MigrationOutFinalized`, `EscrowDepositInitiated`, `EscrowWithdrawalFinalized`, etc.) remain reliable.
+
+The following events are informational:
+
+| Event | When it may be skipped |
+| --- | --- |
+| `MigrationInFinalized` | A `MIGRATING_IN` channel transitions to `OPERATING` via any standard operation (deposit, withdraw, checkpoint, challenge) rather than explicit `finalizeMigration()` |
+| `MigrationOutInitiated` | A newer `MIGRATING_OUT` signed state is enforced on the old home channel that is the successor of the explicit initiation state |
+| `EscrowDepositFinalized` | The non-home channel advances past escrow finalization via a newer signed state |
+| `EscrowDepositFinalizedOnHome` | The home channel advances past the escrow finalization acknowledgement via a newer signed state |
+| `EscrowWithdrawalInitiatedOnHome` | The home channel advances past the escrow withdrawal initiation acknowledgement via a newer signed state |
+| `EscrowWithdrawalFinalizedOnHome` | The home channel advances past the escrow withdrawal finalization acknowledgement via a newer signed state |
+
+The Nitronode does not rely on any of these informational events for its state machine. For migration, the Nitronode watches `MigrationInInitiated` (the on-chain request establishing the new home chain) and `MigrationOutFinalized` (the unconditional completion signal on the old home chain). Both are guaranteed events.
 
 ---

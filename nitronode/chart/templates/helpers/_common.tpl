@@ -87,6 +87,8 @@ Returns common environment variables
   value: "{{ print .port }}"
 - name: NITRONODE_DATABASE_USERNAME
   value: {{ .user }}
+- name: NITRONODE_DATABASE_SSLMODE
+  value: {{ .sslmode | default "require" | quote }}
 {{- end }}
 {{- range $key, $value := .Values.config.extraEnvs }}
 - name: {{ $key | upper }}

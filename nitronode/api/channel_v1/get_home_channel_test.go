@@ -59,7 +59,7 @@ func TestGetHomeChannel_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockTxStore.On("GetActiveHomeChannel", userWallet, asset).Return(&homeChannel, nil)
+	mockTxStore.On("GetNotClosedHomeChannel", userWallet, asset).Return(&homeChannel, nil)
 
 	// Create RPC request
 	reqPayload := rpc.ChannelsV1GetHomeChannelRequest{
@@ -134,7 +134,7 @@ func TestGetHomeChannel_NotFound(t *testing.T) {
 	asset := "USDC"
 
 	// Mock expectations
-	mockTxStore.On("GetActiveHomeChannel", userWallet, asset).Return(nil, nil)
+	mockTxStore.On("GetNotClosedHomeChannel", userWallet, asset).Return(nil, nil)
 
 	// Create RPC request
 	reqPayload := rpc.ChannelsV1GetHomeChannelRequest{
@@ -170,6 +170,47 @@ func TestGetHomeChannel_NotFound(t *testing.T) {
 	mockTxStore.AssertExpectations(t)
 }
 
+// TestGetHomeChannel_ClosingChannel verifies that GetHomeChannel returns the channel data
+// even after an off-chain Finalize has flipped it to Closing, so the SDK can still fetch
+// it before submitting the on-chain close.
+func TestGetHomeChannel_ClosingChannel(t *testing.T) {
+	mockTxStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(h StoreTxHandler) error { return h(mockTxStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	closingChannel := core.Channel{
+		ChannelID:    "0xHomeChannel123",
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		BlockchainID: 1,
+		Status:       core.ChannelStatusClosing,
+		StateVersion: 5,
+	}
+	mockTxStore.On("GetNotClosedHomeChannel", userWallet, asset).Return(&closingChannel, nil)
+
+	payload, err := rpc.NewPayload(rpc.ChannelsV1GetHomeChannelRequest{Wallet: userWallet, Asset: asset})
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_home_channel", Payload: payload},
+	}
+
+	handler.GetHomeChannel(ctx)
+
+	require.Nil(t, ctx.Response.Error(), "Closing channel must be visible to GetHomeChannel")
+	var response rpc.ChannelsV1GetHomeChannelResponse
+	require.NoError(t, ctx.Response.Payload.Translate(&response))
+	assert.Equal(t, "closing", response.Channel.Status)
+	mockTxStore.AssertExpectations(t)
+}
+
 // TestGetHomeChannel_NormalizesWallet verifies the wallet is normalized before the store call.
 func TestGetHomeChannel_NormalizesWallet(t *testing.T) {
 	mockTxStore := new(MockStore)
@@ -184,7 +225,7 @@ func TestGetHomeChannel_NormalizesWallet(t *testing.T) {
 	asset := "USDC"
 
 	homeChannel := core.Channel{ChannelID: "0xch", UserWallet: canonicalWallet, Asset: asset, Type: core.ChannelTypeHome}
-	mockTxStore.On("GetActiveHomeChannel", canonicalWallet, asset).Return(&homeChannel, nil)
+	mockTxStore.On("GetNotClosedHomeChannel", canonicalWallet, asset).Return(&homeChannel, nil)
 
 	reqPayload := rpc.ChannelsV1GetHomeChannelRequest{Wallet: mixedCaseWallet, Asset: asset}
 	payload, err := rpc.NewPayload(reqPayload)

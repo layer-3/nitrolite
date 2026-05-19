@@ -78,16 +78,18 @@ client.rebalanceAppSessions(signedUpdates)                      // Atomic rebala
 
 ### App Session Keys
 ```typescript
-client.signSessionKeyState(state)                               // Sign app session key state
-client.submitSessionKeyState(state)                             // Register/update app session key
-client.getLastKeyStates(userAddress, sessionKey?)               // Get active app session key states
+client.signSessionKeyState(state)                                       // Wallet user_sig over app session key state
+client.signAppSessionKeyOwnership(state, sessionKeySigner)              // Session-key holder's session_key_sig
+client.submitSessionKeyState(state)                                     // Register/update app session key (both sigs required)
+client.getLastAppKeyStates(userAddress, sessionKey?, options?)          // Get app session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Channel Session Keys
 ```typescript
-client.signChannelSessionKeyState(state)                        // Sign channel session key state
-client.submitChannelSessionKeyState(state)                      // Register/update channel session key
-client.getLastChannelKeyStates(userAddress, sessionKey?)        // Get active channel session key states
+client.signChannelSessionKeyState(state)                                // Wallet user_sig over channel session key state
+client.signChannelSessionKeyOwnership(state, sessionKeySigner)          // Session-key holder's session_key_sig
+client.submitChannelSessionKeyState(state)                              // Register/update channel session key (both sigs required)
+client.getLastChannelKeyStates(userAddress, sessionKey?, options?)      // Get channel session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Shared Utilities
@@ -492,58 +494,65 @@ const sessionKeySigner = new AppSessionKeySignerV1(sessionKeyMsgSigner);
 
 ### App Session Keys
 
+Registration requires two signatures: the wallet's `user_sig` (authorizing the
+delegation) and the session-key holder's `session_key_sig` (proving possession of the key
+being registered). The node rejects submits that lack a valid `session_key_sig`.
+
 ```typescript
-// Sign and submit an app session key state
-const sig = await client.signSessionKeyState({
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
+const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',
   version: '1',
   application_ids: ['app1'],
   app_session_ids: [],
   expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: '0x',
-});
+  user_sig: '',
+  session_key_sig: '',
+};
+state.user_sig = await client.signSessionKeyState(state);
+state.session_key_sig = await client.signAppSessionKeyOwnership(state, sessionKeyHolder);
 
-await client.submitSessionKeyState({
-  user_address: '0x1234...',
-  session_key: '0xabcd...',
-  version: '1',
-  application_ids: ['app1'],
-  app_session_ids: [],
-  expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: sig,
-});
+await client.submitSessionKeyState(state);
 
-// Query active app session key states
-const states = await client.getLastKeyStates('0x1234...');
-const filtered = await client.getLastKeyStates('0x1234...', '0xSessionKey...');
+// Query app session key states (active-only by default)
+const states = await client.getLastAppKeyStates('0x1234...');
+const filtered = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ### Channel Session Keys
 
 ```typescript
-// Sign and submit a channel session key state
-const sig = await client.signChannelSessionKeyState({
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
+const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',
   version: '1',
   assets: ['usdc'],
   expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: '0x',
-});
+  user_sig: '',
+  session_key_sig: '',
+};
+state.user_sig = await client.signChannelSessionKeyState(state);
+state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessionKeyHolder);
 
-await client.submitChannelSessionKeyState({
-  user_address: '0x1234...',
-  session_key: '0xabcd...',
-  version: '1',
-  assets: ['usdc'],
-  expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: sig,
-});
+await client.submitChannelSessionKeyState(state);
 
-// Query active channel session key states
+// Query channel session key states (active-only by default)
 const states = await client.getLastChannelKeyStates('0x1234...');
 const filtered = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ## Key Concepts

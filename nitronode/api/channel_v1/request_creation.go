@@ -83,6 +83,14 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 	var nodeSig string
 	err = h.useStoreInTx(func(tx Store) error {
+		// Gate the incoming transition through the action gateway before any state
+		// is signed, stored, or receiver-side state is issued. Mirrors SubmitState so
+		// gated actions (e.g. transfer_send) cannot bypass the 24h allowance by
+		// piggybacking on channel creation.
+		if err := h.actionGateway.AllowAction(tx, incomingState.UserWallet, incomingState.Transition.Type.GatedAction()); err != nil {
+			return rpc.NewError(err)
+		}
+
 		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
 		if err != nil {
 			return rpc.Errorf("failed to lock user state: %v", err)
@@ -128,14 +136,19 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 			return rpc.Errorf("incoming state home_channel_id is invalid")
 		}
 
-		if currentState.HomeChannelID != nil {
-			isFinal := currentState.IsFinal()
-			if !isFinal {
-				return rpc.Errorf("channel is already initialized")
-			}
-			if isFinal && strings.EqualFold(*incomingState.HomeChannelID, *currentState.HomeChannelID) {
-				return rpc.Errorf("cannot use same home channel id")
-			}
+		// Reject reuse of an already-known channel ID. Enforced at the handler rather than
+		// relying on the channels.channel_id primary key, so the invariant holds even when
+		// the prior state has no HomeChannelID (e.g., after a ChallengeRescue squash).
+		existingChannel, err := tx.GetChannelByID(homeChannelID)
+		if err != nil {
+			return rpc.Errorf("failed to look up channel by computed id: %v", err)
+		}
+		if existingChannel != nil {
+			return rpc.Errorf("cannot use same home channel id")
+		}
+
+		if currentState.HomeChannelID != nil && !currentState.IsFinal() {
+			return rpc.Errorf("channel is already initialized")
 		}
 
 		logger.Debug("processing channel creation request", "incomingVersion", incomingState.Version)

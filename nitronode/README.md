@@ -141,6 +141,16 @@ nitronode/
 export GOCACHE=/tmp/gocache && go test -v ./...
 ```
 
+## Protocol Features Not Yet Active
+
+The following protocol operations are fully specified in [protocol-description.md](../protocol-description.md) and implemented in the `ChannelHub` smart contract, but are **not yet active in the Nitronode off-chain implementation**. Submitting these transition types via `channels.v1.submit_state` returns an error.
+
+| Feature | Transition types | Status |
+|---------|-----------------|--------|
+| Home chain migration | `migrate` | Off-chain flow not implemented. On-chain `initiateMigration()` / `finalizeMigration()` are functional. Event handlers for `MigrationInInitiated`, `MigrationOutFinalized`, etc. are stubs. |
+| Cross-chain escrow deposit | `mutual_lock`, `escrow_lock`, `escrow_deposit` | Off-chain flow implemented, but not fully tested. |
+| Cross-chain escrow withdrawal | `escrow_withdraw` | Off-chain flow implemented, but not fully tested. |
+
 ## Documentation
 
 - [Nitrolite Protocol Overview](../protocol-description.md)

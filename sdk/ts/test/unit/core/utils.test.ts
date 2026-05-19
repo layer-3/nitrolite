@@ -7,6 +7,8 @@ import {
   generateChannelMetadata,
   transitionToIntent,
   getStateTransitionHash,
+  SESSION_KEY_AUTH_TYPEHASH,
+  packChannelKeyStateV1,
 } from '../../../src/core/utils';
 import {
   TransitionType,
@@ -551,4 +553,30 @@ describe('getStateTransitionHash', () => {
     const hash = getStateTransitionHash(transition);
     expect(hash).toBeDefined();
   });
+});
+
+describe('SESSION_KEY_AUTH_TYPEHASH', () => {
+    // Golden value cross-checked against Solidity: keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")
+    // Verified by running Solidity test test_log_toSigningData in SessionKeyValidator.t.sol.
+    const EXPECTED = '0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c';
+
+    test('matches_solidity_constant', () => {
+        expect(SESSION_KEY_AUTH_TYPEHASH).toBe(EXPECTED);
+    });
+});
+
+describe('packChannelKeyStateV1', () => {
+    const sessionKey = '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF' as `0x${string}`;
+    const metadataHash = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' as `0x${string}`;
+    // abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash)
+    const EXPECTED =
+        '0x' +
+        '251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c' + // typehash
+        '000000000000000000000000deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' + // address padded
+        'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';  // metadataHash
+
+    test('golden_value', () => {
+        const packed = packChannelKeyStateV1(sessionKey, metadataHash);
+        expect(packed.toLowerCase()).toBe(EXPECTED);
+    });
 });

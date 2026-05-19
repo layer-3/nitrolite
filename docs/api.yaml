@@ -49,6 +49,7 @@ types:
         - escrow_withdraw
         - migrate
         - finalize
+        - challenge_rescue
 
   - transition:
       description: Represents a state transition
@@ -298,6 +299,7 @@ types:
         - migrate
         - rebalance
         - finalize
+        - challenge_rescue
 
   - transaction:
       description: Transaction record
@@ -379,10 +381,17 @@ types:
           description: Unix timestamp in seconds indicating when the session key expires
         - name: user_sig
           type: string
-          description: User's signature over the session key metadata to authorize the registration/update of the session key
+          description: >
+            User's EIP-191 signature over abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash),
+            where SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")
+            and metadata_hash = keccak256(abi.encode(user_address, version, assets[], expires_at)).
+            Authorizes the delegation of signing authority to the session key.
         - name: session_key_sig
           type: string
-          description: Session-key holder's signature over PackChannelKeyStateV1(session_key, metadata_hash) — the same packed bytes user_sig signs, where metadata_hash binds user_address — proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
+          description: >
+            Session-key holder's EIP-191 signature over the same payload as user_sig —
+            abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash) — proving possession of the key
+            being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -532,7 +541,14 @@ api:
                 - message: channel_not_found
                   description: The specified channel was not found
             - name: get_escrow_channel
-              description: Retrieve current on-chain escrow channel information
+              description: |
+                Retrieve current on-chain escrow channel information.
+
+                Note: when the escrow channel has been closed by the on-chain
+                purge queue (no signed FINALIZE_ESCROW_DEPOSIT was received
+                before expiry), `state_version` on the returned channel reflects
+                the initiate version (N) and does not advance to the finalize
+                version (N+1).
               request:
                 - field_name: escrow_channel_id
                   type: string

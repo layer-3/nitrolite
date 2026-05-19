@@ -23,7 +23,7 @@ func TestClient_GetHomeChannel(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetHomeChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    "0xChannelID",
 			UserWallet:   "0xWallet",
 			Type:         "home",
@@ -45,13 +45,30 @@ func TestClient_GetHomeChannel(t *testing.T) {
 	assert.Equal(t, core.ChannelTypeHome, ch.Type)
 }
 
+// TestClient_GetHomeChannel_NilResponse verifies absent-channel responses surface as (nil, nil).
+func TestClient_GetHomeChannel_NilResponse(t *testing.T) {
+	t.Parallel()
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockDialer.RegisterResponse(rpc.ChannelsV1GetHomeChannelMethod.String(), rpc.ChannelsV1GetHomeChannelResponse{})
+
+	client := &Client{
+		rpcClient: rpc.NewClient(mockDialer),
+	}
+
+	ch, err := client.GetHomeChannel(context.Background(), "0xWallet", "USDC")
+	require.NoError(t, err)
+	assert.Nil(t, ch)
+}
+
 func TestClient_GetEscrowChannel(t *testing.T) {
 	t.Parallel()
 	mockDialer := NewMockDialer()
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetEscrowChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    "0xEscrowID",
 			UserWallet:   "0xWallet",
 			Type:         "escrow",
@@ -73,13 +90,30 @@ func TestClient_GetEscrowChannel(t *testing.T) {
 	assert.Equal(t, core.ChannelTypeEscrow, ch.Type)
 }
 
+// TestClient_GetEscrowChannel_NilResponse verifies absent-channel responses surface as (nil, nil).
+func TestClient_GetEscrowChannel_NilResponse(t *testing.T) {
+	t.Parallel()
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockDialer.RegisterResponse(rpc.ChannelsV1GetEscrowChannelMethod.String(), rpc.ChannelsV1GetEscrowChannelResponse{})
+
+	client := &Client{
+		rpcClient: rpc.NewClient(mockDialer),
+	}
+
+	ch, err := client.GetEscrowChannel(context.Background(), "0xEscrowID")
+	require.NoError(t, err)
+	assert.Nil(t, ch)
+}
+
 func TestClient_GetLatestState(t *testing.T) {
 	t.Parallel()
 	mockDialer := NewMockDialer()
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:         "0xStateID",
 			Epoch:      "1",
 			Version:    "1",
@@ -108,6 +142,23 @@ func TestClient_GetLatestState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "0xStateID", state.ID)
 	assert.Equal(t, uint64(1), state.Version)
+}
+
+// TestClient_GetLatestState_NilResponse verifies absent-state responses surface as (nil, nil).
+func TestClient_GetLatestState_NilResponse(t *testing.T) {
+	t.Parallel()
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockDialer.RegisterResponse(rpc.ChannelsV1GetLatestStateMethod.String(), rpc.ChannelsV1GetLatestStateResponse{})
+
+	client := &Client{
+		rpcClient: rpc.NewClient(mockDialer),
+	}
+
+	state, err := client.GetLatestState(context.Background(), "0xWallet", "USDC", false)
+	require.NoError(t, err)
+	assert.Nil(t, state)
 }
 
 func TestClient_GetBalances(t *testing.T) {
@@ -198,7 +249,7 @@ func TestClient_GetAppDefinition(t *testing.T) {
 	mockDialer.Dial(context.Background(), "", nil)
 
 	mockResp := rpc.AppSessionsV1GetAppDefinitionResponse{
-		Definition: rpc.AppDefinitionV1{
+		Definition: &rpc.AppDefinitionV1{
 			Application:  "0xApp",
 			Participants: []rpc.AppParticipantV1{},
 			Nonce:        "1",
@@ -215,6 +266,23 @@ func TestClient_GetAppDefinition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "0xApp", def.ApplicationID)
 	assert.Equal(t, uint64(1), def.Nonce)
+}
+
+// TestClient_GetAppDefinition_NilResponse verifies absent-definition responses surface as (nil, nil).
+func TestClient_GetAppDefinition_NilResponse(t *testing.T) {
+	t.Parallel()
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockDialer.RegisterResponse(rpc.AppSessionsV1GetAppDefinitionMethod.String(), rpc.AppSessionsV1GetAppDefinitionResponse{})
+
+	client := &Client{
+		rpcClient: rpc.NewClient(mockDialer),
+	}
+
+	def, err := client.GetAppDefinition(context.Background(), "0xSessionID")
+	require.NoError(t, err)
+	assert.Nil(t, def)
 }
 
 func TestClient_CreateAppSession(t *testing.T) {
@@ -274,7 +342,7 @@ func TestClient_SubmitAppSessionDeposit(t *testing.T) {
 	homeChannelID := "0xHomeChannel"
 	// Mock latest state
 	stateResp := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:            "0xStateID",
 			Epoch:         "1",
 			Version:       "1",

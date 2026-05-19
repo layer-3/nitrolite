@@ -377,21 +377,15 @@ export class Client {
       throw new Error(`token address not found for asset ${asset} on blockchain ${blockchainId}`);
     }
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
     let channelIsOpen = false;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-
-      // If state has a home channel ID, check if it's usable
-      if (state && state.homeChannelId) {
-        // Check if state has a finalize transition (channel is being closed)
-        const hasFinalize = state.transition.type === core.TransitionType.Finalize;
-        // If no finalize transition, channel is still open and usable
-        channelIsOpen = !hasFinalize;
-      }
-    } catch (err) {
-      // Channel doesn't exist, will create it
+    if (state && state.homeChannelId) {
+      // Check if state has a finalize transition (channel is being closed)
+      const hasFinalize = state.transition.type === core.TransitionType.Finalize;
+      // If no finalize transition, channel is still open and usable
+      channelIsOpen = !hasFinalize;
     }
 
     // Scenario A: Channel doesn't exist or is closed - create it
@@ -475,21 +469,15 @@ export class Client {
       throw new Error(`token address not found for asset ${asset} on blockchain ${blockchainId}`);
     }
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
     let channelIsOpen = false;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-
-      // If state has a home channel ID, check if it's usable
-      if (state && state.homeChannelId) {
-        // Check if state has a finalize transition (channel is being closed)
-        const hasFinalize = state.transition.type === core.TransitionType.Finalize;
-        // If no finalize transition, channel is still open and usable
-        channelIsOpen = !hasFinalize;
-      }
-    } catch (err) {
-      // Channel doesn't exist, will create it
+    if (state && state.homeChannelId) {
+      // Check if state has a finalize transition (channel is being closed)
+      const hasFinalize = state.transition.type === core.TransitionType.Finalize;
+      // If no finalize transition, channel is still open and usable
+      channelIsOpen = !hasFinalize;
     }
 
     // Channel doesn't exist or is closed - create it and withdraw
@@ -562,13 +550,9 @@ export class Client {
   async transfer(recipientWallet: string, asset: string, amount: Decimal): Promise<core.State> {
     const senderWallet = this.getUserAddress();
 
-    // Get sender's latest state
-    let state: core.State | null = null;
-    try {
-      state = await this.getLatestState(senderWallet, asset, false);
-    } catch (err) {
-      // Channel doesn't exist
-    }
+    // Get sender's latest state. Absence returns null (not an error); real RPC
+    // failures still throw.
+    let state = await this.getLatestState(senderWallet, asset, false);
 
     // No open channel path - create channel with transfer. A non-null state
     // without a homeChannelId represents received off-chain funds before the
@@ -656,13 +640,9 @@ export class Client {
   async acknowledge(asset: string): Promise<core.State> {
     const userWallet = this.getUserAddress();
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-    } catch (err) {
-      // No state exists
-    }
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
 
     if (state?.userSig) {
       throw new Error('state already acknowledged by user');
@@ -748,7 +728,7 @@ export class Client {
 
     const state = await this.getLatestState(senderWallet, asset, false);
 
-    if (!state.homeChannelId) {
+    if (!state || !state.homeChannelId) {
       throw new Error(`no channel exists for asset ${asset}`);
     }
 
@@ -793,6 +773,10 @@ export class Client {
     // Get latest signed state (both user and node signatures must be present)
     const state = await this.getLatestState(userWallet, asset, true);
 
+    if (!state) {
+      throw new Error(`no signed state exists for asset ${asset}`);
+    }
+
     if (!state.homeChannelId) {
       // NOTE: this should never happen, because signed state MUST have a channel ID
       throw new Error(`no channel exists for asset ${asset}`);
@@ -806,6 +790,11 @@ export class Client {
 
     // Get home channel info to determine on-chain status
     const channel = await this.getHomeChannel(userWallet, asset);
+    if (!channel) {
+      // Signed state existed but home channel record is missing — node is in
+      // an inconsistent state.
+      throw new Error(`home channel missing for asset ${asset} despite signed state`);
+    }
 
     switch (state.transition.type) {
       case core.TransitionType.Acknowledgement:
@@ -1257,27 +1246,38 @@ export class Client {
   /**
    * GetHomeChannel retrieves home channel information for a user's asset.
    *
+   * Returns `null` when no home channel exists for the wallet/asset pair —
+   * absence is a successful response, not an error.
+   *
    * @param wallet - The user's wallet address
    * @param asset - The asset symbol
-   * @returns Channel information for the home channel
+   * @returns Channel information for the home channel, or `null` if absent
    *
    * @example
    * ```typescript
    * const channel = await client.getHomeChannel('0x1234...', 'usdc');
-   * console.log(`Channel: ${channel.channelId} (Version: ${channel.stateVersion})`);
+   * if (channel === null) {
+   *   // no channel yet
+   * }
    * ```
    */
-  async getHomeChannel(wallet: Address, asset: string): Promise<core.Channel> {
+  async getHomeChannel(wallet: Address, asset: string): Promise<core.Channel | null> {
     const req: API.ChannelsV1GetHomeChannelRequest = {
       wallet,
       asset,
     };
     const resp = await this.rpcClient.channelsV1GetHomeChannel(req);
+    if (resp.channel == null) {
+      return null;
+    }
     return transformChannel(resp.channel);
   }
 
   /**
    * GetEscrowChannel retrieves escrow channel information for a specific channel ID.
+   *
+   * Returns `null` when no escrow channel exists for the given ID — absence is
+   * a successful response, not an error.
    *
    * Note: when the escrow channel has been closed by the on-chain purge queue
    * (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), `stateVersion`
@@ -1285,43 +1285,56 @@ export class Client {
    * to the finalize version (N+1).
    *
    * @param escrowChannelId - The escrow channel ID to query
-   * @returns Channel information for the escrow channel
+   * @returns Channel information for the escrow channel, or `null` if absent
    *
    * @example
    * ```typescript
    * const channel = await client.getEscrowChannel('0x1234...');
-   * console.log(`Channel: ${channel.channelId} (Version: ${channel.stateVersion})`);
+   * if (channel === null) {
+   *   // not found
+   * }
    * ```
    */
-  async getEscrowChannel(escrowChannelId: string): Promise<core.Channel> {
+  async getEscrowChannel(escrowChannelId: string): Promise<core.Channel | null> {
     const req: API.ChannelsV1GetEscrowChannelRequest = {
       escrow_channel_id: escrowChannelId,
     };
     const resp = await this.rpcClient.channelsV1GetEscrowChannel(req);
+    if (resp.channel == null) {
+      return null;
+    }
     return transformChannel(resp.channel);
   }
 
   /**
    * GetLatestState retrieves the latest state for a user's asset.
    *
+   * Returns `null` when the node has no stored state for the wallet/asset
+   * pair — absence is a successful response, not an error.
+   *
    * @param wallet - The user's wallet address
    * @param asset - The asset symbol (e.g., "usdc")
    * @param onlySigned - If true, returns only the latest signed state
-   * @returns State containing all state information
+   * @returns State containing all state information, or `null` if absent
    *
    * @example
    * ```typescript
    * const state = await client.getLatestState('0x1234...', 'usdc', false);
-   * console.log(`Version: ${state.version}, Balance: ${state.homeLedger.userBalance}`);
+   * if (state === null) {
+   *   // no state yet
+   * }
    * ```
    */
-  async getLatestState(wallet: Address, asset: string, onlySigned: boolean): Promise<core.State> {
+  async getLatestState(wallet: Address, asset: string, onlySigned: boolean): Promise<core.State | null> {
     const req: API.ChannelsV1GetLatestStateRequest = {
       wallet,
       asset,
       only_signed: onlySigned,
     };
     const resp = await this.rpcClient.channelsV1GetLatestState(req);
+    if (resp.state == null) {
+      return null;
+    }
     return transformState(resp.state);
   }
 
@@ -1371,20 +1384,28 @@ export class Client {
   /**
    * GetAppDefinition retrieves the definition for a specific app session.
    *
+   * Returns `null` when no app session exists for the given ID — absence is a
+   * successful response, not an error.
+   *
    * @param appSessionId - The app session ID
-   * @returns App session definition
+   * @returns App session definition, or `null` if absent
    *
    * @example
    * ```typescript
    * const definition = await client.getAppDefinition('0x1234...');
-   * console.log('Participants:', definition.participants);
+   * if (definition === null) {
+   *   // not found
+   * }
    * ```
    */
-  async getAppDefinition(appSessionId: string): Promise<app.AppDefinitionV1> {
+  async getAppDefinition(appSessionId: string): Promise<app.AppDefinitionV1 | null> {
     const req: API.AppSessionsV1GetAppDefinitionRequest = {
       app_session_id: appSessionId,
     };
     const resp = await this.rpcClient.appSessionsV1GetAppDefinition(req);
+    if (resp.definition == null) {
+      return null;
+    }
     return transformAppDefinitionFromRPC(resp.definition);
   }
 
@@ -1474,6 +1495,9 @@ export class Client {
   ): Promise<string> {
     // Get current state
     const currentState = await this.getLatestState(this.getUserAddress(), asset, false);
+    if (!currentState) {
+      throw new Error('no channel state to advance for AppSession');
+    }
 
     // Create next state with commit transition (use app session ID as account ID)
     const newState = nextState(currentState);

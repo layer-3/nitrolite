@@ -14,7 +14,7 @@ func (h *Handler) GetAppDefinition(c *rpc.Context) {
 		return
 	}
 
-	var definition rpc.AppDefinitionV1
+	var definition *rpc.AppDefinitionV1
 
 	err := h.useStoreInTx(func(store Store) error {
 		session, err := store.GetAppSession(req.AppSessionID)
@@ -23,7 +23,7 @@ func (h *Handler) GetAppDefinition(c *rpc.Context) {
 		}
 
 		if session == nil {
-			return rpc.Errorf("app_session_not_found")
+			return nil
 		}
 
 		// Convert participants
@@ -35,7 +35,7 @@ func (h *Handler) GetAppDefinition(c *rpc.Context) {
 			}
 		}
 
-		definition = rpc.AppDefinitionV1{
+		definition = &rpc.AppDefinitionV1{
 			Application:  session.ApplicationID,
 			Participants: participants,
 			Quorum:       session.Quorum,

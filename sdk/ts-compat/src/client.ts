@@ -525,18 +525,30 @@ export class NitroliteClient {
 
     async getChannelData(_channelId: string): Promise<any> {
         await this.ensureAssets();
+        let lookupError: unknown = null;
         for (const [, info] of this.assetsBySymbol) {
+            let ch;
             try {
-                const ch = await this.innerClient.getHomeChannel(this.userAddress, info.symbol);
-                if (ch.channelId === _channelId) {
-                    return {
-                        channel: ch,
-                        state: await this.innerClient.getLatestState(this.userAddress, info.symbol, false),
-                    };
-                }
-            } catch {
-                // no channel for this asset
+                ch = await this.innerClient.getHomeChannel(this.userAddress, info.symbol);
+            } catch (err) {
+                lookupError = err;
+                continue;
             }
+            if (!ch || ch.channelId !== _channelId) {
+                continue;
+            }
+            const state = await this.innerClient.getLatestState(this.userAddress, info.symbol, false);
+            if (!state) {
+                throw new Error(`Channel ${_channelId} has no latest state`);
+            }
+            return { channel: ch, state };
+        }
+        // Any uninspected asset (caught exception) invalidates a not-found conclusion,
+        // since genuine absence comes back as null under the nullable contract.
+        if (lookupError) {
+            throw lookupError instanceof Error
+                ? lookupError
+                : new Error(`failed to query channels: ${String(lookupError)}`);
         }
         throw new Error(`Channel ${_channelId} not found`);
     }
@@ -621,7 +633,7 @@ export class NitroliteClient {
             if (ch.status === 1) {
                 try {
                     const state = await this.innerClient.getLatestState(this.userAddress, ch.asset, false);
-                    const raw = state.homeLedger?.userBalance;
+                    const raw = state?.homeLedger?.userBalance;
 
                     if (raw) {
                         const dec = await this.getTokenDecimalsForChannel(
@@ -663,12 +675,12 @@ export class NitroliteClient {
             try {
                 const ch = await this.innerClient.getHomeChannel(this.userAddress, asset.symbol);
 
-                if (ch.channelId) {
+                if (ch && ch.channelId) {
                     let userBalance = 0n;
 
                     try {
                         const state = await this.innerClient.getLatestState(this.userAddress, asset.symbol, false);
-                        const raw = state.homeLedger?.userBalance;
+                        const raw = state?.homeLedger?.userBalance;
 
                         if (raw) {
                             const dec = await this.getTokenDecimalsForChannel(
@@ -995,6 +1007,9 @@ export class NitroliteClient {
 
     async getAppDefinition(appSessionId: string): Promise<GetAppDefinitionResponseParams> {
         const def = await this.innerClient.getAppDefinition(appSessionId);
+        if (!def) {
+            throw new Error(`app session ${appSessionId} not found`);
+        }
         return {
             protocol: def.applicationId,
             participants: def.participants.map((p) => p.walletAddress),
@@ -1216,7 +1231,11 @@ export class NitroliteClient {
     }
 
     async getEscrowChannel(escrowChannelId: string): Promise<core.Channel> {
-        return this.innerClient.getEscrowChannel(escrowChannelId);
+        const channel = await this.innerClient.getEscrowChannel(escrowChannelId);
+        if (!channel) {
+            throw new Error(`escrow channel ${escrowChannelId} not found`);
+        }
+        return channel;
     }
 
     // -----------------------------------------------------------------------

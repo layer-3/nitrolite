@@ -11,12 +11,13 @@ const HOME_CHANNEL_ID = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const USER_SIGNATURE = '0x00';
 const NODE_SIGNATURE = '0x01';
 
-function createHighLevelClient(latestState?: core.State, latestStateError?: Error) {
+function createHighLevelClient(latestState?: core.State | null, latestStateError?: Error) {
     const getLatestState = jest.fn();
     if (latestStateError) {
         getLatestState.mockRejectedValue(latestStateError);
     } else {
-        getLatestState.mockResolvedValue(latestState);
+        // Default to null (absence) when no state provided.
+        getLatestState.mockResolvedValue(latestState ?? null);
     }
 
     const client = Object.create(Client.prototype) as any;
@@ -138,8 +139,8 @@ describe('Client.getOnChainBalance', () => {
 });
 
 describe('Client.acknowledge', () => {
-    it('creates a channel with acknowledgement when latest state lookup fails', async () => {
-        const client = createHighLevelClient(undefined, new Error('state not found'));
+    it('creates a channel with acknowledgement when no latest state exists', async () => {
+        const client = createHighLevelClient(null);
 
         const state = await client.acknowledge('usdc');
 
@@ -205,9 +206,93 @@ describe('Client.acknowledge', () => {
     });
 });
 
+describe('Client absence semantics for GET methods', () => {
+    it('getHomeChannel returns null when the RPC response has no channel', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            channelsV1GetHomeChannel: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getHomeChannel(USER_WALLET, 'usdc');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.channelsV1GetHomeChannel).toHaveBeenCalledWith({
+            wallet: USER_WALLET,
+            asset: 'usdc',
+        });
+    });
+
+    it('getEscrowChannel returns null when the RPC response has no channel', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            channelsV1GetEscrowChannel: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getEscrowChannel('0xEscrow');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.channelsV1GetEscrowChannel).toHaveBeenCalledWith({
+            escrow_channel_id: '0xEscrow',
+        });
+    });
+
+    it('getAppDefinition returns null when the RPC response has no definition', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.rpcClient = {
+            appSessionsV1GetAppDefinition: jest.fn().mockResolvedValue({}),
+        };
+
+        const result = await client.getAppDefinition('0xSession');
+
+        expect(result).toBeNull();
+        expect(client.rpcClient.appSessionsV1GetAppDefinition).toHaveBeenCalledWith({
+            app_session_id: '0xSession',
+        });
+    });
+});
+
+describe('Client nil-state guards', () => {
+    it('closeHomeChannel throws when no latest state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        await expect(client.closeHomeChannel('usdc')).rejects.toThrow(
+            'no channel exists for asset usdc'
+        );
+    });
+
+    it('checkpoint throws when no signed state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        await expect(client.checkpoint('usdc')).rejects.toThrow(
+            'no signed state exists for asset usdc'
+        );
+    });
+
+    it('submitAppSessionDeposit throws when no current state exists', async () => {
+        const client = Object.create(Client.prototype) as any;
+        client.getUserAddress = jest.fn(() => USER_WALLET);
+        client.getLatestState = jest.fn().mockResolvedValue(null);
+
+        const appStateUpdate = {
+            appSessionId: '0xSession',
+            intent: 'deposit',
+            version: 2n,
+            allocations: [],
+        } as any;
+
+        await expect(
+            client.submitAppSessionDeposit(appStateUpdate, ['sig1'], 'usdc', new Decimal(10))
+        ).rejects.toThrow('no channel state to advance for AppSession');
+    });
+});
+
 describe('Client.transfer', () => {
-    it('creates a channel with transfer when latest state lookup fails', async () => {
-        const client = createHighLevelClient(undefined, new Error('state not found'));
+    it('creates a channel with transfer when no latest state exists', async () => {
+        const client = createHighLevelClient(null);
         const amount = new Decimal(1);
 
         const state = await client.transfer(RECIPIENT_WALLET, 'usdc', amount);

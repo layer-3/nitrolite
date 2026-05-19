@@ -70,17 +70,22 @@ func (c *Client) GetAppSessions(ctx context.Context, opts *GetAppSessionsOptions
 
 // GetAppDefinition retrieves the definition for a specific app session.
 //
+// Returns (nil, nil) when no app session exists for the given ID — absence is
+// a successful response, not an error.
+//
 // Parameters:
 //   - appSessionID: The application session ID
 //
 // Returns:
-//   - app.AppDefinitionV1 with participants, quorum, and application info
+//   - app.AppDefinitionV1 with participants, quorum, and application info, or
+//     nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	def, err := client.GetAppDefinition(ctx, "session123")
-//	fmt.Printf("App: %s, Quorum: %d\n", def.Application, def.Quorum)
+//	if err != nil { return err }
+//	if def == nil { /* not found */ }
 func (c *Client) GetAppDefinition(ctx context.Context, appSessionID string) (*app.AppDefinitionV1, error) {
 	if appSessionID == "" {
 		return nil, fmt.Errorf("app session ID required")
@@ -93,7 +98,11 @@ func (c *Client) GetAppDefinition(ctx context.Context, appSessionID string) (*ap
 		return nil, fmt.Errorf("failed to get app definition: %w", err)
 	}
 
-	def, err := transformAppDefinition(resp.Definition)
+	if resp.Definition == nil {
+		return nil, nil
+	}
+
+	def, err := transformAppDefinition(*resp.Definition)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform app definition: %w", err)
 	}

@@ -99,6 +99,7 @@ func TestGetLatestState_Success(t *testing.T) {
 	var response rpc.ChannelsV1GetLatestStateResponse
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
+	require.NotNil(t, response.State)
 
 	assert.Equal(t, state.ID, response.State.ID)
 	assert.Equal(t, userWallet, response.State.UserWallet)
@@ -198,6 +199,7 @@ func TestGetLatestState_OnlySigned(t *testing.T) {
 	var response rpc.ChannelsV1GetLatestStateResponse
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
+	require.NotNil(t, response.State)
 
 	assert.Equal(t, state.ID, response.State.ID)
 	assert.Equal(t, "3", response.State.Version)
@@ -234,5 +236,41 @@ func TestGetLatestState_NormalizesWallet(t *testing.T) {
 	handler.GetLatestState(ctx)
 
 	require.Nil(t, ctx.Response.Error())
+	mockTxStore.AssertExpectations(t)
+}
+
+// TestGetLatestState_NotFound verifies absent state returns a successful response with nil state payload.
+func TestGetLatestState_NotFound(t *testing.T) {
+	mockTxStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(h StoreTxHandler) error { return h(mockTxStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	mockTxStore.On("GetLastUserState", userWallet, asset, false).Return(nil, nil)
+
+	reqPayload := rpc.ChannelsV1GetLatestStateRequest{Wallet: userWallet, Asset: asset}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_latest_state", Payload: payload},
+	}
+
+	handler.GetLatestState(ctx)
+
+	// Absence is a successful response with state == nil.
+	require.NotNil(t, ctx.Response.Payload)
+	require.NoError(t, ctx.Response.Error())
+
+	var response rpc.ChannelsV1GetLatestStateResponse
+	err = ctx.Response.Payload.Translate(&response)
+	require.NoError(t, err)
+	assert.Nil(t, response.State)
+
 	mockTxStore.AssertExpectations(t)
 }

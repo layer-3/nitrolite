@@ -137,7 +137,7 @@ func TestClientV1_ChannelsV1GetHomeChannel(t *testing.T) {
 	client, dialer := setupClient()
 
 	channel := rpc.ChannelsV1GetHomeChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:         testChannelID,
 			UserWallet:        testWalletV1,
 			Type:              "home",
@@ -161,13 +161,29 @@ func TestClientV1_ChannelsV1GetHomeChannel(t *testing.T) {
 	assert.Equal(t, "home", resp.Channel.Type)
 }
 
+// TestClientV1_ChannelsV1GetHomeChannel_NilChannel verifies absent-channel responses decode to a nil pointer without error.
+func TestClientV1_ChannelsV1GetHomeChannel_NilChannel(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	registerSimpleHandlerV1(dialer, "channels.v1.get_home_channel", rpc.ChannelsV1GetHomeChannelResponse{})
+
+	resp, err := client.ChannelsV1GetHomeChannel(testCtxV1, rpc.ChannelsV1GetHomeChannelRequest{
+		Wallet: testWalletV1,
+		Asset:  testAssetV1,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.Channel)
+}
+
 func TestClientV1_ChannelsV1GetEscrowChannel(t *testing.T) {
 	t.Parallel()
 
 	client, dialer := setupClient()
 
 	channel := rpc.ChannelsV1GetEscrowChannelResponse{
-		Channel: rpc.ChannelV1{
+		Channel: &rpc.ChannelV1{
 			ChannelID:    testChannelID,
 			Type:         "escrow",
 			BlockchainID: testChainIDV1,
@@ -182,6 +198,21 @@ func TestClientV1_ChannelsV1GetEscrowChannel(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "escrow", resp.Channel.Type)
+}
+
+// TestClientV1_ChannelsV1GetEscrowChannel_NilChannel verifies absent-channel responses decode to a nil pointer without error.
+func TestClientV1_ChannelsV1GetEscrowChannel_NilChannel(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	registerSimpleHandlerV1(dialer, "channels.v1.get_escrow_channel", rpc.ChannelsV1GetEscrowChannelResponse{})
+
+	resp, err := client.ChannelsV1GetEscrowChannel(testCtxV1, rpc.ChannelsV1GetEscrowChannelRequest{
+		EscrowChannelID: testChannelID,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.Channel)
 }
 
 func TestClientV1_ChannelsV1GetChannels(t *testing.T) {
@@ -218,7 +249,7 @@ func TestClientV1_ChannelsV1GetLatestState(t *testing.T) {
 	client, dialer := setupClient()
 
 	state := rpc.ChannelsV1GetLatestStateResponse{
-		State: rpc.StateV1{
+		State: &rpc.StateV1{
 			ID:         "state123",
 			Asset:      testAssetV1,
 			UserWallet: testWalletV1,
@@ -243,6 +274,23 @@ func TestClientV1_ChannelsV1GetLatestState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "state123", resp.State.ID)
 	assert.Equal(t, testAssetV1, resp.State.Asset)
+}
+
+// TestClientV1_ChannelsV1GetLatestState_NilState verifies absent-state responses decode to a nil pointer without error.
+func TestClientV1_ChannelsV1GetLatestState_NilState(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	registerSimpleHandlerV1(dialer, "channels.v1.get_latest_state", rpc.ChannelsV1GetLatestStateResponse{})
+
+	resp, err := client.ChannelsV1GetLatestState(testCtxV1, rpc.ChannelsV1GetLatestStateRequest{
+		Wallet:     testWalletV1,
+		Asset:      testAssetV1,
+		OnlySigned: false,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.State)
 }
 
 func TestClientV1_ChannelsV1RequestCreation(t *testing.T) {
@@ -302,7 +350,7 @@ func TestClientV1_AppSessionsV1GetAppDefinition(t *testing.T) {
 	client, dialer := setupClient()
 
 	definition := rpc.AppSessionsV1GetAppDefinitionResponse{
-		Definition: rpc.AppDefinitionV1{
+		Definition: &rpc.AppDefinitionV1{
 			Application: "game",
 			Participants: []rpc.AppParticipantV1{
 				{WalletAddress: testWalletV1, SignatureWeight: 1},
@@ -321,6 +369,21 @@ func TestClientV1_AppSessionsV1GetAppDefinition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "game", resp.Definition.Application)
 	assert.Len(t, resp.Definition.Participants, 2)
+}
+
+// TestClientV1_AppSessionsV1GetAppDefinition_NilDefinition verifies absent-definition responses decode to a nil pointer without error.
+func TestClientV1_AppSessionsV1GetAppDefinition_NilDefinition(t *testing.T) {
+	t.Parallel()
+
+	client, dialer := setupClient()
+
+	registerSimpleHandlerV1(dialer, "app_sessions.v1.get_app_definition", rpc.AppSessionsV1GetAppDefinitionResponse{})
+
+	resp, err := client.AppSessionsV1GetAppDefinition(testCtxV1, rpc.AppSessionsV1GetAppDefinitionRequest{
+		AppSessionID: testAppSession,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.Definition)
 }
 
 func TestClientV1_AppSessionsV1GetAppSessions(t *testing.T) {

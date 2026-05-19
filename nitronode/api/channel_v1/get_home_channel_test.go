@@ -89,6 +89,7 @@ func TestGetHomeChannel_Success(t *testing.T) {
 	var response rpc.ChannelsV1GetHomeChannelResponse
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
+	require.NotNil(t, response.Channel)
 
 	assert.Equal(t, homeChannelID, response.Channel.ChannelID)
 	assert.Equal(t, userWallet, response.Channel.UserWallet)
@@ -156,9 +157,14 @@ func TestGetHomeChannel_NotFound(t *testing.T) {
 	// Execute
 	handler.GetHomeChannel(ctx)
 
-	// Assert
-	assert.NotNil(t, ctx.Response.Error())
-	assert.Contains(t, ctx.Response.Error().Error(), "channel_not_found")
+	// Assert: absence is a successful response with channel == nil
+	assert.NotNil(t, ctx.Response.Payload)
+	assert.Nil(t, ctx.Response.Error())
+
+	var response rpc.ChannelsV1GetHomeChannelResponse
+	err = ctx.Response.Payload.Translate(&response)
+	require.NoError(t, err)
+	assert.Nil(t, response.Channel)
 
 	// Verify all mock expectations
 	mockTxStore.AssertExpectations(t)

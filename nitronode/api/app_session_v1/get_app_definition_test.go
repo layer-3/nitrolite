@@ -84,6 +84,7 @@ func TestGetAppDefinition_Success(t *testing.T) {
 	var response rpc.AppSessionsV1GetAppDefinitionResponse
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
+	require.NotNil(t, response.Definition)
 
 	assert.Equal(t, "game", response.Definition.Application)
 	assert.Len(t, response.Definition.Participants, 2)
@@ -143,9 +144,14 @@ func TestGetAppDefinition_NotFound(t *testing.T) {
 	// Execute
 	handler.GetAppDefinition(ctx)
 
-	// Assert
-	assert.NotNil(t, ctx.Response.Error())
-	assert.Contains(t, ctx.Response.Error().Error(), "app_session_not_found")
+	// Assert: absence is a successful response with definition == nil
+	assert.NotNil(t, ctx.Response.Payload)
+	assert.Nil(t, ctx.Response.Error())
+
+	var response rpc.AppSessionsV1GetAppDefinitionResponse
+	err = ctx.Response.Payload.Translate(&response)
+	require.NoError(t, err)
+	assert.Nil(t, response.Definition)
 
 	// Verify all mock expectations
 	mockStore.AssertExpectations(t)

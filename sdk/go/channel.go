@@ -56,9 +56,12 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// Scenario A: Channel doesn't exist - create it
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -164,9 +167,12 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// Channel doesn't exist - create it and withdraw
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -260,7 +266,10 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 	// Get sender's latest state
 	senderWallet := c.GetUserAddress()
 	state, err := c.GetLatestState(ctx, senderWallet, asset, false)
-	if err != nil || state.HomeChannelID == nil {
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
+	if state == nil || state.HomeChannelID == nil {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -380,7 +389,7 @@ func (c *Client) CloseHomeChannel(ctx context.Context, asset string) (*core.Stat
 		return nil, err
 	}
 
-	if state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil {
 		return nil, fmt.Errorf("no channel exists for asset %s", asset)
 	}
 
@@ -431,9 +440,12 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// No channel path - create channel with acknowledgement
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -558,6 +570,10 @@ func (c *Client) Checkpoint(ctx context.Context, asset string) (string, error) {
 		return "", fmt.Errorf("failed to get latest signed state: %w", err)
 	}
 
+	if state == nil {
+		return "", fmt.Errorf("no signed state exists for asset %s", asset)
+	}
+
 	if state.HomeChannelID == nil {
 		// NOTE: this should never happen, because signed state MUST have a channel ID
 		return "", fmt.Errorf("no channel exists for asset %s", asset)
@@ -575,6 +591,11 @@ func (c *Client) Checkpoint(ctx context.Context, asset string) (string, error) {
 	channel, err := c.GetHomeChannel(ctx, userWallet, asset)
 	if err != nil {
 		return "", fmt.Errorf("failed to get home channel: %w", err)
+	}
+	if channel == nil {
+		// Signed state existed but home channel record is missing — node is in
+		// an inconsistent state.
+		return "", fmt.Errorf("home channel missing for asset %s despite signed state", asset)
 	}
 
 	switch state.Transition.Type {
@@ -717,18 +738,22 @@ func (c *Client) Challenge(ctx context.Context, state core.State) (string, error
 
 // GetHomeChannel retrieves home channel information for a user's asset.
 //
+// Returns (nil, nil) when no home channel exists for the wallet/asset pair —
+// absence is a successful response, not an error.
+//
 // Parameters:
 //   - wallet: The user's wallet address
 //   - asset: The asset symbol
 //
 // Returns:
-//   - Channel information for the home channel
+//   - Channel information for the home channel, or nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	channel, err := client.GetHomeChannel(ctx, "0x1234...", "usdc")
-//	fmt.Printf("Home Channel: %s (Version: %d)\n", channel.ChannelID, channel.StateVersion)
+//	if err != nil { return err }
+//	if channel == nil { /* no channel yet */ }
 func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*core.Channel, error) {
 	req := rpc.ChannelsV1GetHomeChannelRequest{
 		Wallet: wallet,
@@ -739,7 +764,11 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 		return nil, fmt.Errorf("failed to get home channel: %w", err)
 	}
 
-	channel, err := transformChannel(resp.Channel)
+	if resp.Channel == nil {
+		return nil, nil
+	}
+
+	channel, err := transformChannel(*resp.Channel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform channel: %w", err)
 	}
@@ -748,11 +777,14 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 
 // GetEscrowChannel retrieves escrow channel information for a specific channel ID.
 //
+// Returns (nil, nil) when no escrow channel exists for the given ID — absence
+// is a successful response, not an error.
+//
 // Parameters:
 //   - escrowChannelID: The escrow channel ID to query
 //
 // Returns:
-//   - Channel information for the escrow channel
+//   - Channel information for the escrow channel, or nil if absent
 //   - Error if the request fails
 //
 // Note: when the escrow channel has been closed by the on-chain purge queue
@@ -763,7 +795,8 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 // Example:
 //
 //	channel, err := client.GetEscrowChannel(ctx, "0x1234...")
-//	fmt.Printf("Escrow Channel: %s (Version: %d)\n", channel.ChannelID, channel.StateVersion)
+//	if err != nil { return err }
+//	if channel == nil { /* not found */ }
 func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (*core.Channel, error) {
 	req := rpc.ChannelsV1GetEscrowChannelRequest{
 		EscrowChannelID: escrowChannelID,
@@ -773,7 +806,11 @@ func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (
 		return nil, fmt.Errorf("failed to get escrow channel: %w", err)
 	}
 
-	channel, err := transformChannel(resp.Channel)
+	if resp.Channel == nil {
+		return nil, nil
+	}
+
+	channel, err := transformChannel(*resp.Channel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform channel: %w", err)
 	}
@@ -786,19 +823,23 @@ func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (
 
 // GetLatestState retrieves the latest state for a user's asset.
 //
+// Returns (nil, nil) when the node has no stored state for the wallet/asset
+// pair — absence is a successful response, not an error.
+//
 // Parameters:
 //   - wallet: The user's wallet address
 //   - asset: The asset symbol (e.g., "usdc")
 //   - onlySigned: If true, returns only the latest signed state
 //
 // Returns:
-//   - core.State containing all state information
+//   - core.State containing all state information, or nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	state, err := client.GetLatestState(ctx, "0x1234...", "usdc", false)
-//	fmt.Printf("State Version: %d, Balance: %s\n", state.Version, state.HomeLedger.UserBalance)
+//	if err != nil { return err }
+//	if state == nil { /* no state yet */ }
 func (c *Client) GetLatestState(ctx context.Context, wallet, asset string, onlySigned bool) (*core.State, error) {
 	req := rpc.ChannelsV1GetLatestStateRequest{
 		Wallet:     wallet,
@@ -809,7 +850,10 @@ func (c *Client) GetLatestState(ctx context.Context, wallet, asset string, onlyS
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest state: %w", err)
 	}
-	state, err := transformState(resp.State)
+	if resp.State == nil {
+		return nil, nil
+	}
+	state, err := transformState(*resp.State)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform state: %w", err)
 	}

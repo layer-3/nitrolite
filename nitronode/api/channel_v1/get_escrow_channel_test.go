@@ -87,6 +87,7 @@ func TestGetEscrowChannel_Success(t *testing.T) {
 	var response rpc.ChannelsV1GetEscrowChannelResponse
 	err = ctx.Response.Payload.Translate(&response)
 	require.NoError(t, err)
+	require.NotNil(t, response.Channel)
 
 	assert.Equal(t, escrowChannelID, response.Channel.ChannelID)
 	assert.Equal(t, userWallet, response.Channel.UserWallet)
@@ -95,5 +96,52 @@ func TestGetEscrowChannel_Success(t *testing.T) {
 	assert.Equal(t, "open", response.Channel.Status)
 
 	// Verify all mock expectations
+	mockTxStore.AssertExpectations(t)
+}
+
+func TestGetEscrowChannel_NotFound(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(h StoreTxHandler) error {
+			return h(mockTxStore)
+		},
+		nodeSigner:       nodeSigner,
+		nodeAddress:      mockSigner.PublicKey().Address().String(),
+		minChallenge:     3600,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	escrowChannelID := "0xMissingEscrowChannel"
+	mockTxStore.On("GetChannelByID", escrowChannelID).Return(nil, nil)
+
+	reqPayload := rpc.ChannelsV1GetEscrowChannelRequest{EscrowChannelID: escrowChannelID}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.get_escrow_channel", Payload: payload},
+	}
+
+	handler.GetEscrowChannel(ctx)
+
+	// Absence is a successful response with channel == nil.
+	assert.NotNil(t, ctx.Response.Payload)
+	assert.Nil(t, ctx.Response.Error())
+
+	var response rpc.ChannelsV1GetEscrowChannelResponse
+	err = ctx.Response.Payload.Translate(&response)
+	require.NoError(t, err)
+	assert.Nil(t, response.Channel)
+
 	mockTxStore.AssertExpectations(t)
 }

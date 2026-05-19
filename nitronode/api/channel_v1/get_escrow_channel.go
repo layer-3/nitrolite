@@ -6,6 +6,11 @@ import (
 )
 
 // GetEscrowChannel retrieves current on-chain escrow channel information.
+//
+// Note: when the escrow channel has been closed by the on-chain purge queue
+// (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), StateVersion
+// on the returned channel reflects the initiate version (N) and does not
+// advance to the finalize version (N+1).
 func (h *Handler) GetEscrowChannel(c *rpc.Context) {
 	var req rpc.ChannelsV1GetEscrowChannelRequest
 	if err := c.Request.Payload.Translate(&req); err != nil {

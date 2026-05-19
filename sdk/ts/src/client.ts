@@ -1279,6 +1279,11 @@ export class Client {
   /**
    * GetEscrowChannel retrieves escrow channel information for a specific channel ID.
    *
+   * Note: when the escrow channel has been closed by the on-chain purge queue
+   * (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), `stateVersion`
+   * on the returned channel reflects the initiate version (N) and does not advance
+   * to the finalize version (N+1).
+   *
    * @param escrowChannelId - The escrow channel ID to query
    * @returns Channel information for the escrow channel
    *

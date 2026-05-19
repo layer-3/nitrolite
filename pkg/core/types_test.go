@@ -215,7 +215,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		}
 	}
 
-	t.Run("Success - opens fresh epoch at version 1 with no channel context", func(t *testing.T) {
+	t.Run("Success - opens fresh epoch at version 0 with no channel context", func(t *testing.T) {
 		prev := makePrev()
 		amount := decimal.NewFromInt(42)
 
@@ -226,7 +226,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		assert.Equal(t, prev.Asset, rescue.Asset)
 		assert.Equal(t, prev.UserWallet, rescue.UserWallet)
 		assert.Equal(t, prev.Epoch+1, rescue.Epoch)
-		assert.Equal(t, uint64(1), rescue.Version)
+		assert.Equal(t, uint64(0), rescue.Version)
 		assert.Nil(t, rescue.HomeChannelID)
 		assert.Empty(t, rescue.HomeLedger.TokenAddress)
 		assert.Equal(t, uint64(0), rescue.HomeLedger.BlockchainID)

@@ -313,9 +313,15 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // Once closed, no further state updates are possible for this channel.
 //
 // Additionally, when the closing path was a challenge resolution (channel was Challenged
-// and the closing state is not a finalize), the handler issues a single ChallengeRescue
-// state for the user that squashes the sum of receiver-state credits accrued during the
-// challenge window into an off-channel ledger entry tied to the closed channel's ID.
+// and no node-signed Finalize state exists for it), the handler issues a single
+// ChallengeRescue state for the user that squashes the sum of receiver-state credits
+// accrued during the challenge window into an off-channel ledger entry tied to the
+// closed channel's ID. When a node-signed Finalize already exists, the cooperative-close
+// path has already advanced the user to a fresh epoch via NextState(), and any receiver
+// credits accumulated post-Finalize live at (epoch+1, version=0..N) with HomeChannelID=nil
+// — issuing a rescue at (epoch+1, version=1) would either overwrite the lone receiver
+// credit or collide on deterministic state ID with an existing row, so the rescue is
+// skipped entirely in that case.
 func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -362,8 +368,23 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	}
 
 	if wasChallenged {
-		if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
+		// Post-Finalize cooperative close racing with an on-chain challenge: receiver
+		// credits issued after the Finalize live in a fresh epoch via NextState() and
+		// are not channel-attached, so the rescue path would either overwrite them or
+		// collide on deterministic state ID. Skip the rescue branch entirely.
+		finalized, err := tx.HasSignedFinalize(chanID)
+		if err != nil {
 			return err
+		}
+		if finalized {
+			logger.Debug("skipping challenge_rescue for post-Finalize close",
+				"channelId", chanID,
+				"userWallet", channel.UserWallet,
+				"closureVersion", event.StateVersion)
+		} else {
+			if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
+				return err
+			}
 		}
 	}
 

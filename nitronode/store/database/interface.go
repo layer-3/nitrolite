@@ -99,8 +99,24 @@ type DatabaseStore interface {
 	// that would prevent issuing a receiver-side state.
 	EnsureNoOngoingEscrowOperation(wallet, asset string) error
 
-	// UpdateStateUserSigIfMissing backfills the user signature for a stored state when it is currently NULL.
-	UpdateStateUserSigIfMissing(channelID string, version uint64, userSig string) error
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
+	// state when the corresponding column is currently NULL. Either signature may be
+	// empty to skip that side.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
+
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel. Used by event handlers to detect the post-Finalize lifecycle when the
+	// channel status field has been temporarily overwritten by an on-chain challenge.
+	HasSignedFinalize(channelID string) (bool, error)
+
+
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
+	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
+	// Other transition kinds are excluded. Used to compute the ChallengeRescue amount
+	// when a challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
 
 	// --- Blockchain Action Operations ---
 

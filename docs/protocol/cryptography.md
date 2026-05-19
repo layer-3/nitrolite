@@ -93,9 +93,12 @@ A participant MAY delegate signing authority to a session key.
 
 The authorization is constructed as follows:
 
-1. The participant signs a message containing:
-   - the session key address
-   - authorization metadata hash (`keccak256` over the canonically encoded authorization metadata structure)
+1. The participant signs an authorization payload constructed as:
+   `abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash)`
+   where `SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")`,
+   `sessionKey` is the address of the delegated key, and `metadataHash` is the `keccak256` hash of the
+   canonically encoded authorization metadata structure. The type hash prefix prevents unrelated
+   64-byte signed values from being reused as session-key authorizations.
 2. The authorization signature is produced using the participant's primary key
 3. The session key MAY then produce signatures on behalf of the participant within the authorized scope
 

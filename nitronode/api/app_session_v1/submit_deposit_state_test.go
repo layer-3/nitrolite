@@ -196,6 +196,7 @@ func TestSubmitDepositState_Success(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
 	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
 		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
 	}, nil).Maybe()
@@ -545,6 +546,7 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
 	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
 		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
 	}, nil).Maybe()
@@ -692,6 +694,7 @@ func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(
 		map[string]map[string]decimal.Decimal{}, nil,
@@ -837,6 +840,7 @@ func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(
 		map[string]map[string]decimal.Decimal{}, nil,
 	).Once()
@@ -970,6 +974,7 @@ func TestSubmitDepositState_InvalidDecimalPrecision_Rejected(t *testing.T) {
 	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(
 		map[string]map[string]decimal.Decimal{}, nil,
 	).Once()

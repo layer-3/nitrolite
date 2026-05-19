@@ -437,12 +437,23 @@ export function getChannelSessionKeyAuthMetadataHashV1(
 }
 
 /**
- * Packs a channel session key state for signing.
- * Matches Go SDK's PackChannelKeyStateV1.
+ * Type hash for SessionKeyAuthorization, matching the Solidity constant
+ * SESSION_KEY_AUTH_TYPEHASH in SessionKeyValidator.sol.
+ * Prepended to the authorization payload to prevent reuse of unrelated
+ * abi.encode(address, bytes32) signatures as session-key authorizations.
+ */
+export const SESSION_KEY_AUTH_TYPEHASH: Hex = keccak256(
+  toHex('Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)')
+);
+
+/**
+ * Packs a channel session key authorization payload for signing.
+ * Matches Go SDK's PackChannelKeyStateV1 and Solidity's toSigningData(SessionKeyAuthorization).
+ * The payload is abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash) — 96 bytes total.
  *
  * @param sessionKey - The session key address
  * @param metadataHash - The metadata hash from getChannelSessionKeyAuthMetadataHashV1
- * @returns ABI-encoded (sessionKey, metadataHash) ready for EIP-191 signing
+ * @returns ABI-encoded (typehash, sessionKey, metadataHash) ready for EIP-191 signing
  */
 export function packChannelKeyStateV1(
   sessionKey: Address,
@@ -450,10 +461,11 @@ export function packChannelKeyStateV1(
 ): `0x${string}` {
   return encodeAbiParameters(
     [
+      { type: 'bytes32' },  // SESSION_KEY_AUTH_TYPEHASH
       { type: 'address' },  // session_key
       { type: 'bytes32' },  // hashed metadata
     ],
-    [sessionKey, metadataHash]
+    [SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash]
   );
 }
 

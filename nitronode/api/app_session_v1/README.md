@@ -706,6 +706,8 @@ ORDER BY created_at DESC;
 - `version` must be greater than 0
 - `expires_at` must be in the future
 - `user_sig` is required
+- `application_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
+- `app_session_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
 - Version must be sequential (latest_version + 1)
 - Signature must recover to `user_address`
 - Newly registered keys count against the per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100). Updates to keys that already exist for the user are not blocked by the cap.
@@ -715,6 +717,7 @@ ORDER BY created_at DESC;
 **Signature Verification**:
 - Uses ABI encoding via `PackAppSessionKeyStateV1` to create a deterministic hash
 - Encodes: user_address (address), session_key (address), version (uint64), application_ids (bytes32[]), app_session_ids (bytes32[]), expires_at (uint64)
+- Each application_id and app_session_id string is converted to bytes32 via `keccak256(utf8(id))` before ABI encoding
 - The `user_sig` field is excluded from packing (it is the signature itself)
 - Recovers signer address from ECDSA signature
 - Validates that recovered address matches `user_address`
@@ -828,6 +831,7 @@ The implementation uses Ethereum ABI encoding for deterministic hashing and sign
 #### `PackAppSessionKeyStateV1(state AppSessionKeyStateV1) ([]byte, error)`
 - Packs session key state for signature verification using ABI encoding
 - Encodes: user_address (address), session_key (address), version (uint64), application_ids (bytes32[]), app_session_ids (bytes32[]), expires_at (uint64)
+- Each `application_id` and `app_session_id` string is converted to bytes32 via `keccak256(utf8(id))`, providing deterministic, collision-resistant identifiers in practice
 - Excludes the `user_sig` field (it is the signature itself)
 - Returns Keccak256 hash of ABI-encoded data
 - Used in `submit_session_key_state` to verify the user's signature

@@ -77,12 +77,13 @@ func main() {
 		return bb.DbStore.ExecuteInTransaction(handler)
 	}
 
-	eventHandlerService := event_handlers.NewEventHandlerService()
-
 	nodeChannelSigner, err := core.NewChannelDefaultSigner(bb.StateSigner)
 	if err != nil {
 		logger.Fatal("failed to build node channel signer", "error", err)
 	}
+
+	eventHandlerStatePacker := core.NewStatePackerV1(bb.MemoryStore)
+	eventHandlerService := event_handlers.NewEventHandlerService(nodeChannelSigner, eventHandlerStatePacker)
 
 	for _, b := range blockchains {
 		rpcURL, ok := bb.BlockchainRPCs[b.ID]

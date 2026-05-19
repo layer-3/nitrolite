@@ -163,24 +163,24 @@ func coreStateToContractState(state core.State, tokenGetter func(blockchainID ui
 func coreLedgerToContractLedger(ledger core.Ledger, decimals uint8) (Ledger, error) {
 	tokenAddr := common.HexToAddress(ledger.TokenAddress)
 
-	userAllocation, err := core.DecimalToBigInt(ledger.UserBalance, decimals)
+	userAllocation, err := core.DecimalToUint256(ledger.UserBalance, decimals)
 	if err != nil {
-		return Ledger{}, errors.Wrap(err, "failed to convert user balance to big.Int")
+		return Ledger{}, errors.Wrap(err, "failed to convert user balance to uint256")
 	}
 
-	userNetFlow, err := core.DecimalToBigInt(ledger.UserNetFlow, decimals)
+	userNetFlow, err := core.DecimalToInt256(ledger.UserNetFlow, decimals)
 	if err != nil {
-		return Ledger{}, errors.Wrap(err, "failed to convert user net flow to big.Int")
+		return Ledger{}, errors.Wrap(err, "failed to convert user net flow to int256")
 	}
 
-	nodeAllocation, err := core.DecimalToBigInt(ledger.NodeBalance, decimals)
+	nodeAllocation, err := core.DecimalToUint256(ledger.NodeBalance, decimals)
 	if err != nil {
-		return Ledger{}, errors.Wrap(err, "failed to convert node balance to big.Int")
+		return Ledger{}, errors.Wrap(err, "failed to convert node balance to uint256")
 	}
 
-	nodeNetFlow, err := core.DecimalToBigInt(ledger.NodeNetFlow, decimals)
+	nodeNetFlow, err := core.DecimalToInt256(ledger.NodeNetFlow, decimals)
 	if err != nil {
-		return Ledger{}, errors.Wrap(err, "failed to convert node net flow to big.Int")
+		return Ledger{}, errors.Wrap(err, "failed to convert node net flow to int256")
 	}
 
 	return Ledger{

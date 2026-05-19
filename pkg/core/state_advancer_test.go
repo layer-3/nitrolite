@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -241,4 +242,130 @@ func TestValidateAdvancement_RejectsInvalidAmount(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestValidateAdvancement_RejectsOverflowDeposit ensures a home_deposit whose
+// scaled amount exceeds uint256 is rejected before storage. Without the bound
+// check, the offchain ledger would record the full amount while the signed
+// payload truncates to the low 256 bits.
+func TestValidateAdvancement_RejectsOverflowDeposit(t *testing.T) {
+	t.Parallel()
+
+	store := newMockAssetStore()
+	store.AddToken(1, "0xToken", 0) // decimals=0 so amount maps 1:1 to scaled
+	advancer := NewStateAdvancerV1(store)
+
+	userWallet := "0xUser"
+	asset := "USDC"
+	chanID := "0xHomeChannelId"
+	sig := "0xSig"
+
+	current := NewVoidState(asset, userWallet)
+	current.HomeChannelID = &chanID
+	current.ID = GetStateID(userWallet, asset, 0, 0)
+	current.HomeLedger.TokenAddress = "0xToken"
+	current.HomeLedger.BlockchainID = 1
+
+	// scaled = 2^256, one above the uint256 range.
+	overflow := new(big.Int).Lsh(big.NewInt(1), 256)
+	amount := decimal.NewFromBigInt(overflow, 0)
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(amount)
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid home ledger")
+	assert.Contains(t, err.Error(), "uint256")
+}
+
+// TestValidateAdvancement_RejectsOverflowNetFlow checks that net-flow values
+// exceeding the int256 range are rejected. Reached by combining balances that
+// fit uint256 with a net flow that would overflow int256 (the signed type).
+func TestValidateAdvancement_RejectsOverflowNetFlow(t *testing.T) {
+	t.Parallel()
+
+	store := newMockAssetStore()
+	store.AddToken(1, "0xToken", 0)
+	advancer := NewStateAdvancerV1(store)
+
+	userWallet := "0xUser"
+	asset := "USDC"
+	chanID := "0xHomeChannelId"
+	sig := "0xSig"
+
+	current := NewVoidState(asset, userWallet)
+	current.HomeChannelID = &chanID
+	current.ID = GetStateID(userWallet, asset, 0, 0)
+	current.HomeLedger.TokenAddress = "0xToken"
+	current.HomeLedger.BlockchainID = 1
+
+	// 2^255, one above max int256
+	overInt := new(big.Int).Lsh(big.NewInt(1), 255)
+	amount := decimal.NewFromBigInt(overInt, 0)
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(amount)
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid home ledger")
+	assert.Contains(t, err.Error(), "int256")
+}
+
+// TestValidateAdvancement_RejectsOverflowEscrowLedger covers the escrow branch
+// of the bound check: a state whose EscrowLedger already carries an out-of-range
+// UserBalance is rejected even when the home ledger and the new transition are
+// otherwise valid.
+func TestValidateAdvancement_RejectsOverflowEscrowLedger(t *testing.T) {
+	t.Parallel()
+
+	store := newMockAssetStore()
+	store.AddToken(1, "0xHomeToken", 0)
+	store.AddToken(2, "0xEscrowToken", 0)
+	advancer := NewStateAdvancerV1(store)
+
+	userWallet := "0xUser"
+	asset := "USDC"
+	homeChanID := "0xHomeChannelId"
+	escrowChanID := "0xEscrowChannelId"
+	sig := "0xSig"
+
+	// 2^256, one above the uint256 range.
+	overflow := new(big.Int).Lsh(big.NewInt(1), 256)
+	overflowDec := decimal.NewFromBigInt(overflow, 0)
+
+	current := NewVoidState(asset, userWallet)
+	current.HomeChannelID = &homeChanID
+	current.EscrowChannelID = &escrowChanID
+	current.ID = GetStateID(userWallet, asset, 0, 0)
+	current.HomeLedger.TokenAddress = "0xHomeToken"
+	current.HomeLedger.BlockchainID = 1
+	// Last transition is acknowledgement so NextState carries the escrow ledger
+	// forward and the new transition is not constrained.
+	current.Transition = *NewTransition(TransitionTypeAcknowledgement, "0x0", "0x0", decimal.Zero)
+	// Escrow balances sum to net flows so the equality check passes; the
+	// uint256 bound is what should reject the state.
+	current.EscrowLedger = &Ledger{
+		BlockchainID: 2,
+		TokenAddress: "0xEscrowToken",
+		UserBalance:  overflowDec,
+		UserNetFlow:  overflowDec,
+		NodeBalance:  decimal.Zero,
+		NodeNetFlow:  decimal.Zero,
+	}
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(decimal.NewFromInt(1))
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid escrow ledger")
+	assert.Contains(t, err.Error(), "uint256")
 }

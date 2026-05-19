@@ -69,6 +69,18 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: application_ids array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
+	for _, id := range coreState.ApplicationIDs {
+		if id != strings.ToLower(id) {
+			c.Fail(rpc.Errorf("invalid_session_key_state: application_ids must be lowercase, got: %s", id), "")
+			return
+		}
+	}
+	for _, id := range coreState.AppSessionIDs {
+		if id != strings.ToLower(id) {
+			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be lowercase, got: %s", id), "")
+			return
+		}
+	}
 	if coreState.UserSig == "" {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return

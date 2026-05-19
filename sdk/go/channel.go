@@ -787,6 +787,11 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 //   - Channel information for the escrow channel, or nil if absent
 //   - Error if the request fails
 //
+// Note: when the escrow channel has been closed by the on-chain purge queue
+// (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), StateVersion
+// on the returned channel reflects the initiate version (N) and does not advance
+// to the finalize version (N+1).
+//
 // Example:
 //
 //	channel, err := client.GetEscrowChannel(ctx, "0x1234...")

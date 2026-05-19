@@ -198,14 +198,14 @@ contract UtilsTest is Test {
         bytes memory encoded = toSigningData(auth);
 
         console.log("SessionKeyAuthorization signing data:");
-        // 0x0000000000000000000000003fba6f40f2cd5b4d833e0305061b88f029ea504459c85ca0f1634dd72294eec96f6d613893a9d3add6943b6f32f9cf7df0858239
+        // 0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c0000000000000000000000003fba6f40f2cd5b4d833e0305061b88f029ea504459c85ca0f1634dd72294eec96f6d613893a9d3add6943b6f32f9cf7df0858239
         console.logBytes(encoded);
 
         // 0x5C372EBfC9029aFe7F7506a4d9586604A40e117F
         uint256 privKey = 0xefc7c391f4ce326e149bb9943658998227094eb3e0acc92c343241e22fbc7624;
         bytes memory authSignature = TestUtils.signEip191(vm, privKey, encoded);
         console.log("Auth signature:");
-        // 0x0dd14906d8d4dc22ffe48c6fbec99323e1fd149c71fdd9a5fafbc584eed1e9cb00f4e761bb12a7b7271f760ee77f58a7feb9c89b7d70f1e07fcfa60846a74bd41b
+        // 0x287f031625a7a3ac8329d7746c5370c30ffad9857b6e0d022296af4bcad9ca4e0b1b680c3231f5508a1a01406697349afedff09b44c4a26a7881aa262c8bbcee1b
         console.logBytes(authSignature);
 
         auth.authSignature = authSignature;

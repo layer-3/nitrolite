@@ -1,7 +1,7 @@
 {
-  "name": "@yellow-org/example-app-sessions",
+  "name": "@yellow-org/example-channel-session-key",
   "version": "1.0.0",
-  "description": "Nitrolite SDK App Sessions Lifecycle Example",
+  "description": "Nitrolite SDK Channel Session Key Lifecycle Example",
   "type": "module",
   "scripts": {
     "lifecycle": "tsx lifecycle.ts"

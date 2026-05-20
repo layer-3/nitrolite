@@ -1064,7 +1064,7 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state))
 
-		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1)
+		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1, "poker")
 		require.NoError(t, err)
 		assert.Equal(t, testUser1, owner)
 	})
@@ -1103,7 +1103,33 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state))
 
-		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1)
+		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1, testApp1)
+		require.NoError(t, err)
+		assert.Equal(t, testUser1, owner)
+	})
+
+	t.Run("Success - Find owner by application ID when app session not yet persisted", func(t *testing.T) {
+		// Regression: during CreateAppSession the deterministic app session ID
+		// is not yet in the database. The owner lookup must still succeed via
+		// the application ID binding alone.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		state := app.AppSessionKeyStateV1{
+			UserAddress:    testUser1,
+			SessionKey:     testSessionKey,
+			Version:        1,
+			ApplicationIDs: []string{testApp1},
+			ExpiresAt:      time.Now().Add(24 * time.Hour),
+			UserSig:        "0xsig123",
+		}
+		require.NoError(t, store.StoreAppSessionKeyState(state))
+
+		// Pass an app session ID that has not been inserted yet — the lookup
+		// must succeed using the application ID branch.
+		owner, err := store.GetAppSessionKeyOwner(testSessionKey, "0x0000000000000000000000000000000000000098", testApp1)
 		require.NoError(t, err)
 		assert.Equal(t, testUser1, owner)
 	})
@@ -1114,7 +1140,7 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 
 		store := NewDBStore(db)
 
-		_, err := store.GetAppSessionKeyOwner("0x0000000000000000000000000000000000000099", "0x0000000000000000000000000000000000000098")
+		_, err := store.GetAppSessionKeyOwner("0x0000000000000000000000000000000000000099", "0x0000000000000000000000000000000000000098", "nonexistent-app")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no active session key found")
 	})
@@ -1153,7 +1179,7 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state))
 
-		_, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1)
+		_, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1, "poker")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no active session key found")
 	})
@@ -1203,7 +1229,7 @@ func TestDBStore_GetAppSessionKeyOwner(t *testing.T) {
 		}
 		require.NoError(t, store.StoreAppSessionKeyState(state2))
 
-		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1)
+		owner, err := store.GetAppSessionKeyOwner(testSessionKey, testSess1, "poker")
 		require.NoError(t, err)
 		assert.Equal(t, testUser1, owner)
 	})

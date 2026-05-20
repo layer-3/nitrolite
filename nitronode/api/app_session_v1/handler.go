@@ -80,7 +80,7 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 
 	appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
 		func(sessionKeyAddr string) (string, error) {
-			return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionId)
+			return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionId, applicationID)
 		},
 	)
 

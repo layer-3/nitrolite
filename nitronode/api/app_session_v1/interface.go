@@ -62,7 +62,7 @@ type Store interface {
 	// latest states are returned; when true, all latest states are returned regardless of
 	// expiry. Results are paginated.
 	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
-	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
+	GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error)
 
 	// Channel Session key state operations
 	ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error)

@@ -219,7 +219,7 @@ type DatabaseStore interface {
 	// StoreAppSessionKeyState stores or updates a session key state.
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 
-	GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
+	GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error)
 
 	// SessionKeyStateExists returns the latest version of a non-expired session key state for a user.
 	// Returns 0 if no state exists.

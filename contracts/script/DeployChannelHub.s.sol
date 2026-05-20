@@ -19,8 +19,20 @@ import {ECDSAValidator} from "../src/sigValidators/ECDSAValidator.sol";
  *      after the script completes.
  *
  * Usage:
- *   DEFAULT_VALIDATOR_ADDR=<addr>   Address of an already-deployed ISignatureValidator.
- *                                   Leave unset to deploy a fresh ECDSAValidator.
+ *   DEFAULT_VALIDATOR_ADDR=<addr>     Address of an already-deployed ISignatureValidator.
+ *                                     Leave unset to deploy a fresh ECDSAValidator.
+ *
+ *   CHANNEL_ENGINE_ADDR=<addr>        Address of an already-deployed ChannelEngine library.
+ *   ESCROW_DEPOSIT_ENGINE_ADDR=<addr> Address of an already-deployed EscrowDepositEngine library.
+ *   ESCROW_WITHDRAWAL_ENGINE_ADDR=<addr> Address of an already-deployed EscrowWithdrawalEngine library.
+ *
+ *   When all three library addresses are provided, Foundry skips their deployment (code
+ *   already exists at those addresses). You must also pass the --libraries flag so the
+ *   linker wires ChannelHub to the existing addresses:
+ *
+ *     --libraries src/ChannelEngine.sol:ChannelEngine:<addr> \
+ *     --libraries src/EscrowDepositEngine.sol:EscrowDepositEngine:<addr> \
+ *     --libraries src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine:<addr>
  *
  *   forge script script/DeployChannelHub.s.sol:DeployChannelHub \
  *     --rpc-url <RPC_URL> \
@@ -34,10 +46,22 @@ contract DeployChannelHub is Script {
         // Optional: reuse an existing validator or deploy a fresh ECDSAValidator
         address defaultValidatorAddr = vm.envOr("DEFAULT_VALIDATOR_ADDR", address(0));
         address nodeAddr = vm.envAddress("NODE_ADDR");
-        run(defaultValidatorAddr, nodeAddr);
+
+        // Optional: reuse existing library deployments; leave unset to deploy via CREATE2
+        address channelEngineAddr = vm.envOr("CHANNEL_ENGINE_ADDR", address(0));
+        address escrowDepositAddr = vm.envOr("ESCROW_DEPOSIT_ENGINE_ADDR", address(0));
+        address escrowWithdrawalAddr = vm.envOr("ESCROW_WITHDRAWAL_ENGINE_ADDR", address(0));
+
+        run(defaultValidatorAddr, nodeAddr, channelEngineAddr, escrowDepositAddr, escrowWithdrawalAddr);
     }
 
-    function run(address defaultValidatorAddr, address nodeAddr) public {
+    function run(
+        address defaultValidatorAddr,
+        address nodeAddr,
+        address channelEngineAddr,
+        address escrowDepositAddr,
+        address escrowWithdrawalAddr
+    ) public {
         // msg.sender is set by Foundry to the address derived from --private-key
         address deployer = msg.sender;
 
@@ -46,13 +70,33 @@ contract DeployChannelHub is Script {
         console.log("Chain ID:          ", block.chainid);
 
         // ----------------------------------------------------------------
-        // Pre-compute all deployment addresses for informational logging.
-        // Libraries are deployed by Foundry via the CREATE2 factory with
-        // salt = bytes32(0), making their addresses fully deterministic.
+        // Resolve library addresses: use provided addresses or fall back to
+        // the deterministic CREATE2 addresses Foundry would deploy to.
         // ----------------------------------------------------------------
-        address channelEngineAddr = _computeLibraryAddress("ChannelEngine.sol:ChannelEngine");
-        address escrowDepositAddr = _computeLibraryAddress("EscrowDepositEngine.sol:EscrowDepositEngine");
-        address escrowWithdrawalAddr = _computeLibraryAddress("EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine");
+        bool deployChannelEngine = channelEngineAddr == address(0);
+        bool deployEscrowDeposit = escrowDepositAddr == address(0);
+        bool deployEscrowWithdrawal = escrowWithdrawalAddr == address(0);
+
+        if (deployChannelEngine) {
+            channelEngineAddr = _computeLibraryAddress("ChannelEngine.sol:ChannelEngine");
+        }
+        if (deployEscrowDeposit) {
+            escrowDepositAddr = _computeLibraryAddress("EscrowDepositEngine.sol:EscrowDepositEngine");
+        }
+        if (deployEscrowWithdrawal) {
+            escrowWithdrawalAddr = _computeLibraryAddress("EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine");
+        }
+
+        // Validate that provided addresses actually have code
+        if (!deployChannelEngine) {
+            require(channelEngineAddr.code.length > 0, "DeployChannelHub: CHANNEL_ENGINE_ADDR has no code");
+        }
+        if (!deployEscrowDeposit) {
+            require(escrowDepositAddr.code.length > 0, "DeployChannelHub: ESCROW_DEPOSIT_ENGINE_ADDR has no code");
+        }
+        if (!deployEscrowWithdrawal) {
+            require(escrowWithdrawalAddr.code.length > 0, "DeployChannelHub: ESCROW_WITHDRAWAL_ENGINE_ADDR has no code");
+        }
 
         uint64 nonce = vm.getNonce(deployer);
 
@@ -63,9 +107,17 @@ contract DeployChannelHub is Script {
         } else {
             console.log("DefaultValidator:  ", defaultValidatorAddr);
         }
-        console.log("ChannelEngine:     ", channelEngineAddr);
-        console.log("EscrowDepositEngine:  ", escrowDepositAddr);
-        console.log("EscrowWithdrawalEngine: ", escrowWithdrawalAddr);
+        console.log(
+            deployChannelEngine ? "ChannelEngine (new):      " : "ChannelEngine (existing): ", channelEngineAddr
+        );
+        console.log(
+            deployEscrowDeposit ? "EscrowDepositEngine (new):         " : "EscrowDepositEngine (existing):    ",
+            escrowDepositAddr
+        );
+        console.log(
+            deployEscrowWithdrawal ? "EscrowWithdrawalEngine (new):      " : "EscrowWithdrawalEngine (existing): ",
+            escrowWithdrawalAddr
+        );
         console.log("ChannelHub:        ", vm.computeCreateAddress(deployer, nonce));
 
         vm.startBroadcast();
@@ -78,9 +130,11 @@ contract DeployChannelHub is Script {
         }
 
         // 2. Deploy ChannelHub.
-        //    Foundry detects unlinked library references (ChannelEngine,
-        //    EscrowDepositEngine, EscrowWithdrawalEngine) and inserts their
-        //    deployment transactions before this one in the broadcast batch.
+        //    When library env vars are unset, Foundry detects unlinked library
+        //    references and inserts their deployment transactions before this one
+        //    in the broadcast batch (CREATE2, salt=0). When addresses are provided
+        //    via env vars, Foundry finds code already at those addresses and skips
+        //    their redeployment.
         require(
             defaultValidatorAddr.code.length > 0,
             "DeployChannelHub: DEFAULT_VALIDATOR_ADDR has no code - must be a deployed contract"
@@ -102,10 +156,19 @@ contract DeployChannelHub is Script {
         console.log("Node:               ", nodeAddr);
         console.log("ChannelHub:         ", address(hub));
         console.log("");
-        console.log("=== Libraries (deployed via CREATE2, salt=0) ===");
-        console.log("  ChannelEngine    :", channelEngineAddr);
-        console.log("  EscrowDepositEngine :", escrowDepositAddr);
-        console.log("  EscrowWithdrawalEngine:", escrowWithdrawalAddr);
+        console.log("=== Libraries ===");
+        console.log(
+            deployChannelEngine ? "  ChannelEngine (deployed):         " : "  ChannelEngine (reused):           ",
+            channelEngineAddr
+        );
+        console.log(
+            deployEscrowDeposit ? "  EscrowDepositEngine (deployed):    " : "  EscrowDepositEngine (reused):      ",
+            escrowDepositAddr
+        );
+        console.log(
+            deployEscrowWithdrawal ? "  EscrowWithdrawalEngine (deployed): " : "  EscrowWithdrawalEngine (reused):   ",
+            escrowWithdrawalAddr
+        );
         console.log("");
         console.log(string.concat("  (tx hashes: ", broadcastFile, ")"));
     }

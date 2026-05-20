@@ -1,11 +1,11 @@
 blockchains:
 - name: "ethereum_sepolia"
   id: 11155111
-  channel_hub_address: "0xf74c93a176794337fb43c951cc0f6cef9a6723f6"
+  channel_hub_address: "0xc9abf89607bb43ac41454c115bdcf58fe6a72d46"
   channel_hub_sig_validators:
     1: "0xe2B33Aa3922d7ac386e6801Ae7D9498C4DF45F1f"
 - name: "base_sepolia"
   id: 84532
-  channel_hub_address: "0xeddf27e378a8b102a98a4b03a3730ef585bfaff5"
+  channel_hub_address: "0x61b9e0767f2eca7e33802e82f9c64b1ebe72ba31"
   channel_hub_sig_validators:
     1: "0x4085554a56F962b6c8eeeb017Bf2e9D2F3E31131"

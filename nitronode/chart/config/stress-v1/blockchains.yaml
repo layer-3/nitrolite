@@ -7,6 +7,6 @@ blockchains:
   locking_contract_address: "0x9B3D4dA5A37857F17648CC4d78Bbae0A681C02c6"
 - name: "base_sepolia"
   id: 84532
-  channel_hub_address: "0xa023c476e02786356b84eda6ad6f8c003960f406"
+  channel_hub_address: "0xeddf27e378a8b102a98a4b03a3730ef585bfaff5"
   channel_hub_sig_validators:
     1: "0x4085554a56F962b6c8eeeb017Bf2e9D2F3E31131"

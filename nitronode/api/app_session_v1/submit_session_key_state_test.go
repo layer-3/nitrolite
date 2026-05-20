@@ -330,6 +330,88 @@ func TestSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+// Covers the typical revocation path: an active key (latestVersion > 0) is deactivated
+// by submitting version+1 with a past expires_at. The per-user cap check is short-circuited
+// because the key already exists, so CountSessionKeysForUser must not be called.
+func TestSubmitSessionKeyState_RevokeExistingActiveKey(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 5,
+	}
+
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, nil, nil, expiresAt, userSigner, sessionKeySigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(1, nil)
+	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
+}
+
+// Covers the re-activation path: after a revoke (latestVersion incremented twice — register
+// then revoke), submitting version+1 with a future expires_at re-activates the same session
+// key address without re-running the per-user cap check.
+func TestSubmitSessionKeyState_ReactivateAfterRevoke(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 5,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, nil, nil, expiresAt, userSigner, sessionKeySigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(2, nil)
+	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
+}
+
 func TestSubmitSessionKeyState_RejectsNegativeExpiresAt(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := &Handler{

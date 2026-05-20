@@ -658,6 +658,12 @@ api:
                     a future `expires_at` re-activates the same session key address.
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
+
+                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
+                on every submit, including the revocation path — the session key must co-sign its
+                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
+                supported by this method; that flow requires a separate code path and is tracked
+                as a follow-up.
               request:
                 - field_name: state
                   type: channel_session_key_state
@@ -865,6 +871,12 @@ api:
                     a future `expires_at` re-activates the same session key address.
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
+
+                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
+                on every submit, including the revocation path — the session key must co-sign its
+                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
+                supported by this method; that flow requires a separate code path and is tracked
+                as a follow-up.
               request:
                 - field_name: state
                   type: app_session_key_state

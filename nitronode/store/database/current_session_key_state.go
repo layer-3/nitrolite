@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -165,5 +166,9 @@ func (s *DBStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
 		return 0, fmt.Errorf("failed to count app session keys for user: %w", err)
 	}
 
-	return uint32(channelCount + appCount), nil
+	total := channelCount + appCount
+	if total < 0 || total > math.MaxUint32 {
+		return 0, fmt.Errorf("session key count %d out of uint32 range", total)
+	}
+	return uint32(total), nil
 }

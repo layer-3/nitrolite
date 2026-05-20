@@ -905,7 +905,10 @@ type GetLastChannelKeyStatesOptions struct {
 // SubmitChannelSessionKeyState submits a channel session key state for registration,
 // update, revocation, or re-activation. The state must carry both the wallet's UserSig
 // (authorizing the delegation) and the session-key holder's SessionKeySig (proving
-// possession of the key); submits without a valid SessionKeySig are rejected.
+// possession of the key); submits without a valid SessionKeySig are rejected on every
+// path, including revocation — the session key must co-sign its own deactivation.
+// Wallet-only revocation (for a lost or compromised key) is not supported by this
+// method.
 //
 // Set state.ExpiresAt to a future time to register or update the key. Set it to a
 // value at or before time.Now() to revoke the key — the auth path filters by

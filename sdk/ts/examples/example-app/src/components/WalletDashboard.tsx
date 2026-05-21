@@ -296,18 +296,21 @@ export default function WalletDashboard({
     try {
       setSkLoading(true);
 
-      // Revoke on-chain: submit a new version with zero assets
+      // Revoke on-chain: submit a new version with expires_at in the past. The nitronode
+      // treats any submit whose expires_at <= now as a revocation (freeing the per-user cap
+      // slot); clearing `assets` would leave the latest state still active until natural expiry.
       try {
         const existing = await client.getLastChannelKeyStates(address, sessionKey.address);
         if (existing && existing.length > 0) {
           const latest = existing[0];
           const newVersion = BigInt(latest.version) + 1n;
+          const pastExpiresAt = Math.floor(Date.now() / 1000) - 1;
           const revokeState = {
             user_address: address,
             session_key: sessionKey.address,
             version: newVersion.toString(),
-            assets: [] as string[],
-            expires_at: latest.expires_at,
+            assets: latest.assets,
+            expires_at: pastExpiresAt.toString(),
             user_sig: '',
             session_key_sig: '',
           };

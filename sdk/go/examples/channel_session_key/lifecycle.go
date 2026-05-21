@@ -54,11 +54,11 @@ import (
 
 func main() {
 	ctx := context.Background()
-	wsURL := "wss://nitronode-stress.yellow.org/v1/ws"
+	wsURL := "wss://nitronode-sandbox.yellow.org/v1/ws"
 
 	// Replace with your hex private key. The wallet must have minimum off-chain
 	// balance for YUSD and YELLOW; channels are auto-opened below if missing.
-	walletPrivateKey := "0x7d6071201765d2630ca9eb83cbe3e2e2e76f9b56ea3ed13a49a00208ebcdf843"
+	walletPrivateKey := "0x7d607..."
 
 	// chainID is the home blockchain ID used for Deposit / Withdraw calls. Set
 	// it to the asset's home chain on the target nitronode deployment. 11155111

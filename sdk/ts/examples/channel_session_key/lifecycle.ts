@@ -61,11 +61,11 @@ import { getChannelSessionKeyAuthMetadataHashV1 } from '../../src/core/utils';
 import { isFinal } from '../../src/core/state';
 
 async function main() {
-  const wsURL = 'wss://nitronode-stress.yellow.org/v1/ws';
+  const wsURL = 'wss://nitronode-sandbox.yellow.org/v1/ws';
 
   // Replace with your hex private key. The wallet must have minimum off-chain
   // balance for YUSD and YELLOW; channels are auto-opened below if missing.
-  const walletPrivateKey = '0x7d6071201765d2630ca9eb83cbe3e2e2e76f9b56ea3ed13a49a00208ebcdf843' as Hex;
+  const walletPrivateKey = '0x7d607...' as Hex;
 
   // chainId is the home blockchain ID used for deposit / withdraw calls. Set
   // it to the asset's home chain on the target nitronode deployment. 11155111

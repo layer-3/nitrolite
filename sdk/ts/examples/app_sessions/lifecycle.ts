@@ -100,13 +100,13 @@ async function ensureChannelOpen(label: string, client: Client, asset: string): 
 
 async function main() {
   // Replace with a real deployment url
-  const wsURL = 'wss://nitronode-stress.yellow.org/v1/ws';
+  const wsURL = 'wss://nitronode-sandbox.yellow.org/v1/ws';
 
   // --- 0. Setup Wallets ---
   // Replace these strings with your actual hex private keys
-  const wallet1PrivateKey = '0x7d6071201765d2630ca9eb83cbe3e2e2e76f9b56ea3ed13a49a00208ebcdf843' as Hex;
-  const wallet2PrivateKey = '0x9b6521133af49807e72b8ecc68ef79706fe374685214130079c375810ec47fe3' as Hex;
-  const wallet3PrivateKey = '0xf636952f9d68984a78ef45ea82480723b8a2c40127111cf83d384f8dcd3b77f8' as Hex;
+  const wallet1PrivateKey = '0x7d607...' as Hex;
+  const wallet2PrivateKey = '0x9b652...' as Hex;
+  const wallet3PrivateKey = '0xf6369...' as Hex;
 
   // Create signers from private keys
   const wallet1Signers = createSigners(wallet1PrivateKey);

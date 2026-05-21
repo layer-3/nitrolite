@@ -53,7 +53,6 @@ import {
   createSigners,
   EthereumMsgSigner,
   EthereumRawSigner,
-  ChannelDefaultSigner,
   ChannelSessionKeyStateSigner,
 } from '../../src/signers';
 import { withBlockchainRPC } from '../../src/config';

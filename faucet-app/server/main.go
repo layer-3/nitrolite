@@ -2,15 +2,24 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"faucet-server/internal/nitronode"
-	"faucet-server/internal/config"
-	"faucet-server/internal/logger"
-	"faucet-server/internal/server"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/server"
 )
+
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "[invalid URL]"
+	}
+	return fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -26,7 +35,7 @@ func main() {
 
 	logger.Info("Starting Nitrolite Faucet Server")
 	logger.Infof("Configuration loaded: Server port=%s, Nitronode URL=%s",
-		cfg.ServerPort, cfg.NitronodeURL)
+		cfg.ServerPort, redactURL(cfg.NitronodeURL))
 
 	client, err := nitronode.NewClient(cfg.OwnerPrivateKey, cfg.NitronodeURL, cfg.TokenSymbol, cfg.StandardTipAmountDecimal, cfg.MinTransferCount)
 	if err != nil {

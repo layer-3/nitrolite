@@ -1,5 +1,0 @@
----
-apiVersion: v2
-description: Faucet App Helm chart
-name: faucet-app
-version: 1.0.0

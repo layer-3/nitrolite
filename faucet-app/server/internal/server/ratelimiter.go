@@ -25,13 +25,13 @@ func (r *rateLimiter) checkAndRecord(key string) bool {
 	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.calls++
+	r.evictExpiredLocked(now)
 	last, exists := r.seen[key]
 	if exists && now.Sub(last) < r.cooldown {
 		return false
 	}
 	r.seen[key] = now
-	r.calls++
-	r.evictExpiredLocked(now)
 	return true
 }
 
@@ -42,6 +42,9 @@ func (r *rateLimiter) checkAndRecordBoth(addr, ip string) (bool, string) {
 	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	r.calls++
+	r.evictExpiredLocked(now)
 
 	if last, ok := r.seen[addr]; ok && now.Sub(last) < r.cooldown {
 		return false, "address"
@@ -54,8 +57,6 @@ func (r *rateLimiter) checkAndRecordBoth(addr, ip string) (bool, string) {
 	if ip != addr {
 		r.seen[ip] = now
 	}
-	r.calls++
-	r.evictExpiredLocked(now)
 	return true, ""
 }
 

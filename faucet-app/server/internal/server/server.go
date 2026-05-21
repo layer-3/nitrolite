@@ -8,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
-	"faucet-server/internal/nitronode"
-	"faucet-server/internal/config"
-	"faucet-server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 )
 
 // NitronodeClient is the interface the server uses to interact with Nitronode.
@@ -64,9 +64,14 @@ func NewServer(cfg *config.Config, client NitronodeClient) *Server {
 	}
 
 	router := gin.New()
-	// Disable X-Forwarded-For trust so c.ClientIP() uses RemoteAddr.
-	// Configure with actual LB IP(s) if deployed behind a trusted reverse proxy.
-	router.SetTrustedProxies(nil)
+	if len(cfg.TrustedProxyList) > 0 {
+		router.SetTrustedProxies(cfg.TrustedProxyList)
+	} else {
+		// No proxies configured: c.ClientIP() uses RemoteAddr directly.
+		// Set TRUSTED_PROXIES if the faucet is behind an ingress or load balancer,
+		// otherwise IP-based rate limiting will collapse to one bucket per proxy.
+		router.SetTrustedProxies(nil)
+	}
 
 	// Add middleware
 	router.Use(gin.Recovery())

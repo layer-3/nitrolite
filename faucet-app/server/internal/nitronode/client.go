@@ -12,7 +12,7 @@ import (
 	sdk "github.com/layer-3/nitrolite/sdk/go"
 	"github.com/shopspring/decimal"
 
-	"faucet-server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 )
 
 const (
@@ -36,13 +36,19 @@ type Client struct {
 	sdkClient    *sdk.Client
 	newSDKClient func() (*sdk.Client, error) // captures parsed signers; no raw key hex stored
 
+	reconnectMu sync.Mutex // serialises reconnect attempts; not held during I/O
+	tokenMu     sync.Mutex // serialises GetAssets; prevents N goroutines racing to validate
+
 	ownerAddress     string
 	tokenSymbol      string
 	tipAmount        decimal.Decimal
 	minTransferCount int
-	tokenSupported   bool // cached after first successful GetAssets; reset on reconnect
+	tokenSupported   bool // cached per connection; reset in reconnect
 }
 
+// NewClient creates a Client that wraps the Nitrolite SDK for faucet operations.
+// privateKeyHex drives both message signing and tx signing. nitronodeURL is the
+// WebSocket endpoint. The client is immediately connected and ready to use.
 func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decimal.Decimal, minTransferCount int) (*Client, error) {
 	// Parse signers once — raw key hex is used here and not retained on the struct.
 	msgSigner, err := sign.NewEthereumMsgSigner(privateKeyHex)
@@ -97,35 +103,42 @@ func (c *Client) GetOwnerAddress() string {
 
 // EnsureConnected checks the connection and reconnects with exponential backoff if necessary.
 func (c *Client) EnsureConnected() error {
-	// Fast path: read WaitCh under read lock.
+	// Fast path: check WaitCh under read lock.
 	c.mu.RLock()
 	waitCh := c.sdkClient.WaitCh()
 	c.mu.RUnlock()
 
 	select {
 	case <-waitCh:
-		// Connection lost; fall through to reconnect.
+		// Connection lost; fall through.
 	default:
 		return nil
 	}
 
-	// Slow path: write lock with double-check to prevent thundering-herd reconnects.
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// Serialise reconnect attempts; only one goroutine does the work at a time.
+	c.reconnectMu.Lock()
+	defer c.reconnectMu.Unlock()
+
+	// Double-check under read lock — another goroutine may have reconnected while
+	// we waited for reconnectMu.
+	c.mu.RLock()
+	waitCh = c.sdkClient.WaitCh()
+	c.mu.RUnlock()
 
 	select {
-	case <-c.sdkClient.WaitCh():
-		// Still disconnected; proceed with reconnect.
+	case <-waitCh:
+		// Still disconnected; proceed.
 	default:
-		return nil // Another goroutine already reconnected while we waited for the lock.
+		return nil
 	}
 
-	return c.reconnectLocked()
+	return c.reconnect()
 }
 
-// reconnectLocked tries to establish a new SDK connection with exponential backoff.
-// Must be called with c.mu write lock held.
-func (c *Client) reconnectLocked() error {
+// reconnect retries SDK connection with exponential backoff.
+// reconnectMu must be held by the caller; c.mu is NOT held here so I/O
+// (dial + ping) does not stall readers or writers.
+func (c *Client) reconnect() error {
 	delay := reconnectInitDelay
 	var lastErr error
 
@@ -137,18 +150,21 @@ func (c *Client) reconnectLocked() error {
 			lastErr = err
 			logger.Warnf("Reconnect attempt %d/%d failed: %v", attempt, reconnectAttempts, err)
 		} else {
-			// Ping to confirm the new connection is alive before accepting it.
+			// Ping without holding any lock.
 			ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 			pingErr := newClient.Ping(ctx)
 			cancel()
 
 			if pingErr == nil {
-				oldClient := c.sdkClient
+				// Swap under write lock — fast, no I/O.
+				c.mu.Lock()
+				old := c.sdkClient
 				c.sdkClient = newClient
-				c.tokenSupported = false // re-validate token on the new connection
+				c.tokenSupported = false // re-validate on new connection
+				c.mu.Unlock()
 
-				// doClose is a non-blocking channel close, safe to call under the lock.
-				if err := oldClient.Close(); err != nil {
+				// Close old client outside the lock.
+				if err := old.Close(); err != nil {
 					logger.Errorf("Error closing stale Nitronode client: %v", err)
 				}
 				logger.Infof("Successfully reconnected to Nitronode on attempt %d", attempt)
@@ -157,7 +173,9 @@ func (c *Client) reconnectLocked() error {
 
 			lastErr = fmt.Errorf("ping failed: %w", pingErr)
 			logger.Warnf("Reconnect attempt %d/%d ping failed: %v", attempt, reconnectAttempts, pingErr)
-			_ = newClient.Close()
+			if err := newClient.Close(); err != nil {
+				logger.Warnf("Error closing failed reconnect client: %v", err)
+			}
 		}
 
 		if attempt < reconnectAttempts {
@@ -183,7 +201,19 @@ func (c *Client) EnsureOperational() error {
 }
 
 func (c *Client) validateTokenSupport(tokenSymbol string) error {
-	// Fast path: token already confirmed on this connection.
+	// Fast path: already confirmed for this connection.
+	c.mu.RLock()
+	if c.tokenSupported {
+		c.mu.RUnlock()
+		return nil
+	}
+	c.mu.RUnlock()
+
+	// Serialise the GetAssets call so only one goroutine fetches at a time.
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+
+	// Double-check after acquiring tokenMu.
 	c.mu.RLock()
 	cached := c.tokenSupported
 	cl := c.sdkClient
@@ -205,7 +235,9 @@ func (c *Client) validateTokenSupport(tokenSymbol string) error {
 		if strings.EqualFold(asset.Symbol, tokenSymbol) {
 			logger.Debugf("Token '%s' is supported by Nitronode", tokenSymbol)
 			c.mu.Lock()
-			c.tokenSupported = true
+			if c.sdkClient == cl { // guard against reconnect between fetch and write
+				c.tokenSupported = true
+			}
 			c.mu.Unlock()
 			return nil
 		}
@@ -281,7 +313,7 @@ func (c *Client) Transfer(destination, asset string, amount decimal.Decimal) (*T
 }
 
 // Close shuts down the Nitronode connection.
-// Uses write lock to serialize with reconnect and prevent closing a freshly installed client.
+// Uses write lock to serialise with reconnect and prevent closing a freshly installed client.
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

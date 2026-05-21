@@ -1,3 +1,4 @@
+// Package logger provides a thin structured-logging wrapper around logrus.
 package logger
 
 import (
@@ -6,63 +7,55 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var Log *logrus.Logger
+// Log is the package-level logger. It is initialised with sane defaults at
+// package init time so callers never encounter a nil dereference, even if
+// Initialize has not yet been called.
+var Log = logrus.New()
 
-func Initialize(level string) error {
-	Log = logrus.New()
-
+func init() {
 	Log.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 	})
-
 	Log.SetOutput(os.Stdout)
+	Log.SetLevel(logrus.InfoLevel)
+}
 
+// Initialize reconfigures the logger with the requested level.
+func Initialize(level string) error {
 	logLevel, err := logrus.ParseLevel(level)
 	if err != nil {
 		return err
 	}
-
 	Log.SetLevel(logLevel)
-
 	return nil
 }
 
-func Info(args ...interface{}) {
-	Log.Info(args...)
-}
+// Info logs an info-level message.
+func Info(args ...interface{}) { Log.Info(args...) }
 
-func Infof(format string, args ...interface{}) {
-	Log.Infof(format, args...)
-}
+// Infof logs a formatted info-level message.
+func Infof(format string, args ...interface{}) { Log.Infof(format, args...) }
 
-func Warn(args ...interface{}) {
-	Log.Warn(args...)
-}
+// Warn logs a warn-level message.
+func Warn(args ...interface{}) { Log.Warn(args...) }
 
-func Warnf(format string, args ...interface{}) {
-	Log.Warnf(format, args...)
-}
+// Warnf logs a formatted warn-level message.
+func Warnf(format string, args ...interface{}) { Log.Warnf(format, args...) }
 
-func Error(args ...interface{}) {
-	Log.Error(args...)
-}
+// Error logs an error-level message.
+func Error(args ...interface{}) { Log.Error(args...) }
 
-func Errorf(format string, args ...interface{}) {
-	Log.Errorf(format, args...)
-}
+// Errorf logs a formatted error-level message.
+func Errorf(format string, args ...interface{}) { Log.Errorf(format, args...) }
 
-func Debug(args ...interface{}) {
-	Log.Debug(args...)
-}
+// Debug logs a debug-level message.
+func Debug(args ...interface{}) { Log.Debug(args...) }
 
-func Debugf(format string, args ...interface{}) {
-	Log.Debugf(format, args...)
-}
+// Debugf logs a formatted debug-level message.
+func Debugf(format string, args ...interface{}) { Log.Debugf(format, args...) }
 
-func Fatal(args ...interface{}) {
-	Log.Fatal(args...)
-}
+// Fatal logs a fatal-level message and exits.
+func Fatal(args ...interface{}) { Log.Fatal(args...) }
 
-func Fatalf(format string, args ...interface{}) {
-	Log.Fatalf(format, args...)
-}
+// Fatalf logs a formatted fatal-level message and exits.
+func Fatalf(format string, args ...interface{}) { Log.Fatalf(format, args...) }

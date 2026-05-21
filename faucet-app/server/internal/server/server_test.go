@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"faucet-server/internal/nitronode"
-	"faucet-server/internal/config"
-	"faucet-server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 )
 
 // mockNitronodeClient is a simple in-memory mock implementing NitronodeClient.
@@ -67,7 +67,9 @@ func defaultMock() *mockNitronodeClient {
 }
 
 func TestMain(m *testing.M) {
-	_ = logger.Initialize("debug")
+	if err := logger.Initialize("debug"); err != nil {
+		panic(err)
+	}
 	os.Exit(m.Run())
 }
 
@@ -76,7 +78,8 @@ func TestRequestTokens_Success(t *testing.T) {
 	srv := NewServer(defaultConfig(), mock)
 
 	testAddress := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
-	body, _ := json.Marshal(FaucetRequest{UserAddress: testAddress})
+	body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
+	require.NoError(t, err)
 
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -103,7 +106,8 @@ func TestRequestTokens_Success(t *testing.T) {
 func TestRequestTokens_InvalidAddress(t *testing.T) {
 	srv := NewServer(defaultConfig(), defaultMock())
 
-	body, _ := json.Marshal(FaucetRequest{UserAddress: "not-an-address"})
+	body, err := json.Marshal(FaucetRequest{UserAddress: "not-an-address"})
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -119,7 +123,8 @@ func TestRequestTokens_InvalidAddress(t *testing.T) {
 func TestRequestTokens_MissingField(t *testing.T) {
 	srv := NewServer(defaultConfig(), defaultMock())
 
-	body, _ := json.Marshal(map[string]string{"wrongField": "0x1234"})
+	body, err := json.Marshal(map[string]string{"wrongField": "0x1234"})
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -137,7 +142,8 @@ func TestRequestTokens_ConnectionFailure(t *testing.T) {
 	mock.connErr = assert.AnError
 	srv := NewServer(defaultConfig(), mock)
 
-	body, _ := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -155,7 +161,8 @@ func TestRequestTokens_OperationalFailure(t *testing.T) {
 	mock.operationalErr = assert.AnError
 	srv := NewServer(defaultConfig(), mock)
 
-	body, _ := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -174,7 +181,8 @@ func TestRequestTokens_TransferFailure(t *testing.T) {
 	mock.transferErr = assert.AnError
 	srv := NewServer(defaultConfig(), mock)
 
-	body, _ := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -196,7 +204,8 @@ func TestRateLimiting(t *testing.T) {
 		srv := NewServer(cfg, mock)
 
 		testAddress := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
-		body, _ := json.Marshal(FaucetRequest{UserAddress: testAddress})
+		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
+	require.NoError(t, err)
 
 		// First request — should succeed
 		req1 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
@@ -224,7 +233,8 @@ func TestRateLimiting(t *testing.T) {
 		srv := NewServer(cfg, mock)
 
 		testAddress := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
-		body, _ := json.Marshal(FaucetRequest{UserAddress: testAddress})
+		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
+	require.NoError(t, err)
 
 		// First request fails at transfer but still consumes the rate-limit slot.
 		req1 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))

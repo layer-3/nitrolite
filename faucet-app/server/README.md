@@ -1,10 +1,10 @@
 # Nitrolite Faucet Server
 
-A Go-based faucet server that distributes tokens through the Clearnode network using WebSocket connections.
+A Go-based faucet server that distributes tokens through the Nitronode network using WebSocket connections.
 
 ## Features
 
-- **Nitrolite SDK Integration**: Uses the official `github.com/layer-3/nitrolite` SDK for Clearnode communication
+- **Nitrolite SDK Integration**: Uses the local `github.com/layer-3/nitrolite` SDK for Nitronode communication
 - **Ethereum Wallet Integration**: Uses ECDSA private key for signing channel states and transactions
 - **RESTful API**: Simple HTTP endpoints for token requests
 - **Structured Logging**: JSON-formatted logs with configurable levels
@@ -17,19 +17,19 @@ The application is structured into several packages:
 
 - `internal/config`: Configuration management with environment variables
 - `internal/logger`: Structured logging with logrus
-- `internal/clearnode`: Thin wrapper around the Nitrolite SDK client
+- `internal/nitronode`: Thin wrapper around the Nitrolite SDK client
 - `internal/server`: HTTP server with Gin framework
 
-### Clearnode Client
+### Nitronode Client
 
-The `internal/clearnode` package wraps the Nitrolite SDK's `sdk.Client`. Connection and message signing are handled internally by the SDK — no manual WebSocket management is required.
+The `internal/nitronode` package wraps the Nitrolite SDK's `sdk.Client`. Connection and message signing are handled internally by the SDK — no manual WebSocket management is required.
 
 ## Quick Start
 
-1. **Clone and setup**:
+1. **Setup**:
 
    ```bash
-   cd server
+   cd faucet-app/server
    go mod tidy
    ```
 
@@ -50,203 +50,124 @@ The `internal/clearnode` package wraps the Nitrolite SDK's `sdk.Client`. Connect
 
 The application uses [cleanenv](https://github.com/ilyakaznacheev/cleanenv) for configuration management. Configuration can be provided via:
 
-1. **Environment variables** (highest priority)
-2. **`.env` file** in the current directory
-3. **Default values** for optional settings
+1. **`.env` file** in the current directory
+2. **Environment variables** (used when `.env` is absent)
 
-Set the following environment variables (or create a `.env` file):
+Set the following environment variables:
 
 | Variable | Required | Default | Description | Example |
 |----------|----------|---------|-------------|---------|
 | `SERVER_PORT` | No | `8080` | HTTP server port | `8080` |
 | `OWNER_PRIVATE_KEY` | **Yes** | - | Owner private key (without 0x prefix) — signs channel states and transfers | `abcdef123...` |
-| `CLEARNODE_URL` | **Yes** | - | Clearnode WebSocket URL | `wss://testnet.clearnode.io/ws` |
+| `NITRONODE_URL` | **Yes** | - | Nitronode WebSocket URL | `wss://nitronode.example.com/ws` |
 | `TOKEN_SYMBOL` | **Yes** | - | Token symbol to distribute | `usdc` |
 | `STANDARD_TIP_AMOUNT` | **Yes** | - | Amount to send per request (decimal format) | `10.0` |
 | `MIN_TRANSFER_COUNT` | **Yes** | - | Minimum number of transfers the server should have balance for | `5` |
 | `COOLDOWN_PERIOD` | **Yes** | - | Cooldown between requests per wallet/IP (Go duration format) | `24h` |
+| `TRUSTED_PROXIES` | No | `""` | Comma-separated trusted proxy IPs; empty means direct exposure only | `10.0.0.1,10.0.0.2` |
 | `LOG_LEVEL` | No | `info` | Logging level (debug/info/warn/error) | `info` |
+
+> **Note on `TRUSTED_PROXIES`:** If the faucet is deployed behind an ingress or load balancer, set this to the proxy IP(s). Without it, `c.ClientIP()` returns the proxy address and all requests share one IP rate-limit bucket.
 
 ## API Endpoints
 
-### POST /requestTokens
+### `POST /requestTokens`
 
-Request tokens from the faucet.
+Request tokens for an Ethereum address.
 
-**Request Body:**
-
+**Request body:**
 ```json
-{
-  "userAddress": "0x1234567890abcdef1234567890abcdef12345678"
-}
+{ "userAddress": "0x..." }
 ```
 
-**Success Response:**
-
+**Success response (200):**
 ```json
 {
   "success": true,
   "message": "Tokens sent successfully",
-  "txId": "abc123",
+  "txId": "...",
   "amount": "10",
   "asset": "usdc",
-  "destination": "0x1234567890abcdef1234567890abcdef12345678"
+  "destination": "0x..."
 }
 ```
 
-**Error Response:**
+**Error responses:**
+- `400` — Invalid address or request format
+- `429` — Rate limit exceeded
+- `500` — Transfer failed
+- `503` — Nitronode unavailable or balance insufficient
 
-```json
-{
-  "error": "Invalid address format."
-}
-```
+### `GET /info`
 
-### GET /info
-
-Service information endpoint.
-
-**Response:**
-
-```json
-{
-  "service": "Nitrolite Faucet Server",
-  "version": "1.0.0",
-  "faucet_address": "0xabcd...",
-  "standard_tip_amount": "10",
-  "token_symbol": "usdc",
-  "endpoints": ["/requestTokens"]
-}
-```
-
-## Startup Validation
-
-The server performs validation during startup:
-
-### Token Support Validation
-
-- Queries Clearnode using `GetAssets()` to fetch all supported tokens
-- Validates that the configured `TOKEN_SYMBOL` exists
-- Server refuses to start if the token is not supported
-
-### Balance Verification
-
-- Queries the owner balance using `GetBalances()`
-- Requires balance ≥ `STANDARD_TIP_AMOUNT × MIN_TRANSFER_COUNT`
-- Server refuses to start with insufficient funds
-
-Example startup output:
-
-```text
-INFO Starting Nitrolite Faucet Server
-INFO Faucet owner address: 0xabc...
-INFO Successfully connected to Clearnode
-INFO Token 'usdc' is supported by Clearnode
-INFO ✓ Sufficient usdc balance: 50000000
-INFO Faucet server is ready to serve requests
-```
+Returns server metadata.
 
 ## WebSocket Connection Management
 
-The Nitrolite SDK maintains a persistent WebSocket connection with Clearnode:
+The Nitrolite SDK maintains a persistent WebSocket connection with Nitronode:
 
-- **Connection**: Established on startup inside `clearnode.NewClient()`; no separate connect/auth step is needed
+- **Connection**: Established on startup inside `nitronode.NewClient()`; no separate connect/auth step is needed
 - **Authentication**: Handled internally by the SDK
-- **Reconnection**: On each request, `EnsureConnected()` detects a lost connection (via `WaitCh()`) and recreates the SDK client automatically
+- **Reconnection**: On each request, `EnsureConnected()` detects a lost connection (via `WaitCh()`) and reconnects with exponential backoff (3 attempts, 300 ms → 600 ms → 2 s)
+- **Post-reconnect ping**: Each reconnect attempt is validated with a `Ping` before the new client is accepted
 - **Message Handling**: Fully managed by the SDK's internal RPC layer
+
+## Startup Log Example
+
+```
+{"level":"info","msg":"Starting Nitrolite Faucet Server","time":"..."}
+{"level":"info","msg":"Configuration loaded: Server port=8080, Nitronode URL=wss://nitronode.example.com","time":"..."}
+{"level":"debug","msg":"Token 'usdc' is supported by Nitronode","time":"..."}
+{"level":"info","msg":"✓ Sufficient usdc balance: 50000000","time":"..."}
+{"level":"info","msg":"Successfully connected to Nitronode","time":"..."}
+{"level":"info","msg":"Faucet server is ready to serve requests","time":"..."}
+```
 
 ## Security Features
 
 - **Address Validation**: Validates Ethereum address format before processing
 - **Private Key Security**: Private key is only used for signing, never exposed
 - **CORS Support**: Configurable CORS headers for web integration
-- **Request Signing**: All Clearnode requests are cryptographically signed by the SDK
+- **Request Signing**: All Nitronode requests are cryptographically signed by the SDK
 - **Balance Guard**: Refuses to operate below minimum balance threshold
+- **URL Redaction**: `NITRONODE_URL` is never logged in full — only scheme and host are shown
 
 ## Building for Production
 
 ```bash
-# Build binary
 go build -o faucet-server main.go
-
-# Run with environment file
 ./faucet-server
-```
-
-## Docker Support
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN go build -o faucet-server main.go
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /app/faucet-server .
-CMD ["./faucet-server"]
 ```
 
 ## Development
 
 ```bash
-# Install dependencies
-go mod tidy
+# Run tests (from repo root)
+go test ./faucet-app/...
 
-# Run with hot reload (using air)
+# Run with hot reload
 go install github.com/cosmtrek/air@latest
 air
-
-# Run tests
-go test ./...
 ```
-
-## Logging
-
-The application uses structured JSON logging:
-
-```json
-{
-  "level": "info",
-  "msg": "Processing faucet request for address: 0x1234...",
-  "time": "2023-12-01T10:00:00Z"
-}
-```
-
-Log levels: `debug`, `info`, `warn`, `error`, `fatal`
 
 ## Error Handling
 
-- **Connection Errors**: Returns 503 if Clearnode is unavailable or reconnection fails
+- **Connection Errors**: Returns 503 if Nitronode is unavailable or reconnection fails
 - **Validation Errors**: Returns 400 for invalid addresses or request format
-- **Transfer Errors**: Returns 500 for Clearnode transfer failures
+- **Transfer Errors**: Returns 500 for Nitronode transfer failures
 - **Service Unavailable**: Returns 503 if token is unsupported or balance is insufficient
-
-## Monitoring
-
-Key metrics to monitor:
-
-- Transfer success/failure rates
-- Response times
-- Server resource usage
 
 ## Troubleshooting
 
 **Connection Issues:**
 
-- Verify `CLEARNODE_URL` is correct and accessible
+- Verify `NITRONODE_URL` is correct and accessible
 - Check firewall settings for WebSocket connections
 
-**Authentication Issues:**
+**Token Not Supported:**
 
-- Verify `OWNER_PRIVATE_KEY` format (no `0x` prefix)
-- Review logs for SDK connection errors
+- Verify `TOKEN_SYMBOL` is supported by the Nitronode instance
 
-**Transfer Issues:**
+**Insufficient Balance:**
 
-- Verify `TOKEN_SYMBOL` is supported by the Clearnode instance
-- Check faucet account balance meets the minimum threshold
-- Review Clearnode transfer logs
+- Top up the faucet wallet; the server requires at least `MIN_TRANSFER_COUNT × STANDARD_TIP_AMOUNT` available balance

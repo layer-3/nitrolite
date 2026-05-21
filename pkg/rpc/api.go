@@ -117,7 +117,10 @@ type ChannelsV1HomeChannelCreatedEvent struct {
 	InitialState StateV1 `json:"initial_state"`
 }
 
-// ChannelsV1SubmitSessionKeyStateRequest submits the session key state for registration and updates.
+// ChannelsV1SubmitSessionKeyStateRequest submits a channel session key state for registration,
+// rotation/update, or revocation. A submit whose ExpiresAt is in the past (<= server's now)
+// is treated as a revocation: the auth path stops accepting state signed by the key and the
+// slot is freed against the per-user cap.
 type ChannelsV1SubmitSessionKeyStateRequest struct {
 	// State contains the session key metadata and delegation information
 	State ChannelSessionKeyStateV1 `json:"state"`
@@ -254,7 +257,10 @@ type AppSessionsV1CreateAppSessionResponse struct {
 	Status string `json:"status"`
 }
 
-// AppSessionsV1SubmitSessionKeyStateRequest submits the session key state for registration and updates.
+// AppSessionsV1SubmitSessionKeyStateRequest submits an app session key state for registration,
+// rotation/update, or revocation. A submit whose ExpiresAt is in the past (<= server's now)
+// is treated as a revocation: the auth path stops accepting state signed by the key and the
+// slot is freed against the per-user cap.
 type AppSessionsV1SubmitSessionKeyStateRequest struct {
 	// State contains the session key metadata and delegation information
 	State AppSessionKeyStateV1 `json:"state"`

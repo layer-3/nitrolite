@@ -56,8 +56,15 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: version must be greater than 0"), "")
 		return
 	}
-	if coreState.ExpiresAt.Before(time.Now()) {
-		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be in the future"), "")
+	// Past expires_at is permitted as a revocation signal. The auth path filters
+	// expires_at > now so a past timestamp deactivates the key immediately while keeping
+	// the same monotonic version sequence (a later submit with a future expires_at can
+	// re-activate the key). A negative unix timestamp is rejected because the
+	// metadata-hash packer casts int64 -> uint64 (wraps to a huge future value), which
+	// would cause the user-signed payload to disagree with the value persisted in the
+	// database — defense-in-depth even though the DB filter is the source of truth.
+	if coreState.ExpiresAt.Unix() < 0 {
+		c.Fail(rpc.Errorf("invalid_session_key_state: expires_at must be non-negative"), "")
 		return
 	}
 	if len(coreState.Assets) > h.maxSessionKeyIDs {
@@ -80,11 +87,12 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	// Validate version and store the session key state
+	now := time.Now()
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, channel) pointer row for the duration of the tx so that
 		// concurrent submits for the same (user, session_key) serialize cleanly and report a
 		// proper "expected version" error rather than racing on the history UNIQUE constraint.
-		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindChannel)
+		latestVersion, latestExpiresAt, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindChannel)
 		if err != nil {
 			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
 				logger.Warn("session key registration collision",
@@ -96,8 +104,17 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 			return rpc.Errorf("failed to lock session key state: %v", err)
 		}
 
-		// Enforce the per-user cap when registering a new session key. Existing keys (latestVersion > 0)
-		// can always be updated regardless of the cap so that legitimate rotation is never blocked.
+		// Enforce the per-user cap whenever this submit transitions the slot from inactive
+		// to active — i.e. a brand-new key (latestVersion == 0) or a reactivation where the
+		// previous latest state was already past its expires_at. A rotation/update against a
+		// still-active key is not counted again so legitimate rotation is never blocked, and
+		// a revoke submit (submitted expires_at <= now) decreases the active count so it is
+		// not subject to the cap either.
+		//
+		// Without the reactivation check a user at the cap can revoke key A, register fresh
+		// key B into the freed slot, then re-submit key A with a future expires_at — the
+		// `latestVersion > 0` branch would skip the cap check and leave the user above the
+		// cap.
 		//
 		// TODO(MF-H01-followup): the row lock above only serializes submits for the same
 		// (user, session_key, kind), so two concurrent submits registering *different* new keys
@@ -106,7 +123,9 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// soft DOS bound, not a hard quota — a small over-shoot under genuine concurrency is
 		// acceptable. If a hard quota is ever required, take a per-user advisory lock here
 		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
-		if latestVersion == 0 && h.maxSessionKeysPerUser > 0 {
+		prevActive := latestVersion > 0 && latestExpiresAt.After(now)
+		submittedActive := coreState.ExpiresAt.After(now)
+		if !prevActive && submittedActive && h.maxSessionKeysPerUser > 0 {
 			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
 			if err != nil {
 				return rpc.Errorf("failed to count session keys for user: %v", err)
@@ -138,6 +157,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	c.Succeed(c.Request.Method, payload)
+	if !coreState.ExpiresAt.After(now) {
+		logger.Info("channel session key revoked",
+			"userAddress", coreState.UserAddress,
+			"sessionKey", coreState.SessionKey,
+			"version", coreState.Version,
+			"expiresAt", coreState.ExpiresAt)
+		return
+	}
 	logger.Info("successfully stored channel session key state",
 		"userAddress", coreState.UserAddress,
 		"sessionKey", coreState.SessionKey,

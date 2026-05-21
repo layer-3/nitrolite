@@ -672,7 +672,12 @@ ORDER BY created_at DESC;
 
 ### 7. `app_sessions.v1.submit_session_key_state`
 
-**Purpose**: Submits a session key state for registration or update. Session keys allow delegated signing for app sessions, enabling applications to sign on behalf of a user's wallet.
+**Purpose**: Submits a session key state for registration, rotation/update, or revocation. Session keys allow delegated signing for app sessions, enabling applications to sign on behalf of a user's wallet.
+
+**Submit semantics**:
+- **Registration**: first submit for a `(user, session_key)` pair (version=1, future `expires_at`).
+- **Rotation/update**: bump version with a future `expires_at` to change scopes or extend lifetime.
+- **Revocation**: bump version with `expires_at <= now`. The auth path stops accepting state signed by the key and the slot is freed against the per-user cap.
 
 **Key Features**:
 - Versioned session key states (each update increments the version)
@@ -704,13 +709,13 @@ ORDER BY created_at DESC;
 - `user_address` must be a valid hex address
 - `session_key` must be a valid hex address
 - `version` must be greater than 0
-- `expires_at` must be in the future
+- `expires_at` may be in the past — past values express revocation (the key is retired and the slot is freed)
 - `user_sig` is required
 - `application_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
 - `app_session_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
 - Version must be sequential (latest_version + 1)
 - Signature must recover to `user_address`
-- Newly registered keys count against the per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100). Updates to keys that already exist for the user are not blocked by the cap.
+- The per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100) is enforced whenever the submit transitions the slot from inactive to active: a brand-new key (no prior state) or a reactivation (previous latest state's `expires_at` was already in the past). Rotation/update against a still-active key, and revocation submits, are not subject to the cap.
 
 **Concurrency**: A `SELECT ... FOR UPDATE` is taken on a per-(user, session_key, kind) pointer row in `current_session_key_states_v1` so concurrent submits for the same key serialize and report a clean "expected version" error instead of racing on the history table's UNIQUE constraint.
 

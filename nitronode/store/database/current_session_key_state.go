@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -97,7 +98,12 @@ func upsertCurrentSessionKeyState(tx *gorm.DB, userAddress, sessionKey string, k
 // seed is the ownership reservation, not a transient placeholder. CountSessionKeysForUser
 // excludes version=0 rows so the per-user cap is unaffected, but the (session_key, kind)
 // ownership bind is permanent by design.
-func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error) {
+//
+// When locked.Version > 0, the matching history row's expires_at is also returned so callers
+// can distinguish a reactivation (prev inactive → submitted active) from a rotation/update
+// (prev still active) and re-run the per-user cap on the reactivation path. When
+// locked.Version == 0 there is no history yet, so a zero time.Time is returned.
+func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, time.Time, error) {
 	userAddress = strings.ToLower(userAddress)
 	sessionKey = strings.ToLower(sessionKey)
 
@@ -109,7 +115,7 @@ func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind Sessi
 		UpdatedAt:   time.Now().UTC(),
 	}
 	if err := s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&seed).Error; err != nil {
-		return 0, fmt.Errorf("failed to ensure current session key state row exists: %w", err)
+		return 0, time.Time{}, fmt.Errorf("failed to ensure current session key state row exists: %w", err)
 	}
 
 	query := s.db.Where("session_key = ? AND kind = ?", sessionKey, kind)
@@ -125,30 +131,91 @@ func (s *DBStore) LockSessionKeyState(userAddress, sessionKey string, kind Sessi
 			// an existing one, so a SELECT keyed on (session_key, kind) must hit a row.
 			// Treat as a hard error rather than falling through as unowned — silently
 			// returning version 0 here would let a submit bypass ownership enforcement.
-			return 0, fmt.Errorf("session key pointer row missing after seed insert for (session_key=%s, kind=%d)", sessionKey, kind)
+			return 0, time.Time{}, fmt.Errorf("session key pointer row missing after seed insert for (session_key=%s, kind=%d)", sessionKey, kind)
 		}
-		return 0, fmt.Errorf("failed to lock current session key state: %w", err)
+		return 0, time.Time{}, fmt.Errorf("failed to lock current session key state: %w", err)
 	}
 
 	if !strings.EqualFold(locked.UserAddress, userAddress) {
-		return 0, ErrSessionKeyNotAllowed
+		return 0, time.Time{}, ErrSessionKeyNotAllowed
 	}
-	return locked.Version, nil
+
+	if locked.Version == 0 {
+		return 0, time.Time{}, nil
+	}
+
+	expiresAt, err := s.fetchLatestSessionKeyExpiresAt(userAddress, sessionKey, locked.Version, kind)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	return locked.Version, expiresAt, nil
 }
 
-// CountSessionKeysForUser returns the number of distinct session keys recorded for the wallet
-// in the pointer table, across both kinds. Drives the per-user cap at submit time.
+// fetchLatestSessionKeyExpiresAt returns the expires_at of the history row at
+// (user_address, session_key, version) for the given kind. The pointer table guarantees
+// at most one such row per (user, key, kind, version) so a missing history row is a hard
+// inconsistency and surfaces as an error rather than a zero expiry.
+func (s *DBStore) fetchLatestSessionKeyExpiresAt(userAddress, sessionKey string, version uint64, kind SessionKeyKind) (time.Time, error) {
+	type expiryRow struct {
+		ExpiresAt time.Time `gorm:"column:expires_at"`
+	}
+
+	var table string
+	switch kind {
+	case SessionKeyKindAppSession:
+		table = "app_session_key_states_v1"
+	case SessionKeyKindChannel:
+		table = "channel_session_key_states_v1"
+	default:
+		return time.Time{}, fmt.Errorf("unknown session key kind: %d", kind)
+	}
+
+	var row expiryRow
+	err := s.db.Table(table).
+		Select("expires_at").
+		Where("user_address = ? AND session_key = ? AND version = ?", userAddress, sessionKey, version).
+		Take(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return time.Time{}, fmt.Errorf("session key history row missing for (user=%s, session_key=%s, version=%d, kind=%d)", userAddress, sessionKey, version, kind)
+		}
+		return time.Time{}, fmt.Errorf("failed to load latest session key expires_at: %w", err)
+	}
+	return row.ExpiresAt, nil
+}
+
+// CountSessionKeysForUser returns the number of distinct active session keys recorded for the
+// wallet in the pointer table, across both kinds. Drives the per-user cap at submit time.
 // Rows seeded by LockSessionKeyState (version=0) are excluded so that a failed-cap rejection
-// does not itself leave a phantom row counted toward the cap.
+// does not itself leave a phantom row counted toward the cap. Revoked or naturally expired
+// keys (expires_at <= now in the underlying history row) are also excluded so that a revoke
+// frees the slot. A single now is bound for both kind branches so the count is internally
+// consistent.
 func (s *DBStore) CountSessionKeysForUser(userAddress string) (uint32, error) {
 	userAddress = strings.ToLower(userAddress)
+	now := time.Now().UTC()
 
-	var count int64
-	err := s.db.Model(&CurrentSessionKeyStateV1{}).
-		Where("user_address = ? AND version > 0", userAddress).
-		Count(&count).Error
+	var channelCount int64
+	err := s.db.Table("current_session_key_states_v1 AS c").
+		Joins("JOIN channel_session_key_states_v1 h ON h.user_address = c.user_address AND h.session_key = c.session_key AND h.version = c.version").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0 AND h.expires_at > ?", userAddress, SessionKeyKindChannel, now).
+		Count(&channelCount).Error
 	if err != nil {
-		return 0, fmt.Errorf("failed to count session keys for user: %w", err)
+		return 0, fmt.Errorf("failed to count channel session keys for user: %w", err)
 	}
-	return uint32(count), nil
+
+	var appCount int64
+	err = s.db.Table("current_session_key_states_v1 AS c").
+		Joins("JOIN app_session_key_states_v1 h ON h.user_address = c.user_address AND h.session_key = c.session_key AND h.version = c.version").
+		Where("c.user_address = ? AND c.kind = ? AND c.version > 0 AND h.expires_at > ?", userAddress, SessionKeyKindAppSession, now).
+		Count(&appCount).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count app session keys for user: %w", err)
+	}
+
+	total := channelCount + appCount
+	if total < 0 || total > math.MaxUint32 {
+		return 0, fmt.Errorf("session key count %d out of uint32 range", total)
+	}
+	return uint32(total), nil
 }

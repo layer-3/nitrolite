@@ -1,6 +1,8 @@
 package channel_v1
 
 import (
+	"time"
+
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -91,8 +93,11 @@ type Store interface {
 	// Session key state operations
 
 	// LockSessionKeyState locks the (user, session_key, kind) pointer row for the surrounding
-	// transaction, returning the current version (0 if newly created).
-	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+	// transaction, returning the current version (0 if newly created) and the expires_at of
+	// the matching history row (zero time when version is 0). Callers use the expires_at to
+	// distinguish a reactivation (prev inactive → submitted active) from a rotation, so the
+	// per-user cap can be re-checked when a revoked slot is brought back.
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (latestVersion uint64, latestExpiresAt time.Time, err error)
 
 	// CountSessionKeysForUser returns the number of distinct session keys for the wallet
 	// across both kinds, used to enforce the per-user cap at submit time.

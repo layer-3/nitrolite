@@ -67,7 +67,9 @@ type ChannelSessionKeyStateV1 struct {
 	Version string `json:"version"`
 	// Assets associated with this session key
 	Assets []string `json:"assets"`
-	// Expiration time as unix timestamp of this session key
+	// ExpiresAt is the unix timestamp (seconds) at which the session key stops
+	// authorizing requests. A future value activates the key; a value at or before
+	// the current time revokes it immediately. Negative values are rejected.
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`
@@ -212,7 +214,9 @@ type AppSessionKeyStateV1 struct {
 	ApplicationIDs []string `json:"application_ids"`
 	// AppSessionID is the application session IDs associated with this session key
 	AppSessionIDs []string `json:"app_session_ids"`
-	// ExpiresAt is Unix timestamp in seconds indicating when the session key expires
+	// ExpiresAt is the unix timestamp (seconds) at which the session key stops
+	// authorizing requests. A future value activates the key; a value at or before
+	// the current time revokes it immediately. Negative values are rejected.
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`

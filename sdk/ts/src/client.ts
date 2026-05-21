@@ -1742,10 +1742,16 @@ export class Client {
   }
 
   /**
-   * Submit a channel session key state for registration or update.
+   * Submit a channel session key state. Used for three flows:
+   *   - registration: first submit for a (user, session_key) pair (version=1, future expires_at)
+   *   - rotation/update: bump version with a future expires_at to change assets or extend lifetime
+   *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
+   *     for the per-user cap and the auth path stops accepting state signed by it
+   *
    * The state must carry both the wallet's user_sig (proving the user authorized the
    * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered). Submits without a valid session_key_sig are rejected.
+   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
+   * are rejected.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1830,10 +1836,16 @@ export class Client {
   }
 
   /**
-   * Submit an app session key state for registration or update.
+   * Submit an app session key state. Used for three flows:
+   *   - registration: first submit for a (user, session_key) pair (version=1, future expires_at)
+   *   - rotation/update: bump version with a future expires_at to change app/session IDs or extend lifetime
+   *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
+   *     for the per-user cap and the auth path stops accepting state signed by it
+   *
    * The state must carry both the wallet's user_sig (proving the user authorized the
    * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered). Submits without a valid session_key_sig are rejected.
+   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
+   * are rejected.
    *
    * @param state - The session key state containing delegation information
    */

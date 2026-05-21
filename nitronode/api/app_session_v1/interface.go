@@ -1,6 +1,8 @@
 package app_session_v1
 
 import (
+	"time"
+
 	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
@@ -53,7 +55,7 @@ type Store interface {
 	EnsureNoOngoingEscrowOperation(wallet, asset string) error
 
 	// App Session key state operations
-	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (uint64, error)
+	LockSessionKeyState(userAddress, sessionKey string, kind database.SessionKeyKind) (latestVersion uint64, latestExpiresAt time.Time, err error)
 	CountSessionKeysForUser(userAddress string) (uint32, error)
 	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
 	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)

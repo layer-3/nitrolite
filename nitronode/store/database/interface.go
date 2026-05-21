@@ -206,9 +206,13 @@ type DatabaseStore interface {
 
 	// LockSessionKeyState seeds the pointer row for (user, session_key, kind) if absent and
 	// locks the (session_key, kind) row for the surrounding transaction. Returns the latest
-	// stored version for the caller's row, or ErrSessionKeyNotAllowed if the key is bound to
-	// a different wallet for this kind.
-	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (uint64, error)
+	// stored version for the caller's row and the latestExpiresAt of that version (zero time
+	// when the latest version is 0, i.e. no history row exists yet). Returns
+	// ErrSessionKeyNotAllowed if the key is bound to a different wallet for this kind.
+	// The latestExpiresAt return lets submit handlers distinguish a reactivation
+	// (prev inactive → submitted active) from a rotation (prev already active) so the
+	// per-user cap can be re-checked when a revoked slot is brought back.
+	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (latestVersion uint64, latestExpiresAt time.Time, err error)
 
 	// CountSessionKeysForUser returns the number of distinct session keys recorded for the
 	// wallet across both kinds. Used to enforce the per-user cap at submit time.

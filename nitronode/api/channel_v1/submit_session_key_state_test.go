@@ -79,7 +79,7 @@ func TestChannelSubmitSessionKeyState_Success(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -157,7 +157,7 @@ func TestChannelSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -234,7 +234,7 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -252,9 +252,10 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// Covers the typical revocation path: an active key (latestVersion > 0) is deactivated
-// by submitting version+1 with a past expires_at. The per-user cap check is short-circuited
-// because the key already exists, so CountSessionKeysForUser must not be called.
+// Covers the typical revocation path: an active key (latestVersion > 0, prev expires_at in
+// the future) is deactivated by submitting version+1 with a past expires_at. The per-user
+// cap check is short-circuited because the previous state was already active (revoke
+// decreases the active count), so CountSessionKeysForUser must not be called.
 func TestChannelSubmitSessionKeyState_RevokeExistingActiveKey(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
@@ -276,7 +277,8 @@ func TestChannelSubmitSessionKeyState_RevokeExistingActiveKey(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, assets, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(1, nil)
+	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(1, prevActiveExpiresAt, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -295,10 +297,12 @@ func TestChannelSubmitSessionKeyState_RevokeExistingActiveKey(t *testing.T) {
 	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
 }
 
-// Covers the re-activation path: after a revoke (latestVersion incremented twice — register
-// then revoke), submitting version+1 with a future expires_at re-activates the same session
-// key address without re-running the per-user cap check.
-func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke(t *testing.T) {
+// Covers the re-activation path: after a revoke (latestVersion > 0, prev expires_at in the
+// past), submitting version+1 with a future expires_at re-activates the slot — i.e. the
+// active count goes from N-1 back to N. Because the previous latest state was inactive, the
+// per-user cap MUST be re-checked here so a user at the cap cannot revoke→register-new→
+// reactivate to exceed it.
+func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke_BelowCapAllowed(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
 	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
@@ -319,7 +323,9 @@ func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke(t *testing.T) {
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, assets, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(2, nil)
+	prevRevokedExpiresAt := time.Now().Add(-time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(2, prevRevokedExpiresAt, nil)
+	mockStore.On("CountSessionKeysForUser", userAddress).Return(4, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -335,7 +341,52 @@ func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke(t *testing.T) {
 	require.NotNil(t, ctx.Response)
 	assert.Nil(t, ctx.Response.Error())
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
+}
+
+// Reactivating a revoked key when the user is already at the per-user cap must be rejected.
+// Without this gate a user at the cap can revoke key A, register fresh key B into the freed
+// slot, then re-submit key A with a future expires_at and end up above the cap.
+func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke_AtCapRejected(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:               metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs:      10,
+		maxSessionKeysPerUser: 3,
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	assets := []string{"USDC"}
+
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, assets, expiresAt, userSigner, sessionKeySigner)
+
+	prevRevokedExpiresAt := time.Now().Add(-time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(2, prevRevokedExpiresAt, nil)
+	mockStore.On("CountSessionKeysForUser", userAddress).Return(3, nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "session key limit of 3")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "StoreChannelSessionKeyState", mock.Anything)
 }
 
 func TestChannelSubmitSessionKeyState_RejectsNegativeExpiresAt(t *testing.T) {
@@ -433,7 +484,7 @@ func TestChannelSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	// Submit version 3 when latest is 0 (expects 1)
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, []string{}, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -471,7 +522,7 @@ func TestChannelSubmitSessionKeyState_RejectsWhenAtUserCap(t *testing.T) {
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, nil)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 	mockStore.On("CountSessionKeysForUser", userAddress).Return(3, nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -512,7 +563,8 @@ func TestChannelSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing
 	// Existing key at version 4: submit version 5. Cap must NOT block updates.
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 5, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
 
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(4, nil)
+	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(4, prevActiveExpiresAt, nil)
 	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -690,7 +742,7 @@ func TestChannelSubmitSessionKeyState_RejectsForeignOwner(t *testing.T) {
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
 
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).
-		Return(0, database.ErrSessionKeyNotAllowed)
+		Return(0, time.Time{}, database.ErrSessionKeyNotAllowed)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)

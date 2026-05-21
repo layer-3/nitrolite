@@ -293,7 +293,9 @@ Now `sessionClient` signs off-chain state updates with the session key — no wa
 
 ### Revoke
 
-Submit a new version with empty assets to revoke a session key:
+Submit a new version with `expires_at` in the past to revoke a session key. The nitronode
+treats any submit whose `expires_at <= now` as a revocation: the slot is freed for the
+per-user cap, and the auth path stops accepting state signed by the key.
 
 ```ts
 import { EthereumMsgSigner, packChannelKeyStateV1 } from '@layer-3/nitrolite';
@@ -301,12 +303,15 @@ import { EthereumMsgSigner, packChannelKeyStateV1 } from '@layer-3/nitrolite';
 const existing = await client.getLastChannelKeyStates(address, sessionKeyAddress);
 const latest = existing[0];
 
+// expires_at one second before now is sufficient; the server compares against its own clock.
+const pastExpiresAt = (Math.floor(Date.now() / 1000) - 1).toString();
+
 const revokeState = {
   user_address: address,
   session_key: sessionKeyAddress,
   version: (BigInt(latest.version) + 1n).toString(),
-  assets: [],
-  expires_at: latest.expires_at,
+  assets: latest.assets,
+  expires_at: pastExpiresAt,
   user_sig: '',
   session_key_sig: '',
 };
@@ -320,7 +325,7 @@ revokeState.session_key_sig = await client.signChannelSessionKeyOwnership(revoke
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
   address,
   BigInt(revokeState.version),
-  [],
+  revokeState.assets,
   BigInt(revokeState.expires_at),
 );
 revokeState.user_sig = await walletClient.signMessage({

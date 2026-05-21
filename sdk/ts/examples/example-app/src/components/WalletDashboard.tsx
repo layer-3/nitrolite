@@ -501,12 +501,16 @@ export default function WalletDashboard({
       }
 
       const newVersion = BigInt(ks.version) + 1n;
+      // Revoke = submit version+1 with expires_at in the past. The nitronode treats any
+      // submit whose expires_at <= now as a revocation (freeing the per-user cap slot);
+      // clearing `assets` would leave the latest state still active until natural expiry.
+      const pastExpiresAt = Math.floor(Date.now() / 1000) - 1;
       const revokeState = {
         user_address: address,
         session_key: ks.session_key,
         version: newVersion.toString(),
-        assets: [] as string[],
-        expires_at: ks.expires_at,
+        assets: ks.assets,
+        expires_at: pastExpiresAt.toString(),
         user_sig: '',
         session_key_sig: '',
       };

@@ -104,11 +104,12 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	// Validate version and store the session key state
+	now := time.Now()
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, app_session) pointer row for the duration of the tx so
 		// that concurrent submits for the same (user, session_key) serialize cleanly and report
 		// a proper "expected version" error rather than racing on the history UNIQUE constraint.
-		latestVersion, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindAppSession)
+		latestVersion, latestExpiresAt, err := tx.LockSessionKeyState(coreState.UserAddress, coreState.SessionKey, database.SessionKeyKindAppSession)
 		if err != nil {
 			if errors.Is(err, database.ErrSessionKeyNotAllowed) {
 				logger.Warn("session key registration collision",
@@ -120,8 +121,17 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 			return rpc.Errorf("failed to lock session key state: %v", err)
 		}
 
-		// Enforce the per-user cap when registering a new session key. Existing keys (latestVersion > 0)
-		// can always be updated regardless of the cap so that legitimate rotation is never blocked.
+		// Enforce the per-user cap whenever this submit transitions the slot from inactive
+		// to active — i.e. a brand-new key (latestVersion == 0) or a reactivation where the
+		// previous latest state was already past its expires_at. A rotation/update against a
+		// still-active key is not counted again so legitimate rotation is never blocked, and
+		// a revoke submit (submitted expires_at <= now) decreases the active count so it is
+		// not subject to the cap either.
+		//
+		// Without the reactivation check a user at the cap can revoke key A, register fresh
+		// key B into the freed slot, then re-submit key A with a future expires_at — the
+		// `latestVersion > 0` branch would skip the cap check and leave the user above the
+		// cap.
 		//
 		// TODO(MF-H01-followup): the row lock above only serializes submits for the same
 		// (user, session_key, kind), so two concurrent submits registering *different* new keys
@@ -130,7 +140,9 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// soft DOS bound, not a hard quota — a small over-shoot under genuine concurrency is
 		// acceptable. If a hard quota is ever required, take a per-user advisory lock here
 		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
-		if latestVersion == 0 && h.maxSessionKeysPerUser > 0 {
+		prevActive := latestVersion > 0 && latestExpiresAt.After(now)
+		submittedActive := coreState.ExpiresAt.After(now)
+		if !prevActive && submittedActive && h.maxSessionKeysPerUser > 0 {
 			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
 			if err != nil {
 				return rpc.Errorf("failed to count session keys for user: %v", err)
@@ -162,7 +174,7 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	c.Succeed(c.Request.Method, payload)
-	if !coreState.ExpiresAt.After(time.Now()) {
+	if !coreState.ExpiresAt.After(now) {
 		logger.Info("session key revoked",
 			"userAddress", coreState.UserAddress,
 			"sessionKey", coreState.SessionKey,

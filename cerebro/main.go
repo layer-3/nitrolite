@@ -78,10 +78,19 @@ func main() {
 	// the termios is not enough — the terminal also needs the matching
 	// disable sequences or the next program in the same shell tab inherits
 	// broken paste behaviour and an unresponsive Ctrl-C.
-	initialState, _ := term.GetState(int(os.Stdin.Fd()))
+	initialState, stateErr := term.GetState(int(os.Stdin.Fd()))
+	if stateErr != nil {
+		log.Printf("warning: failed to capture initial terminal state: %v", stateErr)
+	}
 	handleExit := func() {
-		term.Restore(int(os.Stdin.Fd()), initialState)
-		exec.Command("stty", "sane").Run()
+		if stateErr == nil && initialState != nil {
+			if err := term.Restore(int(os.Stdin.Fd()), initialState); err != nil {
+				log.Printf("warning: failed to restore terminal state: %v", err)
+			}
+		}
+		if err := exec.Command("stty", "sane").Run(); err != nil {
+			log.Printf("warning: failed to run 'stty sane': %v", err)
+		}
 		// Disable bracketed paste, show cursor, leave alt screen, mouse off,
 		// then wipe any leftover completion-menu / ghost-prompt rows that
 		// go-prompt leaves on the screen during its teardown.

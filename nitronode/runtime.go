@@ -287,6 +287,15 @@ func InitBackbone() *Backbone {
 
 	blockchainRPCs := initBlockchainRPCs(logger, memoryStore)
 
+	// Seed per-chain event counters at 0 so a chain whose listener has not yet
+	// emitted an event still appears in /metrics (lets stalled-listener alerts
+	// based on absent()/rate() evaluate against defined series).
+	blockchainIDs := make([]uint64, 0, len(blockchainRPCs))
+	for id := range blockchainRPCs {
+		blockchainIDs = append(blockchainIDs, id)
+	}
+	runtimeMetrics.SeedBlockchainEventMetrics(blockchainIDs)
+
 	return &Backbone{
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,

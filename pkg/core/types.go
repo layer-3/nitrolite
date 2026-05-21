@@ -957,6 +957,26 @@ const (
 	TransitionTypeChallengeRescue TransitionType = 201 // AccountID: closed HomeChannelID
 )
 
+// AllTransitionTypes enumerates every defined transition. Kept beside the const
+// block so adding a new transition here is the natural place to update consumers
+// that iterate the full domain (metrics seeding, drift tests).
+var AllTransitionTypes = []TransitionType{
+	TransitionTypeVoid,
+	TransitionTypeAcknowledgement,
+	TransitionTypeHomeDeposit,
+	TransitionTypeHomeWithdrawal,
+	TransitionTypeEscrowDeposit,
+	TransitionTypeEscrowWithdraw,
+	TransitionTypeTransferSend,
+	TransitionTypeTransferReceive,
+	TransitionTypeCommit,
+	TransitionTypeRelease,
+	TransitionTypeMigrate,
+	TransitionTypeEscrowLock,
+	TransitionTypeMutualLock,
+	TransitionTypeFinalize,
+}
+
 // String returns the human-readable name of the transition type
 func (t TransitionType) String() string {
 	switch t {

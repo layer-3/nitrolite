@@ -1,0 +1,17 @@
+{
+  "deployer": "0x00C3Be935031A977eC5c8f2E3B2C4d67810Eaf9d",
+  "deployedTo": "0x67a5F0B0553E22689A539b80cBE4A1Cd126E2Bde",
+  "transactionHash": "0xe656b40ff7cc5de2e8e929377fae23c379a64f64b0984736f9d77d5b754475e2",
+  "commit": "19288523ff4f7628f1517c4ac24f231b252a5400",
+  "timestamp": 1779375601,
+  "chainId": 11155111,
+  "contractPath": "src/PremintERC20.sol:PremintERC20",
+  "constructorArgs": [
+    "Yellow USD",
+    "yusd",
+    "6",
+    "0xbab179854ba39cfcfb2d1d98a05fcfa113cf4ac1",
+    "1000000000000000000"
+  ],
+  "comment": "sandbox v1.3.0"
+}

@@ -7,6 +7,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IChannelHub {
+    /// @notice Deposits ERC-20 tokens into the node balance on ChannelHub.
+    /// @param token ERC-20 token address.
+    /// @param amount Raw token amount in token decimals.
     function depositToNode(address token, uint256 amount) external payable;
 }
 
@@ -33,6 +36,10 @@ contract DepositToNode is Script {
      * @param amount Token amount in the token's native decimals.
      */
     function run(address hub, address token, uint256 amount) external {
+        require(hub != address(0), "hub=0");
+        require(token != address(0), "token=0");
+        require(amount > 0, "amount=0");
+
         console.log("=== DepositToNode ===");
         console.log("Chain:  ", block.chainid);
         console.log("Hub:    ", hub);

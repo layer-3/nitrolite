@@ -86,11 +86,14 @@ elif $INTERACTIVE_KEY; then
     || openssl rand -base64 24 > "$TMPPW"
   read -rsp "Private key (hex, with or without 0x): " PK; echo
   # Import to temp keystore — key and password briefly in process args for this one call only
-  cast wallet import "batch-$$" \
+  if ! cast wallet import "batch-$$" \
     --keystore-dir "$TMPKS" \
     --private-key "$PK" \
     --unsafe-password "$(cat "$TMPPW")" \
-    >/dev/null 2>&1
+    >/dev/null 2>&1; then
+    echo "Error: failed to import key into temporary keystore (TMPKS=$TMPKS)" >&2
+    exit 1
+  fi
   unset PK
   SIGNING_ARGS=(--keystore "$TMPKS/batch-$$" --password-file "$TMPPW")
 fi
@@ -158,7 +161,24 @@ while read -r chain; do
         fail_tokens="$fail_tokens $token"
         continue
       fi
-      raw_amount=$(awk "BEGIN { printf \"%.0f\", $human_amount * (10 ^ $decimals) }")
+      raw_amount=$(python3 - "$human_amount" "$decimals" <<'PY'
+from decimal import Decimal, InvalidOperation
+import sys
+human, decimals = sys.argv[1], int(sys.argv[2])
+try:
+    scaled = Decimal(human) * (Decimal(10) ** decimals)
+except InvalidOperation:
+    print("INVALID_AMOUNT", end=""); sys.exit(2)
+if scaled != scaled.to_integral_value():
+    print("NON_INTEGER_RAW_AMOUNT", end=""); sys.exit(3)
+print(int(scaled), end="")
+PY
+      ) || {
+        echo "!!! FAILED: [chain=$chain_id] invalid amount '$human_amount' for token=$token"
+        fail=$((fail + 1))
+        fail_tokens="$fail_tokens $token"
+        continue
+      }
 
       echo ">>> [chain=$chain_id] token=$token amount=$human_amount (decimals=$decimals raw=$raw_amount)"
 
@@ -169,19 +189,28 @@ while read -r chain; do
           ${SIGNING_ARGS[@]+"${SIGNING_ARGS[@]}"} \
           ${FORGE_EXTRA[@]+"${FORGE_EXTRA[@]}"}; then
 
+        confirm_failed=false
         if ! $DRY_RUN; then
           broadcast="broadcast/DepositToNode.s.sol/$chain_id/run-latest.json"
           if [[ -f "$broadcast" ]]; then
             while read -r hash; do
               echo "    awaiting $hash ..."
-              cast receipt --confirmations 1 "$hash" --rpc-url "$rpc" >/dev/null \
-                || echo "    WARNING: could not confirm $hash — tx may still land"
+              if ! cast receipt --confirmations 1 "$hash" --rpc-url "$rpc" >/dev/null; then
+                echo "!!! FAILED: could not confirm $hash"
+                confirm_failed=true
+              fi
             done < <(jq -r '.transactions[].hash' "$broadcast")
           fi
         fi
 
-        ok=$((ok + 1))
-        echo "    confirmed: [chain=$chain_id] token=$token amount=$human_amount"
+        if $confirm_failed; then
+          fail=$((fail + 1))
+          fail_tokens="$fail_tokens $token"
+          echo "!!! FAILED: [chain=$chain_id] token=$token unconfirmed tx"
+        else
+          ok=$((ok + 1))
+          echo "    confirmed: [chain=$chain_id] token=$token amount=$human_amount"
+        fi
       else
         fail=$((fail + 1))
         fail_tokens="$fail_tokens $token"

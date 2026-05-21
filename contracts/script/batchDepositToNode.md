@@ -90,20 +90,20 @@ Anything after `--` is forwarded verbatim to every `forge script` call.
 
 A timestamped log file is written to the directory where the script is invoked:
 
-```
+```text
 batchDepositToNode-20260520-143000.log
 ```
 
 All `forge` and `cast` output is captured. On completion:
 
-```
+```text
 === Summary ===
 Deposited 4 tokens across 3 chains
 ```
 
 On partial failure:
 
-```
+```text
 === Summary ===
 Deposited 3 tokens across 3 chains
 
@@ -116,7 +116,7 @@ Exit code is `0` on full success, `1` if any token failed.
 
 ## How it works
 
-```
+```text
 batchDepositToNode.sh
 ├── chain 1 (background) ──► token A: fetch decimals → approve + depositToNode → await confirm
 │                        └──► token B: fetch decimals → approve + depositToNode → await confirm

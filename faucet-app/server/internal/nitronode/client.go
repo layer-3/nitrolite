@@ -15,6 +15,14 @@ import (
 	"faucet-server/internal/logger"
 )
 
+const (
+	sdkCallTimeout     = 30 * time.Second
+	reconnectInitDelay = 300 * time.Millisecond
+	reconnectMaxDelay  = 2 * time.Second
+	reconnectAttempts  = 3
+	pingTimeout        = 3 * time.Second
+)
+
 // TransferResult holds the result of a token transfer.
 type TransferResult struct {
 	TxID   string
@@ -28,9 +36,11 @@ type Client struct {
 	sdkClient    *sdk.Client
 	newSDKClient func() (*sdk.Client, error) // captures parsed signers; no raw key hex stored
 
+	ownerAddress     string
 	tokenSymbol      string
 	tipAmount        decimal.Decimal
 	minTransferCount int
+	tokenSupported   bool // cached after first successful GetAssets; reset on reconnect
 }
 
 func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decimal.Decimal, minTransferCount int) (*Client, error) {
@@ -52,7 +62,12 @@ func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decima
 
 	// factory captures already-parsed signers so reconnects don't need the raw key.
 	factory := func() (*sdk.Client, error) {
-		cl, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner)
+		cl, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner,
+			sdk.WithApplicationID("faucet"),
+			sdk.WithErrorHandler(func(err error) {
+				logger.Errorf("Nitronode connection error: %v", err)
+			}),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to Nitronode: %w", err)
 		}
@@ -67,6 +82,7 @@ func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decima
 	return &Client{
 		sdkClient:        sdkClient,
 		newSDKClient:     factory,
+		ownerAddress:     sdkClient.GetUserAddress(), // immutable: all factory clients share the same signer
 		tokenSymbol:      tokenSymbol,
 		tipAmount:        tipAmount,
 		minTransferCount: minTransferCount,
@@ -74,13 +90,12 @@ func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decima
 }
 
 // GetOwnerAddress returns the faucet owner's Ethereum address.
+// Derived from the immutable raw signer; cached at construction so no lock is needed.
 func (c *Client) GetOwnerAddress() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.sdkClient.GetUserAddress()
+	return c.ownerAddress
 }
 
-// EnsureConnected checks the connection and reconnects if necessary.
+// EnsureConnected checks the connection and reconnects with exponential backoff if necessary.
 func (c *Client) EnsureConnected() error {
 	// Fast path: read WaitCh under read lock.
 	c.mu.RLock()
@@ -96,30 +111,62 @@ func (c *Client) EnsureConnected() error {
 
 	// Slow path: write lock with double-check to prevent thundering-herd reconnects.
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	select {
 	case <-c.sdkClient.WaitCh():
-		// Still disconnected; reconnect now.
+		// Still disconnected; proceed with reconnect.
 	default:
-		c.mu.Unlock()
 		return nil // Another goroutine already reconnected while we waited for the lock.
 	}
 
-	logger.Info("Connection lost, reconnecting to Nitronode...")
-	newClient, err := c.newSDKClient()
-	if err != nil {
-		c.mu.Unlock()
-		return fmt.Errorf("failed to reconnect: %w", err)
-	}
-	oldClient := c.sdkClient
-	c.sdkClient = newClient
-	c.mu.Unlock() // Release before closing old client to avoid holding lock during I/O.
+	return c.reconnectLocked()
+}
 
-	if err := oldClient.Close(); err != nil {
-		logger.Errorf("Error closing stale Nitronode client: %v", err)
+// reconnectLocked tries to establish a new SDK connection with exponential backoff.
+// Must be called with c.mu write lock held.
+func (c *Client) reconnectLocked() error {
+	delay := reconnectInitDelay
+	var lastErr error
+
+	for attempt := 1; attempt <= reconnectAttempts; attempt++ {
+		logger.Infof("Reconnecting to Nitronode (attempt %d/%d)...", attempt, reconnectAttempts)
+
+		newClient, err := c.newSDKClient()
+		if err != nil {
+			lastErr = err
+			logger.Warnf("Reconnect attempt %d/%d failed: %v", attempt, reconnectAttempts, err)
+		} else {
+			// Ping to confirm the new connection is alive before accepting it.
+			ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+			pingErr := newClient.Ping(ctx)
+			cancel()
+
+			if pingErr == nil {
+				oldClient := c.sdkClient
+				c.sdkClient = newClient
+				c.tokenSupported = false // re-validate token on the new connection
+
+				// doClose is a non-blocking channel close, safe to call under the lock.
+				if err := oldClient.Close(); err != nil {
+					logger.Errorf("Error closing stale Nitronode client: %v", err)
+				}
+				logger.Infof("Successfully reconnected to Nitronode on attempt %d", attempt)
+				return nil
+			}
+
+			lastErr = fmt.Errorf("ping failed: %w", pingErr)
+			logger.Warnf("Reconnect attempt %d/%d ping failed: %v", attempt, reconnectAttempts, pingErr)
+			_ = newClient.Close()
+		}
+
+		if attempt < reconnectAttempts {
+			time.Sleep(delay)
+			delay = min(delay*2, reconnectMaxDelay)
+		}
 	}
-	logger.Info("Successfully reconnected to Nitronode")
-	return nil
+
+	return fmt.Errorf("failed to reconnect after %d attempts: %w", reconnectAttempts, lastErr)
 }
 
 // EnsureOperational validates token support and sufficient balance.
@@ -135,15 +182,19 @@ func (c *Client) EnsureOperational() error {
 	return nil
 }
 
-const sdkCallTimeout = 30 * time.Second
-
 func (c *Client) validateTokenSupport(tokenSymbol string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), sdkCallTimeout)
-	defer cancel()
-
+	// Fast path: token already confirmed on this connection.
 	c.mu.RLock()
+	cached := c.tokenSupported
 	cl := c.sdkClient
 	c.mu.RUnlock()
+
+	if cached {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), sdkCallTimeout)
+	defer cancel()
 
 	assets, err := cl.GetAssets(ctx, nil)
 	if err != nil {
@@ -153,6 +204,9 @@ func (c *Client) validateTokenSupport(tokenSymbol string) error {
 	for _, asset := range assets {
 		if strings.EqualFold(asset.Symbol, tokenSymbol) {
 			logger.Debugf("Token '%s' is supported by Nitronode", tokenSymbol)
+			c.mu.Lock()
+			c.tokenSupported = true
+			c.mu.Unlock()
 			return nil
 		}
 	}
@@ -184,6 +238,10 @@ func (c *Client) validateFaucetBalance(tokenSymbol string, tipAmount decimal.Dec
 					tokenSymbol, balance.Balance.String(), minRequired.String(), minTransferCount)
 			}
 			logger.Infof("✓ Sufficient %s balance: %s", tokenSymbol, balance.Balance.String())
+			if balance.Enforced.IsPositive() && balance.Enforced.LessThan(balance.Balance) {
+				logger.Warnf("⚠ %s enforced balance (%s) is below channel balance (%s); consider checkpointing",
+					tokenSymbol, balance.Enforced.String(), balance.Balance.String())
+			}
 			return nil
 		}
 	}
@@ -212,7 +270,7 @@ func (c *Client) Transfer(destination, asset string, amount decimal.Decimal) (*T
 		Asset:  state.Asset,
 	}
 
-	if result.Amount == "" || result.Amount == "0" {
+	if result.Amount == "" {
 		result.Amount = amount.String()
 	}
 	if result.Asset == "" {
@@ -223,8 +281,9 @@ func (c *Client) Transfer(destination, asset string, amount decimal.Decimal) (*T
 }
 
 // Close shuts down the Nitronode connection.
+// Uses write lock to serialize with reconnect and prevent closing a freshly installed client.
 func (c *Client) Close() error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.sdkClient.Close()
 }

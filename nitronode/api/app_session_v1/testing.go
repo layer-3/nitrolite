@@ -146,8 +146,8 @@ func (m *MockStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string
 	return args.Get(0).([]app.AppSessionKeyStateV1), uint32(args.Int(1)), args.Error(2)
 }
 
-func (m *MockStore) GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error) {
-	args := m.Called(sessionKey, appSessionId)
+func (m *MockStore) GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error) {
+	args := m.Called(sessionKey, appSessionId, applicationId)
 	return args.String(0), args.Error(1)
 }
 

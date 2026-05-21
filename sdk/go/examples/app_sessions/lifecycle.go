@@ -2,27 +2,51 @@ package main
 
 // Example: Complete App Session Lifecycle
 //
-// Prerequisites (minimum channel balances):
-//   - Wallet 1: 0.0001 USDC
-//   - Wallet 2: 0.00015 WETH
-//   - Wallet 3: no balance required (receives funds via redistribution)
+// Requirements to run this example:
+//
+//  1. A reachable nitronode WebSocket endpoint (set via wsURL below).
+//     The default points at the public sandbox.
+//
+//  2. Three EVM wallets with hex private keys (replace the placeholders below).
+//     Wallet 3 may be a fresh key — it only receives funds via redistribution.
+//
+//  3. Minimum off-chain (channel) balances on the node:
+//       - Wallet 1: 0.0001 YUSD     (deposited into Session 1)
+//       - Wallet 2: 0.00015 YELLOW  (deposited into Session 2)
+//       - Wallet 3: none required   (receives funds via redistribution)
+//
+//     An open channel is NOT a hard prerequisite. If a wallet already has
+//     funds on the node but no acknowledged channel for the asset yet, the
+//     example calls Acknowledge first to open one. Wallet 3 also needs no
+//     pre-existing channel; the withdraw step will open/credit its ledger
+//     automatically.
+//
+//  4. App registry: if the node was started with the app registry disabled
+//     (apps.v1 group disabled), the registration step is skipped at runtime
+//     and app sessions are created against unregistered app IDs. No action
+//     is required from the operator — the example detects this via a probe
+//     call to GetApps.
 //
 // This example demonstrates:
-// 1. Register apps in the app registry (required before creating app sessions)
-// 2. Create first app session for wallet 1
-// 3. Deposit USDC into first app session by wallet 1
-// 4. Create second app session for wallet 2 with wallet 3 as a participant
-// 5. Deposit WETH into second app session by wallet 2
-// 6. Redistribute app state within app session so that participant with wallet 3 also has some allocation
-// 7. Wallet 3 withdraws from his app session
-// 8. Close both app sessions
-// 9. Fail case: attempt to create app session for unregistered app (expected to fail)
+//  1. Register apps in the app registry (skipped if apps.v1 group is disabled)
+//  2. Create first app session for wallet 1
+//  3. Deposit YUSD into first app session by wallet 1
+//     (auto-opens wallet 1's YUSD channel via Acknowledge if missing)
+//  4. Create second app session for wallet 2 with wallet 3 as a participant
+//  5. Deposit YELLOW into second app session by wallet 2
+//     (auto-opens wallet 2's YELLOW channel via Acknowledge if missing)
+//  6. Redistribute app state within app session so that participant with wallet 3 also has some allocation
+//  7. Wallet 3 withdraws from his app session
+//  8. Close both app sessions
+//  9. Fail case: attempt to create app session for unregistered app (expected to fail).
+//     Skipped entirely when the app registry is disabled.
 
 import (
 	"context"
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,6 +58,11 @@ import (
 	"github.com/layer-3/nitrolite/pkg/sign"
 	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
+
+// appRegistryDisabledMsg is the error fragment returned by the node when the
+// apps.v1 RPC group is disabled by configuration. The example uses this to
+// decide whether to skip the registration step.
+const appRegistryDisabledMsg = "apps.v1 group is disabled"
 
 func main() {
 	ctx := context.Background()
@@ -120,6 +149,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// --- Ensure Required Channels Are Open ---
+	// App session deposits require an acknowledged channel for the asset.
+	// If the wallet has funds on the node but no channel yet, Acknowledge
+	// opens it on the fly so the example only assumes a minimum balance.
+	fmt.Println("=== Ensuring Channels Are Open ===")
+	ensureChannelOpen(ctx, "Wallet 1", wallet1Client, "yusd")
+	ensureChannelOpen(ctx, "Wallet 2", wallet2Client, "yellow")
+	fmt.Println()
+
 	// --- 1. Register Apps ---
 	fmt.Println("=== Step 1: Registering Apps ===")
 
@@ -127,15 +165,31 @@ func main() {
 	app1ID := "test-app-" + suffix
 	app2ID := "multi-party-app-" + suffix
 
-	if err := wallet1Client.RegisterApp(ctx, app1ID, "{}", true); err != nil {
-		log.Fatalf("Failed to register %s: %v", app1ID, err)
+	// Probe the apps.v1 group via GetApps. If the node has the app registry
+	// disabled, the probe returns an error containing appRegistryDisabledMsg
+	// and we skip registration entirely — app sessions can still be created
+	// against unregistered IDs in that mode.
+	appRegistryEnabled := true
+	if _, _, err := wallet1Client.GetApps(ctx, nil); err != nil {
+		if strings.Contains(err.Error(), appRegistryDisabledMsg) {
+			appRegistryEnabled = false
+			fmt.Println("ℹ App registry is disabled on the node — skipping app registration")
+		} else {
+			log.Fatalf("Failed to query app registry: %v", err)
+		}
 	}
-	fmt.Printf("✓ Registered app: %s\n", app1ID)
 
-	if err := wallet1Client.RegisterApp(ctx, app2ID, "{}", false); err != nil {
-		log.Fatalf("Failed to register %s: %v", app2ID, err)
+	if appRegistryEnabled {
+		if err := wallet1Client.RegisterApp(ctx, app1ID, "{}", true); err != nil {
+			log.Fatalf("Failed to register %s: %v", app1ID, err)
+		}
+		fmt.Printf("✓ Registered app: %s\n", app1ID)
+
+		if err := wallet1Client.RegisterApp(ctx, app2ID, "{}", false); err != nil {
+			log.Fatalf("Failed to register %s: %v", app2ID, err)
+		}
+		fmt.Printf("✓ Registered app: %s (owner approval required)\n\n", app2ID)
 	}
-	fmt.Printf("✓ Registered app: %s (owner approval required)\n\n", app2ID)
 
 	// --- 2. Create App Session 1 (Single Participant: Wallet 1) ---
 	fmt.Println("=== Step 2: Creating App Session 1 (Wallet 1 only) ===")
@@ -161,15 +215,15 @@ func main() {
 	}
 	fmt.Printf("✓ Created App Session 1: %s\n\n", session1ID)
 
-	// --- 3. Deposit USDC into Session 1 ---
-	fmt.Println("=== Step 3: Depositing USDC into Session 1 ===")
+	// --- 3. Deposit YUSD into Session 1 ---
+	fmt.Println("=== Step 3: Depositing YUSD into Session 1 ===")
 
 	session1DepositAmount := decimal.NewFromFloat(0.0001)
 	session1DepositUpdate := app.AppStateUpdateV1{
 		AppSessionID: session1ID,
 		Intent:       app.AppStateUpdateIntentDeposit,
 		Version:      2,
-		Allocations:  []app.AppAllocationV1{{Participant: wallet1Address, Asset: "usdc", Amount: session1DepositAmount}},
+		Allocations:  []app.AppAllocationV1{{Participant: wallet1Address, Asset: "yusd", Amount: session1DepositAmount}},
 	}
 
 	session1DepositRequest, err := app.PackAppStateUpdateV1(session1DepositUpdate)
@@ -179,11 +233,11 @@ func main() {
 
 	appSession1DepositSig, _ := appSession1Signer.Sign(session1DepositRequest)
 
-	_, err = wallet1Client.SubmitAppSessionDeposit(ctx, session1DepositUpdate, []string{appSession1DepositSig.String()}, "usdc", session1DepositAmount)
+	_, err = wallet1Client.SubmitAppSessionDeposit(ctx, session1DepositUpdate, []string{appSession1DepositSig.String()}, "yusd", session1DepositAmount)
 	if err != nil {
 		log.Printf("⚠ Deposit warning: %v", err)
 	}
-	fmt.Printf("✓ Deposited %s USDC into Session 1\n\n", session1DepositAmount)
+	fmt.Printf("✓ Deposited %s YUSD into Session 1\n\n", session1DepositAmount)
 
 	// --- 4. Create App Session 2 (Multi-Party: Wallet 2 & 3) ---
 	fmt.Println("=== Step 4: Creating App Session 2 (Wallet 2 & 3) ===")
@@ -261,15 +315,15 @@ func main() {
 	}
 	fmt.Printf("✓ Created App Session 2: %s\n\n", session2ID)
 
-	// --- 5. Deposit WETH into Session 2 by Wallet 2 ---
-	fmt.Println("=== Step 5: Depositing WETH into Session 2 ===")
+	// --- 5. Deposit YELLOW into Session 2 by Wallet 2 ---
+	fmt.Println("=== Step 5: Depositing YELLOW into Session 2 ===")
 
 	session2DepositAmount := decimal.NewFromFloat(0.00015)
 	session2DepositUpdate := app.AppStateUpdateV1{
 		AppSessionID: session2ID,
 		Intent:       app.AppStateUpdateIntentDeposit,
 		Version:      2,
-		Allocations:  []app.AppAllocationV1{{Participant: wallet2Address, Asset: "weth", Amount: session2DepositAmount}},
+		Allocations:  []app.AppAllocationV1{{Participant: wallet2Address, Asset: "yellow", Amount: session2DepositAmount}},
 	}
 
 	session2DepositRequest, err := app.PackAppStateUpdateV1(session2DepositUpdate)
@@ -280,11 +334,11 @@ func main() {
 	appSession2DepositSig, _ := appSession2Signer.Sign(session2DepositRequest)
 	appSession3DepositSig, _ := appSession3Signer.Sign(session2DepositRequest)
 
-	nodeSig, err := wallet2Client.SubmitAppSessionDeposit(ctx, session2DepositUpdate, []string{appSession2DepositSig.String(), appSession3DepositSig.String()}, "weth", session2DepositAmount)
+	nodeSig, err := wallet2Client.SubmitAppSessionDeposit(ctx, session2DepositUpdate, []string{appSession2DepositSig.String(), appSession3DepositSig.String()}, "yellow", session2DepositAmount)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("✓ Deposited %s WETH into Session 2 (Node Sig: %s)\n\n", session2DepositAmount, nodeSig)
+	fmt.Printf("✓ Deposited %s YELLOW into Session 2 (Node Sig: %s)\n\n", session2DepositAmount, nodeSig)
 
 	// Check Session 2 state before redistribution
 	session2InfoBeforeRedist, _, err := wallet2Client.GetAppSessions(ctx, &sdk.GetAppSessionsOptions{AppSessionID: &session2ID})
@@ -303,8 +357,8 @@ func main() {
 		Intent:       app.AppStateUpdateIntentOperate,
 		Version:      3,
 		Allocations: []app.AppAllocationV1{
-			{Participant: wallet2Address, Asset: "weth", Amount: decimal.NewFromFloat(0.0001)},
-			{Participant: wallet3Address, Asset: "weth", Amount: decimal.NewFromFloat(0.00005)},
+			{Participant: wallet2Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.0001)},
+			{Participant: wallet3Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.00005)},
 		},
 	}
 
@@ -321,7 +375,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Redistribution failed: %v", err)
 	}
-	fmt.Println("✓ Redistributed WETH: Wallet 2 (0.0001) -> Wallet 3 (0.00005)")
+	fmt.Println("✓ Redistributed YELLOW: Wallet 2 (0.0001) -> Wallet 3 (0.00005)")
 
 	// NOTE: Rebalance step is disabled.
 	// // --- 7. Rebalance Both App Sessions Atomically ---
@@ -350,8 +404,8 @@ func main() {
 	// 	Intent:       app.AppStateUpdateIntentRebalance,
 	// 	Version:      3,
 	// 	Allocations: []app.AppAllocationV1{
-	// 		{Participant: wallet1Address, Asset: "weth", Amount: decimal.NewFromFloat(0.005)},
-	// 		{Participant: wallet1Address, Asset: "usdc", Amount: decimal.NewFromFloat(0.00005)},
+	// 		{Participant: wallet1Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.005)},
+	// 		{Participant: wallet1Address, Asset: "yusd", Amount: decimal.NewFromFloat(0.00005)},
 	// 	},
 	// }
 
@@ -367,9 +421,9 @@ func main() {
 	// 	Intent:       app.AppStateUpdateIntentRebalance,
 	// 	Version:      4,
 	// 	Allocations: []app.AppAllocationV1{
-	// 		{Participant: wallet2Address, Asset: "usdc", Amount: decimal.NewFromFloat(0.00005)},
-	// 		{Participant: wallet2Address, Asset: "weth", Amount: decimal.NewFromFloat(0.005)},
-	// 		{Participant: wallet3Address, Asset: "weth", Amount: decimal.NewFromFloat(0.005)},
+	// 		{Participant: wallet2Address, Asset: "yusd", Amount: decimal.NewFromFloat(0.00005)},
+	// 		{Participant: wallet2Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.005)},
+	// 		{Participant: wallet3Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.005)},
 	// 	},
 	// }
 
@@ -408,8 +462,8 @@ func main() {
 		Intent:       app.AppStateUpdateIntentWithdraw,
 		Version:      4,
 		Allocations: []app.AppAllocationV1{
-			{Participant: wallet2Address, Asset: "weth", Amount: decimal.NewFromFloat(0.00005)},
-			{Participant: wallet3Address, Asset: "weth", Amount: decimal.NewFromFloat(0.00001)},
+			{Participant: wallet2Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.00005)},
+			{Participant: wallet3Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.00001)},
 		},
 	}
 
@@ -425,7 +479,7 @@ func main() {
 	if err != nil {
 		log.Printf("⚠ Withdraw Error: %v", err)
 	} else {
-		fmt.Println("✓ Wallet 3 successfully withdrew WETH back to channel")
+		fmt.Println("✓ Wallet 3 successfully withdrew YELLOW back to channel")
 	}
 
 	// --- 8. Close Both App Sessions ---
@@ -437,7 +491,7 @@ func main() {
 		Intent:       app.AppStateUpdateIntentClose,
 		Version:      3,
 		Allocations: []app.AppAllocationV1{
-			{Participant: wallet1Address, Asset: "usdc", Amount: decimal.NewFromFloat(0.0001)},
+			{Participant: wallet1Address, Asset: "yusd", Amount: decimal.NewFromFloat(0.0001)},
 		},
 	}
 
@@ -461,8 +515,8 @@ func main() {
 		Intent:       app.AppStateUpdateIntentClose,
 		Version:      5,
 		Allocations: []app.AppAllocationV1{
-			{Participant: wallet2Address, Asset: "weth", Amount: decimal.NewFromFloat(0.00005)},
-			{Participant: wallet3Address, Asset: "weth", Amount: decimal.NewFromFloat(0.00001)},
+			{Participant: wallet2Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.00005)},
+			{Participant: wallet3Address, Asset: "yellow", Amount: decimal.NewFromFloat(0.00001)},
 		},
 	}
 
@@ -482,28 +536,33 @@ func main() {
 	}
 
 	// --- 9. Fail Case: Create App Session for Unregistered App ---
-	fmt.Println("\n=== Step 9: Creating App Session for Unregistered App (expected to fail) ===")
+	// Only meaningful when the app registry is enabled — with apps.v1 disabled
+	// every app ID is "unregistered" from the registry's perspective and the
+	// node accepts the create call, so the fail-case has nothing to assert.
+	if appRegistryEnabled {
+		fmt.Println("\n=== Step 9: Creating App Session for Unregistered App (expected to fail) ===")
 
-	unregisteredDefinition := app.AppDefinitionV1{
-		ApplicationID: "unregistered-app-" + suffix,
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: wallet1Address, SignatureWeight: 100},
-		},
-		Quorum: 100,
-		Nonce:  uint64(time.Now().UnixNano()),
-	}
+		unregisteredDefinition := app.AppDefinitionV1{
+			ApplicationID: "unregistered-app-" + suffix,
+			Participants: []app.AppParticipantV1{
+				{WalletAddress: wallet1Address, SignatureWeight: 100},
+			},
+			Quorum: 100,
+			Nonce:  uint64(time.Now().UnixNano()),
+		}
 
-	unregisteredCreateRequest, err := app.PackCreateAppSessionRequestV1(unregisteredDefinition, "{}")
-	if err != nil {
-		log.Fatal(err)
-	}
+		unregisteredCreateRequest, err := app.PackCreateAppSessionRequestV1(unregisteredDefinition, "{}")
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	unregisteredSig, _ := appSession1Signer.Sign(unregisteredCreateRequest)
-	_, _, _, err = wallet1Client.CreateAppSession(ctx, unregisteredDefinition, "{}", []string{unregisteredSig.String()})
-	if err != nil {
-		fmt.Printf("✓ Expected error: %v\n", err)
-	} else {
-		fmt.Println("✗ Unexpected success: app session was created for unregistered app")
+		unregisteredSig, _ := appSession1Signer.Sign(unregisteredCreateRequest)
+		_, _, _, err = wallet1Client.CreateAppSession(ctx, unregisteredDefinition, "{}", []string{unregisteredSig.String()})
+		if err != nil {
+			fmt.Printf("✓ Expected error: %v\n", err)
+		} else {
+			fmt.Println("✗ Unexpected success: app session was created for unregistered app")
+		}
 	}
 
 	fmt.Println("\n=== Example Complete ===")
@@ -519,4 +578,31 @@ func generateMsgSigner() (sign.Signer, error) {
 	privateKeyBytes := crypto.FromECDSA(privateKey)
 
 	return sign.NewEthereumMsgSigner(hexutil.Encode(privateKeyBytes))
+}
+
+// ensureChannelOpen guarantees that the given wallet has an acknowledged
+// channel open for asset. If the node holds no state for the wallet/asset
+// pair, or the latest state is still awaiting the user's signature (or has
+// been finalized), Acknowledge is invoked to create or progress the channel.
+// Already-acknowledged channels are left untouched.
+func ensureChannelOpen(ctx context.Context, label string, client *sdk.Client, asset string) {
+	wallet := client.GetUserAddress()
+	state, err := client.GetLatestState(ctx, wallet, asset, false)
+	if err != nil {
+		log.Fatalf("[%s] failed to get latest %s state: %v", label, asset, err)
+	}
+
+	hasOpenChannel := state != nil &&
+		state.HomeChannelID != nil &&
+		!state.IsFinal() &&
+		state.UserSig != nil
+	if hasOpenChannel {
+		fmt.Printf("✓ %s already has an open %s channel\n", label, asset)
+		return
+	}
+
+	if _, err := client.Acknowledge(ctx, asset); err != nil {
+		log.Fatalf("[%s] failed to acknowledge %s channel: %v", label, asset, err)
+	}
+	fmt.Printf("✓ %s acknowledged %s channel\n", label, asset)
 }

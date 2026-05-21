@@ -891,7 +891,7 @@ type Store interface {
     StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
     GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
     GetLastAppSessionKeyStates(wallet string, sessionKey *string) ([]app.AppSessionKeyStateV1, error)
-    GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error)
+    GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error)
 }
 ```
 

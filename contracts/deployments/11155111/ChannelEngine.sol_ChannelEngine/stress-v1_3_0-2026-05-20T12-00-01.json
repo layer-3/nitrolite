@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0x89b81857a46cf290f23f6ff9b24e1031aad65204",
+  "transactionHash": "0xce57f0cc9f8184819745729a47b8f4a399b1402557a979062a42fe4f7dab90d9",
+  "commit": "9110ba06",
+  "timestamp": 1779278401,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelEngine.sol:ChannelEngine",
+  "constructorArgs": [],
+  "comment": "stress v1.3.0"
+}

@@ -61,7 +61,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 	}
 
 	// Scenario A: Channel doesn't exist - create it
-	if state == nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -172,7 +172,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 	}
 
 	// Channel doesn't exist - create it and withdraw
-	if state == nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -269,7 +269,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest state: %w", err)
 	}
-	if state == nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -389,7 +389,7 @@ func (c *Client) CloseHomeChannel(ctx context.Context, asset string) (*core.Stat
 		return nil, err
 	}
 
-	if state == nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		return nil, fmt.Errorf("no channel exists for asset %s", asset)
 	}
 
@@ -445,7 +445,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 	}
 
 	// No channel path - create channel with acknowledgement
-	if state == nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {

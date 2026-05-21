@@ -5,7 +5,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/c-bata/go-prompt"
 	"golang.org/x/term"
@@ -70,15 +73,59 @@ func main() {
 	fmt.Printf("Config directory: %s\n", configDir)
 	fmt.Println("\nType 'help' for available commands or 'exit' to quit")
 
-	// Terminal handling
-	initialState, _ := term.GetState(int(os.Stdin.Fd()))
-	handleExit := func() {
-		term.Restore(int(os.Stdin.Fd()), initialState)
-		exec.Command("stty", "sane").Run()
+	// Terminal handling. go-prompt switches the tty into raw mode and emits
+	// bracketed-paste / alternate-screen / mouse-tracking escapes. Restoring
+	// the termios is not enough — the terminal also needs the matching
+	// disable sequences or the next program in the same shell tab inherits
+	// broken paste behaviour and an unresponsive Ctrl-C.
+	initialState, stateErr := term.GetState(int(os.Stdin.Fd()))
+	if stateErr != nil {
+		log.Printf("warning: failed to capture initial terminal state: %v", stateErr)
 	}
+	handleExit := func() {
+		if stateErr == nil && initialState != nil {
+			if err := term.Restore(int(os.Stdin.Fd()), initialState); err != nil {
+				log.Printf("warning: failed to restore terminal state: %v", err)
+			}
+		}
+		if err := exec.Command("stty", "sane").Run(); err != nil {
+			log.Printf("warning: failed to run 'stty sane': %v", err)
+		}
+		// Disable bracketed paste, show cursor, leave alt screen, mouse off,
+		// then wipe any leftover completion-menu / ghost-prompt rows that
+		// go-prompt leaves on the screen during its teardown.
+		fmt.Fprint(os.Stdout, "\x1b[?2004l\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+		// go-prompt leaves on the screen: the redrawn ghost prompt line
+		// (rendered between Executor return and ExitChecker firing) plus up
+		// to 6 rows reserved for the completion menu (default maxSuggestion
+		// = 6 in go-prompt v0.2.6). Cursor is positioned somewhere below
+		// them. Step cursor up enough rows to land at or above the ghost
+		// prompt, then erase from there down. Over-erasing into the user's
+		// "cerebro> exit" line is acceptable — the farewell printed below
+		// preserves the meaning.
+		fmt.Fprint(os.Stdout, "\x1b[7A\r\x1b[0J")
+	}
+
+	// Catch SIGINT / SIGTERM / SIGHUP so abnormal termination still restores
+	// the terminal. The in-prompt Ctrl-C keybind below handles the normal
+	// "exit by Ctrl-C" path; this handler covers shell-level kills.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		<-sigCh
+		handleExit()
+		os.Exit(130)
+	}()
 
 	options := append(getStyleOptions(),
 		prompt.OptionPrefix("cerebro> "),
+		// Make go-prompt exit its Run() loop when the user types "exit" so
+		// its own tty teardown runs before main prints anything below the
+		// prompt. Without this, exit racing with the prompt redraw leaves
+		// completion suggestions splattered over the final output.
+		prompt.OptionSetExitCheckerOnInput(func(in string, breakline bool) bool {
+			return breakline && strings.TrimSpace(in) == "exit"
+		}),
 		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlC,
 			Fn: func(_ *prompt.Buffer) {
@@ -105,15 +152,19 @@ func main() {
 		close(promptExitCh)
 	}()
 
+	var farewell string
 	select {
 	case <-operator.Wait():
-		log.Println("connection closed.")
+		farewell = "connection closed."
 	case <-promptExitCh:
-		log.Println("session ended.")
+		farewell = "session ended."
 	}
 
+	// Restore the terminal first so the farewell prints below any leftover
+	// prompt artefacts in normal mode, not interleaved with go-prompt's
+	// final redraw.
 	handleExit()
-	log.Println("exiting...")
+	log.Println(farewell)
 }
 
 func getStyleOptions() []prompt.Option {
@@ -133,7 +184,5 @@ func getStyleOptions() []prompt.Option {
 
 		prompt.OptionSelectedDescriptionTextColor(prompt.White),
 		prompt.OptionSelectedDescriptionBGColor(prompt.DarkBlue),
-
-		prompt.OptionShowCompletionAtStart(),
 	}
 }

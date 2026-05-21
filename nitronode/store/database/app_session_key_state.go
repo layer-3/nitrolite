@@ -209,27 +209,32 @@ func (s *DBStore) GetLastAppSessionKeyState(wallet, sessionKey string) (*app.App
 }
 
 // GetAppSessionKeyOwner returns the user_address that owns the given session key
-// authorized for the specified app session ID. Only the latest-version, non-expired key
-// with matching permissions is considered. A newer version always supersedes older ones.
-func (s *DBStore) GetAppSessionKeyOwner(sessionKey, appSessionId string) (string, error) {
+// authorized for the specified app session ID or application ID. Only the latest-version,
+// non-expired key with matching permissions is considered. A newer version always supersedes
+// older ones.
+//
+// Both appSessionId and applicationId are accepted because the app session row may not yet
+// exist in the database when this is called (notably during app session creation). Passing
+// applicationId directly avoids a chicken-and-egg subquery against the not-yet-inserted row;
+// callers always know the application ID either from the signed request (create) or from the
+// loaded app session record (post-create state updates).
+func (s *DBStore) GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error) {
 	sessionKey = strings.ToLower(sessionKey)
 	appSessionId = strings.ToLower(appSessionId)
-
-	// Subquery to get the application ID from the app session
-	appSubQuery := s.db.Model(&AppSessionV1{}).Select("application_id").Where("id = ?", appSessionId)
+	applicationId = strings.ToLower(applicationId)
 
 	var dbState AppSessionKeyStateV1
 	err := s.db.
 		Joins("JOIN current_session_key_states_v1 c ON c.user_address = app_session_key_states_v1.user_address AND c.session_key = app_session_key_states_v1.session_key AND c.version = app_session_key_states_v1.version AND c.kind = ?", SessionKeyKindAppSession).
 		Joins("LEFT JOIN app_session_key_app_sessions_v1 ON app_session_key_app_sessions_v1.session_key_state_id = app_session_key_states_v1.id").
 		Joins("LEFT JOIN app_session_key_applications_v1 ON app_session_key_applications_v1.session_key_state_id = app_session_key_states_v1.id").
-		Where("app_session_key_states_v1.session_key = ? AND c.version > 0 AND app_session_key_states_v1.expires_at > ? AND (app_session_key_app_sessions_v1.app_session_id = ? OR app_session_key_applications_v1.application_id = (?))",
-			sessionKey, time.Now().UTC(), appSessionId, appSubQuery).
+		Where("app_session_key_states_v1.session_key = ? AND c.version > 0 AND app_session_key_states_v1.expires_at > ? AND (app_session_key_app_sessions_v1.app_session_id = ? OR app_session_key_applications_v1.application_id = ?)",
+			sessionKey, time.Now().UTC(), appSessionId, applicationId).
 		First(&dbState).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return "", fmt.Errorf("no active session key found for key %s and app session %s", sessionKey, appSessionId)
+			return "", fmt.Errorf("no active session key found for key %s, app session %s, application %s", sessionKey, appSessionId, applicationId)
 		}
 		return "", fmt.Errorf("failed to get session key owner: %w", err)
 	}

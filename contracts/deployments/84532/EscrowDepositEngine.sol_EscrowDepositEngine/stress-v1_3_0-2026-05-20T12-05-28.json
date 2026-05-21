@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0xdccc09e335b87fb506c40a972e76fc7a225e0bf9",
+  "transactionHash": "0x3c6043743ee8f39a6fe2b4b40e236755c2dd7da980d4fc5340e3e44fe4f949e4",
+  "commit": "9110ba06",
+  "timestamp": 1779278728,
+  "chainId": 84532,
+  "contractPath": "src/EscrowDepositEngine.sol:EscrowDepositEngine",
+  "constructorArgs": [],
+  "comment": "stress v1.3.0"
+}

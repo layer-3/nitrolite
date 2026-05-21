@@ -1,0 +1,14 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0x7d61ec428cfae560f43647af567ea7c6e2cc5527",
+  "transactionHash": "0xd74da343a9f1079e3455d9d62396bb9b807a6b8e93e9727cf30c7f91adec5def",
+  "commit": "104c13df",
+  "timestamp": 1779286321,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0x708B3CA8b7Dc0f89Ea5a06709C3b92Dd5843B662",
+    "0x2B6dc5BB33F3eaAbfd3A8d17fDb7BdB8fEf331f9"
+  ],
+  "comment": "stress v1.3.0 with VALIDATOR_ACTIVATION_DELAY = 1 minute"
+}

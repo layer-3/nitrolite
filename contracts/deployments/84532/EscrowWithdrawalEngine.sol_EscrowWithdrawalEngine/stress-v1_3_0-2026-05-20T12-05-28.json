@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0xdca4ab495188b545cfa919c0cb0a7e2280f2f407",
+  "transactionHash": "0x3a642c4c020499885b2b289bfacabbf19b80a4165e7968109c0cc0536753ae7f",
+  "commit": "9110ba06",
+  "timestamp": 1779278728,
+  "chainId": 84532,
+  "contractPath": "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine",
+  "constructorArgs": [],
+  "comment": "stress v1.3.0"
+}

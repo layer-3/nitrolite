@@ -259,6 +259,7 @@ export class Client {
    */
   async close(): Promise<void> {
     this.exitResolve?.();
+    await this.rpcClient.close();
   }
 
   /**

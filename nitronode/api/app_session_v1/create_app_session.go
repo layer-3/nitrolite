@@ -148,7 +148,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 				sigType := app.AppSessionSignerTypeV1(sigBytes[0])
 				appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
 					func(sessionKeyAddr string) (string, error) {
-						return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID)
+						return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID, appDef.ApplicationID)
 					},
 				)
 				recoveredOwnerWallet, err := appSessionSignerValidator.Recover(packedRequest, sigBytes)

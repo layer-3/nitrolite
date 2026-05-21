@@ -1,4 +1,4 @@
-package clearnode
+package nitronode
 
 import (
 	"testing"

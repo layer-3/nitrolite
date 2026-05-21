@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"faucet-server/internal/clearnode"
+	"faucet-server/internal/nitronode"
 	"faucet-server/internal/config"
 	"faucet-server/internal/logger"
 	"faucet-server/internal/server"
@@ -25,12 +25,12 @@ func main() {
 	}
 
 	logger.Info("Starting Nitrolite Faucet Server")
-	logger.Infof("Configuration loaded: Server port=%s, Clearnode URL=%s",
-		cfg.ServerPort, cfg.ClearnodeURL)
+	logger.Infof("Configuration loaded: Server port=%s, Nitronode URL=%s",
+		cfg.ServerPort, cfg.NitronodeURL)
 
-	client, err := clearnode.NewClient(cfg.OwnerPrivateKey, cfg.ClearnodeURL, cfg.TokenSymbol, cfg.StandardTipAmountDecimal, cfg.MinTransferCount)
+	client, err := nitronode.NewClient(cfg.OwnerPrivateKey, cfg.NitronodeURL, cfg.TokenSymbol, cfg.StandardTipAmountDecimal, cfg.MinTransferCount)
 	if err != nil {
-		logger.Fatalf("Failed to create Clearnode client: %v", err)
+		logger.Fatalf("Failed to create Nitronode client: %v", err)
 	}
 
 	if err := client.EnsureOperational(); err != nil {
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	logger.Infof("Faucet owner address: %s", client.GetOwnerAddress())
-	logger.Info("Successfully connected to Clearnode")
+	logger.Info("Successfully connected to Nitronode")
 
 	httpServer := server.NewServer(cfg, client)
 
@@ -57,7 +57,7 @@ func main() {
 	logger.Info("Shutting down server...")
 
 	if err := client.Close(); err != nil {
-		logger.Errorf("Error closing Clearnode connection: %v", err)
+		logger.Errorf("Error closing Nitronode connection: %v", err)
 	}
 
 	logger.Info("Server shutdown complete")

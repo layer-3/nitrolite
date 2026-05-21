@@ -1,7 +1,7 @@
 config:
   args: ["./faucet-server"]
   logLevel: debug
-  clearnodeWsUrl: wss://canarynet.yellow.com/ws
+  nitronodeWsUrl: wss://canarynet.yellow.com/ws
   token:
     symbol: ytest.usd
     tipAmount: 0.1

@@ -14,27 +14,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"faucet-server/internal/clearnode"
+	"faucet-server/internal/nitronode"
 	"faucet-server/internal/config"
 	"faucet-server/internal/logger"
 )
 
-// mockClearnodeClient is a simple in-memory mock implementing ClearnodeClient.
-type mockClearnodeClient struct {
+// mockNitronodeClient is a simple in-memory mock implementing NitronodeClient.
+type mockNitronodeClient struct {
 	ownerAddress       string
 	connErr            error
 	operationalErr     error
-	transferResult     *clearnode.TransferResult
+	transferResult     *nitronode.TransferResult
 	transferErr        error
 	capturedDest       string
 	capturedAsset      string
 	capturedAmount     decimal.Decimal
 }
 
-func (m *mockClearnodeClient) GetOwnerAddress() string { return m.ownerAddress }
-func (m *mockClearnodeClient) EnsureConnected() error  { return m.connErr }
-func (m *mockClearnodeClient) EnsureOperational() error { return m.operationalErr }
-func (m *mockClearnodeClient) Transfer(dest, asset string, amount decimal.Decimal) (*clearnode.TransferResult, error) {
+func (m *mockNitronodeClient) GetOwnerAddress() string { return m.ownerAddress }
+func (m *mockNitronodeClient) EnsureConnected() error  { return m.connErr }
+func (m *mockNitronodeClient) EnsureOperational() error { return m.operationalErr }
+func (m *mockNitronodeClient) Transfer(dest, asset string, amount decimal.Decimal) (*nitronode.TransferResult, error) {
 	m.capturedDest = dest
 	m.capturedAsset = asset
 	m.capturedAmount = amount
@@ -45,7 +45,7 @@ func defaultConfig() *config.Config {
 	return &config.Config{
 		ServerPort:               "0",
 		OwnerPrivateKey:          "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		ClearnodeURL:             "ws://localhost:0",
+		NitronodeURL:             "ws://localhost:0",
 		TokenSymbol:              "usdc",
 		StandardTipAmount:        "10",
 		StandardTipAmountDecimal: decimal.RequireFromString("10"),
@@ -55,10 +55,10 @@ func defaultConfig() *config.Config {
 	}
 }
 
-func defaultMock() *mockClearnodeClient {
-	return &mockClearnodeClient{
+func defaultMock() *mockNitronodeClient {
+	return &mockNitronodeClient{
 		ownerAddress: "0x9fc51BEE23Fb53569c46CcF013400f0E19524bd2",
-		transferResult: &clearnode.TransferResult{
+		transferResult: &nitronode.TransferResult{
 			TxID:   "tx-abc123",
 			Amount: "10",
 			Asset:  "usdc",
@@ -147,7 +147,7 @@ func TestRequestTokens_ConnectionFailure(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	var resp ErrorResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, ErrClearnodeConnectionFailed, resp.Error)
+	assert.Equal(t, ErrNitronodeConnectionFailed, resp.Error)
 }
 
 func TestRequestTokens_OperationalFailure(t *testing.T) {

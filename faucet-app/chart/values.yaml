@@ -6,10 +6,10 @@ config:
   args: ["./faucet-server"]
   # -- Log level (info, debug, warn, error)
   logLevel: info
-  # -- Clearnode WebSocket URL
-  clearnodeWsUrl: "wss://clearnode.example.com/ws"
+  # -- Nitronode WebSocket URL
+  nitronodeWsUrl: "wss://nitronode.example.com/ws"
   token:
-    # -- Token Symbol inside the Clearnode network
+    # -- Token Symbol inside the Nitronode network
     symbol: usdc
     # -- The amount of tokens to tip per request
     tipAmount: 10
@@ -98,7 +98,7 @@ networking:
   # -- TLS cluster issuer
   tlsClusterIssuer: zerossl-prod
   # -- External hostname for the gateway
-  externalHostname: clearnode.example.com
+  externalHostname: nitronode.example.com
 
   gateway:
     # -- Enable API gateway

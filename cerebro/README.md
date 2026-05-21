@@ -250,6 +250,25 @@ Uses layered architecture:
 - Base Client for low-level RPC access
 - Local SQLite for secure configuration storage
 
+## Known issues
+
+- **Scrollback loss on macOS Terminal.app / iTerm2.** Cerebro uses
+  `github.com/c-bata/go-prompt` for the REPL. Its completion-menu renderer
+  reserves screen rows via `\x1bD` (Index) + `\x1bM` (Reverse Index). On
+  xterm-strict terminals RI pulls scrolled-out content back from the
+  scrollback buffer; on macOS Terminal.app and iTerm2 (default settings) RI
+  inserts a blank line at the top instead, permanently dropping whatever was
+  scrolled off. Any cerebro session that triggers a completion menu
+  (including typing `exit`) wipes shell history that existed before cerebro
+  started. Tracked upstream as
+  [c-bata/go-prompt#206](https://github.com/c-bata/go-prompt/issues/206) and
+  unresolved since 2020.
+
+  Planned mitigation: replace `c-bata/go-prompt` with `chzyer/readline` or
+  `peterh/liner`. Both preserve scrollback while still providing Tab
+  completion; the completion glue in `operator.go` needs to be rewritten
+  against the new lib's hook surface.
+
 ## License
 
 Part of the Nitrolite project. Licensed under the MIT License.

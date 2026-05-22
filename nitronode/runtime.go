@@ -111,6 +111,20 @@ type ValidationLimits struct {
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 
+// intrinsicTxGas is the minimum gas required for any Ethereum transaction.
+const intrinsicTxGas = 21000
+
+func validateBlockchainGasLimit(gasLimit uint64) error {
+	if gasLimit > 0 && gasLimit < intrinsicTxGas {
+		return fmt.Errorf(
+			"NITRONODE_BLOCKCHAIN_GAS_LIMIT must be 0 (auto-estimate) or >= %d, got %d",
+			intrinsicTxGas,
+			gasLimit,
+		)
+	}
+	return nil
+}
+
 func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
 	if minChallenge < core.ChannelMinChallengeDuration {
 		return fmt.Errorf(
@@ -158,6 +172,9 @@ func InitBackbone() *Backbone {
 	}
 	if err := validateChannelChallengeConfig(conf.ChannelMinChallengeDuration, conf.ChannelMaxChallengeDuration); err != nil {
 		logger.Fatal("invalid channel challenge duration config", "error", err)
+	}
+	if err := validateBlockchainGasLimit(conf.BlockchainGasLimit); err != nil {
+		logger.Fatal("invalid blockchain gas limit config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)

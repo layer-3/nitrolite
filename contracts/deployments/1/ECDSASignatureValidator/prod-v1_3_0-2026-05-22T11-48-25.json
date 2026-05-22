@@ -1,0 +1,11 @@
+{
+  "deployer": "0xe6521da9b54740e5fe9e002eb7bbf86d5698e581",
+  "deployedTo": "0x98de11a97fdc08d057fc9ab310864655c49bbf8e",
+  "transactionHash": "0xca8853654985715283a8faa4a6b71d1c8de4eb078b8f2b910cf29918c66da30c",
+  "commit": "e07ad9c2",
+  "timestamp": 1779450505,
+  "chainId": 1,
+  "contractPath": "ECDSASignatureValidator",
+  "constructorArgs": [],
+  "comment": "prod v1.3.0"
+}

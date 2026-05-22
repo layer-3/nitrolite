@@ -1,0 +1,11 @@
+{
+  "deployer": "0xe6521da9b54740e5fe9e002eb7bbf86d5698e581",
+  "deployedTo": "0xdca4ab495188b545cfa919c0cb0a7e2280f2f407",
+  "transactionHash": "0xdd4ea848360946f4a0699a2bbc85fc1886164f6de8d213cfecc818934e653772",
+  "commit": "e07ad9c2",
+  "timestamp": 1779452671,
+  "chainId": 14,
+  "contractPath": "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine",
+  "constructorArgs": [],
+  "comment": "prod v1.3.0"
+}

@@ -23,6 +23,20 @@ func (ch ClientBalanceCheck) apply(c *BlockchainClient) {
 	c.requireCheckBalance = ch.RequireBalanceCheck
 }
 
+// ClientGasLimit forces a fixed GasLimit on every transaction sent through the
+// client, bypassing eth_estimateGas. Set to 0 to keep the default behavior
+// (estimate per tx). Useful for chains whose RPC rejects estimateGas — e.g.
+// XRPL EVM testnet returns "gas cap cannot be lower than 21000".
+type ClientGasLimit struct {
+	GasLimit uint64
+}
+
+func (g ClientGasLimit) apply(c *BlockchainClient) {
+	if g.GasLimit > 0 {
+		c.transactOpts.GasLimit = g.GasLimit
+	}
+}
+
 type ClientFeeCheck struct {
 	RequirePositiveNativeBalance bool
 }

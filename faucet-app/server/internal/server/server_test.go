@@ -14,25 +14,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
 )
 
 // mockNitronodeClient is a simple in-memory mock implementing NitronodeClient.
 type mockNitronodeClient struct {
-	ownerAddress       string
-	connErr            error
-	operationalErr     error
-	transferResult     *nitronode.TransferResult
-	transferErr        error
-	capturedDest       string
-	capturedAsset      string
-	capturedAmount     decimal.Decimal
+	ownerAddress   string
+	connErr        error
+	operationalErr error
+	transferResult *nitronode.TransferResult
+	transferErr    error
+	capturedDest   string
+	capturedAsset  string
+	capturedAmount decimal.Decimal
 }
 
-func (m *mockNitronodeClient) GetOwnerAddress() string { return m.ownerAddress }
-func (m *mockNitronodeClient) EnsureConnected() error  { return m.connErr }
+func (m *mockNitronodeClient) GetOwnerAddress() string  { return m.ownerAddress }
+func (m *mockNitronodeClient) EnsureConnected() error   { return m.connErr }
 func (m *mockNitronodeClient) EnsureOperational() error { return m.operationalErr }
 func (m *mockNitronodeClient) Transfer(dest, asset string, amount decimal.Decimal) (*nitronode.TransferResult, error) {
 	m.capturedDest = dest
@@ -205,7 +205,7 @@ func TestRateLimiting(t *testing.T) {
 
 		testAddress := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
 		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		// First request — should succeed
 		req1 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))
@@ -234,7 +234,7 @@ func TestRateLimiting(t *testing.T) {
 
 		testAddress := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
 		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		// First request fails at transfer but still consumes the rate-limit slot.
 		req1 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body))

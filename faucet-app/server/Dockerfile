@@ -1,33 +1,31 @@
-# Build stage
 FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy go mod and sum files
+# Copy root module files first (the replace directive in faucet-app/server points here)
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Copy faucet-app/server module files and pre-download dependencies
+COPY faucet-app/server/go.mod faucet-app/server/go.sum ./faucet-app/server/
+RUN cd faucet-app/server && go mod download
 
-# Copy source code
+# Copy full source tree so the replace directive can resolve
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o faucet-server main.go
+# Build the faucet server binary
+RUN cd faucet-app/server && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/bin/faucet-server .
 
-# Production stage
 FROM alpine:3.23.3
 
-# Install ca-certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+RUN addgroup -g 1001 -S faucet
+RUN adduser -S faucet -u 1001 -G faucet
 
-# Copy the binary from builder stage
-COPY --from=builder /app/faucet-server .
+USER faucet
 
-# Expose port
+COPY --from=builder /build/bin/faucet-server /bin/faucet-server
+
 EXPOSE 8080
 
-# Run the binary
-CMD ["./faucet-server"]
+CMD ["faucet-server"]

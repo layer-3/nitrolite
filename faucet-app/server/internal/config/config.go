@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -15,9 +16,9 @@ import (
 type Config struct {
 	ServerPort string `env:"SERVER_PORT" env-default:"8080" env-description:"HTTP server port"`
 
-	OwnerPrivateKey  string `env:"OWNER_PRIVATE_KEY" env-required:"true" env-description:"Private key for faucet owner wallet (without 0x prefix)"`
-	NitronodeURL     string `env:"NITRONODE_URL" env-required:"true" env-description:"Nitronode WebSocket URL"`
-	TokenSymbol      string `env:"TOKEN_SYMBOL" env-required:"true" env-description:"Token symbol to distribute (e.g., usdc, weth)"`
+	OwnerPrivateKey   string `env:"OWNER_PRIVATE_KEY" env-required:"true" env-description:"Private key for faucet owner wallet (without 0x prefix)"`
+	NitronodeURL      string `env:"NITRONODE_URL" env-required:"true" env-description:"Nitronode WebSocket URL"`
+	TokenSymbol       string `env:"TOKEN_SYMBOL" env-required:"true" env-description:"Token symbol to distribute (e.g., usdc, weth)"`
 	StandardTipAmount string `env:"STANDARD_TIP_AMOUNT" env-required:"true" env-description:"Default amount to send per request"`
 	MinTransferCount  int    `env:"MIN_TRANSFER_COUNT" env-required:"true" env-description:"Number of transfers a server should have a balance for to operate"`
 	CooldownPeriod    string `env:"COOLDOWN_PERIOD" env-required:"true" env-description:"Cooldown between requests per wallet/IP (e.g. 24h, 1h30m)"`
@@ -81,9 +82,16 @@ func (c *Config) Validate() error {
 
 	if c.TrustedProxies != "" {
 		for _, p := range strings.Split(c.TrustedProxies, ",") {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				c.TrustedProxyList = append(c.TrustedProxyList, trimmed)
+			trimmed := strings.TrimSpace(p)
+			if trimmed == "" {
+				continue
 			}
+			if net.ParseIP(trimmed) == nil {
+				if _, _, err := net.ParseCIDR(trimmed); err != nil {
+					return fmt.Errorf("TRUSTED_PROXIES contains invalid IP or CIDR %q: %w", trimmed, err)
+				}
+			}
+			c.TrustedProxyList = append(c.TrustedProxyList, trimmed)
 		}
 	}
 

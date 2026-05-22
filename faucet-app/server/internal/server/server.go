@@ -8,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
-	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
+	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
 )
 
 // NitronodeClient is the interface the server uses to interact with Nitronode.

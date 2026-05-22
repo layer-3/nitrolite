@@ -1,0 +1,19 @@
+{
+  "deployer": "0xbab179854bA39cfcFb2D1D98a05fCFA113CF4ac1",
+  "deployedTo": "0x14F57E02E914951D760902C3B48164FdEF24C3Ab",
+  "transactionHash": "0x094e13abf00058cdbfc4492c8b5d405c87eadf98fe22e202bb5593e47e243c02",
+  "commit": "df26599fb62923d2bc79178f7c3750be3b612b75",
+  "timestamp": 1779368846,
+  "chainId": 11155111,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0xa6BdaF7a0076d269a9B0AB8A06fE2AB2fdA5ea2B",
+    "0xc76632d91d45ec88304ab2a983451d9edf908c0d"
+  ],
+  "libraries": {
+    "src/ChannelEngine.sol:ChannelEngine": "0x89b81857a46cf290f23f6ff9b24e1031aad65204",
+    "src/EscrowDepositEngine.sol:EscrowDepositEngine": "0xdccc09e335b87fb506c40a972e76fc7a225e0bf9",
+    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine": "0xdca4ab495188b545cfa919c0cb0a7e2280f2f407"
+  },
+  "comment": "sandbox v1.3.0"
+}

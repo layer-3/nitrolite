@@ -38,6 +38,7 @@ type Backbone struct {
 	ChannelMaxChallengeDuration uint32
 	AppRegistryEnabled          bool
 	BlockchainRPCs              map[uint64]string
+	BlockchainGasLimit          uint64
 	ValidationLimits            ValidationLimits
 	RateLimitPerSec             float64
 	RateLimitBurst              float64
@@ -88,6 +89,10 @@ type FullConfig struct {
 	WsBytesPerSec float64 `yaml:"ws_bytes_per_sec" env:"NITRONODE_WS_BYTES_PER_SEC" env-default:"262144"`
 	// WsBytesBurst is the burst capacity of the per-connection byte bucket.
 	WsBytesBurst float64 `yaml:"ws_bytes_burst" env:"NITRONODE_WS_BYTES_BURST" env-default:"1048576"`
+	// BlockchainGasLimit forces a fixed GasLimit on every blockchain transaction,
+	// bypassing eth_estimateGas. 0 = use estimate (default). Set when an RPC
+	// rejects estimateGas — e.g. XRPL EVM testnet ("gas cap cannot be lower than 21000").
+	BlockchainGasLimit uint64 `yaml:"blockchain_gas_limit" env:"NITRONODE_BLOCKCHAIN_GAS_LIMIT" env-default:"0"`
 }
 
 type SignerConfig struct {
@@ -104,6 +109,20 @@ type ValidationLimits struct {
 	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
 	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
+}
+
+// intrinsicTxGas is the minimum gas required for any Ethereum transaction.
+const intrinsicTxGas = 21000
+
+func validateBlockchainGasLimit(gasLimit uint64) error {
+	if gasLimit > 0 && gasLimit < intrinsicTxGas {
+		return fmt.Errorf(
+			"NITRONODE_BLOCKCHAIN_GAS_LIMIT must be 0 (auto-estimate) or >= %d, got %d",
+			intrinsicTxGas,
+			gasLimit,
+		)
+	}
+	return nil
 }
 
 func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
@@ -153,6 +172,9 @@ func InitBackbone() *Backbone {
 	}
 	if err := validateChannelChallengeConfig(conf.ChannelMinChallengeDuration, conf.ChannelMaxChallengeDuration); err != nil {
 		logger.Fatal("invalid channel challenge duration config", "error", err)
+	}
+	if err := validateBlockchainGasLimit(conf.BlockchainGasLimit); err != nil {
+		logger.Fatal("invalid blockchain gas limit config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)
@@ -302,6 +324,7 @@ func InitBackbone() *Backbone {
 		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
 		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
+		BlockchainGasLimit:          conf.BlockchainGasLimit,
 		ValidationLimits:            conf.ValidationLimits,
 		RateLimitPerSec:             conf.RateLimitPerSec,
 		RateLimitBurst:              conf.RateLimitBurst,

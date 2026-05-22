@@ -10,5 +10,10 @@
     "0x708B3CA8b7Dc0f89Ea5a06709C3b92Dd5843B662",
     "0x2B6dc5BB33F3eaAbfd3A8d17fDb7BdB8fEf331f9"
   ],
+  "libraries": {
+    "src/ChannelEngine.sol:ChannelEngine": "0x89b81857a46cf290f23f6ff9b24e1031aad65204",
+    "src/EscrowDepositEngine.sol:EscrowDepositEngine": "0xdccc09e335b87fb506c40a972e76fc7a225e0bf9",
+    "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine": "0xdca4ab495188b545cfa919c0cb0a7e2280f2f407"
+  },
   "comment": "stress v1.3.0 with VALIDATOR_ACTIVATION_DELAY = 1 minute"
 }

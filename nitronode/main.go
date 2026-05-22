@@ -103,6 +103,7 @@ func main() {
 			clientOpts := []evm.ClientOption{
 				evm.ClientBalanceCheck{RequireBalanceCheck: false},
 				evm.ClientAllowanceCheck{RequireAllowanceCheck: false},
+				evm.ClientGasLimit{GasLimit: bb.BlockchainGasLimit},
 			}
 
 			blockchainClient, err := evm.NewBlockchainClient(common.HexToAddress(b.ChannelHubAddress), client, bb.TxSigner, b.ID, nodeAddress, bb.MemoryStore, clientOpts...)
@@ -276,15 +277,15 @@ func runRegisterValidators() {
 		logger.Fatal("failed to load blockchains", "error", err)
 	}
 
-	var signerConf SignerConfig
-	if err := cleanenv.ReadEnv(&signerConf); err != nil {
-		logger.Fatal("failed to read signer configuration from env", "error", err)
+	var conf FullConfig
+	if err := cleanenv.ReadEnv(&conf); err != nil {
+		logger.Fatal("failed to read configuration from env", "error", err)
 	}
 	signer, close := initSigner(
 		logger,
-		signerConf.Type,
-		signerConf.Key,
-		signerConf.GCPKMSKeyName)
+		conf.Signer.Type,
+		conf.Signer.Key,
+		conf.Signer.GCPKMSKeyName)
 	defer close()
 
 	blockchainRPCs := initBlockchainRPCs(logger, memoryStore)
@@ -313,6 +314,7 @@ func runRegisterValidators() {
 		clientOpts := []evm.ClientOption{
 			evm.ClientBalanceCheck{RequireBalanceCheck: false},
 			evm.ClientAllowanceCheck{RequireAllowanceCheck: false},
+			evm.ClientGasLimit{GasLimit: conf.BlockchainGasLimit},
 		}
 
 		blockchainClient, err := evm.NewBlockchainClient(common.HexToAddress(b.ChannelHubAddress), client, signer, b.ID, nodeAddress, memoryStore, clientOpts...)

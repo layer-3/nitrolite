@@ -9,6 +9,27 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 )
 
+func TestValidateBlockchainGasLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		gasLimit uint64
+		wantErr  bool
+	}{
+		{"zero auto-estimate", 0, false},
+		{"below intrinsic", 20999, true},
+		{"exactly intrinsic", 21000, false},
+		{"typical block limit", 30_000_000, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBlockchainGasLimit(tt.gasLimit)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateBlockchainGasLimit(%d) error = %v, wantErr %v", tt.gasLimit, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCheckChannelHubVersion_Manual(t *testing.T) {
 	t.Skip("Manual test - uncomment test cases and set values before running")
 

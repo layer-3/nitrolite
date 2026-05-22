@@ -37,7 +37,6 @@ contract DepositToNode is Script {
      */
     function run(address hub, address token, uint256 amount) external {
         require(hub != address(0), "hub=0");
-        require(token != address(0), "token=0");
         require(amount > 0, "amount=0");
 
         console.log("=== DepositToNode ===");
@@ -45,6 +44,13 @@ contract DepositToNode is Script {
         console.log("Hub:    ", hub);
         console.log("Token:  ", token);
         console.log("Amount: ", amount);
+
+        if (token == address(0)) {
+            vm.broadcast();
+            // For ETH deposits, the amount is sent as msg.value and no approval is needed
+            IChannelHub(hub).depositToNode{value: amount}(token, amount);
+            return;
+        }
 
         vm.startBroadcast();
         // forceApprove handles non-standard tokens (e.g. USDT) that don't return bool

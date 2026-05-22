@@ -1,0 +1,11 @@
+{
+  "deployer": "0xbab179854ba39cfcfb2d1d98a05fcfa113cf4ac1",
+  "deployedTo": "0xdca4ab495188b545cfa919c0cb0a7e2280f2f407",
+  "transactionHash": "0x81b8e83810f5c33fb9224e184defbae5197f688eb95124bff530f020af1f4c98",
+  "commit": "5922d170",
+  "timestamp": 1779355867,
+  "chainId": 80002,
+  "contractPath": "src/EscrowWithdrawalEngine.sol:EscrowWithdrawalEngine",
+  "constructorArgs": [],
+  "comment": "sandbox v1.3.0"
+}

@@ -153,13 +153,21 @@ while read -r chain; do
       token=$(echo "$entry" | jq -r '.address')
       human_amount=$(echo "$entry" | jq -r '.amount')
 
-      # Fetch token decimals from chain and compute raw on-chain amount
-      decimals=$(cast call "$token" "decimals()(uint8)" --rpc-url "$rpc" 2>/dev/null)
-      if [[ -z "$decimals" ]]; then
-        echo "!!! FAILED: [chain=$chain_id] could not fetch decimals() for $token"
-        fail=$((fail + 1))
-        fail_tokens="$fail_tokens $token"
-        continue
+      # Fetch token decimals from chain and compute raw on-chain amount.
+      # Native token (zero address): skip decimals() call and hard-code 18. The vast
+      # majority of EVM-compatible networks use 18 decimals for their native asset.
+      # If a chain uses fewer, the tx will most likely fail due to insufficient funds
+      # before any harm is done.
+      if [[ "$token" == "0x0000000000000000000000000000000000000000" ]]; then
+        decimals=18
+      else
+        decimals=$(cast call "$token" "decimals()(uint8)" --rpc-url "$rpc" 2>/dev/null)
+        if [[ -z "$decimals" ]]; then
+          echo "!!! FAILED: [chain=$chain_id] could not fetch decimals() for $token"
+          fail=$((fail + 1))
+          fail_tokens="$fail_tokens $token"
+          continue
+        fi
       fi
       raw_amount=$(python3 - "$human_amount" "$decimals" <<'PY'
 from decimal import Decimal, InvalidOperation

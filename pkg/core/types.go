@@ -175,44 +175,61 @@ func NewVoidState(asset, userWallet string) *State {
 	}
 }
 
-// NewChallengeRescueState constructs a fully-formed ChallengeRescue state derived from
-// prev — the user's last known state for the asset whose home channel is being closed
-// after a challenge. The rescue state opens a fresh epoch at version 0 with no home
-// channel and no token/blockchain context (the closed channel is gone); it credits the
-// user the rescued amount as a standalone ledger entry referencing the closed channel
-// (taken from prev.HomeChannelID) via the transition's AccountID. The rescue state is
-// meant to be stored unsigned, like a credit to a user with no open home channel.
+// NewChallengeRescueState constructs a ChallengeRescue state crediting amount to the
+// user against closedChannelID. Placement depends on prev:
 //
-// Version 0 matches the NextState() post-final convention: any in-protocol fresh-epoch
-// state starts at version 0. Callers must guarantee no other (epoch+1, version=0) row
-// already exists for this (wallet, asset) — for the rescue path this is enforced by
-// only invoking it on non-Finalize challenge closes (see HandleHomeChannelClosed).
+//   - prev is in-channel (HomeChannelID != nil): the rescue opens a fresh epoch at
+//     (prev.Epoch+1, version=0) with a clean ledger seeded by amount. Used when no
+//     node-signed Finalize exists locally for the closed channel — the user's chain
+//     has not been advanced past prev yet.
 //
-// Not a general-purpose constructor: the sole authorized callsite is
-// EventHandlerService.issueChallengeRescue, which gates invocation on
-// HasSignedFinalize=false. Adding a second callsite without an equivalent guard will
-// cause StoreUserState to fail with a deterministic GetStateID collision against an
-// existing (epoch+1, version=0) row.
-func NewChallengeRescueState(prev State, amount decimal.Decimal) (*State, error) {
-	if prev.HomeChannelID == nil {
-		return nil, fmt.Errorf("prev state has no home channel ID")
+//   - prev is detached (HomeChannelID == nil): the rescue appends at (prev.Epoch,
+//     prev.Version+1), inheriting prev's ledger and adding amount on top. Used after
+//     a path-1 timeout close when a node-signed Finalize is on file: the sign-time
+//     NextState() has already advanced the user to a fresh epoch and post-Finalize
+//     receiver credits may already live there. Placing rescue at v=0 would collide
+//     on deterministic state ID; appending after the detached tip avoids that.
+//
+// closedChannelID is the on-chain channel whose close triggers the rescue. It is
+// recorded as the rescue's transition AccountID so the credit is traceable back to
+// the settlement.
+func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.Decimal) (*State, error) {
+	if closedChannelID == "" {
+		return nil, fmt.Errorf("closed channel ID is empty")
 	}
 	if amount.IsNegative() {
 		return nil, fmt.Errorf("challenge rescue amount must be non-negative")
 	}
 
-	closedChannelID := *prev.HomeChannelID
-	rescue := &State{
-		Asset:      prev.Asset,
-		UserWallet: prev.UserWallet,
-		Epoch:      prev.Epoch + 1,
-		Version:    0,
-		HomeLedger: Ledger{
-			UserBalance: amount,
-			UserNetFlow: decimal.Zero,
-			NodeBalance: decimal.Zero,
-			NodeNetFlow: amount,
-		},
+	var rescue *State
+	if prev.HomeChannelID == nil {
+		// Detached tip: append at (prev.Epoch, prev.Version+1), carry ledger forward.
+		rescue = &State{
+			Asset:      prev.Asset,
+			UserWallet: prev.UserWallet,
+			Epoch:      prev.Epoch,
+			Version:    prev.Version + 1,
+			HomeLedger: Ledger{
+				UserBalance: prev.HomeLedger.UserBalance.Add(amount),
+				UserNetFlow: prev.HomeLedger.UserNetFlow,
+				NodeBalance: prev.HomeLedger.NodeBalance,
+				NodeNetFlow: prev.HomeLedger.NodeNetFlow.Add(amount),
+			},
+		}
+	} else {
+		// In-channel prev: wrap to a fresh epoch with a clean ledger seeded by amount.
+		rescue = &State{
+			Asset:      prev.Asset,
+			UserWallet: prev.UserWallet,
+			Epoch:      prev.Epoch + 1,
+			Version:    0,
+			HomeLedger: Ledger{
+				UserBalance: amount,
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: amount,
+			},
+		}
 	}
 	rescue.ID = GetStateID(rescue.UserWallet, rescue.Asset, rescue.Epoch, rescue.Version)
 

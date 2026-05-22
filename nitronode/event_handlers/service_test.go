@@ -1611,9 +1611,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
-	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
-	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion, prevState.Epoch).Return(rescueAmount, nil)
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(rescueAmount, nil)
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(prevState, nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1713,9 +1712,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
-	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
-	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion, prevState.Epoch).Return(decimal.Zero, nil)
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(decimal.Zero, nil)
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(prevState, nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1792,9 +1790,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NegativeNet_ClampsToZero(t *tes
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
-	mockStore.On("GetLastStateByChannelID", channelID, false).Return(prevState, nil)
-	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion, prevState.Epoch).Return(decimal.NewFromInt(-49), nil)
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(decimal.NewFromInt(-49), nil)
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(prevState, nil)
 
 	var capturedState core.State
 	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
@@ -1816,15 +1813,18 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NegativeNet_ClampsToZero(t *tes
 	mockStore.AssertExpectations(t)
 }
 
-// TestHandleHomeChannelClosed_PostFinalize_SkipsRescue pins behavior for the
-// cooperative-close-racing-an-onchain-challenge path: the node has already signed a
-// Finalize state for this channel, and post-Finalize receiver credits live in a fresh
-// epoch via NextState() with HomeChannelID=nil. Issuing a rescue at (epoch+1, version=0)
-// in that case would either overwrite a lone receiver credit (silent balance loss) or
-// collide on deterministic state ID with an existing row (StoreUserState fails and rolls
-// back the close, leaving the channel stuck Challenged). The handler must short-circuit
-// the rescue branch entirely when HasSignedFinalize reports true.
-func TestHandleHomeChannelClosed_PostFinalize_SkipsRescue(t *testing.T) {
+// TestHandleHomeChannelClosed_TimeoutAfterFinalize_AppendsRescue pins the path-1
+// timeout close arriving after a node-signed Finalize already advanced the user's
+// chain. The chain settled at a version Y strictly below the Finalize version F:
+// the user's true off-chain claim was userAlloc(F), but on-chain only userAlloc(Y)
+// was paid. The shortfall is the net of receiver/sender transitions in (Y, F].
+//
+// At sign time, NextState() created a detached fresh-epoch chain at (E+1, v=0..M)
+// holding post-Finalize receiver credits with HomeChannelID nil. Placing the rescue
+// at (E+1, v=0) would collide on deterministic state ID with the first detached
+// row. The handler instead appends after the detached tip at (E+1, M+1),
+// inheriting the tip's ledger and adding the shortfall on top.
+func TestHandleHomeChannelClosed_TimeoutAfterFinalize_AppendsRescue(t *testing.T) {
 	mockStore := new(MockStore)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
@@ -1833,7 +1833,9 @@ func TestHandleHomeChannelClosed_PostFinalize_SkipsRescue(t *testing.T) {
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
 	asset := "USDC"
-	closureVersion := uint64(7)
+	closureVersion := uint64(5) // Y; Finalize was at a higher version F.
+	rescueAmount := decimal.NewFromInt(80)
+	priorDetachedBalance := decimal.NewFromInt(20)
 	expiryTime := time.Now().Add(time.Hour)
 
 	channel := &core.Channel{
@@ -1842,8 +1844,24 @@ func TestHandleHomeChannelClosed_PostFinalize_SkipsRescue(t *testing.T) {
 		Asset:              asset,
 		Type:               core.ChannelTypeHome,
 		Status:             core.ChannelStatusChallenged,
-		StateVersion:       5,
+		StateVersion:       4,
 		ChallengeExpiresAt: &expiryTime,
+	}
+
+	// Detached tip: post-Finalize receiver at (E+1, v=3) with HomeChannelID nil.
+	detachedTip := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 2, 3),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         2,
+		Version:       3,
+		HomeChannelID: nil,
+		HomeLedger: core.Ledger{
+			UserBalance: priorDetachedBalance,
+			UserNetFlow: decimal.Zero,
+			NodeBalance: decimal.Zero,
+			NodeNetFlow: priorDetachedBalance,
+		},
 	}
 
 	event := &core.HomeChannelClosedEvent{
@@ -1860,128 +1878,41 @@ func TestHandleHomeChannelClosed_PostFinalize_SkipsRescue(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(true, nil)
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(rescueAmount, nil)
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(detachedTip, nil)
+
+	var capturedState core.State
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		capturedState = state
+		return true
+	}), "").Return(nil)
+	var capturedTx core.Transaction
+	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		capturedTx = tx
+		return true
+	}), "").Return(nil)
 
 	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
 	require.NoError(t, err)
 
-	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
-}
+	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
+	require.Equal(t, channelID, capturedState.Transition.AccountID)
+	require.True(t, rescueAmount.Equal(capturedState.Transition.Amount))
+	require.Nil(t, capturedState.HomeChannelID, "rescue stays off-channel")
 
-// TestHandleHomeChannelClosed_PostFinalize_CollisionRegression documents the exact
-// failure modes the guard prevents. Two post-Finalize receiver credits already exist on
-// the user's ledger at (epoch+1, version=0) and (epoch+1, version=1) — produced by the
-// normal NextState() path off the Finalize state with HomeChannelID=nil. Without the
-// guard the handler would:
-//   - call GetLastStateByChannelID(channelID), which only matches channel-attached
-//     rows and therefore returns the Finalize state at the original epoch,
-//   - call SumNetTransitionAmountAfterVersion(channelID, ...), which filters by
-//     home_channel_id and returns zero (post-Finalize credits have HomeChannelID=nil),
-//   - construct a rescue state at (Finalize.Epoch+1, version=0) with amount=0,
-//   - StoreUserState on that ID, which collides deterministically with the existing
-//     (epoch+1, version=0) row via GetStateID(wallet, asset, epoch, version) and
-//     rolls the transaction back, stranding the channel in Challenged.
-//
-// With the guard, HasSignedFinalize=true short-circuits the entire branch before any
-// of those DB calls fire. The mock asserts none of them are reached.
-//
-// Intentional twin of TestHandleHomeChannelClosed_PostFinalize_SkipsRescue: setup and
-// AssertNotCalled set are identical at the mock level; this case exists to document the
-// specific collision failure modes the guard prevents. Do not collapse the two.
-func TestHandleHomeChannelClosed_PostFinalize_CollisionRegression(t *testing.T) {
-	mockStore := new(MockStore)
-	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	// Append at (detachedTip.Epoch, detachedTip.Version+1), inheriting prior balance.
+	require.Equal(t, detachedTip.Epoch, capturedState.Epoch)
+	require.Equal(t, detachedTip.Version+1, capturedState.Version)
+	require.True(t, priorDetachedBalance.Add(rescueAmount).Equal(capturedState.HomeLedger.UserBalance),
+		"want %s, got %s", priorDetachedBalance.Add(rescueAmount).String(), capturedState.HomeLedger.UserBalance.String())
+	require.True(t, priorDetachedBalance.Add(rescueAmount).Equal(capturedState.HomeLedger.NodeNetFlow))
 
-	service, _ := newTestEventHandlerService(t)
-
-	channelID := "0xHomeChannelCollision"
-	userWallet := "0x1234567890123456789012345678901234567890"
-	asset := "USDC"
-	closureVersion := uint64(10)
-	expiryTime := time.Now().Add(time.Hour)
-
-	channel := &core.Channel{
-		ChannelID:          channelID,
-		UserWallet:         userWallet,
-		Asset:              asset,
-		Type:               core.ChannelTypeHome,
-		Status:             core.ChannelStatusChallenged,
-		StateVersion:       9,
-		ChallengeExpiresAt: &expiryTime,
-	}
-
-	event := &core.HomeChannelClosedEvent{
-		ChannelID:    channelID,
-		StateVersion: closureVersion,
-	}
-
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
-		return ch.Status == core.ChannelStatusClosed &&
-			ch.StateVersion == closureVersion &&
-			ch.ChallengeExpiresAt == nil
-	})).Return(nil)
-	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
-	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(true, nil)
-
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
-	require.NoError(t, err, "post-Finalize close must succeed; rescue branch must be skipped")
+	require.Equal(t, core.TransactionTypeChallengeRescue, capturedTx.TxType)
+	require.Equal(t, channelID, capturedTx.FromAccount)
+	require.Equal(t, userWallet, capturedTx.ToAccount)
+	require.True(t, rescueAmount.Equal(capturedTx.Amount))
 
 	mockStore.AssertExpectations(t)
-	// The collision-class operations must not be invoked once the guard fires.
-	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
-}
-
-// TestHandleHomeChannelClosed_PostFinalize_HasSignedFinalizeErr ensures errors from the
-// HasSignedFinalize lookup are surfaced rather than silently dropping the rescue guard.
-func TestHandleHomeChannelClosed_PostFinalize_HasSignedFinalizeErr(t *testing.T) {
-	mockStore := new(MockStore)
-	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
-
-	service, _ := newTestEventHandlerService(t)
-
-	channelID := "0xHomeChannel123"
-	userWallet := "0x1234567890123456789012345678901234567890"
-	asset := "USDC"
-	closureVersion := uint64(7)
-
-	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusChallenged,
-		StateVersion: 5,
-	}
-
-	event := &core.HomeChannelClosedEvent{
-		ChannelID:    channelID,
-		StateVersion: closureVersion,
-	}
-
-	dbErr := errors.New("db down")
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
-	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
-	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
-	mockStore.On("HasSignedFinalize", channelID).Return(false, dbErr)
-
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
-	require.ErrorIs(t, err, dbErr)
-
-	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 }
 
 // TestHandleHomeChannelClosed_OpenChannel_NoRescue pins behavior for the normal
@@ -2022,7 +1953,7 @@ func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 	require.NoError(t, err)
 
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }

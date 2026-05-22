@@ -215,11 +215,11 @@ func TestNewChallengeRescueState(t *testing.T) {
 		}
 	}
 
-	t.Run("Success - opens fresh epoch at version 0 with no channel context", func(t *testing.T) {
+	t.Run("Success - in-channel prev wraps to fresh epoch at version 0", func(t *testing.T) {
 		prev := makePrev()
 		amount := decimal.NewFromInt(42)
 
-		rescue, err := NewChallengeRescueState(prev, amount)
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, amount)
 		require.NoError(t, err)
 		require.NotNil(t, rescue)
 
@@ -244,9 +244,44 @@ func TestNewChallengeRescueState(t *testing.T) {
 		assert.Equal(t, expectedTxID, rescue.Transition.TxID)
 	})
 
+	t.Run("Success - detached prev appends at next version inheriting ledger", func(t *testing.T) {
+		// Simulates path-1 timeout after a signed Finalize: user's chain already advanced
+		// via NextState() to a fresh epoch with post-Finalize receiver credits at v=0..M.
+		prev := State{
+			Asset:         "USDC",
+			UserWallet:    "0xUser",
+			Epoch:         4,
+			Version:       2,
+			HomeChannelID: nil,
+			HomeLedger: Ledger{
+				UserBalance: decimal.NewFromInt(10),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.NewFromInt(10),
+			},
+		}
+		amount := decimal.NewFromInt(42)
+
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, amount)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+
+		assert.Equal(t, prev.Epoch, rescue.Epoch)
+		assert.Equal(t, prev.Version+1, rescue.Version)
+		assert.Nil(t, rescue.HomeChannelID)
+		assert.True(t, decimal.NewFromInt(52).Equal(rescue.HomeLedger.UserBalance), "got %s", rescue.HomeLedger.UserBalance.String())
+		assert.True(t, decimal.NewFromInt(52).Equal(rescue.HomeLedger.NodeNetFlow), "got %s", rescue.HomeLedger.NodeNetFlow.String())
+		assert.True(t, rescue.HomeLedger.UserNetFlow.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeBalance.IsZero())
+
+		assert.Equal(t, TransitionTypeChallengeRescue, rescue.Transition.Type)
+		assert.Equal(t, closedChannelID, rescue.Transition.AccountID)
+		assert.True(t, amount.Equal(rescue.Transition.Amount))
+	})
+
 	t.Run("Accepts zero amount", func(t *testing.T) {
 		prev := makePrev()
-		rescue, err := NewChallengeRescueState(prev, decimal.Zero)
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, decimal.Zero)
 		require.NoError(t, err)
 		require.NotNil(t, rescue)
 		assert.True(t, rescue.Transition.Amount.IsZero())
@@ -256,14 +291,13 @@ func TestNewChallengeRescueState(t *testing.T) {
 
 	t.Run("Rejects negative amount", func(t *testing.T) {
 		prev := makePrev()
-		_, err := NewChallengeRescueState(prev, decimal.NewFromInt(-1))
+		_, err := NewChallengeRescueState(prev, closedChannelID, decimal.NewFromInt(-1))
 		require.Error(t, err)
 	})
 
-	t.Run("Rejects prev state without home channel", func(t *testing.T) {
+	t.Run("Rejects empty closed channel ID", func(t *testing.T) {
 		prev := makePrev()
-		prev.HomeChannelID = nil
-		_, err := NewChallengeRescueState(prev, decimal.NewFromInt(1))
+		_, err := NewChallengeRescueState(prev, "", decimal.NewFromInt(1))
 		require.Error(t, err)
 	})
 }

@@ -21,6 +21,16 @@ func (m *MockStore) GetLastStateByChannelID(channelID string, signed bool) (*cor
 	return args.Get(0).(*core.State), args.Error(1)
 }
 
+// GetLastUserState mocks retrieving the most recent state for a user's asset across
+// all channels and detached chain entries.
+func (m *MockStore) GetLastUserState(wallet, asset string, signed bool) (*core.State, error) {
+	args := m.Called(wallet, asset, signed)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.State), args.Error(1)
+}
+
 // GetStateByChannelIDAndVersion mocks retrieving a specific state version for a channel
 func (m *MockStore) GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error) {
 	args := m.Called(channelID, version)
@@ -102,8 +112,8 @@ func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, u
 
 // SumNetTransitionAmountAfterVersion mocks the net-change query used to compute
 // challenge-rescue amounts on a closed channel.
-func (m *MockStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
-	args := m.Called(channelID, minVersion, epoch)
+func (m *MockStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 

@@ -24,4 +24,3 @@ blockchains:
   channel_hub_address: "0x14F57E02E914951D760902C3B48164FdEF24C3Ab"
   channel_hub_sig_validators:
     1: "0xC4C419e0a8D11BF007C7126dbbce6F633a0363D6"
-  locking_contract_address: "0x9B3D4dA5A37857F17648CC4d78Bbae0A681C02c6"

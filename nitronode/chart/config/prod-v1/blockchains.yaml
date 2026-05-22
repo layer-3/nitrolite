@@ -1,40 +1,40 @@
 blockchains:
-- name: "ethereum-mainnet"
+- name: "ethereum"
   id: 1
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "flare-mainnet"
+- name: "flare"
   id: 14
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "bnb-mainnet"
+- name: "bsc"
   id: 56
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "polygon-mainnet"
+- name: "polygon"
   id: 137
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "world-chain-mainnet"
+- name: "world_chain"
   id: 480
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "base-mainnet"
+- name: "base"
   id: 8453
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "linea-mainnet"
+- name: "linea"
   id: 59144
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
-- name: "xrpl-evm-mainnet"
+- name: "xrpl_evm"
   id: 1440000
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:

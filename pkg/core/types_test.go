@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -464,6 +465,34 @@ func TestLedger_Equal_Validate(t *testing.T) {
 	lInvalid = l1
 	lInvalid.UserNetFlow = decimal.NewFromInt(999) // Mismatch
 	assert.Error(t, lInvalid.Validate(6))
+
+	// Each net-flow field fits int256, but their sum does not. Solidity computes
+	// `userNetFlow + nodeNetFlow` as int256, so an unchecked sum overflow would
+	// produce a state the contract panics on.
+	lSumOverflow := Ledger{
+		TokenAddress: "0xT",
+		BlockchainID: 1,
+		UserBalance:  decimal.NewFromBigInt(maxInt256, 0),
+		NodeBalance:  decimal.NewFromInt(1),
+		UserNetFlow:  decimal.NewFromBigInt(maxInt256, 0),
+		NodeNetFlow:  decimal.NewFromInt(1),
+	}
+	err := lSumOverflow.Validate(0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "net flow sum out of int256 range")
+
+	// Sum exactly at the int256 boundary must pass.
+	halfMax := new(big.Int).Rsh(maxInt256, 1) // (2^255-1)/2
+	otherHalf := new(big.Int).Sub(maxInt256, halfMax)
+	lBoundary := Ledger{
+		TokenAddress: "0xT",
+		BlockchainID: 1,
+		UserBalance:  decimal.NewFromBigInt(halfMax, 0),
+		NodeBalance:  decimal.NewFromBigInt(otherHalf, 0),
+		UserNetFlow:  decimal.NewFromBigInt(halfMax, 0),
+		NodeNetFlow:  decimal.NewFromBigInt(otherHalf, 0),
+	}
+	assert.NoError(t, lBoundary.Validate(0))
 }
 
 func TestTransactionType_String(t *testing.T) {

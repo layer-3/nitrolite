@@ -686,6 +686,17 @@ func (l Ledger) Validate(assetDecimals uint8) error {
 		return fmt.Errorf("node net flow out of int256 range: %w", err)
 	}
 
+	// Solidity computes `userAllocation + nodeAllocation` as uint256 and
+	// `userNetFlow + nodeNetFlow` as int256. Individually-valid scaled values
+	// can still overflow these aggregates, producing a state the contract will
+	// reject.
+	if _, err := DecimalToUint256(sumBalances, assetDecimals); err != nil {
+		return fmt.Errorf("allocation sum out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(sumNetFlows, assetDecimals); err != nil {
+		return fmt.Errorf("net flow sum out of int256 range: %w", err)
+	}
+
 	return nil
 }
 

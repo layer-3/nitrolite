@@ -112,11 +112,11 @@ type DatabaseStore interface {
 
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
-	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
-	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
-	// Other transition kinds are excluded. Used to compute the ChallengeRescue amount
-	// when a challenged channel is closed.
-	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
+	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
+	// sender debits (TransferSend, Commit) contribute negatively. Other transition
+	// kinds are excluded. Used to compute the ChallengeRescue amount when a
+	// challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
 
 	// --- Blockchain Action Operations ---
 

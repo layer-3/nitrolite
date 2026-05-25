@@ -33,6 +33,10 @@ type ChannelHubReactorStore interface {
 	// Returns nil if no matching state exists.
 	GetLastStateByChannelID(channelID string, signed bool) (*core.State, error)
 
+	// GetLastUserState retrieves the most recent state for a user's asset across all
+	// channels and detached chain entries. Returns nil if no matching state exists.
+	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
+
 	// GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
 	// Returns nil if the state with the specified version does not exist.
 	GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error)
@@ -89,9 +93,9 @@ type ChannelHubReactorStore interface {
 
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
-	// minVersion at the supplied epoch. Receiver credits (TransferReceive, Release)
-	// contribute positively; sender debits (TransferSend, Commit) contribute negatively.
-	SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error)
+	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
+	// sender debits (TransferSend, Commit) contribute negatively.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
 
 	// StoreUserState persists a user state row. Used to record a ChallengeRescue squash
 	// state derived from a closed challenged channel.

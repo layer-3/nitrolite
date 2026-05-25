@@ -2,18 +2,15 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
-# Copy root module files first (the replace directive in faucet-app/server points here)
+# Copy root module files and pre-download dependencies
 COPY go.mod go.sum ./
+RUN go mod download
 
-# Copy faucet-app/server module files and pre-download dependencies
-COPY faucet-app/server/go.mod faucet-app/server/go.sum ./faucet-app/server/
-RUN cd faucet-app/server && go mod download
-
-# Copy full source tree so the replace directive can resolve
+# Copy full source tree
 COPY . .
 
 # Build the faucet server binary
-RUN cd faucet-app/server && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/bin/faucet-server .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /build/bin/faucet-server ./faucet-app/server
 
 FROM alpine:3.23.3
 

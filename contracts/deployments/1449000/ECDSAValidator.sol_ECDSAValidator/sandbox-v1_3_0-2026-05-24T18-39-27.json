@@ -1,0 +1,11 @@
+{
+  "deployer": "0x3c0563d7a197037d1bc599ae6ab8892438f16353",
+  "deployedTo": "0xb1cdea413a080b3c6eb3d37e1c24d8cd10ce5844",
+  "transactionHash": "0x1d4eed14867460fc5680093662a6525c6762d9f9c7d690fc26980a43fdaff9e8",
+  "commit": "b88d511c",
+  "timestamp": 1779647967,
+  "chainId": 1449000,
+  "contractPath": "src/sigValidators/ECDSAValidator.sol:ECDSAValidator",
+  "constructorArgs": [],
+  "comment": "sandbox v1.3.0"
+}

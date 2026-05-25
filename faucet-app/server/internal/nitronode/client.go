@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/sign"
 	sdk "github.com/layer-3/nitrolite/sdk/go"
 	"github.com/shopspring/decimal"
-
-	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 )
 
 const (
@@ -39,6 +38,7 @@ type Client struct {
 	reconnectMu sync.Mutex // serialises reconnect attempts; not held during I/O
 	tokenMu     sync.Mutex // serialises GetAssets; prevents N goroutines racing to validate
 
+	logger           log.Logger
 	ownerAddress     string
 	tokenSymbol      string
 	tipAmount        decimal.Decimal
@@ -49,7 +49,7 @@ type Client struct {
 // NewClient creates a Client that wraps the Nitrolite SDK for faucet operations.
 // privateKeyHex drives both message signing and tx signing. nitronodeURL is the
 // WebSocket endpoint. The client is immediately connected and ready to use.
-func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decimal.Decimal, minTransferCount int) (*Client, error) {
+func NewClient(logger log.Logger, privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decimal.Decimal, minTransferCount int) (*Client, error) {
 	// Parse signers once — raw key hex is used here and not retained on the struct.
 	msgSigner, err := sign.NewEthereumMsgSigner(privateKeyHex)
 	if err != nil {
@@ -71,7 +71,7 @@ func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decima
 		cl, err := sdk.NewClient(nitronodeURL, stateSigner, txSigner,
 			sdk.WithApplicationID("faucet"),
 			sdk.WithErrorHandler(func(err error) {
-				logger.Errorf("Nitronode connection error: %v", err)
+				logger.Error("nitronode connection error", "error", err)
 			}),
 		)
 		if err != nil {
@@ -88,6 +88,7 @@ func NewClient(privateKeyHex, nitronodeURL, tokenSymbol string, tipAmount decima
 	return &Client{
 		sdkClient:        sdkClient,
 		newSDKClient:     factory,
+		logger:           logger,
 		ownerAddress:     sdkClient.GetUserAddress(), // immutable: all factory clients share the same signer
 		tokenSymbol:      tokenSymbol,
 		tipAmount:        tipAmount,
@@ -143,12 +144,12 @@ func (c *Client) reconnect() error {
 	var lastErr error
 
 	for attempt := 1; attempt <= reconnectAttempts; attempt++ {
-		logger.Infof("Reconnecting to Nitronode (attempt %d/%d)...", attempt, reconnectAttempts)
+		c.logger.Info("reconnecting to nitronode", "attempt", attempt, "max", reconnectAttempts)
 
 		newClient, err := c.newSDKClient()
 		if err != nil {
 			lastErr = err
-			logger.Warnf("Reconnect attempt %d/%d failed: %v", attempt, reconnectAttempts, err)
+			c.logger.Warn("reconnect attempt failed", "attempt", attempt, "max", reconnectAttempts, "error", err)
 		} else {
 			// Ping without holding any lock.
 			ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
@@ -165,16 +166,16 @@ func (c *Client) reconnect() error {
 
 				// Close old client outside the lock.
 				if err := old.Close(); err != nil {
-					logger.Errorf("Error closing stale Nitronode client: %v", err)
+					c.logger.Error("error closing stale nitronode client", "error", err)
 				}
-				logger.Infof("Successfully reconnected to Nitronode on attempt %d", attempt)
+				c.logger.Info("reconnected to nitronode", "attempt", attempt)
 				return nil
 			}
 
 			lastErr = fmt.Errorf("ping failed: %w", pingErr)
-			logger.Warnf("Reconnect attempt %d/%d ping failed: %v", attempt, reconnectAttempts, pingErr)
+			c.logger.Warn("reconnect ping failed", "attempt", attempt, "max", reconnectAttempts, "error", pingErr)
 			if err := newClient.Close(); err != nil {
-				logger.Warnf("Error closing failed reconnect client: %v", err)
+				c.logger.Warn("error closing failed reconnect client", "error", err)
 			}
 		}
 
@@ -233,7 +234,7 @@ func (c *Client) validateTokenSupport(tokenSymbol string) error {
 
 	for _, asset := range assets {
 		if strings.EqualFold(asset.Symbol, tokenSymbol) {
-			logger.Debugf("Token '%s' is supported by Nitronode", tokenSymbol)
+			c.logger.Debug("token supported by nitronode", "token", tokenSymbol)
 			c.mu.Lock()
 			if c.sdkClient == cl { // guard against reconnect between fetch and write
 				c.tokenSupported = true
@@ -269,10 +270,16 @@ func (c *Client) validateFaucetBalance(tokenSymbol string, tipAmount decimal.Dec
 				return fmt.Errorf("insufficient %s balance: %s (required: %s for %d transfers)",
 					tokenSymbol, balance.Balance.String(), minRequired.String(), minTransferCount)
 			}
-			logger.Infof("✓ Sufficient %s balance: %s", tokenSymbol, balance.Balance.String())
+			c.logger.Info("sufficient balance",
+				"token", tokenSymbol,
+				"balance", balance.Balance.String(),
+			)
 			if balance.Enforced.IsPositive() && balance.Enforced.LessThan(balance.Balance) {
-				logger.Warnf("⚠ %s enforced balance (%s) is below channel balance (%s); consider checkpointing",
-					tokenSymbol, balance.Enforced.String(), balance.Balance.String())
+				c.logger.Warn("enforced balance below channel balance; consider checkpointing",
+					"token", tokenSymbol,
+					"enforced", balance.Enforced.String(),
+					"channel", balance.Balance.String(),
+				)
 			}
 			return nil
 		}

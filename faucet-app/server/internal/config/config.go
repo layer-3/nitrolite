@@ -10,6 +10,8 @@ import (
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/shopspring/decimal"
+
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // Config holds all runtime configuration for the faucet server.
@@ -24,7 +26,8 @@ type Config struct {
 	CooldownPeriod    string `env:"COOLDOWN_PERIOD" env-default:"24h" env-description:"Cooldown between requests per wallet/IP (e.g. 24h, 1h30m)"`
 	TrustedProxies    string `env:"TRUSTED_PROXIES" env-default:"" env-description:"Comma-separated trusted proxy IPs; empty means direct exposure only"`
 
-	LogLevel string `env:"LOG_LEVEL" env-default:"info" env-description:"Logging level (debug, info, warn, error)"`
+	// Log carries LOG_LEVEL / LOG_FORMAT / LOG_OUTPUT (see pkg/log).
+	Log log.Config
 
 	// Parsed values (set after loading)
 	StandardTipAmountDecimal decimal.Decimal

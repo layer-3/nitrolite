@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -15,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
-	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // mockNitronodeClient is a simple in-memory mock implementing NitronodeClient.
@@ -51,7 +50,7 @@ func defaultConfig() *config.Config {
 		StandardTipAmountDecimal: decimal.RequireFromString("10"),
 		CooldownPeriod:           "24h",
 		CooldownPeriodDuration:   24 * time.Hour,
-		LogLevel:                 "debug",
+		Log:                      log.Config{Level: log.LevelDebug},
 	}
 }
 
@@ -66,16 +65,9 @@ func defaultMock() *mockNitronodeClient {
 	}
 }
 
-func TestMain(m *testing.M) {
-	if err := logger.Initialize("debug"); err != nil {
-		panic(err)
-	}
-	os.Exit(m.Run())
-}
-
 func TestRequestTokens_Success(t *testing.T) {
 	mock := defaultMock()
-	srv := NewServer(defaultConfig(), mock)
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), mock)
 
 	testAddress := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
 	body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
@@ -104,7 +96,7 @@ func TestRequestTokens_Success(t *testing.T) {
 }
 
 func TestRequestTokens_InvalidAddress(t *testing.T) {
-	srv := NewServer(defaultConfig(), defaultMock())
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), defaultMock())
 
 	body, err := json.Marshal(FaucetRequest{UserAddress: "not-an-address"})
 	require.NoError(t, err)
@@ -121,7 +113,7 @@ func TestRequestTokens_InvalidAddress(t *testing.T) {
 }
 
 func TestRequestTokens_MissingField(t *testing.T) {
-	srv := NewServer(defaultConfig(), defaultMock())
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), defaultMock())
 
 	body, err := json.Marshal(map[string]string{"wrongField": "0x1234"})
 	require.NoError(t, err)
@@ -140,7 +132,7 @@ func TestRequestTokens_MissingField(t *testing.T) {
 func TestRequestTokens_ConnectionFailure(t *testing.T) {
 	mock := defaultMock()
 	mock.connErr = assert.AnError
-	srv := NewServer(defaultConfig(), mock)
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), mock)
 
 	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
 	require.NoError(t, err)
@@ -159,7 +151,7 @@ func TestRequestTokens_ConnectionFailure(t *testing.T) {
 func TestRequestTokens_OperationalFailure(t *testing.T) {
 	mock := defaultMock()
 	mock.operationalErr = assert.AnError
-	srv := NewServer(defaultConfig(), mock)
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), mock)
 
 	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
 	require.NoError(t, err)
@@ -179,7 +171,7 @@ func TestRequestTokens_TransferFailure(t *testing.T) {
 	mock := defaultMock()
 	mock.transferResult = nil
 	mock.transferErr = assert.AnError
-	srv := NewServer(defaultConfig(), mock)
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), mock)
 
 	body, err := json.Marshal(FaucetRequest{UserAddress: "0x742d35Cc6634C0532925a3b8c17d18fBE3b78890"})
 	require.NoError(t, err)
@@ -201,7 +193,7 @@ func TestRateLimiting(t *testing.T) {
 
 	t.Run("second request from same wallet is rejected", func(t *testing.T) {
 		mock := defaultMock()
-		srv := NewServer(cfg, mock)
+		srv := NewServer(log.NewNoopLogger(), cfg, mock)
 
 		testAddress := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
 		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
@@ -230,7 +222,7 @@ func TestRateLimiting(t *testing.T) {
 		mock := defaultMock()
 		mock.transferResult = nil
 		mock.transferErr = assert.AnError
-		srv := NewServer(cfg, mock)
+		srv := NewServer(log.NewNoopLogger(), cfg, mock)
 
 		testAddress := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
 		body, err := json.Marshal(FaucetRequest{UserAddress: testAddress})
@@ -253,7 +245,7 @@ func TestRateLimiting(t *testing.T) {
 
 	t.Run("different wallets from different IPs are not rate limited by each other", func(t *testing.T) {
 		mock := defaultMock()
-		srv := NewServer(cfg, mock)
+		srv := NewServer(log.NewNoopLogger(), cfg, mock)
 
 		addr1 := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
 		addr2 := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
@@ -278,7 +270,7 @@ func TestRateLimiting(t *testing.T) {
 
 	t.Run("same IP with different wallet is still rate limited", func(t *testing.T) {
 		mock := defaultMock()
-		srv := NewServer(cfg, mock)
+		srv := NewServer(log.NewNoopLogger(), cfg, mock)
 
 		addr1 := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
 		addr2 := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
@@ -303,7 +295,7 @@ func TestRateLimiting(t *testing.T) {
 
 func TestInfoEndpoint(t *testing.T) {
 	mock := defaultMock()
-	srv := NewServer(defaultConfig(), mock)
+	srv := NewServer(log.NewNoopLogger(), defaultConfig(), mock)
 
 	req := httptest.NewRequest("GET", "/info", nil)
 	w := httptest.NewRecorder()

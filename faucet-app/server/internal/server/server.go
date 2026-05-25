@@ -9,8 +9,8 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/config"
-	"github.com/layer-3/nitrolite/faucet-app/server/internal/logger"
 	"github.com/layer-3/nitrolite/faucet-app/server/internal/nitronode"
+	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // NitronodeClient is the interface the server uses to interact with Nitronode.
@@ -33,6 +33,7 @@ const (
 )
 
 type Server struct {
+	logger          log.Logger
 	config          *config.Config
 	nitronodeClient NitronodeClient
 	router          *gin.Engine
@@ -56,8 +57,8 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func NewServer(cfg *config.Config, client NitronodeClient) *Server {
-	if cfg.LogLevel == "debug" {
+func NewServer(logger log.Logger, cfg *config.Config, client NitronodeClient) *Server {
+	if cfg.Log.Level == log.LevelDebug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -75,10 +76,11 @@ func NewServer(cfg *config.Config, client NitronodeClient) *Server {
 
 	// Add middleware
 	router.Use(gin.Recovery())
-	router.Use(requestLogger())
+	router.Use(requestLogger(logger))
 	router.Use(corsMiddleware())
 
 	server := &Server{
+		logger:          logger,
 		config:          cfg,
 		nitronodeClient: client,
 		router:          router,
@@ -108,7 +110,7 @@ func (s *Server) getInfo(c *gin.Context) {
 func (s *Server) requestTokens(c *gin.Context) {
 	var req FaucetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Warnf("Invalid request format: %v", err)
+		s.logger.Warn("invalid request format", "error", err)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrInvalidRequestFormat,
 		})
@@ -118,7 +120,7 @@ func (s *Server) requestTokens(c *gin.Context) {
 	// Validate the user address
 	userAddress := strings.TrimSpace(req.UserAddress)
 	if !common.IsHexAddress(userAddress) {
-		logger.Warnf("Invalid address format: %s", userAddress)
+		s.logger.Warn("invalid address format", "address", userAddress)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrInvalidAddressFormat,
 		})
@@ -134,19 +136,19 @@ func (s *Server) requestTokens(c *gin.Context) {
 	clientIP := c.ClientIP()
 	if allowed, blocked := s.rateLimiter.checkAndRecordBoth(userAddress, clientIP); !allowed {
 		if blocked == "address" {
-			logger.Warnf("Rate limit exceeded for address %s", userAddress)
+			s.logger.Warn("rate limit exceeded", "key", "address", "address", userAddress)
 		} else {
-			logger.Warnf("Rate limit exceeded for IP %s (address: %s)", clientIP, userAddress)
+			s.logger.Warn("rate limit exceeded", "key", "ip", "ip", clientIP, "address", userAddress)
 		}
 		c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: ErrRateLimitExceeded})
 		return
 	}
 
-	logger.Infof("Processing faucet request for address: %s", userAddress)
+	s.logger.Info("processing faucet request", "address", userAddress)
 
 	// Ensure client is connected
 	if err := s.nitronodeClient.EnsureConnected(); err != nil {
-		logger.Errorf("Connection failed for %s: %v", userAddress, err)
+		s.logger.Error("connection failed", "address", userAddress, "error", err)
 		c.JSON(http.StatusServiceUnavailable, ErrorResponse{
 			Error: ErrNitronodeConnectionFailed,
 		})
@@ -155,7 +157,7 @@ func (s *Server) requestTokens(c *gin.Context) {
 
 	// Ensure client is operational
 	if err := s.nitronodeClient.EnsureOperational(); err != nil {
-		logger.Errorf("Service not operational for %s: %v", userAddress, err)
+		s.logger.Error("service not operational", "address", userAddress, "error", err)
 		c.JSON(http.StatusServiceUnavailable, ErrorResponse{
 			Error: ErrServiceUnavailable,
 		})
@@ -169,14 +171,14 @@ func (s *Server) requestTokens(c *gin.Context) {
 		s.config.StandardTipAmountDecimal,
 	)
 	if err != nil {
-		logger.Errorf("Transfer failed for %s: %v", userAddress, err)
+		s.logger.Error("transfer failed", "address", userAddress, "error", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrTransferFailed,
 		})
 		return
 	}
 	if result == nil {
-		logger.Errorf("Transfer returned nil result for %s", userAddress)
+		s.logger.Error("transfer returned nil result", "address", userAddress)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrTransferFailed,
 		})
@@ -187,8 +189,12 @@ func (s *Server) requestTokens(c *gin.Context) {
 	amount := result.Amount
 	asset := result.Asset
 
-	logger.Infof("Successfully sent %s %s to %s (txID: %s)",
-		amount, asset, userAddress, txID)
+	s.logger.Info("transfer successful",
+		"address", userAddress,
+		"amount", amount,
+		"asset", asset,
+		"txID", txID,
+	)
 
 	c.JSON(http.StatusOK, FaucetResponse{
 		Success:     true,
@@ -202,19 +208,25 @@ func (s *Server) requestTokens(c *gin.Context) {
 
 func (s *Server) Start() error {
 	addr := ":" + s.config.ServerPort
-	logger.Infof("Starting HTTP server on port %s", s.config.ServerPort)
+	s.logger.Info("starting HTTP server", "port", s.config.ServerPort)
 	return s.router.Run(addr)
 }
 
 // Middleware functions
 
-func requestLogger() gin.HandlerFunc {
+func requestLogger(logger log.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Log request
-		logger.Debugf("%s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
+		logger.Debug("request",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"client_ip", c.ClientIP(),
+		)
 		c.Next()
-		// Log response status
-		logger.Debugf("%s %s - %d", c.Request.Method, c.Request.URL.Path, c.Writer.Status())
+		logger.Debug("response",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"status", c.Writer.Status(),
+		)
 	}
 }
 

@@ -6,7 +6,9 @@ config:
   # /bin/faucet-server (see Dockerfile CMD); the chart only needs to override
   # this when running with extra flags.
   args: ["faucet-server"]
-  # -- Log level (info, debug, warn, error)
+  # -- pkg/log level (debug, info, warn, error, fatal). LOG_FORMAT / LOG_OUTPUT
+  # are not surfaced as chart values; pkg/log defaults to console + stderr,
+  # matching the nitronode chart. Override via config.extraEnvs if needed.
   logLevel: info
   # -- Nitronode WebSocket URL
   nitronodeWsUrl: "ws://nitronode.example.svc.cluster.local:7824/ws"

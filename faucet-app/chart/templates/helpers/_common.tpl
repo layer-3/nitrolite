@@ -68,7 +68,7 @@ Returns common environment variables
 */}}
 {{- define "faucet-app.common.env" -}}
 - name: LOG_LEVEL
-  value: {{ .Values.config.logLevel }}
+  value: {{ .Values.config.logLevel | quote }}
 - name: SERVER_PORT
   value: {{ .Values.service.http.internalPort | default "8080" | print | quote }}
 - name: NITRONODE_URL

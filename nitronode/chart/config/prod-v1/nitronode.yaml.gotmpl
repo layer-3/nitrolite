@@ -1,4 +1,4 @@
-{{- $profile := "tiny" -}}
+{{- $profile := "medium" -}}
 {{- $p := index .Values.profiles $profile -}}
 config:
   args: ["nitronode"]
@@ -7,8 +7,8 @@ config:
     driver: postgres
     host: pgbouncer
     port: 5432
-    name: nitronode_stress_v1
-    user: nitronode_stress_v1_admin
+    name: nitronode_prod_v1
+    user: nitronode_prod_v1_admin
     # pgbouncer runs in-cluster on a private network, so TLS is not required
     # here. Override the chart's `require` default explicitly.
     sslmode: disable
@@ -19,7 +19,7 @@ config:
     NITRONODE_DATABASE_CONN_MAX_LIFETIME_SEC: "3600"
     NITRONODE_DATABASE_CONN_MAX_IDLE_TIME_SEC: "600"
     NITRONODE_SIGNER_TYPE: "gcp-kms"
-    NITRONODE_GCP_KMS_KEY_NAME: "projects/ynet-stage/locations/europe-central2/keyRings/clearnode-signers-eu/cryptoKeys/stress-v1-a/cryptoKeyVersions/1"
+    NITRONODE_GCP_KMS_KEY_NAME: "projects/ynet-stage/locations/europe-central2/keyRings/clearnode-signers-eu/cryptoKeys/prod-v1-a/cryptoKeyVersions/1"
     NITRONODE_MAX_PARTICIPANTS: "32"
     NITRONODE_MAX_SESSION_DATA_LEN: "1024"
     NITRONODE_MAX_SIGNED_UPDATES: "0"
@@ -45,7 +45,7 @@ service:
 serviceAccount:
   create: true
   annotations:
-    iam.gke.io/gcp-service-account: nitronode-stress-v1-agent@ynet-stage.iam.gserviceaccount.com
+    iam.gke.io/gcp-service-account: nitronode-prod-v1-agent@ynet-stage.iam.gserviceaccount.com
 
 metrics:
   enabled: true
@@ -62,7 +62,7 @@ autoscaling:
   enabled: false
 
 networking:
-  externalHostname: nitronode-stress.yellow.org
+  externalHostname: nitronode.yellow.org
   tlsClusterIssuer: zerossl-prod
   gateway:
     enabled: false
@@ -80,7 +80,7 @@ networking:
       # Caps abusive sources before WebSocket upgrade and JSON decode.
       # Effective only when ingress-nginx sees real client IPs — see chart
       # README "WebSocket DoS hardening" for required ConfigMap settings.
-      # stress-v1 has no Cloudflare in front; source IP comes from the GCP
+      # prod-v1 has no Cloudflare in front; source IP comes from the GCP
       # LB. Verify externalTrafficPolicy=Local on the ingress-nginx Service
       # before relying on per-IP limits.
       nginx.ingress.kubernetes.io/limit-connections: "50"        # concurrent / IP

@@ -312,30 +312,24 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // finalized and closed on-chain. It updates the channel status to Closed and sets the final state version.
 // Once closed, no further state updates are possible for this channel.
 //
-// Additionally, when the closing path was a challenge resolution (channel was Challenged
-// and no node-signed Finalize state exists for it), the handler issues a single
-// ChallengeRescue state for the user that squashes the sum of receiver-state credits
-// accrued during the challenge window into an off-channel ledger entry tied to the
-// closed channel's ID. When a node-signed Finalize already exists, the cooperative-close
-// path has already advanced the user to a fresh epoch via NextState(), and any receiver
-// credits accumulated post-Finalize live at (epoch+1, version=0..N) with HomeChannelID=nil
-// — issuing a rescue at (epoch+1, version=1) would either overwrite the lone receiver
-// credit or collide on deterministic state ID with an existing row, so the rescue is
-// skipped entirely in that case.
+// Additionally, when the channel was locally Challenged at the time of close, the handler
+// issues a ChallengeRescue state crediting the user the net receiver-minus-sender balance
+// accrued strictly above the closure version. The rescue runs unconditionally on the
+// Challenged → Closed transition: both path-1 (timeout on a stale candidate) and path-2
+// (cooperative close on a signed Finalize) routes pass through this branch, and the
+// constructor + prev source pick the correct placement for the rescue row.
 //
-// MF3-I01 recovery anchor. This handler is the single recovery point for the
-// wedge state described in audit finding MF3-I01: a receiver credit issued
-// during the challenge window inherits HomeChannelID from currentState via
-// NextState(), so the user's latest stored state can transiently point at a
-// channel that closes via Path-1 (challenge-timeout) before the next
-// receiver-credit issuance reads currentState again. The listener ordering &
-// idempotency invariant (pkg/blockchain/evm/listener.go, see processEvents
-// doc) guarantees HandleHomeChannelChallenged has already run for any Path-1
-// close, so wasChallenged is true here and the rescue moves the user to a
-// fresh epoch with HomeChannelID=nil. Subsequent receiver-credit issuance
-// reads the rescue row as currentState and no longer carries the closed
-// channel reference, so request_creation can reopen on the same (wallet,
-// asset) through the normal flow.
+// MF3-I01 recovery anchor. This handler is the single recovery point for the wedge
+// state described in audit finding MF3-I01: a receiver credit issued during the
+// challenge window inherits HomeChannelID from currentState via NextState(), so the
+// user's latest stored state can transiently point at a channel that closes via path-1
+// before the next receiver-credit issuance reads currentState again. The listener
+// ordering & idempotency invariant (pkg/blockchain/evm/listener.go, see processEvents
+// doc) guarantees HandleHomeChannelChallenged has already run for any path-1 close, so
+// wasChallenged is true here and the rescue advances the user past the closed channel.
+// Subsequent receiver-credit issuance reads the rescue row as currentState and no
+// longer carries the closed channel reference, so request_creation can reopen on the
+// same (wallet, asset) through the normal flow.
 func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
@@ -382,23 +376,8 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 	}
 
 	if wasChallenged {
-		// Post-Finalize cooperative close racing with an on-chain challenge: receiver
-		// credits issued after the Finalize live in a fresh epoch via NextState() and
-		// are not channel-attached, so the rescue path would either overwrite them or
-		// collide on deterministic state ID. Skip the rescue branch entirely.
-		finalized, err := tx.HasSignedFinalize(chanID)
-		if err != nil {
+		if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
 			return err
-		}
-		if finalized {
-			logger.Debug("skipping challenge_rescue for post-Finalize close",
-				"channelId", chanID,
-				"userWallet", channel.UserWallet,
-				"closureVersion", event.StateVersion)
-		} else {
-			if err := s.issueChallengeRescue(ctx, tx, channel, event.StateVersion); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -407,37 +386,37 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 }
 
 // issueChallengeRescue emits a ChallengeRescue state on the user's ledger after a
-// challenged-channel close. The state is issued unconditionally so the user's latest
-// stored state moves to a fresh epoch with HomeChannelID nil; without it future
-// receiver-state issuance and channels.v1.request_creation would stay wedged on the
-// closed channel. The rescue amount is the NET effect on the user's home-channel
-// balance of transitions stored strictly above closureVersion — receives
-// (TransferReceive, Release) credit the user, sends (TransferSend, Commit) debit,
-// everything else is excluded because it requires onchain backing the chain didn't
-// enforce or belongs to a different ledger. Signed (Open-time) and unsigned
-// (during-challenge) rows both contribute. The result is clamped at zero so an
-// adversarial close at a version where the user's own balance was higher than the
-// off-chain head can't dock the user further. AccountID is the closed channel's ID;
-// HomeChannelID is nil — the shape of a credit to a user with no open home channel.
+// challenged-channel close. The state advances the user's chain past the closed
+// channel so future receiver issuance and channels.v1.request_creation no longer
+// wedge on it.
+//
+// Amount: NET effect on the user's home-channel balance of transitions stored
+// strictly above closureVersion — receives (TransferReceive, Release) credit the
+// user, sends (TransferSend, Commit) debit; everything else is excluded because it
+// requires onchain backing the chain didn't enforce or belongs to a different
+// ledger. Signed (Open-time) and unsigned (during-challenge) rows both contribute.
+// Clamped at zero so an adversarial close at a version where the user's own balance
+// was higher than the off-chain head can't dock the user further.
+//
+// Placement: prev is the user's latest state (across both channel-attached and
+// detached rows). When prev is the in-channel head, the rescue wraps to a fresh
+// epoch at (E+1, 0). When prev is a detached tip — the case where a node-signed
+// Finalize already advanced the user via NextState() and post-Finalize receiver
+// credits live at (E+1, v=0..M) with HomeChannelID nil — the rescue appends at
+// (E+1, M+1), inheriting prev's ledger. NewChallengeRescueState picks the branch.
+//
+// AccountID on the rescue transition is the closed channel's ID; the rescue row
+// itself has HomeChannelID nil — the shape of a credit to a user with no open home
+// channel, to be folded into a signed state when the user next opens one.
 func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.ChannelHubEventHandlerStore, channel *core.Channel, closureVersion uint64) error {
 	logger := log.FromContext(ctx)
 
-	prev, err := tx.GetLastStateByChannelID(channel.ChannelID, false)
-	if err != nil {
-		return err
-	}
-	if prev == nil {
-		// Should not happen for a channel that reached Challenged → Closed: at least the
-		// closure state itself must be on file. Surface the inconsistency rather than
-		// silently dropping the rescue.
-		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
-	}
-
 	// Strict `>` against closureVersion: the row at the closure version itself is the
 	// closing state and must be excluded — only transitions issued strictly after the
-	// dispute version are unenforced. The epoch filter pins the sum to prev.Epoch (the
-	// closed channel's epoch) as a defense against any future DB inconsistency.
-	net, err := tx.SumNetTransitionAmountAfterVersion(channel.ChannelID, closureVersion, prev.Epoch)
+	// dispute version are unenforced. A channel's in-channel rows live at a single
+	// epoch; detached post-Finalize rows have HomeChannelID NULL and are already
+	// excluded by the channel_id predicate, so no epoch filter is needed.
+	net, err := tx.SumNetTransitionAmountAfterVersion(channel.ChannelID, closureVersion)
 	if err != nil {
 		return err
 	}
@@ -453,20 +432,26 @@ func (s *EventHandlerService) issueChallengeRescue(ctx context.Context, tx core.
 			"channelId", channel.ChannelID,
 			"netAmount", net.String(),
 			"closureVersion", closureVersion,
-			"prevVersion", prev.Version,
 		)
 		total = decimal.Zero
 	}
 
-	// Invariant: any row included in the sum sits strictly above closureVersion, so the
-	// channel's off-chain head must too. A non-zero net with prev at or below closure
-	// means the state chain disagrees with itself — surface it before issuing the rescue.
-	if !total.IsZero() && prev.Version <= closureVersion {
-		return fmt.Errorf("challenge_rescue: non-zero net (%s) but prev v=%d <= closure v=%d on channel %s",
-			total.String(), prev.Version, closureVersion, channel.ChannelID)
+	// prev is the user's latest state across both channel-attached and detached rows.
+	// When a node-signed Finalize already advanced the user via NextState() at sign
+	// time, prev is the detached tip and the rescue appends after it. Otherwise prev
+	// is the channel's own head and the rescue wraps to a fresh epoch.
+	prev, err := tx.GetLastUserState(channel.UserWallet, channel.Asset, false)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		// Should not happen for a channel that reached Challenged → Closed: at least the
+		// closure state itself must be on file. Surface the inconsistency rather than
+		// silently dropping the rescue.
+		return fmt.Errorf("no state found for closed challenged channel %s", channel.ChannelID)
 	}
 
-	rescue, err := core.NewChallengeRescueState(*prev, total)
+	rescue, err := core.NewChallengeRescueState(*prev, channel.ChannelID, total)
 	if err != nil {
 		return err
 	}

@@ -29,6 +29,14 @@ func (m *mockChannelHubStore) GetLastStateByChannelID(channelID string, signed b
 	return args.Get(0).(*core.State), args.Error(1)
 }
 
+func (m *mockChannelHubStore) GetLastUserState(wallet, asset string, signed bool) (*core.State, error) {
+	args := m.Called(wallet, asset, signed)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.State), args.Error(1)
+}
+
 func (m *mockChannelHubStore) GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error) {
 	args := m.Called(channelID, version)
 	if args.Get(0) == nil {
@@ -95,8 +103,8 @@ func (m *mockChannelHubStore) UpdateStateSigsIfMissing(channelID string, version
 	return args.Error(0)
 }
 
-func (m *mockChannelHubStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
-	args := m.Called(channelID, minVersion, epoch)
+func (m *mockChannelHubStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
+	args := m.Called(channelID, minVersion)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 

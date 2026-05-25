@@ -270,12 +270,12 @@ func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
 
 
 // SumNetTransitionAmountAfterVersion returns the net effect on the user's home-channel
-// balance of transitions stored against channelID strictly above minVersion at the
-// supplied epoch. Receiver credits (TransferReceive, Release) contribute positively;
-// sender debits (TransferSend, Commit) contribute negatively. Other transition kinds
-// (HomeDeposit, HomeWithdrawal, escrow ops, migrate, finalize, acknowledgement) are
-// excluded because they either require onchain backing the chain didn't enforce at
-// this closure or belong to a different ledger.
+// balance of transitions stored against channelID strictly above minVersion. Receiver
+// credits (TransferReceive, Release) contribute positively; sender debits
+// (TransferSend, Commit) contribute negatively. Other transition kinds (HomeDeposit,
+// HomeWithdrawal, escrow ops, migrate, finalize, acknowledgement) are excluded because
+// they either require onchain backing the chain didn't enforce at this closure or
+// belong to a different ledger.
 //
 // Used to compute the ChallengeRescue amount when a challenged channel is closed:
 // onchain payout reflects the closure version, anything strictly above didn't enforce,
@@ -283,7 +283,11 @@ func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
 // sends in that interval. Signed (Open-time) and unsigned (during-challenge) rows
 // both contribute — both are real value the state-advancer validated at submit time.
 // The caller clamps the result at zero before issuing the rescue.
-func (s *DBStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion, epoch uint64) (decimal.Decimal, error) {
+//
+// No epoch filter: a channel's in-channel rows live at a single epoch; detached
+// post-Finalize rows have home_channel_id NULL and are already excluded by the
+// channel_id predicate.
+func (s *DBStore) SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error) {
 	cid := strings.ToLower(channelID)
 	var row struct {
 		Net decimal.Decimal `gorm:"column:net"`
@@ -296,14 +300,13 @@ func (s *DBStore) SumNetTransitionAmountAfterVersion(channelID string, minVersio
 		END), 0) AS net
 		FROM channel_states
 		WHERE home_channel_id = ?
-			AND epoch = ?
 			AND version > ?
 	`,
 		uint8(core.TransitionTypeTransferReceive),
 		uint8(core.TransitionTypeRelease),
 		uint8(core.TransitionTypeTransferSend),
 		uint8(core.TransitionTypeCommit),
-		cid, epoch, minVersion,
+		cid, minVersion,
 	).Scan(&row).Error
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("failed to compute net transition amount: %w", err)

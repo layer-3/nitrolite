@@ -1103,7 +1103,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 
 		storeState(t, store, 1, 2, core.TransitionTypeTransferReceive, decimal.NewFromFloat(0.001), false)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromFloat(0.001).Equal(net), "want 0.001, got %s", net.String())
 	})
@@ -1123,7 +1123,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 4, core.TransitionTypeTransferSend, decimal.NewFromInt(1), true)
 		storeState(t, store, 1, 5, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(1).Equal(net), "want 1, got %s", net.String())
 	})
@@ -1142,7 +1142,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 3, core.TransitionTypeHomeDeposit, decimal.NewFromInt(300000), true)
 		storeState(t, store, 1, 4, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(1).Equal(net), "want 1, got %s", net.String())
 	})
@@ -1160,7 +1160,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 2, core.TransitionTypeTransferReceive, decimal.NewFromInt(1), true)
 		storeState(t, store, 1, 3, core.TransitionTypeTransferSend, decimal.NewFromInt(50), true)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 1)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(-49).Equal(net), "want -49, got %s", net.String())
 	})
@@ -1178,7 +1178,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 4, core.TransitionTypeCommit, decimal.NewFromInt(3), true)
 		storeState(t, store, 1, 5, core.TransitionTypeRelease, decimal.NewFromInt(1), false)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(3).Equal(net), "want 3, got %s", net.String())
 	})
@@ -1199,7 +1199,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 7, core.TransitionTypeMigrate, decimal.NewFromInt(5), true)
 		storeState(t, store, 1, 8, core.TransitionTypeFinalize, decimal.NewFromInt(0), true)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 2)
 		require.NoError(t, err)
 		assert.True(t, net.IsZero(), "want 0, got %s", net.String())
 	})
@@ -1210,7 +1210,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		store := NewDBStore(db)
 		setupChannel(t, store)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 0, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 0)
 		require.NoError(t, err)
 		assert.True(t, net.IsZero())
 	})
@@ -1226,25 +1226,9 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		storeState(t, store, 1, 6, core.TransitionTypeTransferReceive, decimal.NewFromInt(99), true)
 		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(3), false)
 
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 6, 1)
+		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 6)
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(3).Equal(net), "want 3, got %s", net.String())
-	})
-
-	t.Run("Excludes rows in other epochs", func(t *testing.T) {
-		db, cleanup := SetupTestDB(t)
-		defer cleanup()
-		store := NewDBStore(db)
-		setupChannel(t, store)
-
-		// Two rows above cutoff: one in epoch 1, one in epoch 2. Caller asks for epoch 1
-		// only; the epoch-2 row must be excluded even though every other predicate matches.
-		storeState(t, store, 1, 7, core.TransitionTypeTransferReceive, decimal.NewFromInt(30), false)
-		storeState(t, store, 2, 8, core.TransitionTypeTransferReceive, decimal.NewFromInt(999), false)
-
-		net, err := store.SumNetTransitionAmountAfterVersion(homeChannelID, 6, 1)
-		require.NoError(t, err)
-		assert.True(t, decimal.NewFromInt(30).Equal(net), "want 30, got %s", net.String())
 	})
 }
 

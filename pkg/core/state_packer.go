@@ -41,6 +41,14 @@ func (l contractLedger) Validate() error {
 	if err := checkInt256(l.NodeNetFlow); err != nil {
 		return fmt.Errorf("node net flow: %w", err)
 	}
+	allocSum := new(big.Int).Add(l.UserAllocation, l.NodeAllocation)
+	if err := checkUint256(allocSum); err != nil {
+		return fmt.Errorf("allocation sum: %w", err)
+	}
+	netFlowSum := new(big.Int).Add(l.UserNetFlow, l.NodeNetFlow)
+	if err := checkInt256(netFlowSum); err != nil {
+		return fmt.Errorf("net flow sum: %w", err)
+	}
 	return nil
 }
 

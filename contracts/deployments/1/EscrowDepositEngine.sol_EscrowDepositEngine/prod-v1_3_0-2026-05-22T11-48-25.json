@@ -1,0 +1,11 @@
+{
+  "deployer": "0xe6521da9b54740e5fe9e002eb7bbf86d5698e581",
+  "deployedTo": "0xdccc09e335b87fb506c40a972e76fc7a225e0bf9",
+  "transactionHash": "0x0b0f8b27f8ec602b78774f802237a332a2520c950fe5e530cccf385a36c5a47a",
+  "commit": "e07ad9c2",
+  "timestamp": 1779450505,
+  "chainId": 1,
+  "contractPath": "src/EscrowDepositEngine.sol:EscrowDepositEngine",
+  "constructorArgs": [],
+  "comment": "prod v1.3.0"
+}

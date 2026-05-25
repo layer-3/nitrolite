@@ -1,0 +1,11 @@
+{
+  "deployer": "0xe6521da9b54740e5fe9e002eb7bbf86d5698e581",
+  "deployedTo": "0x89b81857a46cf290f23f6ff9b24e1031aad65204",
+  "transactionHash": "0x0d88bafd5e5255886a9c1ec51f6d7229eab4a04a250843ecf817066096095c91",
+  "commit": "e07ad9c2",
+  "timestamp": 1779451180,
+  "chainId": 137,
+  "contractPath": "src/ChannelEngine.sol:ChannelEngine",
+  "constructorArgs": [],
+  "comment": "prod v1.3.0"
+}

@@ -1,0 +1,63 @@
+assets:
+# Alphabetically sorted by symbol (case insensitive)
+  - name: "Ether"
+    symbol: "eth"
+    decimals: 18
+    suggested_blockchain_id: 59144
+    tokens:
+      - blockchain_id: 59144
+        address: "0x0000000000000000000000000000000000000000"
+        decimals: 18
+  - name: "Flare XRP"
+    symbol: "fxrp"
+    decimals: 6
+    suggested_blockchain_id: 14
+    tokens:
+      - blockchain_id: 14
+        address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE"
+        decimals: 6
+  - name: "Tether USD"
+    symbol: "usdt"
+    decimals: 6
+    suggested_blockchain_id: 1
+    tokens:
+      - blockchain_id: 1
+        address: "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        decimals: 6
+      - blockchain_id: 14
+        address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
+        decimals: 6
+      - blockchain_id: 56
+        address: "0x55d398326f99059fF775485246999027B3197955"
+        decimals: 18
+      - blockchain_id: 137
+        address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+        decimals: 6
+      # - blockchain_id: 480
+      #   address: ""
+      #   decimals: 6
+      - blockchain_id: 8453
+        address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
+        decimals: 6
+      - blockchain_id: 59144
+        address: "0xA219439258ca9da29E9Cc4cE5596924745e12B93"
+        decimals: 6
+      # - blockchain_id: 1440000
+      #   address: ""
+      #   decimals: 6
+  - name: "XRP"
+    symbol: "xrp"
+    decimals: 18
+    suggested_blockchain_id: 1440000
+    tokens:
+      - blockchain_id: 1440000
+        address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+        decimals: 18
+  - name: "Yellow"
+    symbol: "yellow"
+    decimals: 18
+    suggested_blockchain_id: 1
+    tokens:
+      - blockchain_id: 1
+        address: "0x236eb848c95b231299b4aa9f56c73d6893462720"
+        decimals: 18

@@ -1915,6 +1915,119 @@ func TestHandleHomeChannelClosed_TimeoutAfterFinalize_AppendsRescue(t *testing.T
 	mockStore.AssertExpectations(t)
 }
 
+// TestHandleHomeChannelClosed_CooperativeCloseAfterChallenge_ZeroRescue pins the
+// cooperative-close-after-local-challenge race: the operator counter-submitted a
+// Finalize at version F while the channel was Challenged, the user then accepted
+// cooperative CLOSE at the same version F, and the close event arrives with
+// StateVersion == F. NextState() at sign time detached the post-Finalize chain at
+// (E+1, v=0..M) with HomeChannelID nil.
+//
+// SumNetTransitionAmountAfterVersion(channelID, F) must collapse to zero by the
+// SQL predicate, with no intent gate required:
+//   - In-channel rows live at versions <= F (closure version is the channel head).
+//   - Post-Finalize detached rows have home_channel_id NULL and are excluded by
+//     the channel_id equality predicate.
+//
+// The rescue must therefore emit a zero-amount state appended after the detached
+// tip at (E+1, M+1), inheriting the tip's ledger unchanged — chain still advances
+// so future receiver issuance and channels.v1.request_creation no longer wedge on
+// the closed channel, but no extra balance is credited beyond what the detached
+// chain already holds. This is the invariant that lets the unconditional rescue
+// branch be safe without forwarding finalState.intent through the reactor.
+func TestHandleHomeChannelClosed_CooperativeCloseAfterChallenge_ZeroRescue(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	closureVersion := uint64(7) // F: cooperative CLOSE settles at the Finalize version.
+	priorDetachedBalance := decimal.NewFromInt(40)
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       6,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	// Detached tip: post-Finalize receiver credits at (E+1, v=2) with HomeChannelID nil.
+	detachedTip := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 2, 2),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         2,
+		Version:       2,
+		HomeChannelID: nil,
+		HomeLedger: core.Ledger{
+			UserBalance: priorDetachedBalance,
+			UserNetFlow: decimal.Zero,
+			NodeBalance: decimal.Zero,
+			NodeNetFlow: priorDetachedBalance,
+		},
+	}
+
+	event := &core.HomeChannelClosedEvent{
+		ChannelID:    channelID,
+		StateVersion: closureVersion,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.Status == core.ChannelStatusClosed &&
+			ch.StateVersion == closureVersion &&
+			ch.ChallengeExpiresAt == nil
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
+	// Key invariant: the predicate collapses cooperative CLOSE to a zero net. In-channel
+	// rows are at versions <= F, detached rows are excluded by home_channel_id = ?.
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(decimal.Zero, nil)
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(detachedTip, nil)
+
+	var capturedState core.State
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		capturedState = state
+		return true
+	}), "").Return(nil)
+	var capturedTx core.Transaction
+	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		capturedTx = tx
+		return true
+	}), "").Return(nil)
+
+	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	require.NoError(t, err)
+
+	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
+	require.Equal(t, channelID, capturedState.Transition.AccountID)
+	require.True(t, capturedState.Transition.Amount.IsZero(),
+		"cooperative CLOSE after challenge must produce zero-amount rescue, got %s", capturedState.Transition.Amount.String())
+	require.Nil(t, capturedState.HomeChannelID, "rescue stays off-channel")
+
+	// Append after the detached tip: (E, M+1), inheriting the tip's ledger unchanged.
+	require.Equal(t, detachedTip.Epoch, capturedState.Epoch)
+	require.Equal(t, detachedTip.Version+1, capturedState.Version)
+	require.True(t, priorDetachedBalance.Equal(capturedState.HomeLedger.UserBalance),
+		"balance must be unchanged from detached tip, want %s, got %s",
+		priorDetachedBalance.String(), capturedState.HomeLedger.UserBalance.String())
+	require.True(t, priorDetachedBalance.Equal(capturedState.HomeLedger.NodeNetFlow))
+
+	require.Equal(t, core.TransactionTypeChallengeRescue, capturedTx.TxType)
+	require.Equal(t, channelID, capturedTx.FromAccount)
+	require.Equal(t, userWallet, capturedTx.ToAccount)
+	require.True(t, capturedTx.Amount.IsZero())
+
+	mockStore.AssertExpectations(t)
+}
+
 // TestHandleHomeChannelClosed_OpenChannel_NoRescue pins behavior for the normal
 // Open → Closed path: the channel was never Challenged before the close event, so the
 // rescue branch is short-circuited entirely. The unsigned-receiver-sum query, rescue

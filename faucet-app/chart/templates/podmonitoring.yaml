@@ -1,0 +1,16 @@
+{{- if and .Values.metrics.enabled .Values.metrics.podmonitoring.enabled }}
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: {{ include "faucet-app.common.fullname" . }}
+  labels:
+    {{- include "faucet-app.common.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "faucet-app.common.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: {{ .Values.metrics.port }}
+    path: {{ .Values.metrics.endpoint }}
+    interval: {{ .Values.metrics.scrapeInterval }}
+{{- end }}

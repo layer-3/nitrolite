@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "faucet-app.common.fullname" . }}
+  labels:
+    {{- include "faucet-app.common.labels" . | nindent 4 }}
+spec:
+  {{- include "faucet-app.component.replicaCount" . | nindent 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "faucet-app.common.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "faucet-app.component.metricsAnnotations" .Values.metrics | nindent 8 }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "faucet-app.common.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.serviceAccount }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+      containers:
+        - name: api
+          args: {{ .Values.config.args | toYaml | nindent 10 }}
+          image: {{ include "faucet-app.component.image" .Values.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            {{- include "faucet-app.common.env" . | nindent 12 }}
+          {{- if or .Values.config.secretEnvs .Values.config.envSecret }}
+          envFrom:
+            {{- if .Values.config.envSecret }}
+            - secretRef:
+                name: {{ .Values.config.envSecret }}
+            {{- end }}
+            {{- if .Values.config.secretEnvs }}
+            - secretRef:
+                name: {{ include "faucet-app.common.fullname" . }}-secret-env
+            {{- end }}
+          {{- end }}
+          {{- include "faucet-app.component.ports" .Values.service | nindent 10 }}
+          {{- include "faucet-app.component.resources" .Values.resources | nindent 10 }}
+          {{- include "faucet-app.component.probes" . | nindent 10 }}
+      {{- include "faucet-app.common.imagePullSecrets" . | nindent 6 }}
+      {{- include "faucet-app.common.nodeSelectorLabels" . | nindent 6 }}
+      {{- include "faucet-app.common.affinity" . | nindent 6 }}
+      {{- include "faucet-app.common.tolerations" . | nindent 6 }}

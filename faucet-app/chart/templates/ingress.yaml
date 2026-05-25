@@ -1,0 +1,17 @@
+{{- if and .Values.networking.ingress.enabled .Values.service.http.enabled }}
+apiVersion: {{ include "faucet-app.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ include "faucet-app.common.fullname" . }}
+  labels:
+    {{- include "faucet-app.common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "faucet-app.ingress.annotations" . | nindent 4 }}
+spec:
+  rules:
+    - host: {{ .Values.networking.externalHostname }}
+      http:
+        paths:
+          {{- include "faucet-app.ingress.httpPath" . | nindent 10 }}
+  {{- include "faucet-app.ingress.tls" . | nindent 2 }}
+{{- end }}

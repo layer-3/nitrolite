@@ -1,0 +1,51 @@
+config:
+  args: ["faucet-server"]
+  logLevel: info
+  # Faucet talks to the nitronode release in the same env, intra-cluster.
+  # Intra-cluster URL — bypasses nitronode ingress, so use the app's native /ws
+  # path (nitronode-internal listener). The /v1/ws prefix only exists on the
+  # public ingress, which rewrites it to /ws before forwarding.
+  nitronodeWsUrl: "ws://nitronode:7824/ws"
+  token:
+    symbol: yusd
+    tipAmount: 10
+  minTransferCount: 5
+  cooldownPeriod: 24h
+  trustedProxies: ""
+  envSecret: ""
+# ownerAddress: "0x5FF0Fdb7A3Cda14387d5ea5A550381d6114D1177"
+
+service:
+  http:
+    enabled: true
+    port: 8080
+    # External path. NGINX rewrite (below) strips the prefix so the app sees
+    # the original request path (e.g. /requestTokens).
+    path: /v1/faucet-app(/|$)(.*)
+
+metrics:
+  enabled: false
+
+replicaCount: 1
+resources:
+  requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+  limits:   { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+
+autoscaling:
+  enabled: false
+
+networking:
+  # Same host as nitronode-stress; routed by path. cert-manager reuses the
+  # TLS secret already provisioned by the nitronode ingress on this host.
+  externalHostname: nitronode-stress.yellow.org
+  tlsClusterIssuer: zerossl-prod
+  gateway:
+    enabled: false
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2

@@ -318,6 +318,18 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // Challenged → Closed transition: both path-1 (timeout on a stale candidate) and path-2
 // (cooperative close on a signed Finalize) routes pass through this branch, and the
 // constructor + prev source pick the correct placement for the rescue row.
+//
+// MF3-I01 recovery anchor. This handler is the single recovery point for the wedge
+// state described in audit finding MF3-I01: a receiver credit issued during the
+// challenge window inherits HomeChannelID from currentState via NextState(), so the
+// user's latest stored state can transiently point at a channel that closes via path-1
+// before the next receiver-credit issuance reads currentState again. The listener
+// ordering & idempotency invariant (pkg/blockchain/evm/listener.go, see processEvents
+// doc) guarantees HandleHomeChannelChallenged has already run for any path-1 close, so
+// wasChallenged is true here and the rescue advances the user past the closed channel.
+// Subsequent receiver-credit issuance reads the rescue row as currentState and no
+// longer carries the closed channel reference, so request_creation can reopen on the
+// same (wallet, asset) through the normal flow.
 func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID

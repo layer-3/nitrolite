@@ -123,6 +123,17 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 		// candidate (Challenged) or commit a credit that will never settle (Closed,
 		// Closing). The unsigned row is still persisted so the challenge-rescue
 		// squash at close can pick it up.
+		//
+		// MF3-I01: persisting an unsigned row whose HomeChannelID still references
+		// a now-Closed channel is safe under the listener ordering & idempotency
+		// invariant (pkg/blockchain/evm/listener.go, processEvents doc). For any
+		// Path-1 (challenge-timeout) close, HandleHomeChannelChallenged has
+		// already run before HandleHomeChannelClosed, so the rescue issued from
+		// HandleHomeChannelClosed has overwritten currentState with a fresh-epoch
+		// row whose HomeChannelID is nil, and the next call here reads that row
+		// rather than the wedge state. The unsigned credit issued here can only
+		// land on a Closed channel if it commits before the close handler runs
+		// — in which case the close handler's rescue sum picks it up.
 		_, channelStatus, err := tx.CheckActiveChannel(receiverWallet, senderState.Asset)
 		if err != nil {
 			return nil, rpc.Errorf("failed to check receiver active channel: %v", err)

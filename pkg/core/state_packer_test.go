@@ -205,3 +205,77 @@ func TestPackState_RejectsOutOfRangeValues(t *testing.T) {
 		assert.Contains(t, err.Error(), "int256")
 	})
 }
+
+// TestContractLedger_Validate covers the ABI-layer guard directly, bypassing
+// Ledger.Validate. Solidity computes `userAllocation + nodeAllocation` as
+// uint256 and `userNetFlow + nodeNetFlow` as int256; individually-valid scaled
+// values can still overflow these aggregates, so the packer's last-chance
+// check must reject them before signing.
+func TestContractLedger_Validate(t *testing.T) {
+	t.Parallel()
+
+	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+
+	t.Run("happy_path", func(t *testing.T) {
+		t.Parallel()
+		l := contractLedger{
+			UserAllocation: big.NewInt(10),
+			NodeAllocation: big.NewInt(20),
+			UserNetFlow:    big.NewInt(10),
+			NodeNetFlow:    big.NewInt(20),
+		}
+		assert.NoError(t, l.Validate())
+	})
+
+	t.Run("net_flow_sum_overflows_int256", func(t *testing.T) {
+		t.Parallel()
+		l := contractLedger{
+			UserAllocation: big.NewInt(0),
+			NodeAllocation: big.NewInt(0),
+			UserNetFlow:    new(big.Int).Set(maxInt256),
+			NodeNetFlow:    big.NewInt(1),
+		}
+		err := l.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "net flow sum")
+	})
+
+	t.Run("net_flow_sum_underflows_int256", func(t *testing.T) {
+		t.Parallel()
+		l := contractLedger{
+			UserAllocation: big.NewInt(0),
+			NodeAllocation: big.NewInt(0),
+			UserNetFlow:    new(big.Int).Set(minInt256),
+			NodeNetFlow:    big.NewInt(-1),
+		}
+		err := l.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "net flow sum")
+	})
+
+	t.Run("allocation_sum_overflows_uint256", func(t *testing.T) {
+		t.Parallel()
+		l := contractLedger{
+			UserAllocation: new(big.Int).Set(maxUint256),
+			NodeAllocation: big.NewInt(1),
+			UserNetFlow:    big.NewInt(0),
+			NodeNetFlow:    big.NewInt(0),
+		}
+		err := l.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "allocation sum")
+	})
+
+	t.Run("net_flow_sum_at_boundary", func(t *testing.T) {
+		t.Parallel()
+		half := new(big.Int).Rsh(maxInt256, 1)
+		other := new(big.Int).Sub(maxInt256, half)
+		l := contractLedger{
+			UserAllocation: big.NewInt(0),
+			NodeAllocation: big.NewInt(0),
+			UserNetFlow:    half,
+			NodeNetFlow:    other,
+		}
+		assert.NoError(t, l.Validate())
+	})
+}

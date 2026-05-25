@@ -189,6 +189,43 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 // events are checked via IsContractEventPresent; once a non-present event is found
 // the check is skipped for the rest of that phase (events are strictly ordered).
 // Returns nil on subscription loss (reconnect), non-nil on handler/check failure.
+//
+// Listener ordering & idempotency invariant
+// -----------------------------------------
+// Downstream handlers (and any code reasoning about the relative arrival order
+// of on-chain events) may rely on the following guarantees provided by this
+// loop. Changes that weaken any of them must update every consumer that cites
+// this invariant by name.
+//
+//  1. Strict per-contract ordering. Within a single Listener, events are
+//     delivered to handleEvent in ascending (block_number, log_index) order
+//     across the historical → live transition. Phase 1 drains historicalCh to
+//     completion before phase 2 reads from currentCh, and the upstream
+//     reconcileBlockRange + live subscription preserve chain order within each
+//     phase.
+//
+//  2. Idempotent resume. On restart, IsContractEventPresent gates the first
+//     event of each phase: events already persisted in a prior run are skipped
+//     rather than reprocessed. Once a non-present event is seen the check is
+//     dropped for the remainder of the phase (safe because of guarantee 1).
+//
+//  3. Cursor advances only on handler success. lastBlock is updated on each
+//     live event, but a non-nil return from handleEvent unsubscribes and
+//     surfaces the error to the caller without persisting any state past the
+//     failed event; the next Listen invocation re-fetches from the same
+//     cursor. Transient handler failures retry instead of silently dropping.
+//
+//  4. Reorged-out logs are discarded. Live deliveries with Removed=true are
+//     dropped. A reorg that fully removes a ChannelChallenged log also
+//     removes the matching on-chain status transition to DISPUTED, so the
+//     contract's Path-1 (challenge-timeout) close cannot subsequently fire
+//     for the same channel.
+//
+// A consequence used by the nitronode event handlers: for any channel that
+// closes via Path-1 (challenge-timeout, ChannelHub Closed-from-DISPUTED),
+// HandleHomeChannelChallenged is guaranteed to run before HandleHomeChannelClosed
+// for that channel. See nitronode/event_handlers/service.go (audit finding
+// MF3-I01) for the wedge case this rules out.
 func (l *Listener) processEvents(
 	ctx context.Context,
 	eventSubscription interface {

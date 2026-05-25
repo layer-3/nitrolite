@@ -170,6 +170,16 @@ func (h *Handler) issueReleaseReceiverState(ctx context.Context, tx Store, recei
 		// unsigned so the challenge-rescue squash at close (Challenged path) can pick
 		// it up, and so terminal-status channels never receive a node-signed credit
 		// that won't settle.
+		//
+		// MF3-I01 (release path): same reasoning as channel_v1. The listener
+		// ordering & idempotency invariant (pkg/blockchain/evm/listener.go,
+		// processEvents doc) guarantees HandleHomeChannelChallenged precedes
+		// HandleHomeChannelClosed for any Path-1 (challenge-timeout) close, so
+		// an unsigned release credit either lands before the close handler runs
+		// (and is squashed into the rescue sum) or after it (and reads the
+		// rescue row as currentState, with HomeChannelID=nil). The wedge state
+		// where currentState transitively points at a Closed channel is not
+		// reachable through the supported event-ingestion path.
 		_, channelStatus, err := tx.CheckActiveChannel(receiverWallet, asset)
 		if err != nil {
 			return rpc.Errorf("failed to check receiver active channel: %v", err)

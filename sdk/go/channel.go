@@ -106,6 +106,11 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 		newState.NodeSig = &nodeSig
 
 		return newState, nil
+	} else if state.HomeLedger.BlockchainID != blockchainID {
+		// Active home channel is bound to the chain it was created on.
+		// Silently advancing it onto a different chain would surface as a
+		// confusing on-chain failure later.
+		return nil, fmt.Errorf("active home channel for asset %q is on chain %d, cannot deposit on chain %d", asset, state.HomeLedger.BlockchainID, blockchainID)
 	}
 
 	// Scenario B: Channel exists - checkpoint deposit
@@ -219,6 +224,11 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 		newState.NodeSig = &nodeSig
 
 		return newState, nil
+	} else if state.HomeLedger.BlockchainID != blockchainID {
+		// Active home channel is bound to the chain it was created on.
+		// Silently advancing it onto a different chain would surface as a
+		// confusing on-chain failure later.
+		return nil, fmt.Errorf("active home channel for asset %q is on chain %d, cannot withdraw on chain %d", asset, state.HomeLedger.BlockchainID, blockchainID)
 	}
 
 	// Create next state

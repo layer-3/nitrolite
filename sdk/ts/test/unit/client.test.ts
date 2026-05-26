@@ -342,3 +342,53 @@ describe('Client.transfer', () => {
         expect(state.nodeSig).toBe(NODE_SIGNATURE);
     });
 });
+
+describe('Client.deposit cross-chain guard', () => {
+    it('rejects deposit when active home channel is on a different chain', async () => {
+        const latestState = openChannelState();
+        latestState.homeLedger.blockchainId = 137n;
+        const client = createHighLevelClient(latestState);
+
+        await expect(client.deposit(8453n, 'usdc', new Decimal(1))).rejects.toThrow(
+            'active home channel for asset "usdc" is on chain 137, cannot deposit on chain 8453'
+        );
+        expect(client.signAndSubmitState).not.toHaveBeenCalled();
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+    });
+
+    it('allows deposit when active home channel matches the supplied chain', async () => {
+        const latestState = openChannelState();
+        latestState.homeLedger.blockchainId = 8453n;
+        latestState.homeLedger.tokenAddress = TOKEN_ADDRESS;
+        const client = createHighLevelClient(latestState);
+
+        await client.deposit(8453n, 'usdc', new Decimal(1));
+        expect(client.signAndSubmitState).toHaveBeenCalledTimes(1);
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+    });
+});
+
+describe('Client.withdraw cross-chain guard', () => {
+    it('rejects withdraw when active home channel is on a different chain', async () => {
+        const latestState = openChannelState();
+        latestState.homeLedger.blockchainId = 137n;
+        const client = createHighLevelClient(latestState);
+
+        await expect(client.withdraw(8453n, 'usdc', new Decimal(1))).rejects.toThrow(
+            'active home channel for asset "usdc" is on chain 137, cannot withdraw on chain 8453'
+        );
+        expect(client.signAndSubmitState).not.toHaveBeenCalled();
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+    });
+
+    it('allows withdraw when active home channel matches the supplied chain', async () => {
+        const latestState = openChannelState();
+        latestState.homeLedger.blockchainId = 8453n;
+        latestState.homeLedger.tokenAddress = TOKEN_ADDRESS;
+        const client = createHighLevelClient(latestState);
+
+        await client.withdraw(8453n, 'usdc', new Decimal(1));
+        expect(client.signAndSubmitState).toHaveBeenCalledTimes(1);
+        expect(client.requestChannelCreation).not.toHaveBeenCalled();
+    });
+});

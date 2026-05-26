@@ -15,6 +15,7 @@ export interface UseChannelOpsResult {
   withdraw: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   transfer: (to: Address, asset: string, amount: Decimal) => Promise<void>;
   closeChannel: (asset: string) => Promise<void>;
+  isApproving: boolean;
   isDepositing: boolean;
   isWithdrawing: boolean;
   isTransferring: boolean;
@@ -30,6 +31,7 @@ export function useChannelOps(
   supportedAssets: Asset[],
   onAfterOp?: () => void,
 ): UseChannelOpsResult {
+  const [isApproving, setIsApproving] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
@@ -93,7 +95,9 @@ export function useChannelOps(
             const divisor = 10n ** BigInt(tokenInfo.decimals);
             const humanMax = new Decimal((maxUnits / divisor).toString());
             toast('Approving token (one-time)…');
+            setIsApproving(true);
             await client.approveToken(blockchainId, asset, humanMax);
+            setIsApproving(false);
             if (generationRef.current !== gen) {
               toast('Wallet changed — operation cancelled');
               return;
@@ -111,6 +115,7 @@ export function useChannelOps(
       } catch (err) {
         handleError(err, 'Deposit');
       } finally {
+        setIsApproving(false);
         setIsDepositing(false);
       }
     },
@@ -225,6 +230,7 @@ export function useChannelOps(
     withdraw,
     transfer,
     closeChannel,
+    isApproving,
     isDepositing,
     isWithdrawing,
     isTransferring,

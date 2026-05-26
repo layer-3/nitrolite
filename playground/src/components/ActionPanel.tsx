@@ -21,6 +21,7 @@ interface Props {
   onDeposit: (chainId: bigint, asset: string, amount: Decimal) => void;
   onWithdraw: (chainId: bigint, asset: string, amount: Decimal) => void;
   onTransfer: (to: Address, asset: string, amount: Decimal) => void;
+  isApproving: boolean;
   isDepositing: boolean;
   isWithdrawing: boolean;
   isTransferring: boolean;
@@ -40,6 +41,7 @@ export default function ActionPanel({
   onDeposit,
   onWithdraw,
   onTransfer,
+  isApproving,
   isDepositing,
   isWithdrawing,
   isTransferring,
@@ -119,6 +121,9 @@ export default function ActionPanel({
     (tab === 'withdraw' && isWithdrawing) ||
     (tab === 'transfer' && isTransferring);
 
+  // For deposit, also require on-chain balance to be loaded before allowing submit.
+  const depositBalanceReady = tab !== 'deposit' || onChainBalance != null;
+
   const transferRecipientValid = tab !== 'transfer' || (isValidAddress(recipient) && !recipientError);
   const canSubmit =
     !disabled &&
@@ -126,9 +131,12 @@ export default function ActionPanel({
     !amountInvalid &&
     !amountExceedsChannel &&
     !amountExceedsOnChain &&
+    depositBalanceReady &&
     !!asset &&
     !!operatingChainId &&
     transferRecipientValid;
+
+  const amountInputError = amountExceedsChannel || amountExceedsOnChain;
 
   return (
     <div className="card">
@@ -148,7 +156,7 @@ export default function ActionPanel({
         />
 
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-text-muted text-xs">Channel</span>
+          <span className="text-text-muted text-xs">Unified balance</span>
           <span className="mono text-2xl font-medium text-accent">{formatBalance(channelBalance)}</span>
         </div>
         <div className="flex justify-between items-baseline">
@@ -196,7 +204,7 @@ export default function ActionPanel({
           )}
 
           <label className="block text-xs text-text-muted mb-1.5">Amount</label>
-          <div className="input">
+          <div className={`input ${amountInputError ? 'error' : ''}`}>
             <input
               type="text"
               inputMode="decimal"
@@ -211,7 +219,7 @@ export default function ActionPanel({
           </div>
 
           {amountExceedsChannel && (
-            <p className="text-error text-xs mt-1.5">Amount exceeds channel balance</p>
+            <p className="text-error text-xs mt-1.5">Amount exceeds Unified balance</p>
           )}
           {amountExceedsOnChain && (
             <p className="text-error text-xs mt-1.5">Amount exceeds on-chain balance</p>
@@ -223,6 +231,12 @@ export default function ActionPanel({
             </p>
           )}
 
+          {operatingChainName && tab === 'withdraw' && (
+            <p className="text-text-muted text-xs mt-2">
+              Will withdraw to <span className="text-text-primary">"{operatingChainName}"</span>
+            </p>
+          )}
+
           <button
             className="btn btn-primary w-full mt-4"
             onClick={fire}
@@ -231,7 +245,7 @@ export default function ActionPanel({
             {isBusy ? (
               <>
                 <span className="spinner" />
-                {tab === 'deposit' && 'Depositing…'}
+                {tab === 'deposit' && (isApproving ? 'Approving…' : 'Depositing…')}
                 {tab === 'withdraw' && 'Withdrawing…'}
                 {tab === 'transfer' && 'Transferring…'}
               </>

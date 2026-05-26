@@ -110,6 +110,7 @@ export default function App() {
                 onDeposit={ops.deposit}
                 onWithdraw={ops.withdraw}
                 onTransfer={ops.transfer}
+                isApproving={ops.isApproving}
                 isDepositing={ops.isDepositing}
                 isWithdrawing={ops.isWithdrawing}
                 isTransferring={ops.isTransferring}

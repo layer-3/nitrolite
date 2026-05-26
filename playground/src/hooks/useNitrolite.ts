@@ -34,6 +34,7 @@ export function useNitrolite(
   address: Address | null,
   walletClient: WalletClient | null,
   sessionKey: StoredSessionKey | null,
+  currentChainId?: bigint | null,
 ): UseNitroliteResult {
   const [client, setClient] = useState<Client | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -47,8 +48,18 @@ export function useNitrolite(
 
   const clientRef = useRef<Client | null>(null);
   const assetsRef = useRef<Asset[]>([]);
+  const currentChainIdRef = useRef<bigint | null>(currentChainId ?? null);
+  useEffect(() => { currentChainIdRef.current = currentChainId ?? null; }, [currentChainId]);
 
   const touch = useCallback(() => setLastCommsAt(new Date()), []);
+
+  // Pick the chain to read the on-chain balance from: prefer the current wallet
+  // chain when the asset is deployed there, otherwise fall back to suggestedBlockchainId.
+  const balanceChainFor = useCallback((a: Asset): bigint => {
+    const cid = currentChainIdRef.current;
+    if (cid != null && a.tokens.some(t => t.blockchainId === cid)) return cid;
+    return a.suggestedBlockchainId;
+  }, []);
 
   const refresh = useCallback(async () => {
     const c = clientRef.current;
@@ -66,7 +77,7 @@ export function useNitrolite(
       await Promise.all(
         assets.map(async a => {
           try {
-            const bal = await c.getOnChainBalance(a.suggestedBlockchainId, a.symbol, address);
+            const bal = await c.getOnChainBalance(balanceChainFor(a), a.symbol, address);
             ocb[a.symbol] = bal;
           } catch {
             ocb[a.symbol] = null;
@@ -77,7 +88,7 @@ export function useNitrolite(
     } catch (err) {
       setNodeError(err instanceof Error ? err.message : String(err));
     }
-  }, [address, touch]);
+  }, [address, touch, balanceChainFor]);
 
   // Lifecycle: rebuild client when address or walletClient changes
   useEffect(() => {
@@ -168,12 +179,12 @@ export function useNitrolite(
           setBalances(nextBal);
           touch();
 
-          // On-chain balances per asset on its suggestedBlockchainId. Failures → null.
+          // On-chain balances per asset on the current wallet chain (or suggestedBlockchainId).
           const ocb: Record<string, Decimal | null> = {};
           await Promise.all(
             assets.map(async a => {
               try {
-                const bal = await finalClient.getOnChainBalance(a.suggestedBlockchainId, a.symbol, address);
+                const bal = await finalClient.getOnChainBalance(balanceChainFor(a), a.symbol, address);
                 ocb[a.symbol] = bal;
               } catch {
                 ocb[a.symbol] = null;
@@ -196,6 +207,25 @@ export function useNitrolite(
       clearTimeout(timer);
     };
   }, [address, walletClient, sessionKey, touch]);
+
+  // Re-read on-chain balances whenever the wallet chain changes so the deposit
+  // tab always reflects what the user holds on the currently connected chain.
+  useEffect(() => {
+    const c = clientRef.current;
+    const assets = assetsRef.current;
+    if (!c || !address || !assets.length || currentChainId == null) return;
+    const ocb: Record<string, Decimal | null> = {};
+    Promise.all(
+      assets.map(async a => {
+        if (!a.tokens.some(t => t.blockchainId === currentChainId)) return;
+        try {
+          ocb[a.symbol] = await c.getOnChainBalance(currentChainId, a.symbol, address);
+        } catch {
+          ocb[a.symbol] = null;
+        }
+      }),
+    ).then(() => setOnChainBalances(prev => ({ ...prev, ...ocb }))).catch(() => {});
+  }, [address, currentChainId]);
 
   // Cleanup on unmount
   useEffect(() => {

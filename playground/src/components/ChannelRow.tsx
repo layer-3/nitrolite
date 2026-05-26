@@ -22,6 +22,7 @@ interface Props {
   onAfterOp?: () => void;
   isClosing: boolean;
   channelStatesKey?: number;
+  defaultExpanded?: boolean;
 }
 
 export default function ChannelRow({
@@ -37,8 +38,9 @@ export default function ChannelRow({
   onAfterOp,
   isClosing,
   channelStatesKey,
+  defaultExpanded,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   const closed = channel.status === ChannelStatus.Closed;
   const homeChainObj = chains.find(c => c.id === channel.blockchainId);
   const homeChainName = chainDisplayName(channel.blockchainId, homeChainObj?.name);

@@ -13,7 +13,7 @@ Single-page app. Sticky header, scrollable body.
 - **Header**: Wallet connection bar + session key status + node health indicator
 - **Body (2-col on desktop)**:
   - Left: Action panel (deposit / withdraw / transfer tabs)
-  - Right: Channel list + pending receipts section
+  - Right: Channel list (includes incoming unacknowledged channels at the top)
 
 **Gating overlays** (modals) appear on top when:
 - Wallet is on an unsupported chain
@@ -47,9 +47,10 @@ Single-page app. Sticky header, scrollable body.
 - If a non-closed home channel exists for an asset, all chain icons except the home chain are dimmed (greyscale + low opacity)
 
 ### ChannelList
-**For**: Overview of all channels the connected address participates in.
+**For**: Overview of all channels and incoming unacknowledged states for the connected address.
 - Refresh button to re-fetch channels from node
-- Renders a ChannelRow per channel
+- Renders `IncomingChannelRow` for assets that have a balance but no open channel (incoming, unacknowledged)
+- Renders a `ChannelRow` per established channel
 
 ### ChannelRow
 **For**: Per-channel identity, status, and drill-down into state.
@@ -68,10 +69,11 @@ Single-page app. Sticky header, scrollable body.
 - **Acknowledge** button: accepts issued state (moves to signed)
 - **Checkpoint** button: commits signed state on-chain
 
-### PendingReceipts
-**For**: Assets received off-chain that haven't been acknowledged yet (no open channel).
-- Lists assets with a non-zero balance but no active channel
-- **Acknowledge** button opens the channel by accepting the received balance
+### IncomingChannelRow
+**For**: An asset that has an issued (node-proposed) state but no acknowledged channel yet.
+- Shows a "NO HOME CHAIN" pill (reddish, low contrast) with tooltip explaining that the wallet's current chain becomes the home chain on acknowledge
+- Expands to show the issued state (version + amount) in the same format as StateViewer
+- **Acknowledge** button: calls `setHomeBlockchain(asset, currentChainId)` then `acknowledge(asset)`; after success the full channel list refreshes and the row transitions into a regular ChannelRow
 
 ### SessionKeyBanner
 **For**: Nudging the user to set up a session key when none is active.
@@ -200,8 +202,8 @@ Single-page app. Sticky header, scrollable body.
 **Checkpoint signed state**
 1. Expand channel → StateViewer → Checkpoint button (signed row) → MetaMask: on-chain transaction → signed becomes enforced
 
-**Accept pending receipt**
-1. PendingReceipts section → Acknowledge → channel opens with received balance
+**Accept incoming channel**
+1. Channels section → expand IncomingChannelRow → Acknowledge → `setHomeBlockchain` sets wallet chain as home → `acknowledge` co-signs the issued state → channel appears as a regular ChannelRow
 
 ---
 

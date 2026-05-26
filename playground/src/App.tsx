@@ -8,7 +8,6 @@ import { useSessionKey } from './hooks/useSessionKey';
 import WalletBar from './components/WalletBar';
 import ActionPanel from './components/ActionPanel';
 import ChannelList from './components/ChannelList';
-import PendingReceipts from './components/PendingReceipts';
 import UnsupportedChainModal from './components/UnsupportedChainModal';
 import SetHomechainModal from './components/SetHomechainModal';
 import SessionKeyBanner from './components/SessionKeyBanner';
@@ -19,7 +18,7 @@ export default function App() {
   const [showSkModal, setShowSkModal] = useState(false);
 
   const sk = useSessionKey(wallet.address);
-  const nitro = useNitrolite(wallet.address, wallet.walletClient, sk.sessionKey);
+  const nitro = useNitrolite(wallet.address, wallet.walletClient, sk.sessionKey, wallet.chainId);
   const channels = useChannels(nitro.client, wallet.address);
 
   const refreshAll = useCallback(() => {
@@ -124,12 +123,6 @@ export default function App() {
               />
 
               <div>
-                <PendingReceipts
-                  client={nitro.client}
-                  channels={channels.channels}
-                  balances={nitro.balances}
-                  onAfterAck={refreshAll}
-                />
                 <ChannelList
                   channels={channels.channels}
                   client={nitro.client}

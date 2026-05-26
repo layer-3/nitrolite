@@ -69,7 +69,7 @@ export function useChannelStates(
       ]);
       setSigned(signedState);
       setIssued(issuedState);
-      if (homeChannel) {
+      if (homeChannel && homeChannel.stateVersion > 0n) {
         const v = homeChannel.stateVersion;
         if (lastEnforcedVersionRef.current !== v) {
           // On-chain version changed — a checkpoint was written. Record the new

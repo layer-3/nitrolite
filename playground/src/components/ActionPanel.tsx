@@ -92,9 +92,14 @@ export default function ActionPanel({
       return new Decimal(0);
     }
   })();
+  const isBusy =
+    (tab === 'deposit' && depositPhase !== 'idle') ||
+    (tab === 'withdraw' && withdrawPhase !== 'idle') ||
+    (tab === 'transfer' && transferPhase !== 'idle');
+
   const amountInvalid = amountDecimal.lte(0);
-  const amountExceedsChannel = (tab === 'withdraw' || tab === 'transfer') && amountDecimal.gt(channelBalance);
-  const amountExceedsOnChain = tab === 'deposit' && onChainBalance != null && amountDecimal.gt(onChainBalance);
+  const amountExceedsChannel = !isBusy && (tab === 'withdraw' || tab === 'transfer') && amountDecimal.gt(channelBalance);
+  const amountExceedsOnChain = !isBusy && tab === 'deposit' && onChainBalance != null && amountDecimal.gt(onChainBalance);
 
   const setMax = () => {
     if (tab === 'deposit' && onChainBalance) setAmount(onChainBalance.toString());
@@ -122,11 +127,6 @@ export default function ActionPanel({
     else if (tab === 'withdraw') onWithdraw(operatingChainId, selectedAsset, amountDecimal);
     else if (tab === 'transfer') onTransfer(recipient as Address, selectedAsset, amountDecimal);
   };
-
-  const isBusy =
-    (tab === 'deposit' && depositPhase !== 'idle') ||
-    (tab === 'withdraw' && withdrawPhase !== 'idle') ||
-    (tab === 'transfer' && transferPhase !== 'idle');
 
   // Re-check allowance whenever the deposit inputs settle (debounced 400 ms).
   useEffect(() => {

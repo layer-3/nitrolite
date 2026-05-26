@@ -8,14 +8,6 @@ assets:
       - blockchain_id: 59144
         address: "0x0000000000000000000000000000000000000000"
         decimals: 18
-  - name: "Flare XRP"
-    symbol: "fxrp"
-    decimals: 6
-    suggested_blockchain_id: 14
-    tokens:
-      - blockchain_id: 14
-        address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE"
-        decimals: 6
   - name: "Tether USD"
     symbol: "usdt"
     decimals: 6
@@ -41,15 +33,18 @@ assets:
         decimals: 6
       - blockchain_id: 59144
         address: "0xA219439258ca9da29E9Cc4cE5596924745e12B93"
+        decimals: 8
+      - blockchain_id: 1440000
+        address: "0x9F8CF9c00fac501b3965872f4ed3271f6f4d06fF"
         decimals: 6
-      # - blockchain_id: 1440000
-      #   address: ""
-      #   decimals: 6
   - name: "XRP"
     symbol: "xrp"
     decimals: 18
     suggested_blockchain_id: 1440000
     tokens:
+      - blockchain_id: 14
+        address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE" # fXRP
+        decimals: 6
       - blockchain_id: 1440000
         address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
         decimals: 18

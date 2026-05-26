@@ -33,13 +33,13 @@ assets:
         decimals: 6
       - blockchain_id: 59144
         address: "0xA219439258ca9da29E9Cc4cE5596924745e12B93"
-        decimals: 8
+        decimals: 6
       - blockchain_id: 1440000
         address: "0x9F8CF9c00fac501b3965872f4ed3271f6f4d06fF"
         decimals: 6
   - name: "XRP"
     symbol: "xrp"
-    decimals: 18
+    decimals: 6
     suggested_blockchain_id: 1440000
     tokens:
       - blockchain_id: 14

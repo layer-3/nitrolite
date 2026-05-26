@@ -463,14 +463,50 @@ func newClient(channelSigner core.ChannelSigner, rawSigner sign.Signer) *sdk.Cli
 // ============================================================================
 
 func setupSessionKeyClient(ctx context.Context, walletA *sdk.Client, sa signers) *sdk.Client {
-	skRaw, skMsg := generateSessionKey()
+	var skRaw sign.Signer
+	var skMsg *sign.EthereumMsgSigner
+	if sessionKeyPriv == "" {
+		skRaw, skMsg = generateSessionKey()
+	} else {
+		var err error
+		skRaw, err = sign.NewEthereumRawSigner(sessionKeyPriv)
+		if err != nil {
+			log.Fatalf("invalid sessionKeyPriv: %v", err)
+		}
+		skMsg, err = sign.NewEthereumMsgSigner(sessionKeyPriv)
+		if err != nil {
+			log.Fatalf("session-key msg signer: %v", err)
+		}
+	}
 	skAddress := skRaw.PublicKey().Address().String()
 	fmt.Printf("Session key: %s\n", skAddress)
+
+	// If a session-key state already exists for this address (active or
+	// expired/revoked), the protocol requires the next submission to use a
+	// strictly higher monotonic version. Look up the latest stored version
+	// and start from version+1; otherwise begin at 1.
+	includeInactive := true
+	prior, err := walletA.GetLastChannelKeyStates(ctx, sa.address, &sdk.GetLastChannelKeyStatesOptions{
+		SessionKey:      &skAddress,
+		IncludeInactive: &includeInactive,
+	})
+	if err != nil {
+		log.Fatalf("lookup prior session key states: %v", err)
+	}
+	version := uint64(1)
+	for _, p := range prior {
+		if p.Version >= version {
+			version = p.Version + 1
+		}
+	}
+	if version > 1 {
+		fmt.Printf("  ↳ existing state found at version %d, registering v%d\n", version-1, version)
+	}
 
 	state := core.ChannelSessionKeyStateV1{
 		UserAddress: sa.address,
 		SessionKey:  skAddress,
-		Version:     1,
+		Version:     version,
 		Assets:      []string{asset},
 		ExpiresAt:   time.Now().Add(24 * time.Hour),
 	}

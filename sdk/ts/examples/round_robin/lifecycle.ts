@@ -319,11 +319,25 @@ async function setupSessionKeyClient(walletA: Client, addrA: Address): Promise<C
   const skMsg = new EthereumMsgSigner(sessionKey);
   console.log(`Session key: ${skAddress}`);
 
+  // If a session-key state already exists for this address (active or
+  // expired/revoked), the protocol requires the next submission to use a
+  // strictly higher monotonic version. Look up the latest stored version
+  // and start from version+1; otherwise begin at 1.
+  const prior = await walletA.getLastChannelKeyStates(addrA, skAddress, { includeInactive: true });
+  let version = 1n;
+  for (const p of prior) {
+    const v = BigInt(p.version);
+    if (v >= version) version = v + 1n;
+  }
+  if (version > 1n) {
+    console.log(`  ↳ existing state found at version ${version - 1n}, registering v${version}`);
+  }
+
   const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 24 * 60 * 60);
   const state: ChannelSessionKeyStateV1 = {
     user_address: addrA,
     session_key: skAddress,
-    version: '1',
+    version: version.toString(),
     assets: [asset],
     expires_at: expiresAt.toString(),
     user_sig: '',

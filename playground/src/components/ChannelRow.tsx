@@ -7,6 +7,7 @@ import type { Address } from 'viem';
 import CopyButton from './CopyButton';
 import StateViewer from './StateViewer';
 import { formatAddress } from '../utils';
+import { chainDisplayName } from '../chainMeta';
 
 interface Props {
   channel: Channel;
@@ -35,7 +36,8 @@ export default function ChannelRow({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const closed = channel.status === ChannelStatus.Closed;
-  const homeChainName = chains.find(c => c.id === channel.blockchainId)?.name ?? `Chain ${channel.blockchainId}`;
+  const homeChainObj = chains.find(c => c.id === channel.blockchainId);
+  const homeChainName = chainDisplayName(channel.blockchainId, homeChainObj?.name);
   const wrongChain = !closed && currentChainId != null && currentChainId !== channel.blockchainId;
 
   return (
@@ -56,8 +58,11 @@ export default function ChannelRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <span>{channel.asset.toUpperCase()}</span>
-            <span className="text-text-muted text-xs">·</span>
-            <span className="text-text-muted text-xs">{homeChainName}</span>
+            <span
+              className="text-[10px] px-1 rounded-xl border border-border bg-bg-surface text-text-muted font-normal"
+            >
+              {homeChainName}
+            </span>
             {wrongChain && (
               <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-accent/40 text-accent">
                 wrong chain
@@ -85,7 +90,7 @@ export default function ChannelRow({
           {wrongChain && (
             <div className="flex items-center justify-between gap-2 px-3 py-2 rounded border border-accent/30 bg-accent-dim">
               <span className="text-accent text-xs">
-                Wallet is on a different chain. Switch to {homeChainName} to interact.
+                Wallet is on a different chain. Switch to "{homeChainName}" to interact.
               </span>
               <button
                 className="btn btn-sm"

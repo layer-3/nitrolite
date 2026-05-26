@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { createWalletClient, custom, type WalletClient, type Address } from 'viem';
 
 declare global {
@@ -15,7 +16,6 @@ export interface WalletState {
   address: Address | null;
   chainId: bigint | null;
   walletClient: WalletClient | null;
-  error: string | null;
   isConnecting: boolean;
 }
 
@@ -30,7 +30,6 @@ export function useWallet(): UseWalletResult {
     address: null,
     chainId: null,
     walletClient: null,
-    error: null,
     isConnecting: false,
   });
 
@@ -49,10 +48,10 @@ export function useWallet(): UseWalletResult {
 
   const connect = useCallback(async () => {
     if (!window.ethereum) {
-      setState(s => ({ ...s, error: 'MetaMask not detected. Install the extension to continue.' }));
+      toast.error('MetaMask not detected. Install the extension to continue.');
       return;
     }
-    setState(s => ({ ...s, isConnecting: true, error: null }));
+    setState(s => ({ ...s, isConnecting: true }));
     try {
       const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as string[];
       if (!accounts.length) throw new Error('No account returned by wallet');
@@ -62,15 +61,11 @@ export function useWallet(): UseWalletResult {
         address,
         chainId,
         walletClient: buildClient(address),
-        error: null,
         isConnecting: false,
       });
     } catch (err) {
-      setState(s => ({
-        ...s,
-        isConnecting: false,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+      setState(s => ({ ...s, isConnecting: false }));
+      toast.error(toErrorMessage(err));
     }
   }, [buildClient, fetchChainId]);
 
@@ -79,7 +74,6 @@ export function useWallet(): UseWalletResult {
       address: null,
       chainId: null,
       walletClient: null,
-      error: null,
       isConnecting: false,
     });
   }, []);
@@ -90,13 +84,13 @@ export function useWallet(): UseWalletResult {
     try {
       await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
     } catch (err) {
-      setState(s => ({ ...s, error: err instanceof Error ? err.message : String(err) }));
+      toast.error(toErrorMessage(err));
     }
   }, []);
 
   useEffect(() => {
     if (!window.ethereum) {
-      setState(s => ({ ...s, error: 'MetaMask not detected. Install the extension to continue.' }));
+      toast.error('MetaMask not detected. Install the extension to continue.');
       return;
     }
 
@@ -130,7 +124,6 @@ export function useWallet(): UseWalletResult {
             address,
             chainId,
             walletClient: buildClient(address),
-            error: null,
             isConnecting: false,
           });
         }
@@ -144,4 +137,10 @@ export function useWallet(): UseWalletResult {
   }, [buildClient, disconnect, fetchChainId]);
 
   return { ...state, connect, disconnect, switchChain };
+}
+
+function toErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
+  return String(err);
 }

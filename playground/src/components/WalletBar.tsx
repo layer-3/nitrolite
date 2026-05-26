@@ -14,7 +14,6 @@ interface Props {
   lastCommsAt: Date | null;
   nodeError: string | null;
   isConnecting: boolean;
-  walletError: string | null;
   sessionKey: StoredSessionKey | null;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -29,7 +28,6 @@ export default function WalletBar({
   lastCommsAt,
   nodeError,
   isConnecting,
-  walletError,
   sessionKey,
   onConnect,
   onDisconnect,
@@ -121,11 +119,6 @@ export default function WalletBar({
           </>
         ) : (
           <>
-            {walletError && (
-              <span className="text-error text-xs max-w-[260px] truncate" title={walletError}>
-                {walletError}
-              </span>
-            )}
             <button className="btn btn-primary btn-sm" onClick={onConnect} disabled={isConnecting}>
               {isConnecting ? <span className="spinner" /> : 'Connect MetaMask'}
             </button>

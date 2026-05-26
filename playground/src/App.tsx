@@ -81,7 +81,6 @@ export default function App() {
         lastCommsAt={nitro.lastCommsAt}
         nodeError={nitro.nodeError}
         isConnecting={wallet.isConnecting}
-        walletError={wallet.error}
         sessionKey={sk.sessionKey}
         onConnect={wallet.connect}
         onDisconnect={wallet.disconnect}

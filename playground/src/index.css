@@ -130,7 +130,6 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: hidden;
 }
 
 .card-header {
@@ -202,13 +201,14 @@ body {
   color: var(--text-primary);
   font-size: 11px;
   padding: 6px 10px;
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;
+  max-width: min(360px, 80vw);
   z-index: 100;
   transition: opacity 0.12s;
   pointer-events: none;
   font-family: 'Inter', sans-serif;
   font-weight: 400;
-  max-width: 240px;
 }
 .tooltip-wrap:hover .tip { visibility: visible; opacity: 1; }
 .help-icon {

@@ -41,9 +41,9 @@ export default function ChannelRow({
   const wrongChain = !closed && currentChainId != null && currentChainId !== channel.blockchainId;
 
   return (
-    <div className={`border border-border rounded-lg mb-2 overflow-hidden ${closed ? 'opacity-60' : ''}`}>
+    <div className={`border border-border rounded-lg mb-2 ${closed ? 'opacity-60' : ''}`}>
       <div
-        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-bg-elevated/40"
+        className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-bg-elevated/40 rounded-t-lg ${!expanded ? 'rounded-b-lg' : ''}`}
         onClick={() => setExpanded(e => !e)}
       >
         <span
@@ -86,7 +86,7 @@ export default function ChannelRow({
       </div>
 
       {expanded && (
-        <div className="border-t border-border px-4 py-3 space-y-3 bg-bg-base/30">
+        <div className="border-t border-border px-4 py-3 space-y-3 bg-bg-base/30 rounded-b-lg">
           {wrongChain && (
             <div className="flex items-center justify-between gap-2 px-3 py-2 rounded border border-accent/30 bg-accent-dim">
               <span className="text-accent text-xs">

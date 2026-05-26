@@ -39,8 +39,8 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
   }
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
-      <div className="grid grid-cols-[120px_70px_1fr_auto] gap-3 px-4 py-2 text-text-muted text-[10px] uppercase tracking-wider border-b border-border bg-bg-base/40">
+    <div className="border border-border rounded-lg">
+      <div className="grid grid-cols-[120px_70px_1fr_auto] gap-3 px-4 py-2 text-text-muted text-[10px] uppercase tracking-wider border-b border-border bg-bg-base/40 rounded-t-lg">
         <span>State</span>
         <span>Version</span>
         <span>Amount</span>
@@ -115,7 +115,7 @@ function StateRow({ label, dotColor, tooltip, version, amount, asset, action, is
   return (
     <div
       className={`grid grid-cols-[120px_70px_1fr_auto] gap-3 items-center px-4 py-3 ${
-        isLast ? '' : 'border-b border-border'
+        isLast ? 'rounded-b-lg' : 'border-b border-border'
       } hover:bg-bg-elevated/50 transition-colors`}
     >
       <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: colorMap[dotColor] }}>

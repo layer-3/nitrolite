@@ -45,24 +45,31 @@ export class ERC20 {
   }
 
   /**
-   * Approve spender to spend amount of tokens
+   * Approve spender to spend amount of tokens.
+   *
+   * Sends the approve transaction directly without a pre-flight
+   * `simulateContract` call. The simulate path tries to decode `approve`'s
+   * return value against the standard ERC-20 ABI, which says it returns
+   * `bool`. Non-standard tokens such as Tether USDT on Ethereum L1 declare
+   * `approve` without a return value, so simulate fails with
+   * `ContractFunctionZeroDataError` even though the tx itself would
+   * succeed. `writeContract` for a non-view function only submits the tx
+   * and never decodes its return data, so it works for both standard and
+   * non-standard ERC-20s.
    */
   async approve(spender: Address, amount: bigint): Promise<string> {
     if (!this.walletSigner) {
       throw new Error('Wallet signer is required for approve operation');
     }
 
-
     try {
-      const { request } = (await this.client.simulateContract({
+      const hash = await this.walletSigner.writeContract({
         address: this.tokenAddress,
         abi: Erc20Abi,
         functionName: 'approve',
         args: [spender, amount],
         account: this.walletSigner.account!,
-      } as any)) as any;
-
-      const hash = await this.walletSigner.writeContract(request as any);
+      } as any);
 
       // Wait several blocks past the receipt so load-balanced public RPCs
       // converge on the post-approve state. Without this, a downstream
@@ -71,10 +78,9 @@ export class ERC20 {
       // sufficient".
       await this.client.waitForTransactionReceipt({ hash, confirmations: 3 });
 
-
       return hash;
     } catch (error: any) {
-      console.error('❌ Approve simulation/execution failed!');
+      console.error('❌ Approve execution failed!');
       if (error.message) {
         console.error('   Reason:', error.message);
       }

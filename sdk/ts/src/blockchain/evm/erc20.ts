@@ -59,7 +59,7 @@ export class ERC20 {
         abi: Erc20Abi,
         functionName: 'approve',
         args: [spender, amount],
-        account: this.walletSigner.account!.address,
+        account: this.walletSigner.account!,
       } as any)) as any;
 
       const hash = await this.walletSigner.writeContract(request as any);

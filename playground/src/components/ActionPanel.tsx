@@ -118,6 +118,7 @@ export default function ActionPanel({
       onTransfer(recipient as Address, selectedAsset, amountDecimal);
     }
     setAmount('');
+    if (tab === 'transfer') setRecipient('');
   };
 
   const isBusy =

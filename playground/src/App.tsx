@@ -100,6 +100,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-5 items-start">
               <ActionPanel
                 assets={nitro.supportedAssets}
+                channels={channels.channels}
                 selectedAsset={selectedAsset}
                 onSelectAsset={setSelectedAsset}
                 balance={nitro.balances[selectedAsset]}
@@ -113,6 +114,7 @@ export default function App() {
                 isWithdrawing={ops.isWithdrawing}
                 isTransferring={ops.isTransferring}
                 disabled={!nitro.client || showUnsupportedModal}
+                onSwitchChain={wallet.switchChain}
               />
 
               <div>

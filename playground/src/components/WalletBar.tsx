@@ -6,6 +6,7 @@ import CopyButton from './CopyButton';
 import { formatAddress, timeAgo } from '../utils';
 import type { StoredSessionKey } from '../sessionKey';
 import { secondsUntilExpiry } from '../sessionKey';
+import { chainDisplayName } from '../chainMeta';
 
 interface Props {
   address: Address | null;
@@ -41,7 +42,9 @@ export default function WalletBar({
     return () => clearInterval(id);
   }, []);
 
-  const currentChainName = chains.find(c => c.id === chainId)?.name;
+  const currentChain = chains.find(c => c.id === chainId);
+  const currentChainName = currentChain ? chainDisplayName(currentChain.id, currentChain.name) : undefined;
+  const sortedChains = [...chains].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   return (
     <nav className="sticky top-0 z-10 flex items-center justify-between px-6 h-14 bg-bg-surface border-b border-border">
@@ -101,9 +104,9 @@ export default function WalletBar({
               {!currentChainName && chainId && (
                 <option value={chainId.toString()}>Chain {chainId.toString()}</option>
               )}
-              {chains.map(c => (
+              {sortedChains.map(c => (
                 <option key={c.id.toString()} value={c.id.toString()}>
-                  {c.name}
+                  {chainDisplayName(c.id, c.name)}
                 </option>
               ))}
             </select>

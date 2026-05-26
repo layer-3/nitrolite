@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import type { Client, State, Channel } from '@yellow-org/sdk';
 import { Decimal } from 'decimal.js';
-import type { Address } from 'viem';
+import type { Address, Hash } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { showErrorToast } from '../toastError';
+import { rpcUrlFor } from '../networks';
 
 export interface EnforcedState {
   stateVersion: bigint;
@@ -38,6 +42,15 @@ export function useChannelStates(
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [isCheckpointing, setIsCheckpointing] = useState(false);
 
+  // Track the last on-chain version we recorded so the enforced balance only
+  // updates when a new checkpoint lands, not on every off-chain state change.
+  const lastEnforcedVersionRef = useRef<bigint | null>(null);
+  const lastEnforcedAmountRef = useRef<Decimal | null>(null);
+  // Keep a ref to the prop so refresh() can read it without being recreated on
+  // every enforcedBalance change.
+  const enforcedBalancePropRef = useRef(enforcedBalance);
+  useEffect(() => { enforcedBalancePropRef.current = enforcedBalance; }, [enforcedBalance]);
+
   const refresh = useCallback(async () => {
     if (!client || !address) {
       setEnforced(null);
@@ -55,8 +68,22 @@ export function useChannelStates(
       ]);
       setSigned(signedState);
       setIssued(issuedState);
-      if (homeChannel && enforcedBalance != null) {
-        setEnforced({ stateVersion: homeChannel.stateVersion, amount: enforcedBalance });
+      if (homeChannel) {
+        const v = homeChannel.stateVersion;
+        if (lastEnforcedVersionRef.current !== v) {
+          // On-chain version changed — a checkpoint was written. Record the new
+          // enforced balance from the matching signed state if available, otherwise
+          // fall back to the prop (covers the edge case of first load with
+          // unconfirmed states already present).
+          lastEnforcedVersionRef.current = v;
+          lastEnforcedAmountRef.current =
+            signedState?.version === v
+              ? signedState.homeLedger.userBalance
+              : (enforcedBalancePropRef.current ?? null);
+        }
+        // Use the cached amount so off-chain state changes (transfers, etc.)
+        // never overwrite the enforced row until the next checkpoint.
+        setEnforced({ stateVersion: v, amount: lastEnforcedAmountRef.current ?? new Decimal(0) });
       } else {
         setEnforced(null);
       }
@@ -65,7 +92,7 @@ export function useChannelStates(
     } finally {
       setIsLoading(false);
     }
-  }, [client, address, asset, enforcedBalance]);
+  }, [client, address, asset, enforcedBalance]); // enforcedBalance triggers re-fetch; actual enforced amount is guarded by refs
 
   useEffect(() => {
     refresh();
@@ -73,6 +100,15 @@ export function useChannelStates(
 
   const canAcknowledge = !!issued && (signed === null || issued.version > signed.version);
   const canCheckpoint = !!signed && (enforced === null || signed.version > enforced.stateVersion);
+
+  const handleOpError = (err: unknown, label: string) => {
+    const e = err as { code?: number; message?: string };
+    if (e?.code === 4001) {
+      toast('Transaction cancelled');
+      return;
+    }
+    showErrorToast(`${label} failed: ${e?.message ?? String(err)}`);
+  };
 
   const acknowledge = useCallback(async () => {
     if (!client) return;
@@ -82,7 +118,7 @@ export function useChannelStates(
       await refresh();
       onAfterOp?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleOpError(err, 'Acknowledge');
     } finally {
       setIsAcknowledging(false);
     }
@@ -92,15 +128,25 @@ export function useChannelStates(
     if (!client) return;
     setIsCheckpointing(true);
     try {
-      await client.checkpoint(asset);
+      const txHash = await client.checkpoint(asset);
+      // Wait for the tx to be mined so the enforced state and on-chain balance
+      // reflect the checkpoint when we refresh.
+      const blockchainId = signed?.homeLedger.blockchainId;
+      if (blockchainId && txHash) {
+        const rpcUrl = rpcUrlFor(blockchainId);
+        if (rpcUrl) {
+          const publicClient = createPublicClient({ transport: http(rpcUrl) });
+          await publicClient.waitForTransactionReceipt({ hash: txHash as Hash });
+        }
+      }
       await refresh();
       onAfterOp?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleOpError(err, 'Checkpoint');
     } finally {
       setIsCheckpointing(false);
     }
-  }, [client, asset, refresh, onAfterOp]);
+  }, [client, asset, signed, refresh, onAfterOp]);
 
   return {
     enforced,

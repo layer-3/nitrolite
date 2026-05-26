@@ -74,7 +74,7 @@ import {
 import { withBlockchainRPC } from '../../src/config';
 import { ChannelSessionKeyStateV1 } from '../../src/rpc/types';
 import { getChannelSessionKeyAuthMetadataHashV1 } from '../../src/core/utils';
-import { Token } from '../../src/core/types';
+import { ChannelStatus, Token } from '../../src/core/types';
 
 // ============================================================================
 // Configuration
@@ -84,8 +84,8 @@ const wsURL = 'wss://nitronode-sandbox.yellow.org/v1/ws';
 
 // Replace with your hex private keys. privA performs every channel
 // operation; privB only receives transfers and sends them back.
-const privA = '0x7d607...' as Hex;
-const privB = '0x4f3a1...' as Hex;
+const privA = '0x7d6071...' as Hex;
+const privB = '0xf63695...' as Hex;
 
 // Empty string disables the session-key path; the wallet client performs
 // channel operations directly. Otherwise this key is registered as a channel
@@ -197,9 +197,9 @@ async function runIteration(
   console.log(`  ✓ A transferred ${transferAmount} ${asset} to B (off-chain)`);
 
   // 2.c A closes home channel for asset on cur.blockchainId.
-  const closeState = await opsClient.closeHomeChannel(asset);
+  await opsClient.closeHomeChannel(asset);
   console.log(`  ✓ A closed home channel for ${asset}`);
-  await checkpointAndWait(opsClient, asset, closeState.version);
+  await closeAndWait(opsClient, asset);
 
   // 2.d B -> A (off-chain credit, lands on void state, no chain attached).
   await walletB.transfer(addrA, asset, transferAmount);
@@ -345,16 +345,57 @@ async function setupSessionKeyClient(walletA: Client, addrA: Address): Promise<C
 // Wait helpers
 // ============================================================================
 
-async function checkpointAndWait(client: Client, asset: string, expectedVersion: bigint): Promise<void> {
+/**
+ * Runs checkpoint after a finalize transition and polls getHomeChannel until
+ * the node observes the on-chain close. Closure is signalled either by the
+ * home-channel row dropping out (null) or by its status being reset to Void.
+ */
+async function closeAndWait(client: Client, asset: string): Promise<void> {
   const txHash = await client.checkpoint(asset);
-  console.log(`    ↳ checkpoint ${asset} tx ${txHash}; waiting for state_version=${expectedVersion}...`);
+  console.log(`    ↳ checkpoint ${asset} tx ${txHash}; waiting for channel close (null or status=Void)...`);
 
   const wallet = client.getUserAddress();
   const deadline = Date.now() + 2 * 60 * 1000;
   while (true) {
     const channel = await client.getHomeChannel(wallet, asset);
-    if (channel !== null && channel.stateVersion >= expectedVersion) return;
+    if (channel === null || channel.status === ChannelStatus.Void) return;
     if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${asset} channel to close (last status=${channel.status})`);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+/**
+ * Runs checkpoint and polls getHomeChannel until the node observes the
+ * expected post-checkpoint state.
+ *
+ * When expectedVersion > 0 the helper waits for channel.stateVersion to catch
+ * up to expectedVersion. When expectedVersion === 0n — which happens for the
+ * channel-creation transitions issued by deposit / withdraw on a void state —
+ * the state_version stays at 0 even after the checkpoint, so the helper
+ * instead waits for channel.status === Open.
+ */
+async function checkpointAndWait(client: Client, asset: string, expectedVersion: bigint): Promise<void> {
+  const txHash = await client.checkpoint(asset);
+  if (expectedVersion === 0n) {
+    console.log(`    ↳ checkpoint ${asset} tx ${txHash}; waiting for channel status=Open...`);
+  } else {
+    console.log(`    ↳ checkpoint ${asset} tx ${txHash}; waiting for state_version=${expectedVersion}...`);
+  }
+
+  const wallet = client.getUserAddress();
+  const deadline = Date.now() + 2 * 60 * 1000;
+  while (true) {
+    const channel = await client.getHomeChannel(wallet, asset);
+    if (channel !== null) {
+      if (expectedVersion === 0n && channel.status === ChannelStatus.Open) return;
+      if (expectedVersion > 0n && channel.stateVersion >= expectedVersion) return;
+    }
+    if (Date.now() > deadline) {
+      if (expectedVersion === 0n) {
+        throw new Error(`timed out waiting for ${asset} channel to reach status=Open`);
+      }
       throw new Error(`timed out waiting for ${asset} to reach state_version=${expectedVersion}`);
     }
     await new Promise((r) => setTimeout(r, 2000));

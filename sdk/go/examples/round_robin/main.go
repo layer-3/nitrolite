@@ -54,12 +54,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -80,8 +82,8 @@ const (
 
 	// Replace with your hex private keys. privA performs every channel
 	// operation; privB only receives transfers and sends them back.
-	privA = "0x7d607..."
-	privB = "0x4f3a1..."
+	privA = "0x7d6071..."
+	privB = "0xf63695..."
 
 	// Empty string disables the session-key path; the wallet client performs
 	// channel operations directly. Otherwise this key is registered as a
@@ -100,10 +102,10 @@ var transferAmount = decimal.NewFromFloat(0.00001)
 // chainRPCs maps blockchain ID -> JSON-RPC endpoint. Must cover every chain
 // in tokenSet (derived at runtime). Missing entries fail preflight.
 var chainRPCs = map[uint64]string{
-	11155111: "https://sepolia.drpc.org",         // Ethereum Sepolia
-	84532:    "https://sepolia.base.org",         // Base Sepolia
+	11155111: "https://sepolia.drpc.org",            // Ethereum Sepolia
+	84532:    "https://sepolia.base.org",            // Base Sepolia
 	80002:    "https://rpc-amoy.polygon.technology", // Polygon Amoy
-	59141:    "https://rpc.sepolia.linea.build",  // Linea Sepolia
+	59141:    "https://rpc.sepolia.linea.build",     // Linea Sepolia
 }
 
 // minNativeBalances maps blockchain ID -> minimum native gas balance for
@@ -185,10 +187,15 @@ func runIteration(
 ) {
 	fmt.Printf("--- iter %d: deposit on chain %d, withdraw on chain %d ---\n", i, cur.BlockchainID, next.BlockchainID)
 
-	// 2.a A deposits transferAmount on cur.BlockchainID.
-	if _, err := opsClient.ApproveToken(ctx, cur.BlockchainID, asset, transferAmount); err != nil {
+	// 2.a A deposits transferAmount on cur.BlockchainID. Wait for the approve
+	// tx to be mined before issuing Deposit; ApproveToken returns immediately
+	// after broadcast, and Deposit will revert if the allowance has not
+	// settled on-chain yet.
+	approveTx, err := opsClient.ApproveToken(ctx, cur.BlockchainID, asset, transferAmount)
+	if err != nil {
 		log.Fatalf("iter %d: approve on chain %d failed: %v", i, cur.BlockchainID, err)
 	}
+	waitForTxReceipt(ctx, chainRPCs[cur.BlockchainID], approveTx)
 	depositState, err := opsClient.Deposit(ctx, cur.BlockchainID, asset, transferAmount)
 	if err != nil {
 		log.Fatalf("iter %d: deposit on chain %d failed: %v", i, cur.BlockchainID, err)
@@ -203,12 +210,11 @@ func runIteration(
 	fmt.Printf("  ✓ A transferred %s %s to B (off-chain)\n", transferAmount, asset)
 
 	// 2.c A closes home channel for asset on cur.BlockchainID.
-	closeState, err := opsClient.CloseHomeChannel(ctx, asset)
-	if err != nil {
+	if _, err := opsClient.CloseHomeChannel(ctx, asset); err != nil {
 		log.Fatalf("iter %d: close home channel failed: %v", i, err)
 	}
 	fmt.Printf("  ✓ A closed home channel for %s\n", asset)
-	checkpointAndWait(ctx, opsClient, asset, closeState.Version)
+	closeAndWait(ctx, opsClient, asset)
 
 	// 2.d B -> A (off-chain credit, lands on void state, no chain attached).
 	if _, err := walletB.Transfer(ctx, addrA, asset, transferAmount); err != nil {
@@ -307,6 +313,37 @@ func nativeBalance(ctx context.Context, rpcURL, addr string) (decimal.Decimal, e
 		return decimal.Zero, err
 	}
 	return decimal.NewFromBigInt(wei, 0).Shift(-18), nil
+}
+
+// waitForTxReceipt polls rpcURL until the given tx is mined and asserts a
+// successful (status=1) receipt. Fatals on revert or timeout. Needed because
+// the SDK's ApproveToken returns immediately after broadcast, and the
+// downstream Deposit call would otherwise race the allowance update.
+func waitForTxReceipt(ctx context.Context, rpcURL, txHash string) {
+	cl, err := ethclient.DialContext(ctx, rpcURL)
+	if err != nil {
+		log.Fatalf("dial %s: %v", rpcURL, err)
+	}
+	defer cl.Close()
+
+	hash := common.HexToHash(txHash)
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		receipt, err := cl.TransactionReceipt(ctx, hash)
+		if err == nil {
+			if receipt.Status != 1 {
+				log.Fatalf("tx %s reverted on-chain", txHash)
+			}
+			return
+		}
+		if !errors.Is(err, ethereum.NotFound) {
+			log.Fatalf("TransactionReceipt %s: %v", txHash, err)
+		}
+		if time.Now().After(deadline) {
+			log.Fatalf("timed out waiting for tx %s", txHash)
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 // ============================================================================
@@ -451,15 +488,16 @@ func generateSessionKey() (sign.Signer, *sign.EthereumMsgSigner) {
 // Wait helpers
 // ============================================================================
 
-// checkpointAndWait runs Checkpoint and polls GetHomeChannel until the node
-// observes expectedVersion. Mirrors the helper in
-// sdk/go/examples/channel_session_key/lifecycle.go.
-func checkpointAndWait(ctx context.Context, client *sdk.Client, asset string, expectedVersion uint64) {
+// closeAndWait runs Checkpoint after a Finalize transition and polls
+// GetHomeChannel until the node observes the on-chain close. Closure is
+// signalled either by the home-channel row dropping out (nil) or by its
+// status being reset to Void.
+func closeAndWait(ctx context.Context, client *sdk.Client, asset string) {
 	txHash, err := client.Checkpoint(ctx, asset)
 	if err != nil {
-		log.Fatalf("checkpoint %s failed: %v", asset, err)
+		log.Fatalf("checkpoint %s (close) failed: %v", asset, err)
 	}
-	fmt.Printf("    ↳ checkpoint %s tx %s; waiting for state_version=%d...\n", asset, txHash, expectedVersion)
+	fmt.Printf("    ↳ checkpoint %s tx %s; waiting for channel close (nil or status=Void)...\n", asset, txHash)
 
 	wallet := client.GetUserAddress()
 	deadline := time.Now().Add(2 * time.Minute)
@@ -468,10 +506,54 @@ func checkpointAndWait(ctx context.Context, client *sdk.Client, asset string, ex
 		if err != nil {
 			log.Fatalf("GetHomeChannel %s: %v", asset, err)
 		}
-		if channel != nil && channel.StateVersion >= expectedVersion {
+		if channel == nil || channel.Status == core.ChannelStatusVoid {
 			return
 		}
 		if time.Now().After(deadline) {
+			log.Fatalf("timed out waiting for %s channel to close (last status=%s)", asset, channel.Status)
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// checkpointAndWait runs Checkpoint and polls GetHomeChannel until the node
+// observes the expected post-checkpoint state.
+//
+// When expectedVersion > 0 the helper waits for channel.StateVersion to catch
+// up to expectedVersion. When expectedVersion == 0 — which happens for the
+// channel-creation transitions issued by Deposit / Withdraw on a void state —
+// the state_version stays at 0 even after the checkpoint, so the helper
+// instead waits for channel.Status == Open.
+func checkpointAndWait(ctx context.Context, client *sdk.Client, asset string, expectedVersion uint64) {
+	txHash, err := client.Checkpoint(ctx, asset)
+	if err != nil {
+		log.Fatalf("checkpoint %s failed: %v", asset, err)
+	}
+	if expectedVersion == 0 {
+		fmt.Printf("    ↳ checkpoint %s tx %s; waiting for channel status=Open...\n", asset, txHash)
+	} else {
+		fmt.Printf("    ↳ checkpoint %s tx %s; waiting for state_version=%d...\n", asset, txHash, expectedVersion)
+	}
+
+	wallet := client.GetUserAddress()
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		channel, err := client.GetHomeChannel(ctx, wallet, asset)
+		if err != nil {
+			log.Fatalf("GetHomeChannel %s: %v", asset, err)
+		}
+		if channel != nil {
+			if expectedVersion == 0 && channel.Status == core.ChannelStatusOpen {
+				return
+			}
+			if expectedVersion > 0 && channel.StateVersion >= expectedVersion {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			if expectedVersion == 0 {
+				log.Fatalf("timed out waiting for %s channel to reach status=Open", asset)
+			}
 			log.Fatalf("timed out waiting for %s to reach state_version=%d", asset, expectedVersion)
 		}
 		time.Sleep(2 * time.Second)

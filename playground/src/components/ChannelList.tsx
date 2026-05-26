@@ -12,9 +12,9 @@ interface Props {
   currentChainId: bigint | null;
   balances: Record<string, Decimal>;
   isLoading: boolean;
-  isClosing: boolean;
+  closingAsset: string | null;
   onRefresh: () => void;
-  onClose: (asset: string) => void;
+  onClose: (asset: string, blockchainId: bigint) => void;
   onSwitchToHomeChain: (chainId: bigint) => void;
   onAfterOp: () => void;
 }
@@ -27,7 +27,7 @@ export default function ChannelList({
   currentChainId,
   balances,
   isLoading,
-  isClosing,
+  closingAsset,
   onRefresh,
   onClose,
   onSwitchToHomeChain,
@@ -68,7 +68,7 @@ export default function ChannelList({
               onClose={onClose}
               onSwitchToHomeChain={onSwitchToHomeChain}
               onAfterOp={onAfterOp}
-              isClosing={isClosing}
+              isClosing={closingAsset?.toLowerCase() === c.asset.toLowerCase()}
             />
           ))
         )}

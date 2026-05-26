@@ -46,6 +46,7 @@ export function useNitrolite(
   const [onChainBalances, setOnChainBalances] = useState<Record<string, Decimal | null>>({});
 
   const clientRef = useRef<Client | null>(null);
+  const assetsRef = useRef<Asset[]>([]);
 
   const touch = useCallback(() => setLastCommsAt(new Date()), []);
 
@@ -58,6 +59,21 @@ export function useNitrolite(
       for (const e of entries) next[e.asset] = e.balance;
       setBalances(next);
       touch();
+
+      // Re-fetch on-chain balances so they reflect completed deposits/withdrawals.
+      const assets = assetsRef.current;
+      const ocb: Record<string, Decimal | null> = {};
+      await Promise.all(
+        assets.map(async a => {
+          try {
+            const bal = await c.getOnChainBalance(a.suggestedBlockchainId, a.symbol, address);
+            ocb[a.symbol] = bal;
+          } catch {
+            ocb[a.symbol] = null;
+          }
+        }),
+      );
+      setOnChainBalances(prev => ({ ...prev, ...ocb }));
     } catch (err) {
       setNodeError(err instanceof Error ? err.message : String(err));
     }
@@ -137,6 +153,7 @@ export function useNitrolite(
 
         clientRef.current = finalClient;
         setClient(finalClient);
+        assetsRef.current = assets;
         setSupportedAssets(assets);
         setSupportedChains(chains);
         setIsConnected(true);

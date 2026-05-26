@@ -23,7 +23,7 @@ export interface UseChannelOpsResult {
   isDepositing: boolean;
   isWithdrawing: boolean;
   isTransferring: boolean;
-  isClosing: boolean;
+  closingAsset: string | null;
   homechainModalAsset: string | null;
   onHomechainSelected: (asset: string, chainId: bigint) => Promise<void>;
   onHomechainModalDismiss: () => void;
@@ -39,7 +39,7 @@ export function useChannelOps(
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+  const [closingAsset, setClosingAsset] = useState<string | null>(null);
   const [homechainModalAsset, setHomechainModalAsset] = useState<string | null>(null);
   const pendingTransferRef = useRef<PendingTransfer | null>(null);
 
@@ -210,7 +210,7 @@ export function useChannelOps(
     async (asset: string, blockchainId: bigint) => {
       if (!client || !address) return;
       const gen = generationRef.current;
-      setIsClosing(true);
+      setClosingAsset(asset);
       try {
         toast('Closing channel…');
         // If a Finalize state is already signed (e.g. a previous checkpoint tx failed or
@@ -236,7 +236,7 @@ export function useChannelOps(
       } catch (err) {
         handleError(err, 'Close');
       } finally {
-        setIsClosing(false);
+        setClosingAsset(null);
       }
     },
     [client, address, onAfterOp],
@@ -251,7 +251,7 @@ export function useChannelOps(
     isDepositing,
     isWithdrawing,
     isTransferring,
-    isClosing,
+    closingAsset,
     homechainModalAsset,
     onHomechainSelected,
     onHomechainModalDismiss,

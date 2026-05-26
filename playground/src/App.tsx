@@ -116,6 +116,7 @@ export default function App() {
                 isTransferring={ops.isTransferring}
                 disabled={!nitro.client || showUnsupportedModal}
                 onSwitchChain={wallet.switchChain}
+                closingAsset={ops.closingAsset}
               />
 
               <div>
@@ -133,7 +134,7 @@ export default function App() {
                   currentChainId={wallet.chainId}
                   balances={nitro.balances}
                   isLoading={channels.isLoading}
-                  isClosing={ops.isClosing}
+                  closingAsset={ops.closingAsset}
                   onRefresh={refreshAll}
                   onClose={ops.closeChannel}
                   onSwitchToHomeChain={wallet.switchChain}

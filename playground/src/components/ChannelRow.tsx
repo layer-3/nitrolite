@@ -16,7 +16,7 @@ interface Props {
   chains: Blockchain[];
   currentChainId: bigint | null;
   enforcedBalance: Decimal | null | undefined;
-  onClose: (asset: string) => void;
+  onClose: (asset: string, blockchainId: bigint) => void;
   onSwitchToHomeChain: (chainId: bigint) => void;
   onAfterOp?: () => void;
   isClosing: boolean;
@@ -104,7 +104,7 @@ export default function ChannelRow({
 
           {!closed && (
             <div className="flex gap-2">
-              <button className="btn btn-danger btn-sm" onClick={() => onClose(channel.asset)} disabled={isClosing || wrongChain}>
+              <button className="btn btn-danger btn-sm" onClick={() => onClose(channel.asset, channel.blockchainId)} disabled={isClosing || wrongChain}>
                 {isClosing ? <span className="spinner" /> : 'Close channel'}
               </button>
             </div>
@@ -119,6 +119,7 @@ export default function ChannelRow({
               asset={channel.asset}
               enforcedBalance={enforcedBalance}
               onAfterOp={onAfterOp}
+              isLocked={isClosing}
             />
           )}
         </div>

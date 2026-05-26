@@ -27,6 +27,7 @@ interface Props {
   isTransferring: boolean;
   disabled: boolean;
   onSwitchChain: (chainId: bigint) => void;
+  closingAsset: string | null;
 }
 
 export default function ActionPanel({
@@ -47,6 +48,7 @@ export default function ActionPanel({
   isTransferring,
   disabled,
   onSwitchChain,
+  closingAsset,
 }: Props) {
   const [tab, setTab] = useState<Tab>('deposit');
   const [amount, setAmount] = useState('');
@@ -74,6 +76,8 @@ export default function ActionPanel({
   const homeChain = homeChainId ? chains.find(c => c.id === homeChainId) : undefined;
   const homeChainName = homeChain ? chainDisplayName(homeChain.id, homeChain.name) : null;
   const isCrossChain = homeChainId !== null && currentChainId !== homeChainId;
+  const isChannelClosing =
+    !!closingAsset && closingAsset.toLowerCase() === selectedAsset.toLowerCase();
 
   const channelBalance = balance ?? new Decimal(0);
   const amountDecimal = (() => {
@@ -167,10 +171,10 @@ export default function ActionPanel({
         </div>
       </div>
 
-      {/* Tabs + Form — blurred when cross-chain */}
+      {/* Tabs + Form — blurred when cross-chain or channel is closing */}
       <div className="relative">
         {/* Tabs */}
-        <div className={`flex gap-1 px-5 pt-4 ${isCrossChain ? 'blur-sm pointer-events-none select-none' : ''}`}>
+        <div className={`flex gap-1 px-5 pt-4 ${isCrossChain || isChannelClosing ? 'blur-sm pointer-events-none select-none' : ''}`}>
           <button className={`tab ${tab === 'deposit' ? 'active' : ''}`} onClick={() => setTab('deposit')}>
             Deposit
           </button>
@@ -183,7 +187,7 @@ export default function ActionPanel({
         </div>
 
         {/* Form */}
-        <div className={`px-5 pt-4 pb-5 ${isCrossChain ? 'blur-sm pointer-events-none select-none' : ''}`}>
+        <div className={`px-5 pt-4 pb-5 ${isCrossChain || isChannelClosing ? 'blur-sm pointer-events-none select-none' : ''}`}>
           {tab === 'transfer' && (
             <div className="mb-3">
               <label className="block text-xs text-text-muted mb-1.5">Recipient address</label>
@@ -260,7 +264,7 @@ export default function ActionPanel({
         </div>
 
         {/* Cross-chain overlay */}
-        {isCrossChain && (
+        {isCrossChain && !isChannelClosing && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
             <p className="text-text-primary text-sm text-center leading-relaxed">
               Cross-chain operations are not yet supported. Please select this asset home chain to perform operations.
@@ -271,6 +275,16 @@ export default function ActionPanel({
             >
               Select "{homeChainName ?? 'home chain'}"
             </button>
+          </div>
+        )}
+
+        {/* Channel-closing overlay */}
+        {isChannelClosing && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
+            <span className="spinner" />
+            <p className="text-text-primary text-sm text-center leading-relaxed">
+              Channel is being closed
+            </p>
           </div>
         )}
       </div>

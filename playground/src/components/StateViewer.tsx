@@ -10,9 +10,10 @@ interface Props {
   asset: string;
   enforcedBalance: Decimal | null | undefined;
   onAfterOp?: () => void;
+  isLocked?: boolean;
 }
 
-export default function StateViewer({ client, address, asset, enforcedBalance, onAfterOp }: Props) {
+export default function StateViewer({ client, address, asset, enforcedBalance, onAfterOp, isLocked }: Props) {
   const {
     enforced,
     signed,
@@ -63,8 +64,8 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
         asset={asset}
         action={
           canCheckpoint ? (
-            <button className="btn btn-sm" onClick={checkpoint} disabled={isCheckpointing}>
-              {isCheckpointing ? <span className="spinner" /> : 'Checkpoint'}
+            <button className="btn btn-sm" onClick={checkpoint} disabled={isCheckpointing || isLocked}>
+              {isCheckpointing || isLocked ? <span className="spinner" /> : 'Checkpoint'}
             </button>
           ) : null
         }
@@ -82,9 +83,9 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
               className="btn btn-sm"
               style={{ borderColor: 'rgba(96,165,250,0.4)', color: '#60a5fa' }}
               onClick={acknowledge}
-              disabled={isAcknowledging}
+              disabled={isAcknowledging || isLocked}
             >
-              {isAcknowledging ? <span className="spinner" /> : 'Acknowledge'}
+              {isAcknowledging || isLocked ? <span className="spinner" /> : 'Acknowledge'}
             </button>
           ) : null
         }

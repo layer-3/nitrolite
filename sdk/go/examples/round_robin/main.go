@@ -106,6 +106,15 @@ var chainRPCs = map[uint64]string{
 	84532:    "https://sepolia.base.org",            // Base Sepolia
 	80002:    "https://rpc-amoy.polygon.technology", // Polygon Amoy
 	59141:    "https://rpc.sepolia.linea.build",     // Linea Sepolia
+	1449000:  "https://rpc.testnet.xrplevm.org",     // XRP LVM Testnet
+
+	1:       "https://0xrpc.io/eth",                   // Ethereum Mainnet
+	14:      "https://rpc.ankr.com/flare",             // Flare Mainnet
+	56:      "https://bsc.api.pocket.network",         // BNB Smart Chain Mainnet
+	137:     "https://polygon-bor-rpc.publicnode.com", // Polygon Mainnet
+	8453:    "https://base-rpc.publicnode.com",        // Base Mainnet
+	59144:   "https://linea.drpc.org",                 // Linea Mainnet
+	1440000: "https://xrpl.drpc.org",                  // XRP EVM Mainnet
 }
 
 // minNativeBalances maps blockchain ID -> minimum native gas balance for
@@ -116,6 +125,15 @@ var minNativeBalances = map[uint64]decimal.Decimal{
 	84532:    decimal.NewFromFloat(0.005),
 	80002:    decimal.NewFromFloat(0.05),
 	59141:    decimal.NewFromFloat(0.005),
+	1449000:  decimal.NewFromFloat(0.001),
+
+	1:       decimal.NewFromFloat(0.001),
+	14:      decimal.NewFromFloat(0.001),
+	56:      decimal.NewFromFloat(0.001),
+	137:     decimal.NewFromFloat(3),
+	8453:    decimal.NewFromFloat(0.001),
+	59144:   decimal.NewFromFloat(0.001),
+	1440000: decimal.NewFromFloat(0.001),
 }
 
 // ============================================================================
@@ -315,10 +333,20 @@ func nativeBalance(ctx context.Context, rpcURL, addr string) (decimal.Decimal, e
 	return decimal.NewFromBigInt(wei, 0).Shift(-18), nil
 }
 
+// approveConfirmations is the number of additional blocks the example waits
+// for after an approve tx receipt before issuing the downstream deposit /
+// checkpoint. Public RPC endpoints are often load-balanced across multiple
+// nodes, and an eth_call read can hit a node that has not yet indexed the
+// approve. Waiting a few blocks past the receipt gives the cluster time to
+// converge on the post-tx state.
+const approveConfirmations uint64 = 3
+
 // waitForTxReceipt polls rpcURL until the given tx is mined and asserts a
-// successful (status=1) receipt. Fatals on revert or timeout. Needed because
+// successful (status=1) receipt, then waits for approveConfirmations more
+// blocks on top before returning. Fatals on revert or timeout. Needed because
 // the SDK's ApproveToken returns immediately after broadcast, and the
-// downstream Deposit call would otherwise race the allowance update.
+// downstream Deposit / Checkpoint would otherwise race the allowance update
+// on load-balanced public RPCs.
 func waitForTxReceipt(ctx context.Context, rpcURL, txHash string) {
 	cl, err := ethclient.DialContext(ctx, rpcURL)
 	if err != nil {
@@ -328,19 +356,37 @@ func waitForTxReceipt(ctx context.Context, rpcURL, txHash string) {
 
 	hash := common.HexToHash(txHash)
 	deadline := time.Now().Add(2 * time.Minute)
+
+	var minedBlock uint64
 	for {
 		receipt, err := cl.TransactionReceipt(ctx, hash)
 		if err == nil {
 			if receipt.Status != 1 {
 				log.Fatalf("tx %s reverted on-chain", txHash)
 			}
-			return
+			minedBlock = receipt.BlockNumber.Uint64()
+			break
 		}
 		if !errors.Is(err, ethereum.NotFound) {
 			log.Fatalf("TransactionReceipt %s: %v", txHash, err)
 		}
 		if time.Now().After(deadline) {
 			log.Fatalf("timed out waiting for tx %s", txHash)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	target := minedBlock + approveConfirmations
+	for {
+		head, err := cl.BlockNumber(ctx)
+		if err != nil {
+			log.Fatalf("BlockNumber on %s: %v", rpcURL, err)
+		}
+		if head >= target {
+			return
+		}
+		if time.Now().After(deadline) {
+			log.Fatalf("timed out waiting for %d confirmations on tx %s (head=%d, target=%d)", approveConfirmations, txHash, head, target)
 		}
 		time.Sleep(2 * time.Second)
 	}

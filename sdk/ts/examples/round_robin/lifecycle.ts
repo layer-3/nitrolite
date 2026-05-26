@@ -107,6 +107,15 @@ const chainRPCs: Record<string, string> = {
   '84532':    'https://sepolia.base.org',              // Base Sepolia
   '80002':    'https://rpc-amoy.polygon.technology',   // Polygon Amoy
   '59141':    'https://rpc.sepolia.linea.build',       // Linea Sepolia
+  '1449000':  'https://rpc.testnet.xrplevm.org',     // XRP LVM Testnet
+
+	'1':       'https://0xrpc.io/eth',                   // Ethereum Mainnet
+	'14':      'https://rpc.ankr.com/flare',            // Flare Mainnet
+	'56':      'https://bsc.api.pocket.network',         // BNB Smart Chain Mainnet
+	'137':     'https://polygon-bor-rpc.publicnode.com', // Polygon Mainnet
+	'8453':    'https://base-rpc.publicnode.com',        // Base Mainnet
+	'59144':   'https://linea.drpc.org',                 // Linea Mainnet
+	'1440000': 'https://xrpl.drpc.org',                  // XRP EVM Mainnet
 };
 
 // minNativeBalances maps blockchain id -> minimum native gas balance for
@@ -117,6 +126,15 @@ const minNativeBalances: Record<string, Decimal> = {
   '84532':    new Decimal('0.005'),
   '80002':    new Decimal('0.05'),
   '59141':    new Decimal('0.005'),
+	'1449000':  new Decimal('0.001'),
+
+	'1':       new Decimal('0.001'),
+	'14':      new Decimal('0.001'),
+	'56':      new Decimal('0.001'),
+	'137':     new Decimal('3'),
+	'8453':    new Decimal('0.001'),
+	'59144':   new Decimal('0.001'),
+	'1440000': new Decimal('0.001'),
 };
 
 // ============================================================================

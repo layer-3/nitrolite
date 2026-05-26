@@ -64,7 +64,12 @@ export class ERC20 {
 
       const hash = await this.walletSigner.writeContract(request as any);
 
-      await this.client.waitForTransactionReceipt({ hash });
+      // Wait several blocks past the receipt so load-balanced public RPCs
+      // converge on the post-approve state. Without this, a downstream
+      // allowance read can hit a node that hasn't yet indexed the approve
+      // and the next deposit/checkpoint reverts with "allowance is not
+      // sufficient".
+      await this.client.waitForTransactionReceipt({ hash, confirmations: 3 });
 
 
       return hash;

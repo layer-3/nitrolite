@@ -27,7 +27,10 @@ export default function App() {
     channels.refresh();
   }, [nitro, channels]);
 
-  const ops = useChannelOps(nitro.client, wallet.address, nitro.supportedAssets, refreshAll);
+  const [channelStatesKey, setChannelStatesKey] = useState(0);
+  const bumpChannelStates = useCallback(() => setChannelStatesKey(k => k + 1), []);
+
+  const ops = useChannelOps(nitro.client, wallet.address, nitro.supportedAssets, refreshAll, bumpChannelStates);
 
   const [selectedAsset, setSelectedAsset] = useState('');
 
@@ -110,10 +113,11 @@ export default function App() {
                 onDeposit={ops.deposit}
                 onWithdraw={ops.withdraw}
                 onTransfer={ops.transfer}
-                isApproving={ops.isApproving}
-                isDepositing={ops.isDepositing}
-                isWithdrawing={ops.isWithdrawing}
-                isTransferring={ops.isTransferring}
+                depositPhase={ops.depositPhase}
+                withdrawPhase={ops.withdrawPhase}
+                transferPhase={ops.transferPhase}
+                needsApproval={ops.needsApproval}
+                checkDepositAllowance={ops.checkDepositAllowance}
                 disabled={!nitro.client || showUnsupportedModal}
                 onSwitchChain={wallet.switchChain}
                 closingAsset={ops.closingAsset}
@@ -140,6 +144,7 @@ export default function App() {
                   onSwitchToHomeChain={wallet.switchChain}
                   onSelectAsset={setSelectedAsset}
                   onAfterOp={refreshAll}
+                  channelStatesKey={channelStatesKey}
                 />
               </div>
             </div>

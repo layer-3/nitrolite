@@ -14,15 +14,20 @@ interface PendingTransfer {
   amount: Decimal;
 }
 
+export type DepositPhase = 'idle' | 'approving' | 'signing_state' | 'signing_tx' | 'confirming';
+export type WithdrawPhase = 'idle' | 'signing_state' | 'signing_tx' | 'confirming';
+export type TransferPhase = 'idle' | 'signing_state';
+
 export interface UseChannelOpsResult {
   deposit: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   withdraw: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   transfer: (to: Address, asset: string, amount: Decimal) => Promise<void>;
   closeChannel: (asset: string, blockchainId: bigint) => Promise<void>;
-  isApproving: boolean;
-  isDepositing: boolean;
-  isWithdrawing: boolean;
-  isTransferring: boolean;
+  depositPhase: DepositPhase;
+  withdrawPhase: WithdrawPhase;
+  transferPhase: TransferPhase;
+  needsApproval: boolean | null;
+  checkDepositAllowance: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   closingAsset: string | null;
   homechainModalAsset: string | null;
   onHomechainSelected: (asset: string, chainId: bigint) => Promise<void>;
@@ -34,11 +39,12 @@ export function useChannelOps(
   address: Address | null,
   supportedAssets: Asset[],
   onAfterOp?: () => void,
+  onAfterTxMined?: () => void,
 ): UseChannelOpsResult {
-  const [isApproving, setIsApproving] = useState(false);
-  const [isDepositing, setIsDepositing] = useState(false);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [isTransferring, setIsTransferring] = useState(false);
+  const [depositPhase, setDepositPhase] = useState<DepositPhase>('idle');
+  const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
+  const [transferPhase, setTransferPhase] = useState<TransferPhase>('idle');
+  const [needsApproval, setNeedsApproval] = useState<boolean | null>(null);
   const [closingAsset, setClosingAsset] = useState<string | null>(null);
   const [homechainModalAsset, setHomechainModalAsset] = useState<string | null>(null);
   const pendingTransferRef = useRef<PendingTransfer | null>(null);
@@ -58,6 +64,24 @@ export function useChannelOps(
     [supportedAssets],
   );
 
+  const checkDepositAllowance = useCallback(
+    async (blockchainId: bigint, asset: string, amount: Decimal) => {
+      if (!client || !address || amount.lte(0)) { setNeedsApproval(null); return; }
+      try {
+        const tokenInfo = tokenInfoFor(asset, blockchainId);
+        if (!tokenInfo || /^0x0+$/i.test(tokenInfo.address)) { setNeedsApproval(false); return; }
+        const allowance = await client.checkTokenAllowance(blockchainId, tokenInfo.address, address);
+        const amountUnits = BigInt(
+          amount.mul(new Decimal(10).pow(tokenInfo.decimals)).floor().toFixed(0),
+        );
+        setNeedsApproval(allowance < amountUnits);
+      } catch {
+        setNeedsApproval(null);
+      }
+    },
+    [client, address, tokenInfoFor],
+  );
+
   const handleError = (err: unknown, label: string) => {
     // EIP-1193 user rejection: code 4001
     const e = err as { code?: number; message?: string };
@@ -72,15 +96,13 @@ export function useChannelOps(
     async (blockchainId: bigint, asset: string, amount: Decimal) => {
       if (!client || !address) return;
       const gen = generationRef.current;
-      setIsDepositing(true);
+      setDepositPhase('approving'); // start — shows "Approve" or transitions to approval immediately
       try {
         const tokenInfo = tokenInfoFor(asset, blockchainId);
         if (!tokenInfo) throw new Error(`token not found for ${asset} on chain ${blockchainId}`);
 
-        // Native tokens (address 0x0…0) don't need allowance/approve.
         const isNative = /^0x0+$/i.test(tokenInfo.address);
         if (!isNative) {
-          // checkTokenAllowance returns smallest-unit bigint; convert deposit amount to the same scale.
           const allowance = await client.checkTokenAllowance(blockchainId, tokenInfo.address, address);
           if (generationRef.current !== gen) {
             toast('Wallet changed — operation cancelled');
@@ -90,17 +112,12 @@ export function useChannelOps(
             amount.mul(new Decimal(10).pow(tokenInfo.decimals)).floor().toFixed(0),
           );
           if (allowance < amountUnits) {
-            // Approve effectively-unlimited once so subsequent deposits skip the
-            // approval popup. SDK's approveToken accepts Decimal in human units
-            // and multiplies by 10^decimals internally; pass floor(MaxUint256 /
-            // 10^decimals) so the scaled bigint never exceeds uint256.
+            // Approve effectively-unlimited once so future deposits skip the popup.
             const maxUnits = (1n << 256n) - 1n;
             const divisor = 10n ** BigInt(tokenInfo.decimals);
             const humanMax = new Decimal((maxUnits / divisor).toString());
-            toast('Approving token (one-time)…');
-            setIsApproving(true);
             await client.approveToken(blockchainId, asset, humanMax);
-            setIsApproving(false);
+            setNeedsApproval(false);
             if (generationRef.current !== gen) {
               toast('Wallet changed — operation cancelled');
               return;
@@ -108,50 +125,69 @@ export function useChannelOps(
           }
         }
 
-        toast('Depositing…');
+        setDepositPhase('signing_state');
         await client.deposit(blockchainId, asset, amount);
         if (generationRef.current !== gen) return;
-        await client.checkpoint(asset);
+        onAfterTxMined?.(); // signed/issued states update; unified balance stays until tx mines
+        setDepositPhase('signing_tx');
+        const depositTxHash = await client.checkpoint(asset);
         if (generationRef.current !== gen) return;
+        setDepositPhase('confirming');
+        const depositRpcUrl = rpcUrlFor(blockchainId);
+        if (depositRpcUrl && depositTxHash) {
+          const depositClient = createPublicClient({ transport: http(depositRpcUrl) });
+          await depositClient.waitForTransactionReceipt({ hash: depositTxHash as Hash });
+          if (generationRef.current !== gen) return;
+        }
         toast.success(`Deposited ${amount.toString()} ${asset}`);
-        onAfterOp?.();
+        onAfterOp?.();       // updates unified balance and on-chain balance
+        onAfterTxMined?.();  // forces channel-states refresh (enforced version, checkpoint button)
       } catch (err) {
         handleError(err, 'Deposit');
       } finally {
-        setIsApproving(false);
-        setIsDepositing(false);
+        setDepositPhase('idle');
       }
     },
-    [client, address, tokenInfoFor, onAfterOp],
+    [client, address, tokenInfoFor, onAfterOp, onAfterTxMined],
   );
 
   const withdraw = useCallback(
     async (blockchainId: bigint, asset: string, amount: Decimal) => {
       if (!client || !address) return;
       const gen = generationRef.current;
-      setIsWithdrawing(true);
+      setWithdrawPhase('signing_state');
       try {
-        toast('Withdrawing…');
         await client.withdraw(blockchainId, asset, amount);
         if (generationRef.current !== gen) return;
-        await client.checkpoint(asset);
+        onAfterOp?.();      // unified balance updates immediately after state is signed
+        onAfterTxMined?.(); // signed/issued states update
+        setWithdrawPhase('signing_tx');
+        const withdrawTxHash = await client.checkpoint(asset);
         if (generationRef.current !== gen) return;
+        setWithdrawPhase('confirming');
+        const withdrawRpcUrl = rpcUrlFor(blockchainId);
+        if (withdrawRpcUrl && withdrawTxHash) {
+          const withdrawClient = createPublicClient({ transport: http(withdrawRpcUrl) });
+          await withdrawClient.waitForTransactionReceipt({ hash: withdrawTxHash as Hash });
+          if (generationRef.current !== gen) return;
+        }
         toast.success(`Withdrew ${amount.toString()} ${asset}`);
-        onAfterOp?.();
+        onAfterOp?.();       // updates unified balance and on-chain balance
+        onAfterTxMined?.();  // forces channel-states refresh (enforced version, checkpoint button)
       } catch (err) {
         handleError(err, 'Withdraw');
       } finally {
-        setIsWithdrawing(false);
+        setWithdrawPhase('idle');
       }
     },
-    [client, address, onAfterOp],
+    [client, address, onAfterOp, onAfterTxMined],
   );
 
   const performTransfer = useCallback(
     async (to: Address, asset: string, amount: Decimal): Promise<boolean> => {
       if (!client) return false;
       const gen = generationRef.current;
-      setIsTransferring(true);
+      setTransferPhase('signing_state');
       try {
         await client.transfer(to, asset, amount);
         if (generationRef.current !== gen) return false;
@@ -169,7 +205,7 @@ export function useChannelOps(
         handleError(err, 'Transfer');
         return false;
       } finally {
-        setIsTransferring(false);
+        setTransferPhase('idle');
       }
     },
     [client, onAfterOp],
@@ -233,13 +269,14 @@ export function useChannelOps(
         }
         toast.success(`Closed channel for ${asset}`);
         onAfterOp?.();
+        onAfterTxMined?.();
       } catch (err) {
         handleError(err, 'Close');
       } finally {
         setClosingAsset(null);
       }
     },
-    [client, address, onAfterOp],
+    [client, address, onAfterOp, onAfterTxMined],
   );
 
   return {
@@ -247,10 +284,11 @@ export function useChannelOps(
     withdraw,
     transfer,
     closeChannel,
-    isApproving,
-    isDepositing,
-    isWithdrawing,
-    isTransferring,
+    depositPhase,
+    withdrawPhase,
+    transferPhase,
+    needsApproval,
+    checkDepositAllowance,
     closingAsset,
     homechainModalAsset,
     onHomechainSelected,

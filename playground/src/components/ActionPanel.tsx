@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Decimal } from 'decimal.js';
 import type { Address } from 'viem';
 import type { Asset, Blockchain, Channel } from '@yellow-org/sdk';
@@ -6,6 +6,7 @@ import { ChannelType, ChannelStatus } from '@yellow-org/sdk';
 import { formatBalance, isValidAddress } from '../utils';
 import { chainDisplayName } from '../chainMeta';
 import TokenSelector from './TokenSelector';
+import type { DepositPhase, WithdrawPhase, TransferPhase } from '../hooks/useChannelOps';
 
 type Tab = 'deposit' | 'withdraw' | 'transfer';
 
@@ -21,10 +22,11 @@ interface Props {
   onDeposit: (chainId: bigint, asset: string, amount: Decimal) => void;
   onWithdraw: (chainId: bigint, asset: string, amount: Decimal) => void;
   onTransfer: (to: Address, asset: string, amount: Decimal) => void;
-  isApproving: boolean;
-  isDepositing: boolean;
-  isWithdrawing: boolean;
-  isTransferring: boolean;
+  depositPhase: DepositPhase;
+  withdrawPhase: WithdrawPhase;
+  transferPhase: TransferPhase;
+  needsApproval: boolean | null;
+  checkDepositAllowance: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   disabled: boolean;
   onSwitchChain: (chainId: bigint) => void;
   closingAsset: string | null;
@@ -42,10 +44,11 @@ export default function ActionPanel({
   onDeposit,
   onWithdraw,
   onTransfer,
-  isApproving,
-  isDepositing,
-  isWithdrawing,
-  isTransferring,
+  depositPhase,
+  withdrawPhase,
+  transferPhase,
+  needsApproval,
+  checkDepositAllowance,
   disabled,
   onSwitchChain,
   closingAsset,
@@ -54,6 +57,8 @@ export default function ActionPanel({
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [recipientError, setRecipientError] = useState<string | null>(null);
+  const wasBusyRef = useRef(false);
+  const operatingTabRef = useRef<Tab | null>(null);
 
   // Pick the chain for deposit/withdraw: current wallet chain if it's supported, else asset's suggested chain.
   const asset = assets.find(a => a.symbol === selectedAsset);
@@ -111,20 +116,42 @@ export default function ActionPanel({
 
   const fire = () => {
     if (!asset || !operatingChainId) return;
+    if (tab === 'transfer' && !validateRecipient()) return;
+    operatingTabRef.current = tab;
     if (tab === 'deposit') onDeposit(operatingChainId, selectedAsset, amountDecimal);
     else if (tab === 'withdraw') onWithdraw(operatingChainId, selectedAsset, amountDecimal);
-    else if (tab === 'transfer') {
-      if (!validateRecipient()) return;
-      onTransfer(recipient as Address, selectedAsset, amountDecimal);
-    }
-    setAmount('');
-    if (tab === 'transfer') setRecipient('');
+    else if (tab === 'transfer') onTransfer(recipient as Address, selectedAsset, amountDecimal);
   };
 
   const isBusy =
-    (tab === 'deposit' && isDepositing) ||
-    (tab === 'withdraw' && isWithdrawing) ||
-    (tab === 'transfer' && isTransferring);
+    (tab === 'deposit' && depositPhase !== 'idle') ||
+    (tab === 'withdraw' && withdrawPhase !== 'idle') ||
+    (tab === 'transfer' && transferPhase !== 'idle');
+
+  // Re-check allowance whenever the deposit inputs settle (debounced 400 ms).
+  useEffect(() => {
+    if (tab !== 'deposit' || !operatingChainId || amountInvalid) {
+      return;
+    }
+    const t = setTimeout(() => {
+      checkDepositAllowance(operatingChainId, selectedAsset, amountDecimal);
+    }, 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, operatingChainId, selectedAsset, amountDecimal.toString()]);
+
+  // Clear inputs when the operation finishes (isBusy: true → false).
+  useEffect(() => {
+    if (wasBusyRef.current && !isBusy) {
+      setAmount('');
+      if (operatingTabRef.current === 'transfer') {
+        setRecipient('');
+        setRecipientError(null);
+      }
+      operatingTabRef.current = null;
+    }
+    wasBusyRef.current = isBusy;
+  }, [isBusy]);
 
   // For deposit, also require on-chain balance to be loaded before allowing submit.
   const depositBalanceReady = tab !== 'deposit' || onChainBalance != null;
@@ -142,6 +169,33 @@ export default function ActionPanel({
     transferRecipientValid;
 
   const amountInputError = amountExceedsChannel || amountExceedsOnChain;
+
+  // Whether the selected asset already has an open channel (affects deposit label).
+  const channelExists = channels.some(
+    c => c.asset.toLowerCase() === selectedAsset.toLowerCase() && c.status !== ChannelStatus.Closed,
+  );
+
+  const buttonLabel = (() => {
+    if (tab === 'deposit') {
+      switch (depositPhase) {
+        case 'approving':   return 'Approving…';
+        case 'signing_state': return channelExists ? 'Signing deposit state…' : 'Signing creation state…';
+        case 'signing_tx':  return 'Signing deposit transaction…';
+        case 'confirming':  return 'Depositing…';
+        default:            return needsApproval ? 'Approve' : 'Deposit';
+      }
+    }
+    if (tab === 'withdraw') {
+      switch (withdrawPhase) {
+        case 'signing_state': return 'Signing withdrawal state…';
+        case 'signing_tx':    return 'Sending withdrawal transaction…';
+        case 'confirming':    return 'Withdrawing…';
+        default:              return 'Withdraw';
+      }
+    }
+    // transfer
+    return transferPhase === 'signing_state' ? 'Signing transfer state…' : 'Transfer';
+  })();
 
   return (
     <div className="card">
@@ -197,6 +251,7 @@ export default function ActionPanel({
                   type="text"
                   placeholder="0x…"
                   value={recipient}
+                  disabled={isBusy}
                   onChange={e => {
                     setRecipient(e.target.value);
                     if (recipientError) setRecipientError(null);
@@ -215,9 +270,10 @@ export default function ActionPanel({
               inputMode="decimal"
               placeholder="0.00"
               value={amount}
+              disabled={isBusy}
               onChange={e => setAmount(e.target.value)}
             />
-            <button type="button" className="input-max" onClick={setMax} title="Use max available">
+            <button type="button" className="input-max" onClick={setMax} disabled={isBusy} title="Use max available">
               MAX
             </button>
             <span className="input-suffix">{selectedAsset.toUpperCase() || '—'}</span>
@@ -250,16 +306,10 @@ export default function ActionPanel({
             {isBusy ? (
               <>
                 <span className="spinner" />
-                {tab === 'deposit' && (isApproving ? 'Approving…' : 'Depositing…')}
-                {tab === 'withdraw' && 'Withdrawing…'}
-                {tab === 'transfer' && 'Transferring…'}
+                {buttonLabel}
               </>
-            ) : tab === 'deposit' ? (
-              'Deposit via MetaMask'
-            ) : tab === 'withdraw' ? (
-              'Withdraw to wallet'
             ) : (
-              'Transfer'
+              buttonLabel
             )}
           </button>
         </div>

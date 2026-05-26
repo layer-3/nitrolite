@@ -18,6 +18,7 @@ interface Props {
   onSwitchToHomeChain: (chainId: bigint) => void;
   onSelectAsset: (asset: string) => void;
   onAfterOp: () => void;
+  channelStatesKey?: number;
 }
 
 export default function ChannelList({
@@ -34,6 +35,7 @@ export default function ChannelList({
   onSwitchToHomeChain,
   onSelectAsset,
   onAfterOp,
+  channelStatesKey,
 }: Props) {
   return (
     <div className="card">
@@ -72,6 +74,7 @@ export default function ChannelList({
               onSelectAsset={onSelectAsset}
               onAfterOp={onAfterOp}
               isClosing={closingAsset?.toLowerCase() === c.asset.toLowerCase()}
+              channelStatesKey={channelStatesKey}
             />
           ))
         )}

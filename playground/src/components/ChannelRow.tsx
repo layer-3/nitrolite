@@ -21,6 +21,7 @@ interface Props {
   onSelectAsset: (asset: string) => void;
   onAfterOp?: () => void;
   isClosing: boolean;
+  channelStatesKey?: number;
 }
 
 export default function ChannelRow({
@@ -35,6 +36,7 @@ export default function ChannelRow({
   onSelectAsset,
   onAfterOp,
   isClosing,
+  channelStatesKey,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const closed = channel.status === ChannelStatus.Closed;
@@ -133,6 +135,7 @@ export default function ChannelRow({
               enforcedBalance={enforcedBalance}
               onAfterOp={onAfterOp}
               isLocked={isClosing}
+              refreshKey={channelStatesKey}
             />
           )}
         </div>

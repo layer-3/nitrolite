@@ -11,9 +11,10 @@ interface Props {
   enforcedBalance: Decimal | null | undefined;
   onAfterOp?: () => void;
   isLocked?: boolean;
+  refreshKey?: number;
 }
 
-export default function StateViewer({ client, address, asset, enforcedBalance, onAfterOp, isLocked }: Props) {
+export default function StateViewer({ client, address, asset, enforcedBalance, onAfterOp, isLocked, refreshKey }: Props) {
   const {
     enforced,
     signed,
@@ -26,7 +27,7 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
     checkpoint,
     isAcknowledging,
     isCheckpointing,
-  } = useChannelStates(client, address, asset, enforcedBalance, onAfterOp);
+  } = useChannelStates(client, address, asset, enforcedBalance, onAfterOp, refreshKey);
 
   if (isLoading && !enforced && !signed && !issued) {
     return <div className="text-text-muted text-xs px-4 py-3">Loading states…</div>;

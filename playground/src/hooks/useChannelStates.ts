@@ -33,6 +33,7 @@ export function useChannelStates(
   asset: string,
   enforcedBalance: Decimal | null | undefined,
   onAfterOp?: () => void,
+  refreshKey?: number,
 ): UseChannelStatesResult {
   const [enforced, setEnforced] = useState<EnforcedState | null>(null);
   const [signed, setSigned] = useState<State | null>(null);
@@ -96,7 +97,7 @@ export function useChannelStates(
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, refreshKey]);
 
   const canAcknowledge = !!issued && (signed === null || issued.version > signed.version);
   const canCheckpoint = !!signed && (enforced === null || signed.version > enforced.stateVersion);

@@ -1,0 +1,21 @@
+{
+  "name": "@yellow-org/example-round-robin",
+  "version": "1.0.0",
+  "description": "Nitrolite SDK Round Robin Test Example",
+  "type": "module",
+  "scripts": {
+    "lifecycle": "tsx lifecycle.ts"
+  },
+  "dependencies": {
+    "@yellow-org/sdk": "file:../..",
+    "decimal.js": "^10.4.3",
+    "viem": "^2.46.2",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

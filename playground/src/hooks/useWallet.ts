@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { showErrorToast } from "../toastError";
 import { createWalletClient, custom, type WalletClient, type Address } from 'viem';
 
 declare global {
@@ -48,7 +48,7 @@ export function useWallet(): UseWalletResult {
 
   const connect = useCallback(async () => {
     if (!window.ethereum) {
-      toast.error('MetaMask not detected. Install the extension to continue.');
+      showErrorToast('MetaMask not detected. Install the extension to continue.');
       return;
     }
     setState(s => ({ ...s, isConnecting: true }));
@@ -65,7 +65,7 @@ export function useWallet(): UseWalletResult {
       });
     } catch (err) {
       setState(s => ({ ...s, isConnecting: false }));
-      toast.error(toErrorMessage(err));
+      showErrorToast(toErrorMessage(err));
     }
   }, [buildClient, fetchChainId]);
 
@@ -84,13 +84,13 @@ export function useWallet(): UseWalletResult {
     try {
       await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
     } catch (err) {
-      toast.error(toErrorMessage(err));
+      showErrorToast(toErrorMessage(err));
     }
   }, []);
 
   useEffect(() => {
     if (!window.ethereum) {
-      toast.error('MetaMask not detected. Install the extension to continue.');
+      showErrorToast('MetaMask not detected. Install the extension to continue.');
       return;
     }
 

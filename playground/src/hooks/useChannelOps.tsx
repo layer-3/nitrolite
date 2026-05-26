@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { showErrorToast } from "../toastError";
 import type { Client, Asset } from '@yellow-org/sdk';
+import { TransitionType } from '@yellow-org/sdk';
 import { Decimal } from 'decimal.js';
-import type { Address } from 'viem';
+import type { Address, Hash } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { rpcUrlFor } from '../networks';
 
 interface PendingTransfer {
   to: Address;
@@ -14,7 +18,7 @@ export interface UseChannelOpsResult {
   deposit: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   withdraw: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   transfer: (to: Address, asset: string, amount: Decimal) => Promise<void>;
-  closeChannel: (asset: string) => Promise<void>;
+  closeChannel: (asset: string, blockchainId: bigint) => Promise<void>;
   isApproving: boolean;
   isDepositing: boolean;
   isWithdrawing: boolean;
@@ -61,8 +65,7 @@ export function useChannelOps(
       toast('Transaction cancelled');
       return;
     }
-    const msg = e?.message ?? String(err);
-    toast.error(`${label} failed: ${msg}`);
+    showErrorToast(`${label} failed: ${e?.message ?? String(err)}`);
   };
 
   const deposit = useCallback(
@@ -204,16 +207,30 @@ export function useChannelOps(
   }, []);
 
   const closeChannel = useCallback(
-    async (asset: string) => {
-      if (!client) return;
+    async (asset: string, blockchainId: bigint) => {
+      if (!client || !address) return;
       const gen = generationRef.current;
       setIsClosing(true);
       try {
         toast('Closing channel…');
-        await client.closeHomeChannel(asset);
+        // If a Finalize state is already signed (e.g. a previous checkpoint tx failed or
+        // the channel is in Closing status on-chain), skip re-signing and go straight to
+        // the on-chain transaction.
+        const signedState = await client.getLatestState(address, asset, true);
         if (generationRef.current !== gen) return;
-        await client.checkpoint(asset);
+        if (!signedState || signedState.transition.type !== TransitionType.Finalize) {
+          await client.closeHomeChannel(asset);
+          if (generationRef.current !== gen) return;
+        }
+        const txHash = await client.checkpoint(asset);
         if (generationRef.current !== gen) return;
+        // Wait for the transaction to be mined before reporting success.
+        const rpcUrl = rpcUrlFor(blockchainId);
+        if (rpcUrl && txHash) {
+          const publicClient = createPublicClient({ transport: http(rpcUrl) });
+          await publicClient.waitForTransactionReceipt({ hash: txHash as Hash });
+          if (generationRef.current !== gen) return;
+        }
         toast.success(`Closed channel for ${asset}`);
         onAfterOp?.();
       } catch (err) {
@@ -222,7 +239,7 @@ export function useChannelOps(
         setIsClosing(false);
       }
     },
-    [client, onAfterOp],
+    [client, address, onAfterOp],
   );
 
   return {

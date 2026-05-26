@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { showErrorToast } from "../toastError";
 import type { Client, Channel } from '@yellow-org/sdk';
 import { Decimal } from 'decimal.js';
 import { Inbox } from 'lucide-react';
@@ -34,7 +35,7 @@ export default function PendingReceipts({ client, channels, balances, onAfterAck
       if (e?.code === 4001) {
         toast('Cancelled');
       } else {
-        toast.error(`Acknowledge failed: ${e?.message ?? String(err)}`);
+        showErrorToast(`Acknowledge failed: ${e?.message ?? String(err)}`);
       }
     } finally {
       setAcking(null);

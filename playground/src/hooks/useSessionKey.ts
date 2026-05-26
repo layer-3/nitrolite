@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { showErrorToast } from "../toastError";
 import type { Address } from 'viem';
 import type { Client } from '@yellow-org/sdk';
 import {
@@ -55,7 +56,7 @@ export function useSessionKey(address: Address | null): UseSessionKeyResult {
   const register = useCallback(
     async (client: Client, assetSymbols: string[]) => {
       if (!address || !assetSymbols.length) {
-        toast.error('Cannot register: missing address or assets');
+        showErrorToast('Cannot register: missing address or assets');
         return;
       }
       setIsRegistering(true);
@@ -90,7 +91,7 @@ export function useSessionKey(address: Address | null): UseSessionKeyResult {
       } catch (err) {
         const e = err as { code?: number; message?: string };
         if (e?.code === 4001) toast('Cancelled');
-        else toast.error(`Session key setup failed: ${e?.message ?? String(err)}`);
+        else showErrorToast(`Session key setup failed: ${e?.message ?? String(err)}`);
       } finally {
         setIsRegistering(false);
       }

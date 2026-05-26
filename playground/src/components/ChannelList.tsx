@@ -16,6 +16,7 @@ interface Props {
   onRefresh: () => void;
   onClose: (asset: string, blockchainId: bigint) => void;
   onSwitchToHomeChain: (chainId: bigint) => void;
+  onSelectAsset: (asset: string) => void;
   onAfterOp: () => void;
 }
 
@@ -31,6 +32,7 @@ export default function ChannelList({
   onRefresh,
   onClose,
   onSwitchToHomeChain,
+  onSelectAsset,
   onAfterOp,
 }: Props) {
   return (
@@ -67,6 +69,7 @@ export default function ChannelList({
               enforcedBalance={balances[c.asset] ?? null}
               onClose={onClose}
               onSwitchToHomeChain={onSwitchToHomeChain}
+              onSelectAsset={onSelectAsset}
               onAfterOp={onAfterOp}
               isClosing={closingAsset?.toLowerCase() === c.asset.toLowerCase()}
             />

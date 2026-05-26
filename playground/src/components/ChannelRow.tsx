@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import type { Client, Channel, Blockchain } from '@yellow-org/sdk';
 import { ChannelStatus } from '@yellow-org/sdk';
 import { Decimal } from 'decimal.js';
@@ -18,6 +18,7 @@ interface Props {
   enforcedBalance: Decimal | null | undefined;
   onClose: (asset: string, blockchainId: bigint) => void;
   onSwitchToHomeChain: (chainId: bigint) => void;
+  onSelectAsset: (asset: string) => void;
   onAfterOp?: () => void;
   isClosing: boolean;
 }
@@ -31,6 +32,7 @@ export default function ChannelRow({
   enforcedBalance,
   onClose,
   onSwitchToHomeChain,
+  onSelectAsset,
   onAfterOp,
   isClosing,
 }: Props) {
@@ -58,6 +60,17 @@ export default function ChannelRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <span>{channel.asset.toUpperCase()}</span>
+            <span className="tooltip-wrap">
+              <button
+                type="button"
+                className="flex items-center text-text-muted hover:text-accent transition-colors"
+                onClick={e => { e.stopPropagation(); onSelectAsset(channel.asset); }}
+                aria-label="Select asset"
+              >
+                <Search size={12} />
+              </button>
+              <span className="tip">Select asset</span>
+            </span>
             <span
               className="text-[10px] px-1 rounded-xl border border-border bg-bg-surface text-text-muted font-normal"
             >

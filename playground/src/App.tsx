@@ -138,6 +138,7 @@ export default function App() {
                   onRefresh={refreshAll}
                   onClose={ops.closeChannel}
                   onSwitchToHomeChain={wallet.switchChain}
+                  onSelectAsset={setSelectedAsset}
                   onAfterOp={refreshAll}
                 />
               </div>

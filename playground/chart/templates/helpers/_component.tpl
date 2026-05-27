@@ -65,7 +65,7 @@ Returns component's probes
   {{- if eq $probe.type "http" }}
   httpGet:
     port: {{ $port }}
-    path: {{ default "/playground/" $probe.endpoint }}
+    path: {{ default "/v1/playground/" $probe.endpoint }}
   {{- else }}
   tcpSocket:
     port: {{ $port }}

@@ -6,5 +6,5 @@ set -eu
 
 : "${NITRONODE_URL:?NITRONODE_URL must be set}"
 
-OUT=/usr/share/nginx/html/playground/env.js
+OUT=/usr/share/nginx/html/v1/playground/env.js
 envsubst < /env.js.tmpl > "$OUT"

@@ -23,7 +23,7 @@ COPY playground/package.json playground/package-lock.json ./playground/
 RUN cd playground && npm ci --no-audit --no-fund
 
 # Build the playground bundle. `npm run build` runs `tsc --noEmit && vite build`,
-# emitting to playground/dist with base=/playground/.
+# emitting to playground/dist with base=/v1/playground/.
 COPY playground ./playground
 RUN cd playground && npm run build
 
@@ -38,6 +38,6 @@ COPY playground/deploy/env.js.tmpl /env.js.tmpl
 COPY playground/deploy/entrypoint.sh /docker-entrypoint.d/40-playground-env.sh
 RUN chmod +x /docker-entrypoint.d/40-playground-env.sh
 
-COPY --from=builder /repo/playground/dist /usr/share/nginx/html/playground
+COPY --from=builder /repo/playground/dist /usr/share/nginx/html/v1/playground
 
 EXPOSE 8080

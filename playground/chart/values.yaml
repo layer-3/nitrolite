@@ -22,9 +22,9 @@ service:
     enabled: true
     # -- HTTP service port (matches nginx listener in playground/deploy/nginx.conf)
     port: 8080
-    # -- External path. The bundle is built with Vite base=/playground/, so no
-    # ingress rewrite is needed: nginx serves the same prefix directly.
-    path: /playground
+    # -- External path. The bundle is built with Vite base=/v1/playground/, so
+    # no ingress rewrite is needed: nginx serves the same prefix directly.
+    path: /v1/playground
 
 metrics:
   # -- Static SPA — no app-level metrics. Kept for template parity with faucet.

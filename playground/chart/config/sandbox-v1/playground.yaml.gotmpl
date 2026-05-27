@@ -6,10 +6,10 @@ service:
   http:
     enabled: true
     port: 8080
-    # No ingress rewrite: the Vite bundle is built with base=/playground/, so
-    # browser asset URLs already include the prefix and nginx serves files
+    # No ingress rewrite: the Vite bundle is built with base=/v1/playground/,
+    # so browser asset URLs already include the prefix and nginx serves files
     # from the same prefix in-cluster.
-    path: /playground
+    path: /v1/playground
 
 metrics:
   enabled: false

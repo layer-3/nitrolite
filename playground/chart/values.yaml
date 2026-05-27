@@ -77,6 +77,16 @@ networking:
     tls:
       enabled: false
 
+  # -- Optional ingress that redirects requests to `/` on the same host to
+  # the playground entry point. Useful when the playground is the only
+  # public UI on the hostname and a bare domain hit should land users on the
+  # SPA. Disabled by default; enabled per-env in chart/config/<env>/.
+  ingressRootRedirect:
+    enabled: false
+    # -- HTTP status code used for the redirect. 308 is method-preserving and
+    # cacheable; switch to 302 if you need clients to recheck on every visit.
+    statusCode: 308
+
 # -- Image pull secret name. Defaults to the secret created by the co-deployed
 # nitronode release in the same namespace (playground `needs:` nitronode in
 # helmfile, so the secret always exists by the time playground pulls).

@@ -24,7 +24,13 @@ type Config struct {
 	StandardTipAmount string `env:"STANDARD_TIP_AMOUNT" env-required:"true" env-description:"Default amount to send per request"`
 	MinTransferCount  int    `env:"MIN_TRANSFER_COUNT" env-required:"true" env-description:"Number of transfers a server should have a balance for to operate"`
 	CooldownPeriod    string `env:"COOLDOWN_PERIOD" env-default:"24h" env-description:"Cooldown between requests per wallet/IP (e.g. 24h, 1h30m)"`
-	TrustedProxies    string `env:"TRUSTED_PROXIES" env-default:"" env-description:"Comma-separated trusted proxy IPs; empty means direct exposure only"`
+	// IPRateLimitEnabled toggles the per-IP bucket. With ingress-level
+	// limits (limit-rps, limit-connections) handling flood protection, the
+	// per-IP app cooldown becomes redundant — and worse, collapses to a
+	// single bucket whenever TRUSTED_PROXIES is unset, since gin's
+	// ClientIP() then returns the ingress pod's address for every request.
+	IPRateLimitEnabled bool   `env:"IP_RATE_LIMIT_ENABLED" env-default:"true" env-description:"Whether the per-IP rate-limit bucket is active. Disable when the ingress is enforcing per-IP limits."`
+	TrustedProxies     string `env:"TRUSTED_PROXIES" env-default:"" env-description:"Comma-separated trusted proxy IPs; empty means direct exposure only"`
 
 	// Log carries LOG_LEVEL / LOG_FORMAT / LOG_OUTPUT (see pkg/log).
 	Log log.Config

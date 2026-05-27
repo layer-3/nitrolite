@@ -19,8 +19,14 @@ config:
     tipAmount: 10
   # -- Minimum number of transfers the server should have a balance for to operate
   minTransferCount: 5
-  # -- Cooldown between requests per wallet/IP (Go duration, e.g. 24h, 1h30m)
+  # -- Cooldown between requests per wallet/IP (Go duration, e.g. 24h, 1h30m).
+  # Applies to both the per-address and per-IP buckets when both are active.
   cooldownPeriod: 24h
+  # -- Whether the per-IP rate-limit bucket is active. Set `false` when
+  # ingress-level limits (limit-rps, limit-connections) handle per-IP flood
+  # protection — see networking.ingress.annotations in the per-env values.
+  # Leave `true` only if the faucet is exposed without a fronting ingress.
+  ipRateLimitEnabled: true
   # -- Comma-separated trusted proxy IPs/CIDRs; empty means direct exposure only
   trustedProxies: ""
   # -- Additional environment variables as key-value pairs

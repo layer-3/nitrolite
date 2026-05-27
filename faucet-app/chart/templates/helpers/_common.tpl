@@ -81,6 +81,8 @@ Returns common environment variables
   value: {{ .Values.config.minTransferCount | print | quote }}
 - name: COOLDOWN_PERIOD
   value: {{ .Values.config.cooldownPeriod | print | quote }}
+- name: IP_RATE_LIMIT_ENABLED
+  value: {{ .Values.config.ipRateLimitEnabled | print | quote }}
 {{- with .Values.config.trustedProxies }}
 - name: TRUSTED_PROXIES
   value: {{ . | print | quote }}

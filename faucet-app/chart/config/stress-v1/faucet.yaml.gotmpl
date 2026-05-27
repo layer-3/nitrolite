@@ -11,6 +11,8 @@ config:
     tipAmount: 10
   minTransferCount: 5
   cooldownPeriod: 24h
+  # Per-IP flood protection lives on the ingress (see annotations below).
+  ipRateLimitEnabled: false
   trustedProxies: ""
   envSecret: ""
 # ownerAddress: "0x5FF0Fdb7A3Cda14387d5ea5A550381d6114D1177"
@@ -49,3 +51,9 @@ networking:
     annotations:
       nginx.ingress.kubernetes.io/use-regex: "true"
       nginx.ingress.kubernetes.io/rewrite-target: /$2
+      # ── Per-IP flood protection (NGINX-level) ────────────────────────────
+      # Replaces the app-level per-IP bucket; see sandbox-v1 for caveats on
+      # source-IP propagation. Lower numbers because faucet is rare-write.
+      nginx.ingress.kubernetes.io/limit-connections: "10"
+      nginx.ingress.kubernetes.io/limit-rps: "5"
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"

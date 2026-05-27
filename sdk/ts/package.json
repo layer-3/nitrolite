@@ -64,7 +64,7 @@
         "abitype": "^1.2.3",
         "decimal.js": "^10.4.3",
         "jest-util": "^30.3.0",
-        "viem": "^2.46.1",
+        "viem": "^2.50.4",
         "zod": "^4.3.6"
     },
     "devDependencies": {
@@ -87,6 +87,9 @@
         "ts-jest": "^29.1.2",
         "ts-node": "^10.9.2",
         "typescript": "^6.0.3",
+        "ws": "8.21.0"
+    },
+    "overrides": {
         "ws": "8.21.0"
     }
 }

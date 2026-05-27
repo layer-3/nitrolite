@@ -19,10 +19,13 @@ replicas: {{ .replicaCount }}
 {{- end }}
 
 {{/*
-Returns full docker image name
+Returns full docker image name. Fails fast if `image.tag` is empty so that a
+missing IMAGE_TAG never produces a broken `repo:` reference that would only
+surface as ImagePullBackOff at pod startup.
 */}}
 {{- define "playground.component.image" -}}
-{{ printf "%s:%s" (print .repository) (print .tag) }}
+{{- $tag := required "image.tag is required (set via PLAYGROUND_IMAGE_TAG or IMAGE_TAG)" .tag -}}
+{{ printf "%s:%s" (print .repository) (print $tag) }}
 {{- end }}
 
 {{/*

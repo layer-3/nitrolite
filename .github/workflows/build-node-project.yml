@@ -12,15 +12,10 @@ on:
         required: true
         type: string
       bootstrap-project-path:
-        description: 'Optional sibling project that must be built before the target (e.g. for `file:` dependencies)'
+        description: 'Optional sibling project that must be built before the target (e.g. for `file:` dependencies). The bootstrap project is always built with `npm run build:ci`.'
         required: false
         type: string
         default: ''
-      bootstrap-build-script:
-        description: 'npm script to run in the bootstrap project'
-        required: false
-        type: string
-        default: 'build:ci'
 
 jobs:
   build:
@@ -47,7 +42,7 @@ jobs:
 
       - name: Build bootstrap project
         if: ${{ inputs.bootstrap-project-path != '' }}
-        run: npm run ${{ inputs.bootstrap-build-script }}
+        run: npm run build:ci
         working-directory: ${{ inputs.bootstrap-project-path }}
 
       - name: Install dependencies

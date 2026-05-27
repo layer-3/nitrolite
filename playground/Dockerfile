@@ -28,8 +28,12 @@ COPY playground ./playground
 RUN cd playground && npm run build
 
 
-FROM nginx:1.27-alpine
+# Unprivileged nginx variant — listens on 8080 by default and runs as the
+# `nginx` user (UID 101). pid file lives under /tmp, so nothing in the image
+# requires root at runtime.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 
+USER root
 # envsubst (gettext) is required by the entrypoint to render env.js at start.
 RUN apk add --no-cache gettext
 
@@ -39,5 +43,8 @@ COPY playground/deploy/entrypoint.sh /docker-entrypoint.d/40-playground-env.sh
 RUN chmod +x /docker-entrypoint.d/40-playground-env.sh
 
 COPY --from=builder /repo/playground/dist /usr/share/nginx/html/v1/playground
+RUN chown -R nginx:nginx /usr/share/nginx/html /docker-entrypoint.d /env.js.tmpl
+
+USER nginx
 
 EXPOSE 8080

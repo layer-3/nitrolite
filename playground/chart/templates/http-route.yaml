@@ -23,5 +23,8 @@ spec:
             value: {{ $http.path }}
       backendRefs:
         - name: {{ include "playground.common.fullname" . }}
-          port: {{ default $http.port $http.internalPort }}
+          # Mirror service.yaml's `ports[].port = default .port .externalPort`
+          # so the route targets a port the Service actually exposes when
+          # externalPort/internalPort diverge.
+          port: {{ default $http.port $http.externalPort }}
 {{- end }}

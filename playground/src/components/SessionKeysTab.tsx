@@ -74,6 +74,7 @@ interface Props {
   walletClient: WalletClient | null;
   address: Address | null;
   sessionKey: StoredSessionKey | null;
+  allSessionKeys: StoredSessionKey[];
   supportedAssets: string[];
   onKeyActivated: (sk: StoredSessionKey) => void;
   onKeyCleared: () => void;
@@ -88,6 +89,7 @@ export default function SessionKeysTab({
   walletClient,
   address,
   sessionKey,
+  allSessionKeys,
   supportedAssets,
   onKeyActivated,
   onKeyCleared,
@@ -238,7 +240,10 @@ export default function SessionKeysTab({
               <tbody>
                 {displayKeys.map(key => {
                   const status = getKeyStatus(key);
-                  const isDisabled = status === 'expired' || status === 'revoked';
+                  const isTerminal = status === 'expired' || status === 'revoked';
+                  const hasLocalKey = allSessionKeys.some(
+                    lk => lk.sessionKeyAddress.toLowerCase() === key.session_key.toLowerCase(),
+                  );
                   const isCurrentKey = sessionKey?.sessionKeyAddress.toLowerCase() === key.session_key.toLowerCase();
                   const rowOpacity = status === 'revoked' ? 0.55 : status === 'expired' ? 0.7 : 1;
 
@@ -252,7 +257,7 @@ export default function SessionKeysTab({
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Key
                             size={12}
-                            color={isDisabled ? 'var(--text-muted)' : status === 'expiring' ? '#f97316' : '#22c55e'}
+                            color={isTerminal ? 'var(--text-muted)' : status === 'expiring' ? '#f97316' : '#22c55e'}
                           />
                           <span className="mono" style={{ fontSize: 12 }}>
                             {key.session_key.slice(0, 6)}…{key.session_key.slice(-4)}
@@ -308,7 +313,7 @@ export default function SessionKeysTab({
                       {/* Actions */}
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          {status === 'expiring' ? (
+                          {status === 'expiring' && (
                             <button
                               className="btn btn-ghost btn-sm"
                               style={{ borderColor: 'rgba(249,115,22,0.4)', color: '#f97316' }}
@@ -316,23 +321,33 @@ export default function SessionKeysTab({
                             >
                               Renew
                             </button>
-                          ) : (
+                          )}
+                          {status === 'active' && (
                             <button
                               className="btn btn-ghost btn-sm"
-                              disabled={isDisabled}
                               onClick={() => setKeyForUpdate(key)}
                             >
                               Update
                             </button>
                           )}
-                          <button
-                            className="btn btn-danger btn-sm"
-                            disabled={isDisabled}
-                            onClick={() => setKeyForRevoke(key)}
-                          >
-                            Revoke
-                          </button>
-                          {!isDisabled && !isCurrentKey && (
+                          {isTerminal && hasLocalKey && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setKeyForUpdate(key)}
+                              title="Re-register with future expiry to reactivate"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                          {!isTerminal && (
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => setKeyForRevoke(key)}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                          {!isTerminal && !isCurrentKey && (
                             <button
                               className="btn btn-ghost btn-sm"
                               onClick={() => onSelectKey(key.session_key as Address)}

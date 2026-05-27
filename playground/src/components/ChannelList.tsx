@@ -7,8 +7,6 @@ import type { Address } from 'viem';
 import ChannelRow from './ChannelRow';
 import IncomingChannelRow from './IncomingChannelRow';
 
-import type { StoredSessionKey } from '../sessionKey';
-
 interface Props {
   channels: Channel[];
   client: Client | null;
@@ -24,10 +22,6 @@ interface Props {
   onSelectAsset: (asset: string) => void;
   onAfterOp: () => void;
   channelStatesKey?: number;
-  sessionKey: StoredSessionKey | null;
-  allSessionKeys: StoredSessionKey[];
-  onSelectSessionKey: (sessionKeyAddress: Address | null) => void;
-  onManageSessionKeys: () => void;
 }
 
 export default function ChannelList({
@@ -45,10 +39,6 @@ export default function ChannelList({
   onSelectAsset,
   onAfterOp,
   channelStatesKey,
-  sessionKey,
-  allSessionKeys,
-  onSelectSessionKey,
-  onManageSessionKeys,
 }: Props) {
   const [expandedIncoming, setExpandedIncoming] = useState<Set<string>>(new Set());
 
@@ -123,10 +113,6 @@ export default function ChannelList({
                 isClosing={closingAsset?.toLowerCase() === c.asset.toLowerCase()}
                 channelStatesKey={channelStatesKey}
                 defaultExpanded={expandedIncoming.has(c.asset.toLowerCase())}
-                sessionKey={sessionKey}
-                allSessionKeys={allSessionKeys}
-                onSelectSessionKey={onSelectSessionKey}
-                onManageSessionKeys={onManageSessionKeys}
               />
             ))}
           </>

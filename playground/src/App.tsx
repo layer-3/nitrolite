@@ -98,6 +98,7 @@ export default function App() {
                 walletClient={wallet.walletClient}
                 address={wallet.address}
                 sessionKey={sk.sessionKey}
+                allSessionKeys={sk.allKeys}
                 supportedAssets={nitro.supportedAssets.map(a => a.symbol)}
                 onKeyActivated={(newSk) => sk.selectKey(newSk.sessionKeyAddress)}
                 onKeyCleared={sk.clear}
@@ -146,10 +147,6 @@ export default function App() {
                     onSelectAsset={setSelectedAsset}
                     onAfterOp={refreshAll}
                     channelStatesKey={channelStatesKey}
-                    sessionKey={sk.sessionKey}
-                    allSessionKeys={sk.allKeys}
-                    onSelectSessionKey={(addr) => addr ? sk.selectKey(addr) : sk.clear()}
-                    onManageSessionKeys={() => setActiveTab('keys')}
                   />
                 </div>
               </div>

@@ -69,6 +69,7 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 - Expand/collapse to see channel state detail (StateViewer) or a closed notice
 - Inline prompt to switch wallet chain when it doesn't match the channel's home chain
 - Close channel button
+- Does **not** show a session-key selector — the active SK is wallet-global (not per-channel); manage it via WalletBar chip + Session Keys tab
 
 ### StateViewer
 **For**: Inspecting and acting on the three layers of channel state.
@@ -91,14 +92,17 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 - "Set up" button navigates to the Session Keys tab
 
 ### SessionKeysTab
-**For**: Full management of session keys (list, register, update/renew, revoke).
+**For**: Full management of session keys (list, register, update/renew, revoke, reactivate).
 - Fetches all session keys (active + inactive) from the node via `useSessionKeyManagement`
 - Displays a table with address (truncated + copy), assets, expiration (3-way format toggle: relative / UTC date / Unix), status badge, version, and per-row actions
 - "Expiring Soon" banner at the top when any key has < 1 hour remaining
 - Register New opens `SessionKeyRegisterForm` in register mode
-- Update/Renew opens `SessionKeyRegisterForm` in update mode (pre-filled assets + expiry)
+- Per-row actions depend on status and whether the key's private key is still in localStorage (`hasLocalKey`):
+  - **active** → Update, Revoke, Use (if not current)
+  - **expiring** → Renew, Revoke, Use (if not current)
+  - **expired/revoked + hasLocalKey** → Reactivate (re-registers via update flow at version+1 with future expiry)
+  - **expired/revoked + !hasLocalKey** → no row actions (cannot update without the private key)
 - Revoke opens `SessionKeyRevokeModal` (sets expiresAt to past)
-- "Use" button on non-current active keys calls `onSelectKey` to switch the active signing key
 - "IN USE" badge on the currently active key
 
 ### SessionKeySetupModal

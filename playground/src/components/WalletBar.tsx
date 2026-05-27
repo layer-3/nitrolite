@@ -52,19 +52,19 @@ export default function WalletBar({
   const sortedChains = [...chains].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   return (
-    <nav className="sticky top-0 z-10 flex items-center justify-between px-6 h-14 bg-bg-surface border-b border-border relative">
+    <nav className="sticky top-0 z-10 flex items-center gap-3 px-6 h-14 bg-bg-surface border-b border-border">
       {/* Left: brand + node status */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <span className="mono font-bold tracking-tight text-accent text-[14px]">Nitrolite</span>
-        <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-medium uppercase tracking-wider" style={{ background: 'var(--accent)', color: '#0a0a0a' }}>
+        <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-medium uppercase tracking-wider flex-shrink-0" style={{ background: 'var(--accent)', color: '#0a0a0a' }}>
           Playground
           <FlaskConical size={11} strokeWidth={2.5} />
         </span>
 
         {nodeError ? (
-          <span className="flex items-center gap-1.5 text-error text-xs">
+          <span className="flex items-center gap-1.5 text-error text-xs min-w-0">
             <span className="dot error" />
-            <span className="truncate max-w-[200px]" title={nodeError}>{nodeError}</span>
+            <span className="truncate" title={nodeError}>{nodeError}</span>
           </span>
         ) : lastCommsAt ? (
           <span className="flex items-center gap-1.5 text-text-muted text-xs">
@@ -81,7 +81,7 @@ export default function WalletBar({
 
       {/* Center: tab selector (only when wallet connected) */}
       {address && (
-        <div className="absolute left-1/2 flex items-center gap-1" style={{ transform: 'translateX(-50%)' }}>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             className={`tab${activeTab === 'main' ? ' active' : ''}`}
             onClick={() => onTabChange('main')}
@@ -104,15 +104,15 @@ export default function WalletBar({
       )}
 
       {/* Right: session key + chain + address + disconnect */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
         {address && sessionKey && (
           <span
-            className="chip text-xs"
+            className="chip text-xs flex-shrink-0"
             title={`Session key ${sessionKey.sessionKeyAddress} · expires at ${new Date(Number(sessionKey.expiresAt) * 1000).toLocaleString()}`}
             style={{ borderColor: 'rgba(245,166,35,0.4)', color: 'var(--accent)' }}
           >
             <Key size={11} />
-            <span className="mono">{sessionKey.sessionKeyAddress.slice(0, 6)}…{sessionKey.sessionKeyAddress.slice(-4)} · {formatSkExpiry(sessionKey)}</span>
+            <span className="mono">{formatSkExpiry(sessionKey)}</span>
             <button
               type="button"
               className="text-text-muted hover:text-error transition-colors"

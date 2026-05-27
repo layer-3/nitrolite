@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, ChevronRight, ChevronDown, Filter, X, Copy, Check } from 'lucide-react';
 import { TransactionType } from '@yellow-org/sdk';
-import type { Client, Transaction, Blockchain } from '@yellow-org/sdk';
+import type { Client, Transaction, Blockchain, State } from '@yellow-org/sdk';
 import type { Address } from 'viem';
 import { tokenIconUrl } from '../icons';
 import { formatAddress, timeAgo } from '../utils';
@@ -94,6 +94,30 @@ function isOnChainTx(type: TransactionType): boolean {
     type === TransactionType.EscrowDeposit ||
     type === TransactionType.EscrowWithdraw ||
     type === TransactionType.Finalize;
+}
+
+type ConfirmStatus = 'cosigned' | 'pending';
+
+function getConfirmStatus(
+  tx: Transaction,
+  address: Address | null,
+  latestStates: Record<string, State | null>,
+): ConfirmStatus {
+  // On-chain txs have their own confirmation model; off-chain senders are co-signed synchronously.
+  if (isOnChainTx(tx.txType)) return 'cosigned';
+  if (!address || tx.toAccount.toLowerCase() !== address.toLowerCase()) return 'cosigned';
+
+  const state = latestStates[tx.asset];
+  if (!state || !tx.receiverNewStateId) return 'cosigned';
+
+  // Pending = latest state IS this receiver state AND the user hasn't signed it yet.
+  if (
+    state.id.toLowerCase() === tx.receiverNewStateId.toLowerCase() &&
+    state.nodeSig &&
+    !state.userSig
+  ) return 'pending';
+
+  return 'cosigned';
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -215,10 +239,11 @@ function FilterIcon({ active }: { active: boolean }) {
 
 type TsFormat = 'date' | 'unix';
 
-function DetailPanel({ tx, tsFormat, onToggleTsFormat }: {
+function DetailPanel({ tx, tsFormat, onToggleTsFormat, confirmStatus }: {
   tx: Transaction;
   tsFormat: TsFormat;
   onToggleTsFormat: () => void;
+  confirmStatus: ConfirmStatus;
 }) {
   const onChain = isOnChainTx(tx.txType);
   const tsDate = tx.createdAt.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
@@ -277,7 +302,7 @@ function DetailPanel({ tx, tsFormat, onToggleTsFormat }: {
         <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
           Confirmation
         </span>
-        <ConfirmTimeline onChain={onChain} />
+        <ConfirmTimeline onChain={onChain} status={confirmStatus} />
       </div>
     </div>
   );
@@ -319,24 +344,33 @@ function DetailField({ label, value, displayValue, mono = true, onCopy }: {
   );
 }
 
-function ConfirmTimeline({ onChain }: { onChain: boolean }) {
-  const steps = onChain
-    ? ['Signed', 'Broadcasted', 'Confirmed']
-    : ['Signed', 'Co-signed'];
+function ConfirmTimeline({ onChain, status }: { onChain: boolean; status: ConfirmStatus }) {
+  type Step = { label: string; done: boolean };
+  const steps: Step[] = onChain
+    ? [
+        { label: 'Signed', done: true },
+        { label: 'Broadcasted', done: true },
+        { label: 'Confirmed', done: true },
+      ]
+    : [
+        { label: 'Signed', done: true },
+        { label: 'Co-signed', done: status === 'cosigned' },
+      ];
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      {steps.map((step, i) => (
-        <span key={step} style={{ display: 'inline-flex', alignItems: 'center' }}>
+      {steps.map(({ label, done }, i) => (
+        <span key={label} style={{ display: 'inline-flex', alignItems: 'center' }}>
           <span style={{
             fontSize: '12px',
-            color: 'var(--text-primary)',
-            background: 'rgba(34,197,94,0.12)',
-            border: '1px solid rgba(34,197,94,0.3)',
             borderRadius: '4px',
             padding: '2px 8px',
+            ...(done
+              ? { color: 'var(--text-primary)', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)' }
+              : { color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }
+            ),
           }}>
-            {step}
+            {label}{!done ? '…' : ''}
           </span>
           {i < steps.length - 1 && (
             <span style={{ width: '28px', height: '1px', background: 'var(--border)', display: 'inline-block', margin: '0 2px' }} />
@@ -416,6 +450,8 @@ export default function HistoryTab({ client, address }: Props) {
   const [pendingFrom, setPendingFrom] = useState('');
   const [pendingTo, setPendingTo] = useState('');
 
+  const [latestStates, setLatestStates] = useState<Record<string, State | null>>({});
+
   const [openPopover, setOpenPopover] = useState<'type' | 'asset' | 'from' | 'to' | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -448,6 +484,24 @@ export default function HistoryTab({ client, address }: Props) {
     setPage(1);
     fetchTxs();
   }, [fetchTxs]);
+
+  // After transactions load, fetch the latest state for each asset where the user is receiver.
+  useEffect(() => {
+    if (!client || !address || allTxs.length === 0) return;
+    const assets = [...new Set(
+      allTxs
+        .filter(tx => !isOnChainTx(tx.txType) && tx.toAccount.toLowerCase() === address.toLowerCase())
+        .map(tx => tx.asset)
+    )];
+    if (assets.length === 0) return;
+    Promise.all(
+      assets.map(asset =>
+        client.getLatestState(address, asset, false)
+          .then(state => [asset, state] as const)
+          .catch(() => [asset, null] as const)
+      )
+    ).then(entries => setLatestStates(Object.fromEntries(entries)));
+  }, [client, address, allTxs]);
 
   // Close popover on outside click
   useEffect(() => {
@@ -785,6 +839,7 @@ export default function HistoryTab({ client, address }: Props) {
                   const variant = txVariant(tx.txType);
                   const { color: amtColor } = VARIANT_STYLE[variant];
                   const prefix = amountPrefix(tx.txType, tx.toAccount, address);
+                  const confirmStatus = getConfirmStatus(tx, address, latestStates);
 
                   return (
                     <>
@@ -873,6 +928,7 @@ export default function HistoryTab({ client, address }: Props) {
                               tx={tx}
                               tsFormat={tsFormat}
                               onToggleTsFormat={() => setTsFormat(f => f === 'date' ? 'unix' : 'date')}
+                              confirmStatus={confirmStatus}
                             />
                           </td>
                         </tr>

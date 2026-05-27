@@ -77,10 +77,14 @@ const VARIANT_STYLE: Record<TxVariant, { color: string; bg: string }> = {
   muted:    { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)' },
 };
 
-function amountPrefix(type: TransactionType): string {
+function amountPrefix(type: TransactionType, toAccount?: string, address?: Address | null): string {
   const v = txVariant(type);
   if (v === 'deposit') return '+';
-  if (v === 'withdraw' || v === 'transfer') return '−';
+  if (v === 'withdraw') return '−';
+  if (v === 'transfer') {
+    if (address && toAccount && toAccount.toLowerCase() === address.toLowerCase()) return '+';
+    return '−';
+  }
   return '';
 }
 
@@ -780,7 +784,7 @@ export default function HistoryTab({ client, address }: Props) {
                   const isExpanded = expandedId === tx.id;
                   const variant = txVariant(tx.txType);
                   const { color: amtColor } = VARIANT_STYLE[variant];
-                  const prefix = amountPrefix(tx.txType);
+                  const prefix = amountPrefix(tx.txType, tx.toAccount, address);
 
                   return (
                     <>

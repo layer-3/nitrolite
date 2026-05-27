@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_NITRONODE_URL?: string;
+  readonly VITE_FAUCET_URL?: string;
 }
 
 interface ImportMeta {
@@ -11,5 +12,6 @@ interface ImportMeta {
 interface Window {
   __ENV__?: {
     NITRONODE_URL?: string;
+    FAUCET_URL?: string;
   };
 }

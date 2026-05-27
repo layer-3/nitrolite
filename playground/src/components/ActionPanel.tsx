@@ -8,11 +8,10 @@ import { chainDisplayName } from '../chainMeta';
 import { showErrorToast } from '../toastError';
 import TokenSelector from './TokenSelector';
 import type { DepositPhase, WithdrawPhase, TransferPhase } from '../hooks/useChannelOps';
+import { FAUCET_URL } from '../config';
 
 type Tab = 'deposit' | 'withdraw' | 'transfer' | 'faucet';
 type FaucetPhase = 'idle' | 'requesting' | 'done' | 'rate-limited';
-
-const FAUCET_URL = 'https://nitronode-sandbox.yellow.org/v1/faucet-app/requestTokens';
 
 interface Props {
   assets: Asset[];

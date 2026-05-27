@@ -127,8 +127,8 @@ export default function ChannelRow({
   const homeChainName = chainDisplayName(channel.blockchainId, homeChainObj?.name);
   const wrongChain = !closed && currentChainId != null && currentChainId !== channel.blockchainId;
 
-  // Signer selector — shown in header for non-closed channels when keys exist
-  const showSkSelector = !closed && allSessionKeys.length > 0;
+  // Signer selector — shown for all non-closed channels; always useful for the "Manage" link
+  const showSkSelector = !closed;
 
   const skIcon = sessionKey && activeSkSecs > 0
     ? <Key size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />

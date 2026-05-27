@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Key, X } from 'lucide-react';
+import { Key, X, FlaskConical } from 'lucide-react';
 import type { Address } from 'viem';
 import type { Blockchain } from '@yellow-org/sdk';
 import CopyButton from './CopyButton';
@@ -8,7 +8,7 @@ import type { StoredSessionKey } from '../sessionKey';
 import { secondsUntilExpiry } from '../sessionKey';
 import { chainDisplayName } from '../chainMeta';
 
-export type AppTab = 'main' | 'history';
+export type AppTab = 'main' | 'history' | 'keys';
 
 interface Props {
   address: Address | null;
@@ -55,8 +55,11 @@ export default function WalletBar({
     <nav className="sticky top-0 z-10 flex items-center justify-between px-6 h-14 bg-bg-surface border-b border-border relative">
       {/* Left: brand + node status */}
       <div className="flex items-center gap-3">
-        <span className="text-accent font-semibold tracking-tight">Nitrolite</span>
-        <span className="text-text-muted text-xs uppercase tracking-wider">Playground</span>
+        <span className="mono font-bold tracking-tight text-accent text-[14px]">Nitrolite</span>
+        <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-medium uppercase tracking-wider" style={{ background: 'var(--accent)', color: '#0a0a0a' }}>
+          Playground
+          <FlaskConical size={11} strokeWidth={2.5} />
+        </span>
 
         {nodeError ? (
           <span className="flex items-center gap-1.5 text-error text-xs">
@@ -90,6 +93,12 @@ export default function WalletBar({
             onClick={() => onTabChange('history')}
           >
             History
+          </button>
+          <button
+            className={`tab${activeTab === 'keys' ? ' active' : ''}`}
+            onClick={() => onTabChange('keys')}
+          >
+            Session Keys
           </button>
         </div>
       )}

@@ -50,6 +50,7 @@ func defaultConfig() *config.Config {
 		StandardTipAmountDecimal: decimal.RequireFromString("10"),
 		CooldownPeriod:           "24h",
 		CooldownPeriodDuration:   24 * time.Hour,
+		IPRateLimitEnabled:       true,
 		Log:                      log.Config{Level: log.LevelDebug},
 	}
 }
@@ -290,6 +291,39 @@ func TestRateLimiting(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		srv.router.ServeHTTP(w2, req2)
 		assert.Equal(t, http.StatusTooManyRequests, w2.Code)
+	})
+
+	t.Run("with IP rate limit disabled, same IP different wallet succeeds", func(t *testing.T) {
+		mock := defaultMock()
+		cfgNoIP := *cfg
+		cfgNoIP.IPRateLimitEnabled = false
+		srv := NewServer(log.NewNoopLogger(), &cfgNoIP, mock)
+
+		addr1 := common.HexToAddress("0x742D35CC6634c0532925a3B8c17D18fBe3b78890").Hex()
+		addr2 := common.HexToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF").Hex()
+
+		body1, _ := json.Marshal(FaucetRequest{UserAddress: addr1})
+		body2, _ := json.Marshal(FaucetRequest{UserAddress: addr2})
+
+		req1 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body1))
+		req1.Header.Set("Content-Type", "application/json")
+		w1 := httptest.NewRecorder()
+		srv.router.ServeHTTP(w1, req1)
+		assert.Equal(t, http.StatusOK, w1.Code)
+
+		// Different wallet, same IP — accepted because per-IP bucket is off.
+		req2 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body2))
+		req2.Header.Set("Content-Type", "application/json")
+		w2 := httptest.NewRecorder()
+		srv.router.ServeHTTP(w2, req2)
+		assert.Equal(t, http.StatusOK, w2.Code)
+
+		// Same wallet still rejected — per-address cooldown stays in force.
+		req3 := httptest.NewRequest("POST", "/requestTokens", bytes.NewReader(body1))
+		req3.Header.Set("Content-Type", "application/json")
+		w3 := httptest.NewRecorder()
+		srv.router.ServeHTTP(w3, req3)
+		assert.Equal(t, http.StatusTooManyRequests, w3.Code)
 	})
 }
 

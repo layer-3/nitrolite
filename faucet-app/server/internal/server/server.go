@@ -129,12 +129,24 @@ func (s *Server) requestTokens(c *gin.Context) {
 
 	userAddress = common.HexToAddress(userAddress).Hex()
 
-	// Atomically check-and-record both keys under one lock. This prevents a
-	// blocked IP from burning the wallet's cooldown slot and eliminates TOCTOU.
-	// Every accepted request (including ones that later fail) consumes a slot,
-	// preventing unlimited probing via induced failures.
+	// Atomically check-and-record. When the per-IP bucket is enabled, both
+	// keys are checked under one lock so a blocked IP cannot burn the wallet's
+	// cooldown slot. When disabled (ingress handles per-IP flood protection),
+	// only the wallet bucket is checked. Every accepted request — including
+	// ones that later fail — consumes the slot, blocking probing via induced
+	// failures.
 	clientIP := c.ClientIP()
-	if allowed, blocked := s.rateLimiter.checkAndRecordBoth(userAddress, clientIP); !allowed {
+	var (
+		allowed bool
+		blocked string
+	)
+	if s.config.IPRateLimitEnabled {
+		allowed, blocked = s.rateLimiter.checkAndRecordBoth(userAddress, clientIP)
+	} else {
+		allowed = s.rateLimiter.checkAndRecord(userAddress)
+		blocked = "address"
+	}
+	if !allowed {
 		if blocked == "address" {
 			s.logger.Warn("rate limit exceeded", "key", "address", "address", userAddress)
 		} else {

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>History — B: Sidebar Drawer Filters</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-base:     #0a0a0a;
+      --bg-surface:  #141414;
+      --bg-elevated: #1c1c1c;
+      --border:      #242424;
+      --text-primary:#f0f0f0;
+      --text-muted:  #666666;
+      --accent:      #f5a623;
+      --accent-dim:  rgba(245,166,35,0.12);
+      --error:       #ef4444;
+      --success:     #22c55e;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ── WalletBar ── */
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; height: 56px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand { display: flex; align-items: center; gap: 12px; }
+    .brand-name { color: var(--accent); font-weight: 600; letter-spacing: -0.02em; font-size: 15px; }
+    .brand-sub  { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ── Chip ── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 8px; padding: 5px 10px;
+      font-size: 12px; color: var(--text-primary);
+    }
+    .chip-sk { border-color: rgba(245,166,35,0.4); color: var(--accent); }
+
+    /* ── Dot ── */
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; flex-shrink: 0; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-primary);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      font-family: inherit; transition: background 0.12s;
+    }
+    .btn:hover { background: #1f1f1f; }
+    .btn-ghost { background: transparent; color: var(--text-muted); }
+    .btn-ghost:hover { color: var(--text-primary); border-color: #333; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-primary {
+      background: var(--accent); color: #0a0a0a;
+      border-color: var(--accent); font-weight: 600;
+    }
+    .btn-primary:hover { background: #e09520; border-color: #e09520; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      padding: 7px 16px; border-radius: 999px; border: none;
+      background: transparent; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 500; color: var(--text-muted);
+      cursor: pointer; transition: background 0.12s, color 0.12s;
+    }
+    .tab:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .tab.active { color: var(--accent); background: var(--accent-dim); }
+
+    /* ── Card ── */
+    .card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: 15px; font-weight: 600; }
+
+    /* ── Filter button with badge ── */
+    .filter-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-muted);
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      font-family: inherit; transition: all 0.12s;
+    }
+    .filter-toggle.has-filters {
+      border-color: var(--accent); color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .filter-toggle:hover { border-color: #333; color: var(--text-primary); }
+    .filter-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); color: #0a0a0a;
+      font-size: 10px; font-weight: 700; line-height: 1;
+    }
+
+    /* ── Split layout: table + drawer ── */
+    .history-layout {
+      display: flex;
+      min-height: 0;
+    }
+    .history-table-area {
+      flex: 1;
+      min-width: 0;
+      border-right: 1px solid var(--border);
+    }
+    .history-drawer {
+      width: 252px;
+      flex-shrink: 0;
+      background: var(--bg-base);
+      display: flex;
+      flex-direction: column;
+    }
+    .drawer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .drawer-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .drawer-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .drawer-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+
+    /* ── Filter controls in drawer ── */
+    .filter-field { display: flex; flex-direction: column; gap: 6px; }
+    .filter-field-label { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .filter-select {
+      appearance: none;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 28px 7px 10px;
+      font-size: 12px; font-family: 'Inter', sans-serif;
+      color: var(--text-primary); cursor: pointer; outline: none; width: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      transition: border-color 0.12s;
+    }
+    .filter-select:hover, .filter-select:focus { border-color: #333; }
+    .filter-select.active { border-color: rgba(245,166,35,0.5); }
+    .filter-input {
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 10px;
+      font-size: 12px; font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary); outline: none; width: 100%;
+      transition: border-color 0.12s;
+    }
+    .filter-input::placeholder { color: var(--text-muted); }
+    .filter-input:focus { border-color: var(--accent); }
+    .filter-input.active { border-color: rgba(245,166,35,0.5); }
+
+    /* ── Checkboxes in drawer ── */
+    .check-list { display: flex; flex-direction: column; gap: 6px; }
+    .check-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .check-item input[type=checkbox] {
+      appearance: none; width: 14px; height: 14px; border: 1px solid var(--border);
+      border-radius: 4px; background: var(--bg-elevated); cursor: pointer;
+      position: relative; flex-shrink: 0;
+    }
+    .check-item input[type=checkbox]:checked {
+      background: var(--accent); border-color: var(--accent);
+    }
+    .check-item input[type=checkbox]:checked::after {
+      content: ''; position: absolute; top: 2px; left: 4px;
+      width: 4px; height: 7px; border: 2px solid #0a0a0a;
+      border-top: none; border-left: none; transform: rotate(45deg);
+    }
+    .check-label { font-size: 12px; color: var(--text-primary); }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 16px; text-align: left;
+      font-size: 11px; font-weight: 500; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; background: var(--bg-surface);
+    }
+    tbody td {
+      padding: 11px 16px; font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; color: var(--text-primary);
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.018); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 8px; border-radius: 6px;
+      font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+    .badge-deposit  { background: rgba(34,197,94,0.1);   color: #22c55e; }
+    .badge-withdraw { background: rgba(239,68,68,0.1);   color: #ef4444; }
+    .badge-transfer { background: rgba(59,130,246,0.1);  color: #3b82f6; }
+    .badge-finalize { background: rgba(168,85,247,0.1);  color: #a855f7; }
+
+    /* ── Amount ── */
+    .amt { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .amt-in  { color: var(--success); }
+    .amt-out { color: var(--error); }
+
+    /* ── Address ── */
+    .addr { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .addr-self { color: var(--text-primary); }
+
+    /* ── Hash link ── */
+    .hash-link {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .hash-link:hover { color: var(--accent); }
+
+    /* ── Asset cell ── */
+    .asset-cell { display: flex; align-items: center; gap: 7px; }
+    .asset-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 600; flex-shrink: 0;
+    }
+    .asset-icon.eth  { background: rgba(98,126,234,0.15); color: #627eea; }
+    .asset-icon.usdt { background: rgba(38,161,123,0.15); color: #26a17b; }
+
+    /* ── Chain pill ── */
+    .chain-pill {
+      font-size: 11px; color: var(--text-muted);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 6px; padding: 2px 6px; white-space: nowrap;
+    }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; border-top: 1px solid var(--border);
+    }
+    .page-info { font-size: 12px; color: var(--text-muted); }
+    .page-btns { display: flex; gap: 6px; }
+
+    /* ── Active filter tags ── */
+    .active-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+    .filter-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 8px; border-radius: 6px; font-size: 11px;
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid rgba(245,166,35,0.25);
+    }
+    .filter-tag-x { cursor: pointer; opacity: 0.6; line-height: 1; }
+    .filter-tag-x:hover { opacity: 1; }
+
+    .text-muted { color: var(--text-muted); }
+    .em-dash { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- ── WalletBar ── -->
+<nav>
+  <div class="nav-brand">
+    <span class="brand-name">Nitrolite</span>
+    <span class="brand-sub">Playground</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <span class="dot"></span>
+    <span class="mono text-muted" style="font-size:12px;">3s ago</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="chip chip-sk">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="3"/><path d="M10.5 13.5L21 3"/><path d="M15 9l1.5 1.5"/><path d="M18 6l1.5 1.5"/></svg>
+      SK · 23h
+      <span style="color:var(--text-muted);cursor:pointer;line-height:1;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </span>
+    </span>
+    <span class="chip mono" style="font-size:11px;cursor:pointer;">
+      Ethereum Sepolia
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </span>
+    <span class="chip mono" style="font-size:12px;">
+      0x1234…Cafe
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    </span>
+    <button class="btn btn-ghost btn-sm">Disconnect</button>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<main style="margin:0 auto;width:100%;max-width:1100px;padding:32px 24px;">
+
+  <!-- Tab switcher -->
+  <div class="tabs" style="margin-bottom:20px;">
+    <button class="tab">Overview</button>
+    <button class="tab active">History</button>
+  </div>
+
+  <!-- History card -->
+  <div class="card">
+
+    <!-- Card header -->
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="card-title">Transaction History</span>
+        <!-- Active filter tags -->
+        <div class="active-filters">
+          <span class="filter-tag">
+            Type: Deposit
+            <span class="filter-tag-x">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </span>
+          </span>
+          <span class="filter-tag">
+            Chain: Eth Sepolia
+            <span class="filter-tag-x">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+      <button class="filter-toggle has-filters">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        Filters
+        <span class="filter-badge">2</span>
+      </button>
+    </div>
+
+    <!-- ── Split: table + drawer ── -->
+    <div class="history-layout">
+
+      <!-- Table area -->
+      <div class="history-table-area">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Asset</th>
+                <th>Amount</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Chain</th>
+                <th>Tx Hash</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- Row 1 -->
+              <tr>
+                <td><span style="font-size:12px;color:var(--text-muted);">2h ago</span></td>
+                <td><span class="badge badge-deposit">Deposit</span></td>
+                <td><div class="asset-cell"><span class="asset-icon eth">ETH</span><span style="font-weight:500;">ETH</span></div></td>
+                <td><span class="amt amt-in">+5.00</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="addr">0x9B4F…N0DE</span></td>
+                <td><span class="chain-pill">Eth Sepolia</span></td>
+                <td>
+                  <a href="#" class="hash-link">0xabc1…3f4e
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 2 -->
+              <tr>
+                <td><span style="font-size:12px;color:var(--text-muted);">45m ago</span></td>
+                <td><span class="badge badge-transfer">Transfer</span></td>
+                <td><div class="asset-cell"><span class="asset-icon usdt">USDT</span><span style="font-weight:500;">USDT</span></div></td>
+                <td><span class="amt" style="color:var(--text-primary);">100.00</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="addr">0x5678…Feed</span></td>
+                <td><span class="em-dash">—</span></td>
+                <td><span class="em-dash">—</span></td>
+              </tr>
+
+              <!-- Row 3 -->
+              <tr>
+                <td><span style="font-size:12px;color:var(--text-muted);">1h ago</span></td>
+                <td><span class="badge badge-withdraw">Withdraw</span></td>
+                <td><div class="asset-cell"><span class="asset-icon eth">ETH</span><span style="font-weight:500;">ETH</span></div></td>
+                <td><span class="amt amt-out">-2.50</span></td>
+                <td><span class="addr">0x9B4F…N0DE</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="chain-pill">Eth Sepolia</span></td>
+                <td>
+                  <a href="#" class="hash-link">0xdef2…7a1b
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 4 -->
+              <tr>
+                <td><span style="font-size:12px;color:var(--text-muted);">3h ago</span></td>
+                <td><span class="badge badge-deposit">Deposit</span></td>
+                <td><div class="asset-cell"><span class="asset-icon usdt">USDT</span><span style="font-weight:500;">USDT</span></div></td>
+                <td><span class="amt amt-in">+500.00</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="addr">0x9B4F…N0DE</span></td>
+                <td><span class="chain-pill">Base Sepolia</span></td>
+                <td>
+                  <a href="#" class="hash-link">0x789c…2d5f
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 5 -->
+              <tr>
+                <td><span style="font-size:12px;color:var(--text-muted);">55m ago</span></td>
+                <td><span class="badge badge-finalize">Finalize</span></td>
+                <td><div class="asset-cell"><span class="asset-icon eth">ETH</span><span style="font-weight:500;">ETH</span></div></td>
+                <td><span class="amt" style="color:var(--text-primary);">7.50</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="addr addr-self">0x1234…Cafe</span></td>
+                <td><span class="chain-pill">Eth Sepolia</span></td>
+                <td>
+                  <a href="#" class="hash-link">0x012d…8e9a
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+          <span class="page-info">Showing 1–5 of 47 transactions</span>
+          <div class="page-btns">
+            <button class="btn btn-ghost btn-sm" style="opacity:0.4;cursor:not-allowed;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+              Prev
+            </button>
+            <button class="btn btn-sm">
+              Next
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div><!-- /table area -->
+
+      <!-- ── Filter drawer ── -->
+      <div class="history-drawer">
+        <div class="drawer-header">
+          <span class="drawer-title">Filters</span>
+          <button style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;line-height:1;" title="Close filters">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+
+          <!-- Type checkboxes -->
+          <div class="filter-field">
+            <span class="filter-field-label">Type</span>
+            <div class="check-list">
+              <label class="check-item">
+                <input type="checkbox" checked />
+                <span class="check-label"><span class="badge badge-deposit" style="font-size:10px;padding:2px 6px;">Deposit</span></span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" />
+                <span class="check-label"><span class="badge badge-withdraw" style="font-size:10px;padding:2px 6px;">Withdraw</span></span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" />
+                <span class="check-label"><span class="badge badge-transfer" style="font-size:10px;padding:2px 6px;">Transfer</span></span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" />
+                <span class="check-label"><span class="badge badge-finalize" style="font-size:10px;padding:2px 6px;">Finalize</span></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Asset -->
+          <div class="filter-field">
+            <span class="filter-field-label">Asset</span>
+            <select class="filter-select">
+              <option>All assets</option>
+              <option>ETH</option>
+              <option>USDT</option>
+              <option>USDC</option>
+            </select>
+          </div>
+
+          <!-- Chain -->
+          <div class="filter-field">
+            <span class="filter-field-label">Chain</span>
+            <select class="filter-select active">
+              <option>Ethereum Sepolia</option>
+              <option>Base Sepolia</option>
+              <option>Linea Sepolia</option>
+              <option>Polygon Amoy</option>
+            </select>
+          </div>
+
+          <!-- From -->
+          <div class="filter-field">
+            <span class="filter-field-label">From address</span>
+            <input class="filter-input" type="text" placeholder="0x…" />
+          </div>
+
+          <!-- To -->
+          <div class="filter-field">
+            <span class="filter-field-label">To address</span>
+            <input class="filter-input" type="text" placeholder="0x…" />
+          </div>
+
+        </div><!-- /drawer-body -->
+
+        <div class="drawer-footer">
+          <button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">Apply filters</button>
+          <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;">Clear all</button>
+        </div>
+      </div><!-- /drawer -->
+
+    </div><!-- /history-layout -->
+
+  </div><!-- /card -->
+</main>
+
+</body>
+</html>

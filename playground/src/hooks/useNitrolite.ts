@@ -51,10 +51,15 @@ export function useNitrolite(
   const currentChainIdRef = useRef<bigint | null>(currentChainId ?? null);
   useEffect(() => { currentChainIdRef.current = currentChainId ?? null; }, [currentChainId]);
 
+  // Stored factory that creates a final Client with the pre-computed RPC options.
+  // Used by the fast-path rebuild (signer-only change) to skip the probe phase.
+  const buildClientRef = useRef<((s: StateSigner, t: TransactionSigner) => Promise<Client>) | null>(null);
+  // Track previous identity so we can detect signer-only changes.
+  const prevAddressRef = useRef<Address | null>(null);
+  const prevWalletClientRef = useRef<WalletClient | null>(null);
+
   const touch = useCallback(() => setLastCommsAt(new Date()), []);
 
-  // Pick the chain to read the on-chain balance from: prefer the current wallet
-  // chain when the asset is deployed there, otherwise fall back to suggestedBlockchainId.
   const balanceChainFor = useCallback((a: Asset): bigint => {
     const cid = currentChainIdRef.current;
     if (cid != null && a.tokens.some(t => t.blockchainId === cid)) return cid;
@@ -71,7 +76,6 @@ export function useNitrolite(
       setBalances(next);
       touch();
 
-      // Re-fetch on-chain balances so they reflect completed deposits/withdrawals.
       const assets = assetsRef.current;
       const ocb: Record<string, Decimal | null> = {};
       await Promise.all(
@@ -90,10 +94,12 @@ export function useNitrolite(
     }
   }, [address, touch, balanceChainFor]);
 
-  // Lifecycle: rebuild client when address or walletClient changes
   useEffect(() => {
     if (!address || !walletClient) {
-      // teardown
+      // Teardown
+      buildClientRef.current = null;
+      prevAddressRef.current = null;
+      prevWalletClientRef.current = null;
       const prev = clientRef.current;
       clientRef.current = null;
       setClient(null);
@@ -102,65 +108,74 @@ export function useNitrolite(
       return;
     }
 
+    // Detect what changed this run.
+    const addressChanged = address !== prevAddressRef.current;
+    const walletClientChanged = walletClient !== prevWalletClientRef.current;
+    prevAddressRef.current = address;
+    prevWalletClientRef.current = walletClient;
+
+    // Build signer for the new session-key state (shared between both paths).
+    let stateSigner: StateSigner;
+    if (sessionKey && sessionKey.walletAddress.toLowerCase() === address.toLowerCase()) {
+      stateSigner = buildSessionKeyStateSigner(sessionKey);
+    } else {
+      const walletSigner = new WalletStateSigner(walletClient) as unknown as StateSigner;
+      stateSigner = new ChannelDefaultSigner(walletSigner);
+    }
+    const txSigner = new WalletTransactionSigner(walletClient) as unknown as TransactionSigner;
+
+    // ── Fast path: only the signer changed ───────────────────────────────────
+    // Skip probe, config fetch, and asset fetch. Swap the client silently
+    // without touching isConnecting / isConnected / chains / assets / balances.
+    if (!addressChanged && !walletClientChanged && buildClientRef.current) {
+      let cancelled = false;
+      const prev = clientRef.current;
+
+      buildClientRef.current(stateSigner, txSigner).then(async newClient => {
+        if (cancelled) { await newClient.close().catch(() => {}); return; }
+        clientRef.current = newClient;
+        setClient(newClient);
+        touch();
+        if (prev) await prev.close().catch(() => {});
+      }).catch(err => {
+        if (!cancelled) setNodeError(err instanceof Error ? err.message : String(err));
+      });
+
+      return () => { cancelled = true; };
+    }
+
+    // ── Full rebuild: address or walletClient changed ─────────────────────────
     let cancelled = false;
     setIsConnecting(true);
     setNodeError(null);
 
     const timer = setTimeout(async () => {
-      // Tear down any existing client before building a new one
       const prev = clientRef.current;
       clientRef.current = null;
       if (prev) {
-        try {
-          await prev.close();
-        } catch {
-          /* ignore */
-        }
+        try { await prev.close(); } catch { /* ignore */ }
       }
 
       try {
-        // State signer choice: session key when active (no MetaMask popup), else
-        // wallet-backed default. txSigner is always wallet-backed because on-chain
-        // txs (deposit/withdraw/checkpoint/approve) must come from the user.
-        let stateSigner: StateSigner;
-        if (sessionKey && sessionKey.walletAddress.toLowerCase() === address.toLowerCase()) {
-          stateSigner = buildSessionKeyStateSigner(sessionKey);
-        } else {
-          // Wrap in ChannelDefaultSigner so the SDK prepends the 0x00 type byte that
-          // the nitronode expects (raw EIP-191 sigs are rejected as "signature type 28").
-          const walletSigner = new WalletStateSigner(walletClient) as unknown as StateSigner;
-          stateSigner = new ChannelDefaultSigner(walletSigner);
-        }
-        const txSigner = new WalletTransactionSigner(walletClient) as unknown as TransactionSigner;
-
-        // Build a temporary client to discover supported chains, then rebuild with their RPCs.
-        // The first connect just needs *some* RPC; we'll add them per chain after getConfig().
         const probe = await Client.create(NODE_URL, stateSigner, txSigner);
-        if (cancelled) {
-          await probe.close().catch(() => {});
-          return;
-        }
+        if (cancelled) { await probe.close().catch(() => {}); return; }
 
         const cfg = await probe.getConfig();
         const chains = cfg.blockchains;
         const assets = await probe.getAssets();
-        if (cancelled) {
-          await probe.close().catch(() => {});
-          return;
-        }
+        if (cancelled) { await probe.close().catch(() => {}); return; }
         await probe.close().catch(() => {});
 
-        // Build final client with all RPC options applied
         const opts = chains
           .map(c => rpcUrlFor(c.id))
           .map((url, i) => (url ? withBlockchainRPC(chains[i].id, url) : null))
           .filter((o): o is NonNullable<typeof o> => o !== null);
 
-        const finalClient = await Client.create(NODE_URL, stateSigner, txSigner, ...opts);
-        if (cancelled) {
-          await finalClient.close().catch(() => {});
-          return;
-        }
+        // Store the builder so signer-only changes can reuse it.
+        buildClientRef.current = (s, t) => Client.create(NODE_URL, s, t, ...opts);
+
+        const finalClient = await buildClientRef.current(stateSigner, txSigner);
+        if (cancelled) { await finalClient.close().catch(() => {}); return; }
 
         clientRef.current = finalClient;
         setClient(finalClient);
@@ -171,7 +186,6 @@ export function useNitrolite(
         setIsConnecting(false);
         touch();
 
-        // Initial balances
         const entries = await finalClient.getBalances(address);
         const nextBal: Record<string, Decimal> = {};
         for (const e of entries) nextBal[e.asset] = e.balance;
@@ -179,7 +193,6 @@ export function useNitrolite(
           setBalances(nextBal);
           touch();
 
-          // On-chain balances per asset on the current wallet chain (or suggestedBlockchainId).
           const ocb: Record<string, Decimal | null> = {};
           await Promise.all(
             assets.map(async a => {
@@ -200,7 +213,7 @@ export function useNitrolite(
           setIsConnected(false);
         }
       }
-    }, 200); // debounce per plan H-2
+    }, 200);
 
     return () => {
       cancelled = true;
@@ -208,8 +221,6 @@ export function useNitrolite(
     };
   }, [address, walletClient, sessionKey, touch]);
 
-  // Re-read on-chain balances whenever the wallet chain changes so the deposit
-  // tab always reflects what the user holds on the currently connected chain.
   useEffect(() => {
     const c = clientRef.current;
     const assets = assetsRef.current;
@@ -227,7 +238,6 @@ export function useNitrolite(
     ).then(() => setOnChainBalances(prev => ({ ...prev, ...ocb }))).catch(() => {});
   }, [address, currentChainId]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       const prev = clientRef.current;

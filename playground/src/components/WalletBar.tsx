@@ -112,7 +112,7 @@ export default function WalletBar({
             style={{ borderColor: 'rgba(245,166,35,0.4)', color: 'var(--accent)' }}
           >
             <Key size={11} />
-            <span>SK · {formatSkExpiry(sessionKey)}</span>
+            <span className="mono">{sessionKey.sessionKeyAddress.slice(0, 6)}…{sessionKey.sessionKeyAddress.slice(-4)} · {formatSkExpiry(sessionKey)}</span>
             <button
               type="button"
               className="text-text-muted hover:text-error transition-colors"

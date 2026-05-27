@@ -10,12 +10,15 @@ Developer-facing playground for Nitrolite — wallet, channel, and state channel
 
 Single-page app. Sticky header, scrollable body.
 
-- **Header**: Wallet connection bar (left: brand + node status; center: Main/History tabs when connected; right: SK chip + chain + address + disconnect)
+- **Header**: Wallet connection bar (left: brand + node status; center: Main/History/Session Keys tabs when connected; right: SK chip + chain + address + disconnect)
 - **Body — Main tab (2-col on desktop)**:
   - Left: Action panel (deposit / withdraw / transfer / faucet tabs)
   - Right: Channel list (includes incoming unacknowledged channels at the top)
 - **Body — History tab (full-width)**:
   - Transaction history table with column-filter popovers, per-cell quick filter, expandable row detail, and pagination (25/page)
+- **Body — Session Keys tab (full-width)**:
+  - Table of all session keys (active, expiring, expired, revoked) fetched from the node
+  - Register, update (renew), and revoke keys via modals
 
 Tab selector only appears when a wallet is connected. Switching tabs preserves state in both panels.
 
@@ -34,6 +37,7 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 - Display current address and active chain
 - Session key chip: shows time remaining, allows clearing the key
 - Node status: shows last successful communication timestamp, or error if unreachable
+- Tab selector: Main / History / Session Keys (shown when wallet is connected)
 
 ### ActionPanel
 **For**: All channel money operations initiated by the user.
@@ -84,10 +88,21 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 ### SessionKeyBanner
 **For**: Nudging the user to set up a session key when none is active.
 - Appears when wallet is connected but no session key exists
-- "Set up" button opens SessionKeySetupModal
+- "Set up" button navigates to the Session Keys tab
+
+### SessionKeysTab
+**For**: Full management of session keys (list, register, update/renew, revoke).
+- Fetches all session keys (active + inactive) from the node via `useSessionKeyManagement`
+- Displays a table with address (truncated + copy), assets, expiration (3-way format toggle: relative / UTC date / Unix), status badge, version, and per-row actions
+- "Expiring Soon" banner at the top when any key has < 1 hour remaining
+- Register New opens `SessionKeyRegisterForm` in register mode
+- Update/Renew opens `SessionKeyRegisterForm` in update mode (pre-filled assets + expiry)
+- Revoke opens `SessionKeyRevokeModal` (sets expiresAt to past)
+- "Use" button on non-current active keys calls `onSelectKey` to switch the active signing key
+- "IN USE" badge on the currently active key
 
 ### SessionKeySetupModal
-**For**: Explaining and confirming session key creation or renewal.
+**For**: Legacy modal for quick session key creation (still present but no longer wired from the banner).
 - Clarifies what a session key is (24h authorization stored locally, avoids MetaMask popups per state op)
 - Confirm triggers one MetaMask signature, then session key is stored in localStorage
 - Cancel dismisses without changes
@@ -153,10 +168,19 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 
 ### useSessionKey
 **Owns**: Session key storage and registration.
-- Loads session key from localStorage on address change
+- Loads session key from localStorage on address change; also loads `allKeys` (all stored keys)
 - Registers a new key: generates keypair, finds next version, signs ownership with wallet, submits to node
+- `selectKey(address)` — switches the active signing key among locally stored keys
 - Clears key from storage
 - Re-checks expiry every 60s so the banner re-appears in the same session if a key expires
+
+### useSessionKeyManagement
+**Owns**: Server-side session key fetching and register/update/revoke operations.
+- `fetchKeys()` — fetches all keys (including inactive) from the node via `client.getLastChannelKeyStates`
+- `register(client, walletAddress, assets, expiresAt)` — registers a new key, saves to localStorage, returns StoredSessionKey
+- `update(client, walletAddress, currentKey, assets, expiresAt)` — re-registers with new assets/expiry at the next version
+- `revoke(client, walletAddress, currentKey)` — re-registers with `expiresAt` in the past to invalidate the key
+- Exposes `serverKeys`, `isLoading`, `isSubmitting`
 
 ---
 
@@ -209,7 +233,13 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 1. In ActionPanel or ChannelRow → Close → MetaMask: close transaction → checkpoint
 
 **Session key setup**
-1. Banner appears → "Set up" → modal → confirm → one MetaMask signature → key stored locally → future state ops (acknowledge, checkpoint) skip MetaMask
+1. Banner appears → "Set up" → navigates to Session Keys tab → "Register New" → `SessionKeyRegisterForm` → confirm → one MetaMask signature → key stored locally + submitted to node → future state ops (acknowledge, checkpoint) skip MetaMask
+
+**Session key management**
+1. Session Keys tab → table of all keys from node (active, expiring, expired, revoked)
+2. Update/Renew key → `SessionKeyRegisterForm` in update mode (new version registered on node)
+3. Revoke key → `SessionKeyRevokeModal` confirm → re-registers with expiresAt in the past
+4. Switch active key → "Use" button → `selectKey` updates localStorage active flag + SDK switches signer
 
 **Acknowledge issued state**
 1. Expand channel → StateViewer → Acknowledge button (issued row) → signs with session key or wallet → issued becomes signed

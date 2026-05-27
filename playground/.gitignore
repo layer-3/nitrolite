@@ -5,3 +5,8 @@ dist/
 .env.*.local
 *.log
 .DS_Store
+.vite
+PLAN.md
+TASKS.md
+TODO.md
+layout-options.md

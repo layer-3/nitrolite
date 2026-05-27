@@ -10,14 +10,12 @@ import type { AppTab } from './components/WalletBar';
 import ActionPanel from './components/ActionPanel';
 import ChannelList from './components/ChannelList';
 import HistoryTab from './components/HistoryTab';
+import SessionKeysTab from './components/SessionKeysTab';
 import UnsupportedChainModal from './components/UnsupportedChainModal';
 import SetHomechainModal from './components/SetHomechainModal';
-import SessionKeyBanner from './components/SessionKeyBanner';
-import SessionKeySetupModal from './components/SessionKeySetupModal';
 
 export default function App() {
   const wallet = useWallet();
-  const [showSkModal, setShowSkModal] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>('main');
 
   const sk = useSessionKey(wallet.address);
@@ -49,20 +47,6 @@ export default function App() {
   }, [wallet.chainId, nitro.supportedChains]);
 
   const showUnsupportedModal = !!wallet.address && !!nitro.isConnected && !isChainSupported;
-  const showSkBanner = !!wallet.address && nitro.isConnected && !sk.sessionKey;
-
-  const onConfirmSk = async () => {
-    if (!nitro.client) return;
-    await sk.register(
-      nitro.client,
-      nitro.supportedAssets.map(a => a.symbol),
-    );
-  };
-
-  // Close modal when registration finishes successfully (sessionKey becomes set).
-  useEffect(() => {
-    if (sk.sessionKey && showSkModal) setShowSkModal(false);
-  }, [sk.sessionKey, showSkModal]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -102,13 +86,23 @@ export default function App() {
           <div className="text-text-muted text-sm text-center py-16">Connecting to Nitronode…</div>
         ) : (
           <>
-            {showSkBanner && <SessionKeyBanner onSetup={() => setShowSkModal(true)} />}
-
-            {activeTab === 'history' ? (
+{activeTab === 'history' ? (
               <HistoryTab
                 client={nitro.client}
                 address={wallet.address}
                 chains={nitro.supportedChains}
+              />
+            ) : activeTab === 'keys' ? (
+              <SessionKeysTab
+                client={nitro.client}
+                walletClient={wallet.walletClient}
+                address={wallet.address}
+                sessionKey={sk.sessionKey}
+                supportedAssets={nitro.supportedAssets.map(a => a.symbol)}
+                onKeyActivated={(newSk) => sk.selectKey(newSk.sessionKeyAddress)}
+                onKeyCleared={sk.clear}
+                onSelectKey={sk.selectKey}
+                onRefreshAllKeys={sk.refreshAllKeys}
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-[420px_1fr] gap-5 items-start">
@@ -152,6 +146,10 @@ export default function App() {
                     onSelectAsset={setSelectedAsset}
                     onAfterOp={refreshAll}
                     channelStatesKey={channelStatesKey}
+                    sessionKey={sk.sessionKey}
+                    allSessionKeys={sk.allKeys}
+                    onSelectSessionKey={(addr) => addr ? sk.selectKey(addr) : sk.clear()}
+                    onManageSessionKeys={() => setActiveTab('keys')}
                   />
                 </div>
               </div>
@@ -174,15 +172,6 @@ export default function App() {
         />
       )}
 
-      {showSkModal && (
-        <SessionKeySetupModal
-          assets={nitro.supportedAssets.map(a => a.symbol)}
-          isRegistering={sk.isRegistering}
-          mode={sk.sessionKey ? 'renew' : 'setup'}
-          onConfirm={onConfirmSk}
-          onCancel={() => setShowSkModal(false)}
-        />
-      )}
     </div>
   );
 }

@@ -133,6 +133,7 @@ export default function App() {
                   onSwitchChain={wallet.switchChain}
                   closingAsset={ops.closingAsset}
                   address={wallet.address}
+                  onRefresh={() => { refreshAll(); bumpChannelStates(); }}
                 />
 
                 <div>

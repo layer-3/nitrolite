@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Droplets } from 'lucide-react';
 import type { Asset, Blockchain, Channel } from '@yellow-org/sdk';
 import { ChannelType, ChannelStatus } from '@yellow-org/sdk';
 import { tokenIconUrl, chainIconUrl } from '../icons';
 import { chainDisplayName } from '../chainMeta';
+import { FAUCET_ASSETS } from '../utils';
 
 interface Props {
   assets: Asset[];
@@ -109,8 +110,14 @@ function AssetRow({
   return (
     <>
       <TokenIcon symbol={asset.symbol} size={22} />
-      <span className="font-medium text-text-primary flex-1 text-left">
+      <span className="font-medium text-text-primary flex-1 text-left flex items-center gap-1.5">
         {asset.symbol.toUpperCase()}
+        {FAUCET_ASSETS.has(asset.symbol.toLowerCase()) && (
+          <span className="tooltip-wrap">
+            <Droplets size={13} className="text-accent flex-shrink-0" />
+            <span className="tip">Faucet available</span>
+          </span>
+        )}
       </span>
       <div className="flex items-center gap-1.5">
         {assetChains.map(chain => (

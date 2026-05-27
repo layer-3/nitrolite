@@ -10,10 +10,14 @@ Developer-facing playground for Nitrolite — wallet, channel, and state channel
 
 Single-page app. Sticky header, scrollable body.
 
-- **Header**: Wallet connection bar + session key status + node health indicator
-- **Body (2-col on desktop)**:
-  - Left: Action panel (deposit / withdraw / transfer tabs)
+- **Header**: Wallet connection bar (left: brand + node status; center: Main/History tabs when connected; right: SK chip + chain + address + disconnect)
+- **Body — Main tab (2-col on desktop)**:
+  - Left: Action panel (deposit / withdraw / transfer / faucet tabs)
   - Right: Channel list (includes incoming unacknowledged channels at the top)
+- **Body — History tab (full-width)**:
+  - Transaction history table with column-filter popovers, per-cell quick filter, expandable row detail, and pagination (25/page)
+
+Tab selector only appears when a wallet is connected. Switching tabs preserves state in both panels.
 
 **Gating overlays** (modals) appear on top when:
 - Wallet is on an unsupported chain
@@ -36,13 +40,15 @@ Single-page app. Sticky header, scrollable body.
 - **Deposit tab** — move on-chain funds into a channel (requires MetaMask approval + transaction)
 - **Withdraw tab** — move channel funds back on-chain
 - **Transfer tab** — send channel funds to another address (requires recipient address input)
+- **Faucet tab** — visible only for assets in `FAUCET_ASSETS` (currently YUSD); shows a "Request drip" button that calls the faucet endpoint (mock until endpoint is configured)
 - Token selector (custom dropdown via TokenSelector), amount input, Max button (auto-fills from relevant balance)
 - Enforces amount limits: cannot exceed on-chain balance (deposit) or channel balance (withdraw/transfer)
-- **Cross-chain guard**: if the selected asset has a home channel on a different chain than the wallet's current chain, the tabs and form are blurred and a "Select {chain}" button appears to switch chains (cross-chain operations are not supported)
+- **Cross-chain guard**: if the selected asset has a home channel on a different chain than the wallet's current chain, the deposit/withdraw/transfer form is blurred and a "Select {chain}" button appears to switch chains; the Faucet tab remains accessible regardless of chain state
 
 ### TokenSelector
 **For**: Custom asset/token picker used inside ActionPanel.
 - Displays each asset as a row: token icon + symbol + supported chain icons
+- Assets in `FAUCET_ASSETS` show a small drip icon (Droplets) with a "Faucet available" tooltip next to the symbol
 - Token and chain icons are loaded from CDN (see `src/icons.ts`); unknown symbols fall back to a letter avatar
 - If a non-closed home channel exists for an asset, all chain icons except the home chain are dimmed (greyscale + low opacity)
 
@@ -96,6 +102,14 @@ Single-page app. Sticky header, scrollable body.
 **For**: Guiding the user off an unsupported chain.
 - Appears when the connected wallet's chain is not recognized by the node
 - Lists supported chains; clicking one triggers a wallet chain-switch request
+
+### HistoryTab
+**For**: Full-width transaction history view, shown when the History tab is active.
+- Fetches up to 200 recent transactions via `client.getTransactions(address, { pageSize: 200 })`; sorts newest-first; paginates at 25/page client-side
+- Column header popovers (funnel icon) for Type (multi-select checkboxes), Asset (multi-select), From/To (text input); Apply/Clear buttons in each popover
+- Per-cell quick filter: clicking a Type badge, Asset name, or From/To address immediately adds/removes an exact-value filter with tooltip feedback
+- Expandable rows: clicking a row reveals Sender new state ID, Receiver new state ID, Timestamp, and a Confirmation timeline (Signed → Co-signed for off-chain; Signed → Broadcasted → Confirmed for on-chain)
+- All filtering is client-side after the initial fetch; Refresh button re-fetches from the node
 
 ### CopyButton
 **For**: One-click copy of addresses or hashes throughout the UI.
@@ -154,6 +168,7 @@ Single-page app. Sticky header, scrollable body.
 - `tokenIconUrl(symbol)` / `chainIconUrl(chainId)` return `null` for unknown entries; callers render a fallback
 
 ### utils.ts
+- `FAUCET_ASSETS` — Set of lowercase asset symbols that have a test faucet (currently `yusd`)
 - Address formatting (abbreviated display)
 - Balance formatting (thousands separators, 2 decimal places)
 - Relative time ("just now", "5m ago", "2h ago")

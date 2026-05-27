@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "playground.common.fullname" . }}
+  labels:
+    {{- include "playground.common.labels" . | nindent 4 }}
+spec:
+  {{- include "playground.component.replicaCount" . | nindent 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "playground.common.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "playground.component.metricsAnnotations" .Values.metrics | nindent 8 }}
+      labels:
+        {{- include "playground.common.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.serviceAccount }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+      containers:
+        - name: web
+          image: {{ include "playground.component.image" .Values.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            {{- include "playground.common.env" . | nindent 12 }}
+          {{- include "playground.component.ports" .Values.service | nindent 10 }}
+          {{- include "playground.component.resources" .Values.resources | nindent 10 }}
+          {{- include "playground.component.probes" . | nindent 10 }}
+      {{- include "playground.common.imagePullSecrets" . | nindent 6 }}
+      {{- include "playground.common.nodeSelectorLabels" . | nindent 6 }}
+      {{- include "playground.common.affinity" . | nindent 6 }}
+      {{- include "playground.common.tolerations" . | nindent 6 }}

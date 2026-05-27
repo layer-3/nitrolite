@@ -12,8 +12,7 @@ import type { Address, WalletClient } from 'viem';
 import { WalletStateSigner, WalletTransactionSigner } from '../walletSigners';
 import { rpcUrlFor } from '../networks';
 import { buildSessionKeyStateSigner, type StoredSessionKey } from '../sessionKey';
-
-const NODE_URL = import.meta.env.VITE_NITRONODE_URL ?? 'wss://nitronode-sandbox.yellow.org/v1/ws';
+import { NODE_URL } from '../config';
 
 export interface UseNitroliteResult {
   client: Client | null;

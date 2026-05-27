@@ -1,0 +1,5 @@
+---
+apiVersion: v2
+description: Nitrolite Playground Helm chart
+name: playground
+version: 1.0.0

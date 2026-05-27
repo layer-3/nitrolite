@@ -1,23 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 32" fill="none">
-  <!-- Italic N: font-size 28 (up from 26), weight 500 (down from 700 → thinner strokes) -->
-  <text
-    x="1" y="27"
-    font-family="'JetBrains Mono', 'Courier New', monospace"
-    font-style="italic"
-    font-weight="500"
-    font-size="28"
-    fill="#f5a623"
-  >N</text>
-
-  <!--
-    FlaskConical — exact Lucide paths (viewBox 0 0 24 24).
-    scale(0.82) down from 0.95 → flask height ~16.4px.
-    N spans y≈6.3–27 (height ~20.7px); flask centered within that range.
-    translate(15.5 7):  flask top ≈ y=8.6, flask bottom ≈ y=25.0
-    Gap: N right edge ≈ x=17.8, flask cap left ≈ x=22.5 → ~5px gap.
-  -->
-  <g transform="translate(18.8 8.5) scale(0.82)"
-     stroke="#f5a623" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="7" fill="#f5a623"/>
+  <g transform="translate(4.7 4.7) scale(0.943)"
+     stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
     <path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/>
     <path d="M6.453 15h11.094"/>
     <path d="M8.5 2h7"/>

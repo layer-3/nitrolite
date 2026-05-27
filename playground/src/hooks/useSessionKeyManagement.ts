@@ -18,8 +18,7 @@ import {
   type StoredSessionKey,
 } from '../sessionKey';
 import { WalletStateSigner, WalletTransactionSigner } from '../walletSigners';
-
-const NODE_URL = import.meta.env.VITE_NITRONODE_URL ?? 'wss://nitronode-sandbox.yellow.org/v1/ws';
+import { NODE_URL } from '../config';
 
 interface UseSessionKeyManagementResult {
   serverKeys: ChannelSessionKeyStateV1[];

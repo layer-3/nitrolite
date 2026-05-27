@@ -12,8 +12,7 @@ import {
   registerSessionKey,
   type StoredSessionKey,
 } from '../sessionKey';
-
-const NODE_URL = import.meta.env.VITE_NITRONODE_URL ?? 'wss://nitronode-sandbox.yellow.org/v1/ws';
+import { NODE_URL } from '../config';
 
 export interface UseSessionKeyResult {
   sessionKey: StoredSessionKey | null;

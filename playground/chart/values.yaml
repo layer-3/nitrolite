@@ -1,0 +1,125 @@
+# -- Override the full name
+fullnameOverride: ""
+
+config:
+  # -- Public nitronode WebSocket URL. Rendered into /v1/playground/env.js at
+  # container start; consumed by the SPA in the browser, not by the container,
+  # so this must be the externally-reachable URL (not the in-cluster service).
+  nitronodeWsUrl: "wss://nitronode.example.com/v1/ws"
+  # -- Whether the faucet UI is enabled. Disable on envs where the faucet-app
+  # release is not installed (see helmfile.yaml.gotmpl), otherwise the drip
+  # button 404s.
+  faucetEnabled: true
+
+# -- Number of replicas
+replicaCount: 1
+
+image:
+  # -- Docker image repository
+  repository: ghcr.io/layer-3/nitrolite/playground
+  # -- Docker image tag (set via helmfile/CI)
+  tag: ""
+
+service:
+  http:
+    # -- Enable HTTP service
+    enabled: true
+    # -- HTTP service port (matches nginx listener in playground/deploy/nginx.conf)
+    port: 8080
+    # -- External path. The bundle is built with Vite base=/v1/playground/, so
+    # no ingress rewrite is needed: nginx serves the same prefix directly.
+    path: /v1/playground
+
+metrics:
+  # -- Static SPA — no app-level metrics. Kept for template parity with faucet.
+  enabled: false
+  podmonitoring:
+    enabled: false
+  port: 4242
+  endpoint: "/metrics"
+  scrapeInterval: 30s
+
+probes:
+  liveness:
+    enabled: true
+    type: tcp
+  readiness:
+    enabled: true
+    type: tcp
+
+resources:
+  limits: {}
+  requests: {}
+
+# -- Service account name
+serviceAccount: ""
+
+autoscaling:
+  # -- Toggle the HorizontalPodAutoscaler. When on, `replicaCount` is ignored
+  # and `spec.replicas` is omitted from the Deployment so the HPA owns it
+  # outright.
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  # -- CPU target utilization. The bundle is a static-asset nginx, so CPU is the
+  # right signal — memory stays flat regardless of traffic.
+  targetCPUUtilizationPercentage: 80
+  # -- Kept for parity with the chart skeleton, but the HPA template only wires
+  # up CPU. Memory utilization is not a useful trigger for an SPA.
+  targetMemoryUtilizationPercentage: 80
+
+# -- PodDisruptionBudget. Recommended whenever `minReplicas` (or `replicaCount`)
+# is greater than 1 so node drains / rolling rollouts can't take every pod
+# down at once.
+pdb:
+  enabled: false
+  # -- `minAvailable: 1` keeps at least one pod up during voluntary disruptions.
+  # Use a fraction like `50%` if you scale higher and want proportional minimums.
+  minAvailable: 1
+
+networking:
+  # -- TLS cluster issuer (cert-manager). The TLS secret is shared with the
+  # nitronode release on the same host, so cert-manager does not re-provision.
+  tlsClusterIssuer: zerossl-prod
+  # -- External hostname for the gateway / ingress
+  externalHostname: nitronode.example.com
+
+  gateway:
+    enabled: false
+    className: envoy-gateway
+    ipAddressName: ""
+
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    grpc: false
+    tls:
+      enabled: false
+
+  # -- Optional ingress that redirects requests to `/` on the same host to
+  # the playground entry point. Useful when the playground is the only
+  # public UI on the hostname and a bare domain hit should land users on the
+  # SPA. Disabled by default; enabled per-env in chart/config/<env>/.
+  ingressRootRedirect:
+    enabled: false
+    # -- HTTP status code used for the redirect. 308 is method-preserving and
+    # cacheable; switch to 302 if you need clients to recheck on every visit.
+    statusCode: 308
+
+# -- Image pull secret name. Defaults to the secret created by the co-deployed
+# nitronode release in the same namespace (playground `needs:` nitronode in
+# helmfile, so the secret always exists by the time playground pulls).
+imagePullSecret: nitronode-ghcr-pull
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity settings
+affinity: {}
+
+# -- Additional labels to add to all resources
+extraLabels: {}

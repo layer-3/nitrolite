@@ -1,0 +1,35 @@
+config:
+  nitronodeWsUrl: "wss://nitronode-stress.yellow.org/v1/ws"
+
+service:
+  http:
+    enabled: true
+    port: 8080
+    path: /v1/playground
+
+metrics:
+  enabled: false
+
+# Stress runs controlled load tests against nitronode; the playground itself is
+# not the workload under test. Fix the replica count so test results aren't
+# contaminated by autoscale events.
+replicaCount: 1
+resources:
+  requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
+  limits:   { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+
+autoscaling:
+  enabled: false
+
+networking:
+  externalHostname: nitronode-stress.yellow.org
+  tlsClusterIssuer: zerossl-prod
+  gateway:
+    enabled: false
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+  ingressRootRedirect:
+    enabled: true

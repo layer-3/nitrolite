@@ -45,3 +45,15 @@ releases:
     set:
       - name: image.tag
         value: '{{ env "FAUCET_IMAGE_TAG" | default (requiredEnv "IMAGE_TAG") }}'
+
+  - name: playground
+    namespace: nitronode-{{ .Environment.Name }}
+    chart: ./playground/chart
+    installed: true
+    needs:
+      - nitronode-{{ .Environment.Name }}/nitronode
+    values:
+      - playground/chart/config/{{ .Environment.Name }}/playground.yaml.gotmpl
+    set:
+      - name: image.tag
+        value: '{{ env "PLAYGROUND_IMAGE_TAG" | default (requiredEnv "IMAGE_TAG") }}'

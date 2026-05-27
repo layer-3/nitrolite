@@ -1,0 +1,17 @@
+{{- if and .Values.networking.ingress.enabled .Values.service.http.enabled }}
+apiVersion: {{ include "playground.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ include "playground.common.fullname" . }}
+  labels:
+    {{- include "playground.common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "playground.ingress.annotations" . | nindent 4 }}
+spec:
+  rules:
+    - host: {{ .Values.networking.externalHostname }}
+      http:
+        paths:
+          {{- include "playground.ingress.httpPath" . | nindent 10 }}
+  {{- include "playground.ingress.tls" . | nindent 2 }}
+{{- end }}

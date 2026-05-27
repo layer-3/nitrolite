@@ -65,12 +65,14 @@ imagePullSecrets:
 
 {{/*
 Returns common environment variables. The nginx container itself needs no
-configuration — NITRONODE_URL is the single runtime input, consumed by the
-entrypoint to render /playground/env.js before nginx starts.
+configuration — the entrypoint reads these values to render
+/v1/playground/env.js before nginx starts.
 */}}
 {{- define "playground.common.env" -}}
 - name: NITRONODE_URL
   value: {{ .Values.config.nitronodeWsUrl | quote }}
+- name: FAUCET_ENABLED
+  value: {{ .Values.config.faucetEnabled | print | quote }}
 {{- end }}
 
 {{/*

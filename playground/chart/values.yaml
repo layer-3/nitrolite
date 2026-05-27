@@ -2,10 +2,14 @@
 fullnameOverride: ""
 
 config:
-  # -- Public nitronode WebSocket URL. Rendered into /playground/env.js at
+  # -- Public nitronode WebSocket URL. Rendered into /v1/playground/env.js at
   # container start; consumed by the SPA in the browser, not by the container,
   # so this must be the externally-reachable URL (not the in-cluster service).
   nitronodeWsUrl: "wss://nitronode.example.com/v1/ws"
+  # -- Whether the faucet UI is enabled. Disable on envs where the faucet-app
+  # release is not installed (see helmfile.yaml.gotmpl), otherwise the drip
+  # button 404s.
+  faucetEnabled: true
 
 # -- Number of replicas
 replicaCount: 1

@@ -8,7 +8,7 @@ import { chainDisplayName } from '../chainMeta';
 import { showErrorToast } from '../toastError';
 import TokenSelector from './TokenSelector';
 import type { DepositPhase, WithdrawPhase, TransferPhase } from '../hooks/useChannelOps';
-import { FAUCET_URL } from '../config';
+import { FAUCET_URL, FAUCET_ENABLED } from '../config';
 
 type Tab = 'deposit' | 'withdraw' | 'transfer' | 'faucet';
 type FaucetPhase = 'idle' | 'requesting' | 'done' | 'rate-limited';
@@ -68,7 +68,7 @@ export default function ActionPanel({
   const wasBusyRef = useRef(false);
   const operatingTabRef = useRef<Tab | null>(null);
 
-  const hasFaucet = FAUCET_ASSETS.has(selectedAsset.toLowerCase());
+  const hasFaucet = FAUCET_ENABLED && FAUCET_ASSETS.has(selectedAsset.toLowerCase());
 
   // Pick the chain for deposit/withdraw: current wallet chain if it's supported, else asset's suggested chain.
   const asset = assets.find(a => a.symbol === selectedAsset);
@@ -163,9 +163,10 @@ export default function ActionPanel({
     wasBusyRef.current = isBusy;
   }, [isBusy]);
 
-  // Switch away from faucet tab if selected asset no longer has a faucet.
+  // Switch away from faucet tab if selected asset no longer has a faucet, or
+  // if the faucet was disabled at runtime (env-driven, e.g. prod).
   useEffect(() => {
-    if (tab === 'faucet' && !FAUCET_ASSETS.has(selectedAsset.toLowerCase())) {
+    if (tab === 'faucet' && (!FAUCET_ENABLED || !FAUCET_ASSETS.has(selectedAsset.toLowerCase()))) {
       setTab('deposit');
     }
   }, [selectedAsset, tab]);

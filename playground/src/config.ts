@@ -32,3 +32,16 @@ export const FAUCET_URL: string =
   (typeof window !== 'undefined' && window.__ENV__?.FAUCET_URL) ||
   import.meta.env.VITE_FAUCET_URL ||
   deriveFaucetUrl(NODE_URL);
+
+// Whether the faucet UI surface is enabled. The faucet itself ships only to
+// non-prod envs (see helmfile.yaml.gotmpl), so this flag hides the tab on
+// hosts where the request would 404. Default `true` keeps sandbox/stress
+// behavior — prod overrides via env.js.
+function parseEnabled(raw: string | undefined): boolean | null {
+  if (raw === undefined || raw === '') return null;
+  return raw !== 'false' && raw !== '0';
+}
+export const FAUCET_ENABLED: boolean =
+  parseEnabled(typeof window !== 'undefined' ? window.__ENV__?.FAUCET_ENABLED : undefined) ??
+  parseEnabled(import.meta.env.VITE_FAUCET_ENABLED) ??
+  true;

@@ -1,5 +1,8 @@
 config:
   nitronodeWsUrl: "wss://nitronode.yellow.org/v1/ws"
+  # faucet-app release is not installed in prod (see helmfile.yaml.gotmpl);
+  # hide the UI tab so the drip button can't 404.
+  faucetEnabled: false
 
 service:
   http:

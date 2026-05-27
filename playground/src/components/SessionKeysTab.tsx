@@ -37,9 +37,10 @@ type KeyStatus = 'active' | 'expiring' | 'expired' | 'revoked';
 function getKeyStatus(key: ChannelSessionKeyStateV1): KeyStatus {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = Number(key.expires_at);
-  if (expiresAt <= now) return 'expired';
-  // Revoked = registered with expiresAt well in the past (via revoke flow)
+  // Revoked = registered with expiresAt well in the past (via revoke flow).
+  // Check before 'expired' so the more specific branch wins.
   if (expiresAt < now - 60) return 'revoked';
+  if (expiresAt <= now) return 'expired';
   if (expiresAt - now < 3600) return 'expiring'; // < 1 hour
   return 'active';
 }

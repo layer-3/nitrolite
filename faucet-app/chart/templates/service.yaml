@@ -1,0 +1,20 @@
+{{- $svc := .Values.service }}
+{{- if $svc.http.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "faucet-app.common.fullname" . }}
+  labels:
+    {{- include "faucet-app.common.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    {{- with $svc.http }}
+    - name: http
+      port: {{ default .port .externalPort }}
+      targetPort: {{ default .port .internalPort }}
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "faucet-app.common.selectorLabels" . | nindent 4 }}
+{{- end }}

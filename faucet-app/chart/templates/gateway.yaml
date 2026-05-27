@@ -1,0 +1,31 @@
+{{- if .Values.networking.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "faucet-app.common.fullname" . }}
+  labels:
+    {{- include "faucet-app.common.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.networking.tlsClusterIssuer }}
+    # FIXME: This annotation doesn't work
+    {{- if .Values.networking.gateway.ipAddressName }}
+    gateway.envoyproxy.io/service-annotations: |
+      networking.gke.io/load-balancer-ip-addresses: "{{ .Values.networking.gateway.ipAddressName }}"
+    {{- end }}
+spec:
+  gatewayClassName: {{ .Values.networking.gateway.className }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      hostname: {{ .Values.networking.externalHostname }}
+      port: 80
+    - name: https
+      protocol: HTTPS
+      hostname: {{ .Values.networking.externalHostname }}
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ printf "%s-tls" (.Values.networking.externalHostname | replace "." "-") }}
+{{- end }}

@@ -1,0 +1,47 @@
+environments:
+  sandbox-v1:
+    values:
+      - nitronode/chart/config/profiles.yaml
+  stress-v1:
+    values:
+      - nitronode/chart/config/profiles.yaml
+  prod-v1:
+    values:
+      - nitronode/chart/config/profiles.yaml
+
+---
+
+releases:
+  - name: nitronode
+    namespace: nitronode-{{ .Environment.Name }}
+    chart: ./nitronode/chart
+    installed: true
+    secrets:
+      - nitronode/chart/config/secrets.yaml
+      - nitronode/chart/config/{{ .Environment.Name }}/secrets.yaml
+    values:
+      - nitronode/chart/config/{{ .Environment.Name }}/nitronode.yaml.gotmpl
+    set:
+      - name: image.tag
+        value: '{{ env "NITRONODE_IMAGE_TAG" | default (requiredEnv "IMAGE_TAG") }}'
+      - name: config.blockchains
+        file: nitronode/chart/config/{{ .Environment.Name }}/blockchains.yaml
+      - name: config.assets
+        file: nitronode/chart/config/{{ .Environment.Name }}/assets.yaml
+
+  - name: faucet-app
+    namespace: nitronode-{{ .Environment.Name }}
+    chart: ./faucet-app/chart
+    # Faucet ships only to non-prod envs.
+    installed: {{ ne .Environment.Name "prod-v1" }}
+    needs:
+      - nitronode-{{ .Environment.Name }}/nitronode
+    {{- if ne .Environment.Name "prod-v1" }}
+    secrets:
+      - faucet-app/chart/config/{{ .Environment.Name }}/secrets.yaml
+    {{- end }}
+    values:
+      - faucet-app/chart/config/{{ .Environment.Name }}/faucet.yaml.gotmpl
+    set:
+      - name: image.tag
+        value: '{{ env "FAUCET_IMAGE_TAG" | default (requiredEnv "IMAGE_TAG") }}'

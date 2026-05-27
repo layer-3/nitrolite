@@ -10,15 +10,6 @@ prometheus.io/path: {{ default "/metrics" .endpoint | print | quote }}
 {{- end }}
 
 {{/*
-Returns replica count depending on component and HPA settings
-*/}}
-{{- define "playground.component.replicaCount" -}}
-{{- if not (and .autoscaling .autoscaling.enabled) }}
-replicas: {{ .replicaCount }}
-{{- end }}
-{{- end }}
-
-{{/*
 Returns full docker image name. Fails fast if `image.tag` is empty so that a
 missing IMAGE_TAG never produces a broken `repo:` reference that would only
 surface as ImagePullBackOff at pod startup.

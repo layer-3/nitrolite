@@ -10,6 +10,9 @@ service:
 metrics:
   enabled: false
 
+# Stress runs controlled load tests against nitronode; the playground itself is
+# not the workload under test. Fix the replica count so test results aren't
+# contaminated by autoscale events.
 replicaCount: 1
 resources:
   requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }

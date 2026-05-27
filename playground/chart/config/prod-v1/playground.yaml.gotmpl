@@ -13,13 +13,21 @@ service:
 metrics:
   enabled: false
 
-replicaCount: 2
+# `replicaCount` is ignored while autoscaling.enabled is true — see hpa.yaml.
 resources:
   requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
   limits:   { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
 
 autoscaling:
-  enabled: false
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  # Lower target than sandbox so prod has more headroom before scale-up lag.
+  targetCPUUtilizationPercentage: 60
+
+pdb:
+  enabled: true
+  minAvailable: 1
 
 networking:
   externalHostname: nitronode.yellow.org

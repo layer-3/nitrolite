@@ -55,11 +55,27 @@ resources:
 serviceAccount: ""
 
 autoscaling:
+  # -- Toggle the HorizontalPodAutoscaler. When on, `replicaCount` is ignored
+  # and `spec.replicas` is omitted from the Deployment so the HPA owns it
+  # outright.
   enabled: false
   minReplicas: 1
   maxReplicas: 3
+  # -- CPU target utilization. The bundle is a static-asset nginx, so CPU is the
+  # right signal — memory stays flat regardless of traffic.
   targetCPUUtilizationPercentage: 80
+  # -- Kept for parity with the chart skeleton, but the HPA template only wires
+  # up CPU. Memory utilization is not a useful trigger for an SPA.
   targetMemoryUtilizationPercentage: 80
+
+# -- PodDisruptionBudget. Recommended whenever `minReplicas` (or `replicaCount`)
+# is greater than 1 so node drains / rolling rollouts can't take every pod
+# down at once.
+pdb:
+  enabled: false
+  # -- `minAvailable: 1` keeps at least one pod up during voluntary disruptions.
+  # Use a fraction like `50%` if you scale higher and want proportional minimums.
+  minAvailable: 1
 
 networking:
   # -- TLS cluster issuer (cert-manager). The TLS secret is shared with the

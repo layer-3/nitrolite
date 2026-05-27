@@ -1,0 +1,27 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: {{ include "playground.hpa.apiVersion" . }}
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "playground.common.fullname" . }}
+  labels:
+    {{- include "playground.common.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "playground.common.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+  # Conservative scale-down: nginx CPU drops to near-zero between bursts; without
+  # a stabilization window the HPA would flap pods every few seconds.
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+{{- end }}

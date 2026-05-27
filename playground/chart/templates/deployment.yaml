@@ -5,7 +5,11 @@ metadata:
   labels:
     {{- include "playground.common.labels" . | nindent 4 }}
 spec:
-  {{- include "playground.component.replicaCount" . | nindent 2 }}
+  # Omit `replicas` entirely when the HPA owns the field — co-managing the same
+  # value from two controllers races on first reconcile and produces churn.
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:

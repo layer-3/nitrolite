@@ -231,7 +231,7 @@ export class Client {
         abi: ChannelHubAbi,
         functionName: 'depositToNode',
         args: [token, amountBig],
-        account: this.walletSigner.account!.address,
+        account: this.walletSigner.account!,
         ...(token === zeroAddress ? { value: amountBig } : {}),
       });
 
@@ -289,7 +289,7 @@ export class Client {
         abi: ChannelHubAbi,
         functionName: 'withdrawFromNode',
         args: [to, token, amountBig],
-        account: this.walletSigner.account!.address,
+        account: this.walletSigner.account!,
       });
 
       console.log('✅ Simulation successful - executing withdrawal...');
@@ -375,7 +375,7 @@ export class Client {
         abi: ChannelHubAbi,
         functionName: 'createChannel',
         args: [contractDef, contractState],
-        account: this.walletSigner.account!.address,
+        account: this.walletSigner.account!,
         ...(nativeValue != null ? { value: nativeValue } : {}),
       } as any)) as any;
 

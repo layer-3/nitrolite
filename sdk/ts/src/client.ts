@@ -422,6 +422,13 @@ export class Client {
       newState.nodeSig = nodeSig as Hex;
 
       return newState;
+    } else if (state.homeLedger.blockchainId !== blockchainId) {
+      // Active home channel is bound to the chain it was created on.
+      // Silently advancing it onto a different chain would surface as a
+      // confusing on-chain failure later.
+      throw new Error(
+        `active home channel for asset "${asset}" is on chain ${state.homeLedger.blockchainId}, cannot deposit on chain ${blockchainId}`
+      );
     }
 
     // Scenario B: Channel exists and is open - advance state with deposit
@@ -514,6 +521,13 @@ export class Client {
       newState.nodeSig = nodeSig as Hex;
 
       return newState;
+    } else if (state.homeLedger.blockchainId !== blockchainId) {
+      // Active home channel is bound to the chain it was created on.
+      // Silently advancing it onto a different chain would surface as a
+      // confusing on-chain failure later.
+      throw new Error(
+        `active home channel for asset "${asset}" is on chain ${state.homeLedger.blockchainId}, cannot withdraw on chain ${blockchainId}`
+      );
     }
 
     // Create next state

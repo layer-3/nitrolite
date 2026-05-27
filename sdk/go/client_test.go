@@ -620,3 +620,104 @@ func TestClient_SignSessionKeyState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rawSigner.PublicKey().Address().String(), recoveredAddr.String())
 }
+
+// newCrossChainTestClient builds a Client wired to a mockDialer pre-stocked
+// with the responses needed to reach the Deposit/Withdraw cross-chain guard:
+// node config (chain 137 home), assets (asset on both 137 and 8453), and a
+// latest state representing an open channel on chain 137. Returns the client
+// and the wallet address used to populate the state.
+func newCrossChainTestClient(t *testing.T) (*Client, string) {
+	t.Helper()
+
+	pk, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	pkHex := hexutil.Encode(crypto.FromECDSA(pk))
+
+	rawSigner, err := sign.NewEthereumRawSigner(pkHex)
+	require.NoError(t, err)
+	msgSigner, err := sign.NewEthereumMsgSignerFromRaw(rawSigner)
+	require.NoError(t, err)
+	stateSigner, err := core.NewChannelDefaultSigner(msgSigner)
+	require.NoError(t, err)
+	walletAddr := rawSigner.PublicKey().Address().String()
+
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockDialer.RegisterResponse(rpc.NodeV1GetConfigMethod.String(), rpc.NodeV1GetConfigResponse{
+		NodeAddress: "0xNodeAddress",
+		Blockchains: []rpc.BlockchainInfoV1{
+			{Name: "Polygon", BlockchainID: "137", ChannelHubAddress: "0xHubAddr137"},
+			{Name: "Base", BlockchainID: "8453", ChannelHubAddress: "0xHubAddr8453"},
+		},
+	})
+
+	mockDialer.RegisterResponse(rpc.NodeV1GetAssetsMethod.String(), rpc.NodeV1GetAssetsResponse{
+		Assets: []rpc.AssetV1{
+			{
+				Name:                  "USDC",
+				Symbol:                "USDC",
+				Decimals:              6,
+				SuggestedBlockchainID: "137",
+				Tokens: []rpc.TokenV1{
+					{BlockchainID: "137", Address: "0xToken137", Decimals: 6},
+					{BlockchainID: "8453", Address: "0xToken8453", Decimals: 6},
+				},
+			},
+		},
+	})
+
+	homeChannelID := "0xHomeChannel"
+	mockDialer.RegisterResponse(rpc.ChannelsV1GetLatestStateMethod.String(), rpc.ChannelsV1GetLatestStateResponse{
+		State: &rpc.StateV1{
+			ID:            "0xStateID",
+			Epoch:         "1",
+			Version:       "1",
+			UserWallet:    walletAddr,
+			Asset:         "USDC",
+			HomeChannelID: &homeChannelID,
+			Transition: rpc.TransitionV1{
+				Type:   core.TransitionTypeHomeDeposit,
+				Amount: "10",
+			},
+			HomeLedger: rpc.LedgerV1{
+				BlockchainID: "137",
+				TokenAddress: "0xToken137",
+				UserBalance:  "10",
+				UserNetFlow:  "10",
+				NodeBalance:  "0",
+				NodeNetFlow:  "0",
+			},
+		},
+	})
+
+	client := &Client{
+		rpcClient:       rpc.NewClient(mockDialer),
+		stateSigner:     stateSigner,
+		rawSigner:       rawSigner,
+		homeBlockchains: make(map[string]uint64),
+	}
+	client.assetStore = newClientAssetStore(client)
+	client.stateAdvancer = core.NewStateAdvancerV1(client.assetStore)
+	return client, walletAddr
+}
+
+func TestClient_Deposit_RejectsForeignChain(t *testing.T) {
+	t.Parallel()
+	client, _ := newCrossChainTestClient(t)
+
+	_, err := client.Deposit(context.Background(), 8453, "USDC", decimal.NewFromFloat(0.5))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "active home channel for asset \"USDC\" is on chain 137")
+	assert.Contains(t, err.Error(), "cannot deposit on chain 8453")
+}
+
+func TestClient_Withdraw_RejectsForeignChain(t *testing.T) {
+	t.Parallel()
+	client, _ := newCrossChainTestClient(t)
+
+	_, err := client.Withdraw(context.Background(), 8453, "USDC", decimal.NewFromFloat(0.5))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "active home channel for asset \"USDC\" is on chain 137")
+	assert.Contains(t, err.Error(), "cannot withdraw on chain 8453")
+}

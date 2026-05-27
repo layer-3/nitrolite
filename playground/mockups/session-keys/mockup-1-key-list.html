@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Keys — Key List</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base:      #0a0a0a;
+    --bg-surface:   #141414;
+    --bg-elevated:  #1c1c1c;
+    --border:       #242424;
+    --text-primary: #f0f0f0;
+    --text-muted:   #666666;
+    --accent:       #f5a623;
+    --accent-dim:   rgba(245, 166, 35, 0.12);
+    --error:        #ef4444;
+    --success:      #22c55e;
+    --warning:      #f97316;
+    --warning-dim:  rgba(249, 115, 22, 0.12);
+    --info:         #3b82f6;
+    --info-dim:     rgba(59, 130, 246, 0.12);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Nav ── */
+  .nav {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .nav-left { display: flex; align-items: center; gap: 10px; }
+
+  .nav-logo {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 5px var(--success);
+    flex-shrink: 0;
+  }
+
+  .nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .nav-right { display: flex; align-items: center; gap: 8px; }
+
+  /* ── Tabs ── */
+  .tab {
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tab.active { color: var(--accent); background: var(--accent-dim); }
+  .tab:hover:not(.active) { background: var(--bg-elevated); color: var(--text-primary); }
+
+  /* ── Chips ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .chip-sk {
+    border-color: rgba(245,166,35,0.4);
+    background: var(--accent-dim);
+    color: var(--accent);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .chip-clear {
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 2px;
+  }
+  .chip-clear:hover { color: var(--text-primary); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.12s;
+  }
+  .btn:hover { background: #1f1f1f; }
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0a;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #e09520; border-color: #e09520; }
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
+  .btn-danger {
+    background: transparent;
+    border: none;
+    color: var(--error);
+    padding: 5px 8px;
+  }
+  .btn-danger:hover { background: rgba(239,68,68,0.08); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* ── Count badge ── */
+  .count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  /* ── Dot ── */
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .dot.error { background: var(--error); }
+  .dot.muted { background: var(--text-muted); }
+
+  /* ── Status badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-active   { background: rgba(34,197,94,0.12);  color: #22c55e; }
+  .badge-expiring { background: rgba(249,115,22,0.14); color: #f97316; }
+  .badge-expired  { background: rgba(102,102,102,0.14); color: var(--text-muted); }
+  .badge-revoked  { background: rgba(239,68,68,0.12);  color: var(--error); }
+  .badge-pending  { background: rgba(59,130,246,0.12); color: #3b82f6; }
+
+  /* ── Address cell ── */
+  .addr-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .copy-btn-addr {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: var(--text-muted);
+    display: inline-flex;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: color 0.12s, opacity 0.12s;
+  }
+  .addr-cell:hover .copy-btn-addr { opacity: 1; }
+  .copy-btn-addr:hover { color: var(--accent); }
+
+  /* ── Expiry toggle ── */
+  .ts-toggle {
+    position: relative;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+  }
+  .ts-toggle::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 11px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+    z-index: 300;
+    font-family: 'Inter', sans-serif;
+  }
+  .ts-toggle:hover::after { opacity: 1; }
+  .ts-toggle:hover span { color: var(--accent); }
+
+  /* ── Table ── */
+  .sk-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .sk-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .sk-table th:first-child { padding-left: 20px; }
+  .sk-table th:last-child  { padding-right: 20px; }
+
+  .sk-table td {
+    padding: 13px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .sk-table td:first-child { padding-left: 20px; }
+  .sk-table td:last-child  { padding-right: 20px; }
+  .sk-table tr:last-child td { border-bottom: none; }
+  .sk-table tbody tr { transition: background 0.1s; }
+  .sk-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  /* ── Expiring soon banner ── */
+  .warning-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 16px;
+    border-radius: 10px;
+    background: var(--warning-dim);
+    border: 1px solid rgba(249,115,22,0.25);
+    margin-bottom: 16px;
+  }
+
+  /* ── Th filter header ── */
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+  }
+  .th-inner.filterable { cursor: pointer; }
+  .th-inner.filterable:hover { color: var(--text-primary); }
+  .th-inner.filter-active { color: var(--accent); }
+
+  /* ── Main content ── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 11px; }
+  .text-muted { color: var(--text-muted); }
+  .text-accent { color: var(--accent); }
+  .font-semibold { font-weight: 600; }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation Bar ── -->
+<nav class="nav">
+  <div class="nav-left">
+    <span class="nav-logo">nitrolite</span>
+    <div class="flex items-center gap-2 text-sm text-muted">
+      <span class="status-dot"></span>
+      <span>connected · 2s ago</span>
+    </div>
+  </div>
+
+  <div class="nav-center">
+    <button class="tab">Main</button>
+    <button class="tab">History</button>
+    <button class="tab active">Session Keys</button>
+  </div>
+
+  <div class="nav-right">
+    <div class="chip">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span>Base</span>
+    </div>
+    <div class="chip mono" style="font-size:11px">0x1234…abcd</div>
+    <div class="chip chip-sk">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+      </svg>
+      SK · 23h
+      <span class="chip-clear">×</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Main Content ── -->
+<main class="main">
+
+  <!-- Expiring Soon Banner -->
+  <div class="warning-banner">
+    <div class="flex items-center gap-3">
+      <div style="width:32px;height:32px;border-radius:50%;background:rgba(249,115,22,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+        </svg>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#f97316">Session key expiring soon</div>
+        <div style="font-size:12px;color:var(--text-muted)">
+          Key <span class="mono" style="font-size:11px">0x9fEd…A1b2</span> expires in 45 minutes. Renew to keep signing without MetaMask prompts.
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-sm" style="border-color:rgba(249,115,22,0.4);color:#f97316;white-space:nowrap;flex-shrink:0">Renew Key</button>
+  </div>
+
+  <!-- Session Keys Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="flex items-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+        </svg>
+        <span class="card-title">Session Keys</span>
+        <span class="count-badge">4</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost btn-sm">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary btn-sm">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Register New
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <table class="sk-table">
+      <thead>
+        <tr>
+          <th>
+            <span class="th-inner">Address</span>
+          </th>
+          <th>
+            <span class="th-inner">Assets</span>
+          </th>
+          <th>
+            <span class="th-inner filterable" title="Click to cycle expiry format">
+              Expiration
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </th>
+          <th>
+            <span class="th-inner filterable">
+              Status
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </th>
+          <th>
+            <span class="th-inner">Version</span>
+          </th>
+          <th style="text-align:right">
+            <span class="th-inner">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- Row 1: Active key (currently in use) -->
+        <tr>
+          <td>
+            <div class="addr-cell">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+              </svg>
+              <span class="mono" style="font-size:12px">0x1a2B…c3dE</span>
+              <div style="display:inline-flex;align-items:center;gap:4px;background:var(--accent-dim);border-radius:4px;padding:1px 6px">
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style="font-size:10px;font-weight:600;color:var(--accent)">IN USE</span>
+              </div>
+              <button class="copy-btn-addr" title="Copy address">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+          <td>
+            <span style="font-size:12px;color:var(--text-muted)" class="mono">USDC, ETH, YUSD</span>
+          </td>
+          <td>
+            <div class="ts-toggle" data-tip="Show as UTC date">
+              <span style="font-size:13px" class="mono">23h 15m</span>
+            </div>
+          </td>
+          <td><span class="badge badge-active">● Active</span></td>
+          <td><span style="font-size:12px;color:var(--text-muted)" class="mono">v1</span></td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-ghost btn-sm">Update</button>
+              <button class="btn btn-danger btn-sm">Revoke</button>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Row 2: Expiring soon -->
+        <tr>
+          <td>
+            <div class="addr-cell">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+              </svg>
+              <span class="mono" style="font-size:12px">0x9fEd…A1b2</span>
+              <button class="copy-btn-addr" title="Copy address">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+          <td>
+            <span style="font-size:12px;color:var(--text-muted)" class="mono">USDC</span>
+          </td>
+          <td>
+            <div class="ts-toggle" data-tip="Show as UTC date">
+              <span style="font-size:13px;color:#f97316" class="mono">45m</span>
+            </div>
+          </td>
+          <td><span class="badge badge-expiring">● Expiring Soon</span></td>
+          <td><span style="font-size:12px;color:var(--text-muted)" class="mono">v3</span></td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-sm" style="border-color:rgba(249,115,22,0.4);color:#f97316">Renew</button>
+              <button class="btn btn-danger btn-sm">Revoke</button>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Row 3: Expired -->
+        <tr style="opacity:0.7">
+          <td>
+            <div class="addr-cell">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+              </svg>
+              <span class="mono" style="font-size:12px">0xAbCd…1234</span>
+              <button class="copy-btn-addr" title="Copy address">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+          <td>
+            <span style="font-size:12px;color:var(--text-muted)" class="mono">ETH</span>
+          </td>
+          <td>
+            <div class="ts-toggle" data-tip="Show as UTC date">
+              <span style="font-size:13px;color:var(--text-muted)" class="mono">expired</span>
+            </div>
+          </td>
+          <td><span class="badge badge-expired">● Expired</span></td>
+          <td><span style="font-size:12px;color:var(--text-muted)" class="mono">v1</span></td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-ghost btn-sm" disabled>Update</button>
+              <button class="btn btn-danger btn-sm" disabled>Revoke</button>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Row 4: Revoked -->
+        <tr style="opacity:0.55">
+          <td>
+            <div class="addr-cell">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+              </svg>
+              <span class="mono" style="font-size:12px">0x7eF1…8Ba4</span>
+              <button class="copy-btn-addr" title="Copy address">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+          <td>
+            <span style="font-size:12px;color:var(--text-muted)" class="mono">USDC, ETH</span>
+          </td>
+          <td>
+            <span style="font-size:13px;color:var(--text-muted)" class="mono">—</span>
+          </td>
+          <td><span class="badge badge-revoked">● Revoked</span></td>
+          <td><span style="font-size:12px;color:var(--text-muted)" class="mono">v2</span></td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-ghost btn-sm" disabled>Update</button>
+              <button class="btn btn-danger btn-sm" disabled>Revoke</button>
+            </div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+</main>
+</body>
+</html>

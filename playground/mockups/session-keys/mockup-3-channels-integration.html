@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Keys — Channels Integration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base:      #0a0a0a;
+    --bg-surface:   #141414;
+    --bg-elevated:  #1c1c1c;
+    --border:       #242424;
+    --text-primary: #f0f0f0;
+    --text-muted:   #666666;
+    --accent:       #f5a623;
+    --accent-dim:   rgba(245, 166, 35, 0.12);
+    --error:        #ef4444;
+    --success:      #22c55e;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Nav ── */
+  .nav {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .nav-left { display: flex; align-items: center; gap: 10px; }
+  .nav-logo { font-size: 17px; font-weight: 600; color: var(--accent); letter-spacing: -0.3px; }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 5px var(--success);
+    flex-shrink: 0;
+  }
+  .nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .nav-right { display: flex; align-items: center; gap: 8px; }
+
+  .tab {
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tab.active { color: var(--accent); background: var(--accent-dim); }
+  .tab:hover:not(.active) { background: var(--bg-elevated); color: var(--text-primary); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.12s;
+  }
+  .btn:hover { background: #1f1f1f; }
+  .btn-primary { background: var(--accent); color: #0a0a0a; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { background: #e09520; }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--text-muted); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title { font-size: 15px; font-weight: 600; }
+
+  /* ── Layout ── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ── Action Panel (simplified) ── */
+  .action-panel-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 14px 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ap-tab {
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .ap-tab.active { color: var(--accent); background: var(--accent-dim); }
+
+  .ap-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+  .input-wrap {
+    display: flex;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .input-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--text-primary);
+    width: 100%;
+  }
+  .input-wrap input::placeholder { color: var(--text-muted); }
+  .input-max {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0 12px;
+  }
+
+  .token-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .token-selector:hover { border-color: #333; }
+
+  .token-icon {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #2775ca;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* ── Session Key Selector ── */
+  .sk-selector-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .sk-selector-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.12s;
+  }
+  .sk-selector-btn:hover { border-color: #333; }
+  .sk-selector-btn.open { border-color: var(--accent); }
+
+  .sk-dot-active {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+  }
+  .sk-dot-expiring {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #f97316;
+    flex-shrink: 0;
+  }
+
+  /* ── SK Dropdown ── */
+  .sk-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    z-index: 200;
+    min-width: 260px;
+    overflow: hidden;
+    padding: 6px 0;
+  }
+
+  .sk-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .sk-dropdown-item:hover { background: rgba(255,255,255,0.04); }
+  .sk-dropdown-item.selected { background: var(--accent-dim); }
+
+  .sk-dropdown-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .sk-option-address {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    flex: 1;
+  }
+
+  .sk-option-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .sk-option-meta.expiring { color: #f97316; }
+  .sk-option-meta.expired  { color: var(--text-muted); opacity: 0.6; }
+
+  .sk-dropdown-item.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .sk-dropdown-item.disabled:hover { background: transparent; }
+
+  /* ── Channel rows ── */
+  .channel-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .channel-row:last-child { border-bottom: none; }
+
+  .channel-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    gap: 12px;
+  }
+  .channel-row-head:hover { background: rgba(255,255,255,0.02); }
+
+  .channel-info { display: flex; align-items: center; gap: 10px; }
+
+  .channel-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .channel-peer { font-size: 13px; font-weight: 500; }
+  .channel-id   { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+  .channel-balance { text-align: right; }
+  .channel-balance-amount {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .channel-balance-asset { font-size: 11px; color: var(--text-muted); }
+
+  .channel-sk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--success);
+    white-space: nowrap;
+  }
+  .channel-sk-badge.wallet {
+    background: var(--bg-elevated);
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+
+  /* ── Annotations / callout boxes ── */
+  .callout {
+    position: absolute;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    max-width: 240px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .callout strong { color: var(--text-primary); font-weight: 500; }
+  .callout-arrow-left::before {
+    content: '';
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-right-color: var(--border);
+    margin-right: -1px;
+  }
+  .callout-arrow-left::after {
+    content: '';
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 5px solid transparent;
+    border-right-color: var(--bg-elevated);
+  }
+
+  .annotations-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .layout-wrapper {
+    position: relative;
+  }
+
+  /* ── count badge ── */
+  .count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .check-icon {
+    width: 14px; height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation Bar ── -->
+<nav class="nav">
+  <div class="nav-left">
+    <span class="nav-logo">nitrolite</span>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
+      <span class="status-dot"></span>
+      <span>connected · 2s ago</span>
+    </div>
+  </div>
+
+  <div class="nav-center">
+    <button class="tab active">Main</button>
+    <button class="tab">History</button>
+    <button class="tab">Session Keys</button>
+  </div>
+
+  <div class="nav-right">
+    <div class="chip">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span>Base</span>
+    </div>
+    <div class="chip mono" style="font-size:11px">0x1234…abcd</div>
+    <div class="chip" style="border-color:rgba(245,166,35,0.4);background:var(--accent-dim);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+      </svg>
+      SK · 23h
+      <span style="color:var(--text-muted);font-size:11px;cursor:pointer;margin-left:2px">×</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Main Content ── -->
+<main class="main">
+  <div class="grid-layout">
+
+    <!-- ── Left: Action Panel (simplified) ── -->
+    <div class="card">
+      <div class="action-panel-tabs">
+        <button class="ap-tab active">Deposit</button>
+        <button class="ap-tab">Withdraw</button>
+        <button class="ap-tab">Transfer</button>
+        <button class="ap-tab">Faucet</button>
+      </div>
+
+      <div class="ap-body">
+        <!-- Token selector -->
+        <div>
+          <div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Asset</div>
+          <div class="token-selector">
+            <div class="token-icon">$</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500">USDC</div>
+              <div style="font-size:11px;color:var(--text-muted)">USD Coin</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Amount -->
+        <div>
+          <div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Amount</div>
+          <div class="input-wrap">
+            <input type="text" placeholder="0.00" value="100" />
+            <button class="input-max">MAX</button>
+          </div>
+          <div class="balance-row" style="margin-top:6px">
+            <span>On-chain balance</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">1,250.00 USDC</span>
+          </div>
+        </div>
+
+        <!-- Channel balance -->
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+          <div class="balance-row">
+            <span>Channel balance</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">320.00 USDC</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%">Deposit</button>
+      </div>
+    </div>
+
+    <!-- ── Right: Channels Card ── -->
+    <div style="position:relative">
+      <div class="card" style="position:relative;z-index:1">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="card-title">Channels</span>
+            <span class="count-badge">2</span>
+            <!-- ── Session Key Selector ── -->
+            <div class="sk-selector-wrap">
+              <button class="sk-selector-btn open">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)">
+                  <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+                </svg>
+                <span class="mono" style="font-size:11px">0x1a2B…c3dE</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              <!-- Dropdown (open state) -->
+              <div class="sk-dropdown">
+
+                <!-- Wallet option -->
+                <div class="sk-dropdown-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+                  </svg>
+                  <span style="font-size:13px;flex:1">Wallet (no key)</span>
+                  <span class="sk-option-meta">MetaMask</span>
+                </div>
+
+                <div class="sk-dropdown-sep"></div>
+
+                <!-- Active key — currently selected -->
+                <div class="sk-dropdown-item selected">
+                  <span class="sk-dot-active"></span>
+                  <span class="sk-option-address">0x1a2B…c3dE</span>
+                  <span class="sk-option-meta">23h 15m</span>
+                  <div class="check-icon" style="margin-left:4px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <!-- Expiring key -->
+                <div class="sk-dropdown-item">
+                  <span class="sk-dot-expiring"></span>
+                  <span class="sk-option-address">0x9fEd…A1b2</span>
+                  <span class="sk-option-meta expiring">45m ⚠</span>
+                </div>
+
+                <div class="sk-dropdown-sep"></div>
+
+                <!-- Expired key (disabled) -->
+                <div class="sk-dropdown-item disabled">
+                  <div style="width:6px;height:6px;border-radius:50%;background:var(--text-muted);flex-shrink:0"></div>
+                  <span class="sk-option-address" style="color:var(--text-muted)">0xAbCd…1234</span>
+                  <span class="sk-option-meta expired">expired</span>
+                </div>
+
+                <div class="sk-dropdown-sep"></div>
+
+                <!-- Manage link -->
+                <div class="sk-dropdown-item" style="color:var(--accent);font-size:12px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+                  </svg>
+                  <span>Manage session keys →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        <!-- Channel Rows -->
+        <div>
+
+          <!-- Channel 1 — signed with SK -->
+          <div class="channel-row">
+            <div class="channel-row-head">
+              <div class="channel-info">
+                <div class="channel-avatar" style="background:rgba(39,117,202,0.18)">
+                  <span style="font-size:13px">🏦</span>
+                </div>
+                <div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="channel-peer">Nitronode</span>
+                    <span class="channel-sk-badge">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+                      </svg>
+                      SK · 0x1a2B…c3dE
+                    </span>
+                  </div>
+                  <div class="channel-id">ch_0xDe4f…2e91</div>
+                </div>
+              </div>
+              <div class="channel-balance">
+                <div class="channel-balance-amount">320.00</div>
+                <div class="channel-balance-asset">USDC</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Channel 2 — wallet only -->
+          <div class="channel-row">
+            <div class="channel-row-head">
+              <div class="channel-info">
+                <div class="channel-avatar" style="background:rgba(98,126,234,0.18)">
+                  <span style="font-size:13px">⚡</span>
+                </div>
+                <div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="channel-peer">App Layer</span>
+                    <span class="channel-sk-badge wallet">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+                      </svg>
+                      Wallet
+                    </span>
+                  </div>
+                  <div class="channel-id">ch_0x9bA2…7c03</div>
+                </div>
+              </div>
+              <div class="channel-balance">
+                <div class="channel-balance-amount">0.50</div>
+                <div class="channel-balance-asset">ETH</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Annotation callouts ── -->
+
+      <!-- Callout 1: pointing at dropdown -->
+      <div style="position:absolute;top:52px;right:-260px;z-index:10">
+        <div class="callout callout-arrow-left">
+          <strong>Global session key selector</strong><br>
+          Pick which key signs all channel operations. Switching rebuilds the SDK client instantly — no reconnect needed.
+        </div>
+      </div>
+
+      <!-- Callout 2: pointing at SK badge on channel row -->
+      <div style="position:absolute;top:165px;right:-260px;z-index:10">
+        <div class="callout callout-arrow-left">
+          <strong>Per-channel indicator</strong><br>
+          Shows which key (or wallet) is actively signing for this channel. Hover for the full address.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+</body>
+</html>

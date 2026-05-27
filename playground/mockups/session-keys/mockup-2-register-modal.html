@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Keys — Register Modal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base:      #0a0a0a;
+    --bg-surface:   #141414;
+    --bg-elevated:  #1c1c1c;
+    --border:       #242424;
+    --text-primary: #f0f0f0;
+    --text-muted:   #666666;
+    --accent:       #f5a623;
+    --accent-dim:   rgba(245, 166, 35, 0.12);
+    --error:        #ef4444;
+    --success:      #22c55e;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Nav ── */
+  .nav {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .nav-left { display: flex; align-items: center; gap: 10px; }
+  .nav-logo { font-size: 17px; font-weight: 600; color: var(--accent); letter-spacing: -0.3px; }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 5px var(--success);
+  }
+
+  .nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .nav-right { display: flex; align-items: center; gap: 8px; }
+
+  .tab {
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tab.active { color: var(--accent); background: var(--accent-dim); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.12s;
+    width: 100%;
+    justify-content: center;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0a;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #e09520; }
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Background card ── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title { font-size: 15px; font-weight: 600; }
+
+  /* ── Main ── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* ── Background table (blurred) ── */
+  .bg-table-placeholder {
+    filter: blur(1.5px);
+    opacity: 0.35;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .sk-table-bg {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .sk-table-bg th {
+    padding: 10px 20px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  .sk-table-bg td {
+    padding: 13px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sk-table-bg tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-active  { background: rgba(34,197,94,0.12);  color: #22c55e; }
+  .badge-expiring { background: rgba(249,115,22,0.14); color: #f97316; }
+
+  /* ── Modal Overlay ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 440px;
+    max-width: calc(100vw - 32px);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .modal-header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-icon {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-title {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  /* ── Section ── */
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Asset checkboxes ── */
+  .asset-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .asset-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+
+  .asset-checkbox.checked {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .cb-box {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .asset-checkbox.checked .cb-box {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .asset-icon {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .asset-info { flex: 1; }
+  .asset-symbol { font-size: 13px; font-weight: 500; }
+  .asset-name { font-size: 11px; color: var(--text-muted); }
+
+  /* ── Expiry segmented control ── */
+  .seg-ctrl {
+    display: flex;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .seg-btn {
+    flex: 1;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.12s, color 0.12s;
+  }
+  .seg-btn.active {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+
+  /* ── Duration input ── */
+  .duration-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .input-wrap {
+    display: flex;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+
+  .input-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--text-primary);
+    width: 100%;
+  }
+  .input-wrap input::placeholder { color: var(--text-muted); }
+
+  .unit-select {
+    background: var(--bg-base);
+    border: none;
+    border-left: 1px solid var(--border);
+    padding: 0 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .computed-expiry {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 6px 0 0 2px;
+  }
+  .computed-expiry span { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Summary box ── */
+  .summary-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .summary-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Footer buttons ── */
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+  }
+  .modal-footer .btn { flex: 1; }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 -28px;
+  }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation Bar ── -->
+<nav class="nav">
+  <div class="nav-left">
+    <span class="nav-logo">nitrolite</span>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
+      <span class="status-dot"></span>
+      <span>connected · 2s ago</span>
+    </div>
+  </div>
+
+  <div class="nav-center">
+    <button class="tab">Main</button>
+    <button class="tab">History</button>
+    <button class="tab active">Session Keys</button>
+  </div>
+
+  <div class="nav-right">
+    <div class="chip">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span>Base</span>
+    </div>
+    <div class="chip mono" style="font-size:11px">0x1234…abcd</div>
+  </div>
+</nav>
+
+<!-- ── Main Content (blurred background) ── -->
+<main class="main">
+  <div class="bg-table-placeholder">
+    <div class="card">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="card-title">Session Keys</span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;min-width:22px;height:22px;padding:0 7px;font-size:12px;color:var(--text-muted)">2</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="padding:5px 10px;font-size:12px;pointer-events:none">Refresh</button>
+          <button class="btn btn-primary" style="padding:5px 10px;font-size:12px;pointer-events:none">+ Register New</button>
+        </div>
+      </div>
+      <table class="sk-table-bg">
+        <thead>
+          <tr>
+            <th style="text-align:left">Address</th>
+            <th style="text-align:left">Assets</th>
+            <th style="text-align:left">Expiration</th>
+            <th style="text-align:left">Status</th>
+            <th style="text-align:left">Version</th>
+            <th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mono" style="font-size:12px">0x1a2B…c3dE</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">USDC, ETH, YUSD</span></td>
+            <td><span class="mono" style="font-size:12px">23h 15m</span></td>
+            <td><span class="badge badge-active">● Active</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">v1</span></td>
+            <td style="text-align:right;color:var(--text-muted);font-size:12px">· · ·</td>
+          </tr>
+          <tr>
+            <td><span class="mono" style="font-size:12px">0x9fEd…A1b2</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">USDC</span></td>
+            <td><span class="mono" style="font-size:12px;color:#f97316">45m</span></td>
+            <td><span class="badge badge-expiring">● Expiring Soon</span></td>
+            <td><span class="mono" style="font-size:12px;color:var(--text-muted)">v3</span></td>
+            <td style="text-align:right;color:var(--text-muted);font-size:12px">· · ·</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ── Modal ── -->
+<div class="modal-overlay">
+  <div class="modal-card">
+
+    <!-- Header -->
+    <div class="modal-header">
+      <div class="modal-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>
+        </svg>
+      </div>
+      <div class="modal-title">Register a new session key</div>
+      <div style="font-size:13px;color:var(--text-muted);text-align:center;line-height:1.5">
+        Authorize a temporary key to sign state updates on your behalf — no MetaMask popup for every action.
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Assets -->
+    <div class="form-section">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="form-label">Authorize Assets</span>
+        <span style="font-size:11px;color:var(--text-muted);cursor:pointer">Select all · Clear</span>
+      </div>
+      <div class="asset-grid">
+
+        <label class="asset-checkbox checked">
+          <div class="cb-box">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="asset-icon" style="background:#2775ca">
+            <span style="color:white;font-size:9px">$</span>
+          </div>
+          <div class="asset-info">
+            <div class="asset-symbol">USDC</div>
+            <div class="asset-name">USD Coin</div>
+          </div>
+        </label>
+
+        <label class="asset-checkbox checked">
+          <div class="cb-box">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="asset-icon" style="background:#627eea">
+            <span style="color:white;font-size:9px">Ξ</span>
+          </div>
+          <div class="asset-info">
+            <div class="asset-symbol">ETH</div>
+            <div class="asset-name">Ether</div>
+          </div>
+        </label>
+
+        <label class="asset-checkbox">
+          <div class="cb-box"></div>
+          <div class="asset-icon" style="background:#f5a623">
+            <span style="color:#0a0a0a;font-size:8px;font-weight:700">Y</span>
+          </div>
+          <div class="asset-info">
+            <div class="asset-symbol">YUSD</div>
+            <div class="asset-name">Yellow USD</div>
+          </div>
+        </label>
+
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Expiration -->
+    <div class="form-section">
+      <span class="form-label">Expiration</span>
+
+      <!-- Segmented control -->
+      <div class="seg-ctrl">
+        <button class="seg-btn active">Duration</button>
+        <button class="seg-btn">Date</button>
+        <button class="seg-btn">Unix</button>
+      </div>
+
+      <!-- Duration input -->
+      <div class="duration-row">
+        <div class="input-wrap">
+          <input type="number" value="24" min="1" />
+          <select class="unit-select">
+            <option>hours</option>
+            <option>days</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="computed-expiry">
+        Expires: <span>2026-05-28 11:30:00 UTC</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Summary -->
+    <div class="summary-box">
+      This key will authorize: <strong>USDC, ETH</strong> and expire in <strong>24 hours</strong>.<br>
+      On-chain transactions (deposit, checkpoint, approve) will still require MetaMask.
+    </div>
+
+    <!-- Buttons -->
+    <div class="modal-footer">
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-primary">Register &amp; Sign</button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

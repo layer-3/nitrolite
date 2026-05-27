@@ -42,18 +42,21 @@ export default function ChannelRow({
 }: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   const closed = channel.status === ChannelStatus.Closed;
+
   const homeChainObj = chains.find(c => c.id === channel.blockchainId);
   const homeChainName = chainDisplayName(channel.blockchainId, homeChainObj?.name);
   const wrongChain = !closed && currentChainId != null && currentChainId !== channel.blockchainId;
 
   return (
     <div className={`border border-border rounded-lg mb-2 ${closed ? 'opacity-60' : ''}`}>
+      {/* ── Row header ── */}
       <div
         className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-bg-elevated/40 rounded-t-lg ${!expanded ? 'rounded-b-lg' : ''}`}
         onClick={() => setExpanded(e => !e)}
       >
+        {/* Asset icon */}
         <span
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full text-xs font-semibold"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-full text-xs font-semibold flex-shrink-0"
           style={{
             background: closed ? 'rgba(102,102,102,0.12)' : 'var(--accent-dim)',
             color: closed ? 'var(--text-muted)' : 'var(--accent)',
@@ -61,8 +64,10 @@ export default function ChannelRow({
         >
           {channel.asset.slice(0, 4).toUpperCase()}
         </span>
+
+        {/* Name + ID */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium">
+          <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
             <span>{channel.asset.toUpperCase()}</span>
             <span className="tooltip-wrap">
               <button
@@ -75,9 +80,8 @@ export default function ChannelRow({
               </button>
               <span className="tip">Select asset</span>
             </span>
-            <span
-              className="text-[10px] px-1 rounded-xl border border-border bg-bg-surface text-text-muted font-normal"
-            >
+            {/* Chain pill */}
+            <span className="chip text-[10px] font-normal" style={{ padding: '2px 7px', borderRadius: 6 }}>
               {homeChainName}
             </span>
             {wrongChain && (
@@ -96,12 +100,14 @@ export default function ChannelRow({
             <CopyButton value={channel.channelId} size={11} />
           </div>
         </div>
+
         <ChevronDown
           size={16}
-          className={`text-text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`text-text-muted transition-transform flex-shrink-0 ${expanded ? 'rotate-180' : ''}`}
         />
       </div>
 
+      {/* ── Expanded panel ── */}
       {expanded && (
         <div className="border-t border-border px-4 py-3 space-y-3 bg-bg-base/30 rounded-b-lg">
           {wrongChain && (
@@ -121,7 +127,11 @@ export default function ChannelRow({
 
           {!closed && (
             <div className="flex gap-2">
-              <button className="btn btn-danger btn-sm" onClick={() => onClose(channel.asset, channel.blockchainId)} disabled={isClosing || wrongChain}>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => onClose(channel.asset, channel.blockchainId)}
+                disabled={isClosing || wrongChain}
+              >
                 {isClosing ? <span className="spinner" /> : 'Close channel'}
               </button>
             </div>

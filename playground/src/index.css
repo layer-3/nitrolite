@@ -245,6 +245,145 @@ body {
   max-width: calc(100vw - 32px);
 }
 
+/* ── History: quick-filter cell wrapper ── */
+.qf {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.1s;
+}
+.qf:hover { background: rgba(255,255,255,0.05); }
+.qf.qf-on { background: var(--accent-dim); }
+.qf.qf-on:hover { background: rgba(245,166,35,0.2); }
+.qf::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 300;
+}
+.qf:hover::after { opacity: 1; }
+
+/* ── History: address + copy layout ── */
+.addr-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.copy-btn-addr {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--text-muted);
+  display: inline-flex;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.12s, opacity 0.12s;
+  opacity: 0;
+}
+.addr-cell:hover .copy-btn-addr { opacity: 1; }
+.copy-btn-addr:hover { color: var(--accent); opacity: 1 !important; }
+
+/* ── History: timestamp format toggle ── */
+.ts-toggle {
+  position: relative;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.ts-toggle::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 300;
+  font-family: 'Inter', sans-serif;
+}
+.ts-toggle:hover::after { opacity: 1; }
+.ts-toggle:hover > * { color: var(--accent); }
+
+/* ── History: column header filter popovers ── */
+.th-popover-wrap {
+  position: relative;
+  display: inline-block;
+}
+.th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.th-inner.filterable { cursor: pointer; }
+.th-inner.filterable:hover { color: var(--text-primary); }
+.th-inner.filter-active { color: var(--accent); }
+.th-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 200;
+  min-width: 170px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.th-popover-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'Inter', sans-serif;
+}
+.th-popover-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+.th-text-input {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  width: 100%;
+  display: block;
+}
+.th-text-input:focus { border-color: var(--accent); }
+.th-text-input::placeholder { color: var(--text-muted); }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

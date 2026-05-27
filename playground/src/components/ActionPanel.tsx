@@ -1,14 +1,18 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Decimal } from 'decimal.js';
 import type { Address } from 'viem';
 import type { Asset, Blockchain, Channel } from '@yellow-org/sdk';
 import { ChannelType, ChannelStatus } from '@yellow-org/sdk';
-import { formatBalance, isValidAddress } from '../utils';
+import { formatBalance, isValidAddress, FAUCET_ASSETS } from '../utils';
 import { chainDisplayName } from '../chainMeta';
+import { showErrorToast } from '../toastError';
 import TokenSelector from './TokenSelector';
 import type { DepositPhase, WithdrawPhase, TransferPhase } from '../hooks/useChannelOps';
 
-type Tab = 'deposit' | 'withdraw' | 'transfer';
+type Tab = 'deposit' | 'withdraw' | 'transfer' | 'faucet';
+type FaucetPhase = 'idle' | 'requesting' | 'done' | 'rate-limited';
+
+const FAUCET_URL = 'https://nitronode-sandbox.yellow.org/v1/faucet-app/requestTokens';
 
 interface Props {
   assets: Asset[];
@@ -30,6 +34,8 @@ interface Props {
   disabled: boolean;
   onSwitchChain: (chainId: bigint) => void;
   closingAsset: string | null;
+  address: Address | null;
+  onRefresh: () => void;
 }
 
 export default function ActionPanel({
@@ -52,13 +58,18 @@ export default function ActionPanel({
   disabled,
   onSwitchChain,
   closingAsset,
+  address,
+  onRefresh,
 }: Props) {
   const [tab, setTab] = useState<Tab>('deposit');
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [faucetPhase, setFaucetPhase] = useState<FaucetPhase>('idle');
   const wasBusyRef = useRef(false);
   const operatingTabRef = useRef<Tab | null>(null);
+
+  const hasFaucet = FAUCET_ASSETS.has(selectedAsset.toLowerCase());
 
   // Pick the chain for deposit/withdraw: current wallet chain if it's supported, else asset's suggested chain.
   const asset = assets.find(a => a.symbol === selectedAsset);
@@ -153,6 +164,42 @@ export default function ActionPanel({
     wasBusyRef.current = isBusy;
   }, [isBusy]);
 
+  // Switch away from faucet tab if selected asset no longer has a faucet.
+  useEffect(() => {
+    if (tab === 'faucet' && !FAUCET_ASSETS.has(selectedAsset.toLowerCase())) {
+      setTab('deposit');
+    }
+  }, [selectedAsset, tab]);
+
+  const requestDrip = useCallback(async () => {
+    if (!address) return;
+    setFaucetPhase('requesting');
+    try {
+      const res = await fetch(FAUCET_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: address }),
+      });
+      if (!res.ok) {
+        if (res.status === 429) {
+          setFaucetPhase('rate-limited');
+        } else {
+          const msg =
+            res.status === 503 ? 'Faucet service unavailable — try again later' :
+            'Faucet request failed';
+          showErrorToast(msg);
+          setFaucetPhase('idle');
+        }
+        return;
+      }
+      setFaucetPhase('done');
+      onRefresh();
+    } catch {
+      showErrorToast('Faucet request failed — check your connection');
+      setFaucetPhase('idle');
+    }
+  }, [address, onRefresh]);
+
   // For deposit, also require on-chain balance to be loaded before allowing submit.
   const depositBalanceReady = tab !== 'deposit' || onChainBalance != null;
 
@@ -226,119 +273,144 @@ export default function ActionPanel({
         </div>
       </div>
 
-      {/* Tabs + Form — blurred when cross-chain or channel is closing */}
-      <div className="relative">
-        {/* Tabs */}
-        <div className={`flex gap-1 px-5 pt-4 ${isCrossChain || isChannelClosing ? 'blur-sm pointer-events-none select-none' : ''}`}>
-          <button className={`tab ${tab === 'deposit' ? 'active' : ''}`} onClick={() => setTab('deposit')}>
-            Deposit
+      {/* Tabs */}
+      <div className="flex gap-1 px-5 pt-4">
+        <button className={`tab ${tab === 'deposit' ? 'active' : ''}`} onClick={() => setTab('deposit')}>
+          Deposit
+        </button>
+        <button className={`tab ${tab === 'withdraw' ? 'active' : ''}`} onClick={() => setTab('withdraw')}>
+          Withdraw
+        </button>
+        <button className={`tab ${tab === 'transfer' ? 'active' : ''}`} onClick={() => setTab('transfer')}>
+          Transfer
+        </button>
+        {hasFaucet && (
+          <button className={`tab ${tab === 'faucet' ? 'active' : ''}`} onClick={() => setTab('faucet')}>
+            Faucet
           </button>
-          <button className={`tab ${tab === 'withdraw' ? 'active' : ''}`} onClick={() => setTab('withdraw')}>
-            Withdraw
-          </button>
-          <button className={`tab ${tab === 'transfer' ? 'active' : ''}`} onClick={() => setTab('transfer')}>
-            Transfer
-          </button>
-        </div>
+        )}
+      </div>
 
-        {/* Form */}
-        <div className={`px-5 pt-4 pb-5 ${isCrossChain || isChannelClosing ? 'blur-sm pointer-events-none select-none' : ''}`}>
-          {tab === 'transfer' && (
-            <div className="mb-3">
-              <label className="block text-xs text-text-muted mb-1.5">Recipient address</label>
-              <div className={`input ${recipientError ? 'error' : ''}`}>
-                <input
-                  type="text"
-                  placeholder="0x…"
-                  value={recipient}
-                  disabled={isBusy}
-                  onChange={e => {
-                    setRecipient(e.target.value);
-                    if (recipientError) setRecipientError(null);
-                  }}
-                  onBlur={validateRecipient}
-                />
+      {/* Deposit / Withdraw / Transfer form — blurred when cross-chain or channel is closing */}
+      {tab !== 'faucet' && (
+        <div className="relative">
+          <div className={`px-5 pt-4 pb-5 ${isCrossChain || isChannelClosing ? 'blur-sm pointer-events-none select-none' : ''}`}>
+            {tab === 'transfer' && (
+              <div className="mb-3">
+                <label className="block text-xs text-text-muted mb-1.5">Recipient address</label>
+                <div className={`input ${recipientError ? 'error' : ''}`}>
+                  <input
+                    type="text"
+                    placeholder="0x…"
+                    value={recipient}
+                    disabled={isBusy}
+                    onChange={e => {
+                      setRecipient(e.target.value);
+                      if (recipientError) setRecipientError(null);
+                    }}
+                    onBlur={validateRecipient}
+                  />
+                </div>
+                {recipientError && <p className="text-error text-xs mt-1.5">{recipientError}</p>}
               </div>
-              {recipientError && <p className="text-error text-xs mt-1.5">{recipientError}</p>}
+            )}
+
+            <label className="block text-xs text-text-muted mb-1.5">Amount</label>
+            <div className={`input ${amountInputError ? 'error' : ''}`}>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={amount}
+                disabled={isBusy}
+                onChange={e => setAmount(e.target.value)}
+              />
+              <button type="button" className="input-max" onClick={setMax} disabled={isBusy} title="Use max available">
+                MAX
+              </button>
+              <span className="input-suffix">{selectedAsset.toUpperCase() || '—'}</span>
+            </div>
+
+            {amountExceedsChannel && (
+              <p className="text-error text-xs mt-1.5">Amount exceeds Unified balance</p>
+            )}
+            {amountExceedsOnChain && (
+              <p className="text-error text-xs mt-1.5">Amount exceeds on-chain balance</p>
+            )}
+
+            {operatingChainName && tab === 'deposit' && (
+              <p className="text-text-muted text-xs mt-2">
+                Will deposit on <span className="text-text-primary">"{operatingChainName}"</span>
+              </p>
+            )}
+
+            {operatingChainName && tab === 'withdraw' && (
+              <p className="text-text-muted text-xs mt-2">
+                Will withdraw to <span className="text-text-primary">"{operatingChainName}"</span>
+              </p>
+            )}
+
+            <button
+              className="btn btn-primary w-full mt-4"
+              onClick={fire}
+              disabled={!canSubmit}
+            >
+              {isBusy ? (
+                <>
+                  <span className="spinner" />
+                  {buttonLabel}
+                </>
+              ) : (
+                buttonLabel
+              )}
+            </button>
+          </div>
+
+          {/* Cross-chain overlay */}
+          {isCrossChain && !isChannelClosing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
+              <p className="text-text-primary text-sm text-center leading-relaxed">
+                Cross-chain operations are not yet supported. Please select this asset home chain to perform operations.
+              </p>
+              <button
+                className="btn btn-primary text-xs px-4 py-2"
+                onClick={() => homeChainId && onSwitchChain(homeChainId)}
+              >
+                Select "{homeChainName ?? 'home chain'}"
+              </button>
             </div>
           )}
 
-          <label className="block text-xs text-text-muted mb-1.5">Amount</label>
-          <div className={`input ${amountInputError ? 'error' : ''}`}>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              value={amount}
-              disabled={isBusy}
-              onChange={e => setAmount(e.target.value)}
-            />
-            <button type="button" className="input-max" onClick={setMax} disabled={isBusy} title="Use max available">
-              MAX
-            </button>
-            <span className="input-suffix">{selectedAsset.toUpperCase() || '—'}</span>
-          </div>
-
-          {amountExceedsChannel && (
-            <p className="text-error text-xs mt-1.5">Amount exceeds Unified balance</p>
+          {/* Channel-closing overlay */}
+          {isChannelClosing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
+              <span className="spinner" />
+              <p className="text-text-primary text-sm text-center leading-relaxed">
+                Channel is being closed
+              </p>
+            </div>
           )}
-          {amountExceedsOnChain && (
-            <p className="text-error text-xs mt-1.5">Amount exceeds on-chain balance</p>
-          )}
+        </div>
+      )}
 
-          {operatingChainName && tab === 'deposit' && (
-            <p className="text-text-muted text-xs mt-2">
-              Will deposit on <span className="text-text-primary">"{operatingChainName}"</span>
-            </p>
-          )}
-
-          {operatingChainName && tab === 'withdraw' && (
-            <p className="text-text-muted text-xs mt-2">
-              Will withdraw to <span className="text-text-primary">"{operatingChainName}"</span>
-            </p>
-          )}
-
+      {/* Faucet tab content */}
+      {tab === 'faucet' && (
+        <div className="px-5 pt-4 pb-5">
+          <p className="text-text-muted text-sm mb-4">
+            Drips 10 {selectedAsset.toUpperCase()} every 5 minutes to your account.
+          </p>
           <button
-            className="btn btn-primary w-full mt-4"
-            onClick={fire}
-            disabled={!canSubmit}
+            className="btn btn-primary w-full"
+            onClick={requestDrip}
+            disabled={faucetPhase !== 'idle' || disabled || !address}
           >
-            {isBusy ? (
-              <>
-                <span className="spinner" />
-                {buttonLabel}
-              </>
-            ) : (
-              buttonLabel
-            )}
+            {faucetPhase === 'requesting' && <><span className="spinner" />Requesting…</>}
+            {faucetPhase === 'done' && 'Drip sent!'}
+            {faucetPhase === 'rate-limited' && 'Rate limit exceeded'}
+            {faucetPhase === 'idle' && 'Request drip'}
           </button>
         </div>
-
-        {/* Cross-chain overlay */}
-        {isCrossChain && !isChannelClosing && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
-            <p className="text-text-primary text-sm text-center leading-relaxed">
-              Cross-chain operations are not yet supported. Please select this asset home chain to perform operations.
-            </p>
-            <button
-              className="btn btn-primary text-xs px-4 py-2"
-              onClick={() => homeChainId && onSwitchChain(homeChainId)}
-            >
-              Select "{homeChainName ?? 'home chain'}"
-            </button>
-          </div>
-        )}
-
-        {/* Channel-closing overlay */}
-        {isChannelClosing && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 gap-3">
-            <span className="spinner" />
-            <p className="text-text-primary text-sm text-center leading-relaxed">
-              Channel is being closed
-            </p>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

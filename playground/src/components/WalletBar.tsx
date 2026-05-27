@@ -8,6 +8,8 @@ import type { StoredSessionKey } from '../sessionKey';
 import { secondsUntilExpiry } from '../sessionKey';
 import { chainDisplayName } from '../chainMeta';
 
+export type AppTab = 'main' | 'history';
+
 interface Props {
   address: Address | null;
   chainId: bigint | null;
@@ -16,10 +18,12 @@ interface Props {
   nodeError: string | null;
   isConnecting: boolean;
   sessionKey: StoredSessionKey | null;
+  activeTab: AppTab;
   onConnect: () => void;
   onDisconnect: () => void;
   onSwitchChain: (chainId: bigint) => void;
   onClearSessionKey: () => void;
+  onTabChange: (tab: AppTab) => void;
 }
 
 export default function WalletBar({
@@ -30,12 +34,13 @@ export default function WalletBar({
   nodeError,
   isConnecting,
   sessionKey,
+  activeTab,
   onConnect,
   onDisconnect,
   onSwitchChain,
   onClearSessionKey,
+  onTabChange,
 }: Props) {
-  // Tick every second so "Xs ago" stays fresh
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000);
@@ -47,31 +52,49 @@ export default function WalletBar({
   const sortedChains = [...chains].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   return (
-    <nav className="sticky top-0 z-10 flex items-center justify-between px-6 h-14 bg-bg-surface border-b border-border">
+    <nav className="sticky top-0 z-10 flex items-center justify-between px-6 h-14 bg-bg-surface border-b border-border relative">
+      {/* Left: brand + node status */}
       <div className="flex items-center gap-3">
         <span className="text-accent font-semibold tracking-tight">Nitrolite</span>
         <span className="text-text-muted text-xs uppercase tracking-wider">Playground</span>
-      </div>
 
-      <div className="flex items-center gap-3 text-xs">
         {nodeError ? (
-          <span className="flex items-center gap-1.5 text-error">
+          <span className="flex items-center gap-1.5 text-error text-xs">
             <span className="dot error" />
             <span className="truncate max-w-[200px]" title={nodeError}>{nodeError}</span>
           </span>
         ) : lastCommsAt ? (
-          <span className="flex items-center gap-1.5 text-text-muted">
+          <span className="flex items-center gap-1.5 text-text-muted text-xs">
             <span className="dot" />
             <span className="mono">{timeAgo(lastCommsAt)}</span>
           </span>
         ) : address ? (
-          <span className="flex items-center gap-1.5 text-text-muted">
+          <span className="flex items-center gap-1.5 text-text-muted text-xs">
             <span className="dot muted" />
             <span>connecting…</span>
           </span>
         ) : null}
       </div>
 
+      {/* Center: tab selector (only when wallet connected) */}
+      {address && (
+        <div className="absolute left-1/2 flex items-center gap-1" style={{ transform: 'translateX(-50%)' }}>
+          <button
+            className={`tab${activeTab === 'main' ? ' active' : ''}`}
+            onClick={() => onTabChange('main')}
+          >
+            Main
+          </button>
+          <button
+            className={`tab${activeTab === 'history' ? ' active' : ''}`}
+            onClick={() => onTabChange('history')}
+          >
+            History
+          </button>
+        </div>
+      )}
+
+      {/* Right: session key + chain + address + disconnect */}
       <div className="flex items-center gap-2">
         {address && sessionKey && (
           <span
@@ -121,11 +144,9 @@ export default function WalletBar({
             </button>
           </>
         ) : (
-          <>
-            <button className="btn btn-primary btn-sm" onClick={onConnect} disabled={isConnecting}>
-              {isConnecting ? <span className="spinner" /> : 'Connect MetaMask'}
-            </button>
-          </>
+          <button className="btn btn-primary btn-sm" onClick={onConnect} disabled={isConnecting}>
+            {isConnecting ? <span className="spinner" /> : 'Connect MetaMask'}
+          </button>
         )}
       </div>
     </nav>

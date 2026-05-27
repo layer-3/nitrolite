@@ -6,8 +6,10 @@ import { useChannels } from './hooks/useChannels';
 import { useChannelOps } from './hooks/useChannelOps';
 import { useSessionKey } from './hooks/useSessionKey';
 import WalletBar from './components/WalletBar';
+import type { AppTab } from './components/WalletBar';
 import ActionPanel from './components/ActionPanel';
 import ChannelList from './components/ChannelList';
+import HistoryTab from './components/HistoryTab';
 import UnsupportedChainModal from './components/UnsupportedChainModal';
 import SetHomechainModal from './components/SetHomechainModal';
 import SessionKeyBanner from './components/SessionKeyBanner';
@@ -16,6 +18,7 @@ import SessionKeySetupModal from './components/SessionKeySetupModal';
 export default function App() {
   const wallet = useWallet();
   const [showSkModal, setShowSkModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<AppTab>('main');
 
   const sk = useSessionKey(wallet.address);
   const nitro = useNitrolite(wallet.address, wallet.walletClient, sk.sessionKey, wallet.chainId);
@@ -84,10 +87,12 @@ export default function App() {
         nodeError={nitro.nodeError}
         isConnecting={wallet.isConnecting}
         sessionKey={sk.sessionKey}
+        activeTab={activeTab}
         onConnect={wallet.connect}
         onDisconnect={wallet.disconnect}
         onSwitchChain={wallet.switchChain}
         onClearSessionKey={sk.clear}
+        onTabChange={setActiveTab}
       />
 
       <main className="flex-1 mx-auto w-full max-w-[1100px] px-6 py-8">
@@ -99,48 +104,57 @@ export default function App() {
           <>
             {showSkBanner && <SessionKeyBanner onSetup={() => setShowSkModal(true)} />}
 
-            <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-5 items-start">
-              <ActionPanel
-                assets={nitro.supportedAssets}
-                channels={channels.channels}
-                selectedAsset={selectedAsset}
-                onSelectAsset={setSelectedAsset}
-                balance={nitro.balances[selectedAsset]}
-                onChainBalance={nitro.onChainBalances[selectedAsset]}
-                currentChainId={wallet.chainId}
+            {activeTab === 'history' ? (
+              <HistoryTab
+                client={nitro.client}
+                address={wallet.address}
                 chains={nitro.supportedChains}
-                onDeposit={ops.deposit}
-                onWithdraw={ops.withdraw}
-                onTransfer={ops.transfer}
-                depositPhase={ops.depositPhase}
-                withdrawPhase={ops.withdrawPhase}
-                transferPhase={ops.transferPhase}
-                needsApproval={ops.needsApproval}
-                checkDepositAllowance={ops.checkDepositAllowance}
-                disabled={!nitro.client || showUnsupportedModal}
-                onSwitchChain={wallet.switchChain}
-                closingAsset={ops.closingAsset}
               />
-
-              <div>
-                <ChannelList
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-[420px_1fr] gap-5 items-start">
+                <ActionPanel
+                  assets={nitro.supportedAssets}
                   channels={channels.channels}
-                  client={nitro.client}
-                  address={wallet.address}
-                  chains={nitro.supportedChains}
-                  currentChainId={wallet.chainId}
-                  balances={nitro.balances}
-                  isLoading={channels.isLoading}
-                  closingAsset={ops.closingAsset}
-                  onRefresh={refreshAll}
-                  onClose={ops.closeChannel}
-                  onSwitchToHomeChain={wallet.switchChain}
+                  selectedAsset={selectedAsset}
                   onSelectAsset={setSelectedAsset}
-                  onAfterOp={refreshAll}
-                  channelStatesKey={channelStatesKey}
+                  balance={nitro.balances[selectedAsset]}
+                  onChainBalance={nitro.onChainBalances[selectedAsset]}
+                  currentChainId={wallet.chainId}
+                  chains={nitro.supportedChains}
+                  onDeposit={ops.deposit}
+                  onWithdraw={ops.withdraw}
+                  onTransfer={ops.transfer}
+                  depositPhase={ops.depositPhase}
+                  withdrawPhase={ops.withdrawPhase}
+                  transferPhase={ops.transferPhase}
+                  needsApproval={ops.needsApproval}
+                  checkDepositAllowance={ops.checkDepositAllowance}
+                  disabled={!nitro.client || showUnsupportedModal}
+                  onSwitchChain={wallet.switchChain}
+                  closingAsset={ops.closingAsset}
+                  address={wallet.address}
                 />
+
+                <div>
+                  <ChannelList
+                    channels={channels.channels}
+                    client={nitro.client}
+                    address={wallet.address}
+                    chains={nitro.supportedChains}
+                    currentChainId={wallet.chainId}
+                    balances={nitro.balances}
+                    isLoading={channels.isLoading}
+                    closingAsset={ops.closingAsset}
+                    onRefresh={refreshAll}
+                    onClose={ops.closeChannel}
+                    onSwitchToHomeChain={wallet.switchChain}
+                    onSelectAsset={setSelectedAsset}
+                    onAfterOp={refreshAll}
+                    channelStatesKey={channelStatesKey}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </main>

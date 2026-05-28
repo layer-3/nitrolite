@@ -1,6 +1,6 @@
 {
     "name": "@yellow-org/sdk-compat",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "description": "Curated migration layer preserving selected Nitrolite SDK v0.5.3 app-facing APIs over the v1 runtime.",
     "type": "module",
     "sideEffects": false,
@@ -18,7 +18,8 @@
         "drift:check": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --runTestsByPath test/unit/client.test.ts test/unit/config.test.ts test/unit/public-api-drift.test.ts",
         "lint": "eslint src test",
         "typecheck": "tsc --noEmit",
-        "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+        "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+        "prepublishOnly": "npm run clean && npm run build:prod"
     },
     "keywords": [
         "yellow",

@@ -1,6 +1,6 @@
 {
   "name": "@yellow-org/sdk-mcp",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Unified MCP server for Yellow SDK and Nitrolite protocol context for AI agents and IDEs",
   "type": "module",
   "mcpName": "io.github.layer-3/yellow-sdk-mcp",
@@ -19,10 +19,11 @@
     "start": "tsx src/index.ts",
     "prepare-content": "node scripts/prepare-package-content.mjs",
     "build": "npm run prepare-content && tsc && node scripts/set-executable.mjs dist/index.js",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true}); require('fs').rmSync('content',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit",
     "verify:package": "node scripts/verify-package-content.mjs",
     "verify:release-preflight": "node scripts/verify-release-preflight.mjs",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -3,11 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/@yellow-org/sdk.svg)](https://www.npmjs.com/package/@yellow-org/sdk)
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
-TypeScript SDK for Clearnode payment channels providing both high-level and low-level operations in a unified client:
+> The off-chain broker was renamed from "Clearnode" to "Nitronode" in v1.3.0. The default WebSocket sandbox URL is now `wss://nitronode-sandbox.yellow.org/v1/ws`. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md).
+
+TypeScript SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `deposit()`, `withdraw()`, `transfer()`, `closeHomeChannel()`, `acknowledge()` - build and co-sign states off-chain
 - **Blockchain Settlement**: `checkpoint()` - the single entry point for all on-chain transactions
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
-- **Full Feature Parity**: 100% compatibility with Go SDK functionality
+- **Go-Aligned Surface**: core channel, blockchain, and app-session flows follow the Go SDK patterns without claiming complete parity for every helper
 
 > If you are migrating from `@layer-3/nitrolite@v0.5.3`, please consider using the [@yellow-org/sdk-compat](https://www.npmjs.com/package/@yellow-org/sdk-compat) package. It is a translation layer that uses this SDK underneath and maps the familiar v0.5.3 API surfaces to this SDK.
 
@@ -28,6 +30,11 @@ client.checkpoint(asset)                          // Settle latest state on-chai
 client.challenge(state)                           // Submit on-chain challenge
 client.approveToken(chainId, asset, amount)       // Approve token spending
 client.checkTokenAllowance(chainId, token, owner) // Check token allowance
+```
+
+### On-Chain Queries
+```typescript
+client.getOnChainBalance(chainId, asset, wallet)  // Query on-chain token or native balance
 ```
 
 ### Node Information
@@ -71,16 +78,18 @@ client.rebalanceAppSessions(signedUpdates)                      // Atomic rebala
 
 ### App Session Keys
 ```typescript
-client.signSessionKeyState(state)                               // Sign app session key state
-client.submitSessionKeyState(state)                             // Register/update app session key
-client.getLastKeyStates(userAddress, sessionKey?)               // Get active app session key states
+client.signSessionKeyState(state)                                       // Wallet user_sig over app session key state
+client.signAppSessionKeyOwnership(state, sessionKeySigner)              // Session-key holder's session_key_sig
+client.submitSessionKeyState(state)                                     // Register/update app session key (both sigs required)
+client.getLastAppKeyStates(userAddress, sessionKey?, options?)          // Get app session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Channel Session Keys
 ```typescript
-client.signChannelSessionKeyState(state)                        // Sign channel session key state
-client.submitChannelSessionKeyState(state)                      // Register/update channel session key
-client.getLastChannelKeyStates(userAddress, sessionKey?)        // Get active channel session key states
+client.signChannelSessionKeyState(state)                                // Wallet user_sig over channel session key state
+client.signChannelSessionKeyOwnership(state, sessionKeySigner)          // Session-key holder's session_key_sig
+client.submitChannelSessionKeyState(state)                              // Register/update channel session key (both sigs required)
+client.getLastChannelKeyStates(userAddress, sessionKey?, options?)      // Get channel session key states (active-only by default; pass { includeInactive: true } to include expired)
 ```
 
 ### Shared Utilities
@@ -118,7 +127,7 @@ async function main() {
 
   // Create unified client
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, 'https://polygon-amoy.alchemy.com/v2/KEY')
@@ -485,58 +494,65 @@ const sessionKeySigner = new AppSessionKeySignerV1(sessionKeyMsgSigner);
 
 ### App Session Keys
 
+Registration requires two signatures: the wallet's `user_sig` (authorizing the
+delegation) and the session-key holder's `session_key_sig` (proving possession of the key
+being registered). The node rejects submits that lack a valid `session_key_sig`.
+
 ```typescript
-// Sign and submit an app session key state
-const sig = await client.signSessionKeyState({
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
+const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',
   version: '1',
   application_ids: ['app1'],
   app_session_ids: [],
   expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: '0x',
-});
+  user_sig: '',
+  session_key_sig: '',
+};
+state.user_sig = await client.signSessionKeyState(state);
+state.session_key_sig = await client.signAppSessionKeyOwnership(state, sessionKeyHolder);
 
-await client.submitSessionKeyState({
-  user_address: '0x1234...',
-  session_key: '0xabcd...',
-  version: '1',
-  application_ids: ['app1'],
-  app_session_ids: [],
-  expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: sig,
-});
+await client.submitSessionKeyState(state);
 
-// Query active app session key states
-const states = await client.getLastKeyStates('0x1234...');
-const filtered = await client.getLastKeyStates('0x1234...', '0xSessionKey...');
+// Query app session key states (active-only by default)
+const states = await client.getLastAppKeyStates('0x1234...');
+const filtered = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastAppKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ### Channel Session Keys
 
 ```typescript
-// Sign and submit a channel session key state
-const sig = await client.signChannelSessionKeyState({
+// sessionKeyHolder is an EthereumMsgSigner whose address equals state.session_key.
+// Use a raw message signer (not a wrapped StateSigner) — the node expects a
+// raw 65-byte EIP-191 signature for session_key_sig.
+const sessionKeyHolder = new EthereumMsgSigner(sessionKeyPrivateKey);
+const state = {
   user_address: '0x1234...',
   session_key: '0xabcd...',
   version: '1',
   assets: ['usdc'],
   expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: '0x',
-});
+  user_sig: '',
+  session_key_sig: '',
+};
+state.user_sig = await client.signChannelSessionKeyState(state);
+state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessionKeyHolder);
 
-await client.submitChannelSessionKeyState({
-  user_address: '0x1234...',
-  session_key: '0xabcd...',
-  version: '1',
-  assets: ['usdc'],
-  expires_at: String(Math.floor(Date.now() / 1000) + 86400),
-  user_sig: sig,
-});
+await client.submitChannelSessionKeyState(state);
 
-// Query active channel session key states
+// Query channel session key states (active-only by default)
 const states = await client.getLastChannelKeyStates('0x1234...');
 const filtered = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...');
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+const all = await client.getLastChannelKeyStates('0x1234...', '0xSessionKey...', { includeInactive: true });
 ```
 
 ## Key Concepts
@@ -683,7 +699,7 @@ async function basicExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.RPC_URL!)
@@ -732,7 +748,7 @@ async function multiChainExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.POLYGON_RPC!), // Polygon Amoy
@@ -770,7 +786,7 @@ import { Client, createSigners } from '@yellow-org/sdk';
 async function queryTransactions() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner
   );
@@ -816,7 +832,7 @@ import Decimal from 'decimal.js';
 async function appSessionExample() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withBlockchainRPC(80002n, process.env.RPC_URL!)
@@ -897,7 +913,7 @@ async function monitorConnection() {
   const { stateSigner, txSigner } = createSigners(process.env.PRIVATE_KEY!);
 
   const client = await Client.create(
-    'wss://clearnode.example.com/ws',
+    'wss://nitronode.example.com/ws',
     stateSigner,
     txSigner,
     withPingInterval(3000),
@@ -1068,7 +1084,7 @@ For understanding how operations work under the hood:
 
 - **Node.js**: 20.0.0 or later
 - **TypeScript**: 5.3.0 or later (for development)
-- **Running Clearnode instance** or access to public node
+- **Running Nitronode instance** or access to public node
 - **Blockchain RPC endpoint** (for on-chain operations via `checkpoint()`)
 
 ## License

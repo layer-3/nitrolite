@@ -2,16 +2,27 @@
 
 [![License](https://img.shields.io/npm/l/@yellow-org/sdk-compat.svg)](https://github.com/layer-3/nitrolite/blob/main/LICENSE)
 
-Compatibility layer that bridges the Nitrolite SDK **v0.5.3 API** to the **v1.0.0 runtime**, letting existing dApps upgrade to the new protocol with minimal code changes.
+`@yellow-org/sdk-compat` is a migration layer that preserves selected Nitrolite SDK **v0.5.3 app-facing APIs** over the **v1 runtime**.
 
-- Keep v0.5.3-style app-facing calls in your code.
+> The off-chain broker was renamed from "Clearnode" to "Nitronode" in v1.3.0. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md).
+
+- Keep supported v0.5.3-style app-facing calls in your code.
 - Run them through `@yellow-org/sdk-compat`, backed by `@yellow-org/sdk`.
+- Treat it as a migration aid, not a drop-in replacement for the full published v0.5.3 package.
+
+## Compatibility Scope
+
+`@yellow-org/sdk-compat` is intentionally narrower than the published v0.5.3 package surface.
+
+- **Preserved app-facing APIs**: the `NitroliteClient` facade, selected auth helpers, app-session signing helpers, and many app-facing types remain available for supported migration paths.
+- **Transitional helper surfaces**: some legacy `create*Message` / `parse*Response` exports now emit real v1-compatible payloads inside the legacy `req`/`sig` envelope, while workflow-only helpers stay exported as fail-fast migration shims.
+- **Unsupported full-package parity**: low-level internals, broad root-export parity, and every legacy helper being runtime-faithful are not promised by this package.
 
 ## Why
 
-The v1.0.0 protocol introduces breaking changes across 14 dimensions — wire format, authentication, WebSocket lifecycle, unit system, asset resolution, and more. A direct migration touches 20+ files per app with deep, scattered rewrites.
+The v1 protocol changes wire format, authentication, WebSocket lifecycle, unit handling, asset resolution, and more. For apps built around the old surface, a direct migration can require scattered rewrites across transport, signing, and amount-handling paths.
 
-The compat layer centralises this complexity into **~1,000 lines** that absorb the protocol differences, reducing per-app integration effort by an estimated **56–70%**.
+The compat layer centralizes the supported migration paths into one package so app code can move to client-level methods incrementally instead of rewriting every call site at once.
 
 ## Build Size
 
@@ -32,7 +43,7 @@ npm pack --dry-run --json
 
 ## Migration Guide
 
-Step-by-step guides for migrating from v0.5.3:
+Step-by-step guides for migrating supported app-facing paths from v0.5.3:
 
 - [Overview & Quick Start](./docs/migration-overview.md) — pattern changes, import swaps
 - [On-Chain Changes](./docs/migration-onchain.md) — deposits, withdrawals, channels
@@ -56,7 +67,7 @@ Replace `new Client(ws, signer)` with `NitroliteClient.create()`:
 import { NitroliteClient, blockchainRPCsFromEnv } from '@yellow-org/sdk-compat';
 
 const client = await NitroliteClient.create({
-  wsURL: 'wss://clearnode.example.com/ws',
+  wsURL: 'wss://nitronode.example.com/ws',
   walletClient,          // viem WalletClient with account
   chainId: 11155111,     // Sepolia
   blockchainRPCs: blockchainRPCsFromEnv(),
@@ -65,7 +76,7 @@ const client = await NitroliteClient.create({
 
 ### 2. Deposit & create a channel
 
-In v1.0.0, channel creation is implicit on deposit — no separate `createChannel()` call needed:
+In v1, channel creation is implicit on deposit — no separate `createChannel()` call needed:
 
 ```typescript
 const tokenAddress = '0x6E2C4707DA119425DF2C722E2695300154652F56'; // USDC on Sepolia
@@ -86,10 +97,10 @@ const assets   = await client.getAssetsList();
 
 ### 4. Transfer off-chain
 
-The compat `transfer(destination, allocations)` preserves the v0.5.3-style array-of-allocations signature. Each `TransferAllocation.amount` is a **raw-unit string** (smallest denomination). The compat layer divides by token decimals before delegating to the v1 SDK's `transfer(wallet, asset, Decimal)`:
+The compat `transfer(destination, allocations)` preserves the v0.5.3-style array-of-allocations signature. Each `TransferAllocation.amount` is a **raw asset-unit string** using the asset's canonical decimals. The compat layer divides by asset decimals before delegating to the v1 SDK's `transfer(wallet, asset, Decimal)`:
 
 ```typescript
-// 5 USDC = 5_000_000 raw units (6 decimals)
+// 5 USDC = 5_000_000 raw asset units when USDC has 6 asset decimals
 await client.transfer(recipientAddress, [
   { asset: 'usdc', amount: '5000000' },
 ]);
@@ -136,6 +147,7 @@ await client.close();
 | `getEscrowChannel(escrowChannelId)` | Query an escrow channel by ID |
 | `getChannelData(channelId)` | Full channel + state for a specific channel |
 | `getLastAppSessionsListError()` | Last `getAppSessionsList()` error message (if any) |
+| `getOpenChannels()` | Read current-chain open channel IDs from the ChannelHub |
 
 ### App Sessions
 
@@ -145,6 +157,8 @@ await client.close();
 | `closeAppSession(appSessionId, allocations, quorumSigs)` | Close an app session with quorum signatures |
 | `submitAppState(params)` | Submit state update (operate/deposit/withdraw/close) |
 | `getAppDefinition(appSessionId)` | Get the definition for a session |
+
+App-session allocation strings remain **human-readable decimal strings** such as `'0.01'`. They are not raw smallest-unit token strings.
 
 ### App Registry
 
@@ -164,20 +178,29 @@ await client.close();
 
 ### Session Key Operations
 
+Both `state.user_sig` (wallet authorization) and `state.session_key_sig` (proof of
+possession by the session-key holder) are required at submit time. The `*Ownership`
+helpers produce `session_key_sig`.
+
 | Method | Description |
 |---|---|
-| `signChannelSessionKeyState(state)` | Sign a channel session-key state payload |
-| `submitChannelSessionKeyState(state)` | Register/submit a channel session-key state |
-| `getLastChannelKeyStates(userAddress, sessionKey?)` | Fetch channel session-key states for wallet/key |
-| `signSessionKeyState(state)` | Sign an app-session key state payload |
-| `submitSessionKeyState(state)` | Register/submit an app-session key state |
-| `getLastKeyStates(userAddress, sessionKey?)` | Fetch app-session key states for wallet/key |
+| `signChannelSessionKeyState(state)` | Wallet `user_sig` over channel session-key state |
+| `signChannelSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for channel state |
+| `submitChannelSessionKeyState(state)` | Register/submit a channel session-key state (both sigs required) |
+| `getLastChannelKeyStates(userAddress, sessionKey?, options?)` | Fetch channel session-key states (active-only by default; `{ includeInactive: true }` for expired/revoked) |
+| `signSessionKeyState(state)` | Wallet `user_sig` over app session-key state |
+| `signAppSessionKeyOwnership(state, sessionKeySigner)` | Session-key holder's `session_key_sig` for app state |
+| `submitSessionKeyState(state)` | Register/submit an app-session key state (both sigs required) |
+| `getLastAppKeyStates(userAddress, sessionKey?, options?)` | Fetch app-session key states (active-only by default; `{ includeInactive: true }` for expired/revoked) |
+| `getLastKeyStates(userAddress, sessionKey?)` | **Deprecated** — 0.5.x alias for `getLastAppKeyStates`; no `includeInactive` option |
 
 ### Transfers
 
 | Method | Description |
 |---|---|
 | `transfer(destination, allocations)` | Off-chain transfer to another participant |
+
+`TransferAllocation.amount` remains a **raw asset-unit string** using the asset's canonical decimals, for example `'5000000'` for 5 USDC when USDC has 6 asset decimals.
 
 ### Asset Resolution
 
@@ -190,6 +213,25 @@ await client.close();
 | `formatAmount(tokenAddress, rawAmount)` | Convert raw bigint → human-readable string |
 | `parseAmount(tokenAddress, humanAmount)` | Convert human-readable string → raw bigint |
 | `findOpenChannel(tokenAddress, chainId?)` | Find an open channel for a given token |
+
+### Legacy On-Chain Helpers
+
+| Method | Description |
+|---|---|
+| `approveTokens(tokenAddress, amount)` | Approve the current-chain ChannelHub using raw token units |
+| `getTokenAllowance(tokenAddress)` | Read current-chain ChannelHub allowance in raw token units |
+| `getTokenBalance(tokenAddress)` | Read current-chain wallet token balance in raw token units |
+
+### Unsupported Legacy Gaps
+
+These legacy methods remain intentionally unsupported because the v1 runtime no longer offers an honest one-to-one mapping:
+
+- `createChannel(...)`
+- `checkpointChannel(...)`
+- `getAccountBalance(...)`
+- `getChannelBalance(...)`
+
+Workflow-style RPC helpers such as `createTransferMessage(...)`, `createCreateChannelMessage(...)`, `createCloseChannelMessage(...)`, and `createResizeChannelMessage(...)` are in the same category: they stay exported for migration, but now fail fast with migration guidance instead of silently approximating old behavior.
 
 ### Security Token Locking
 
@@ -209,11 +251,11 @@ await client.close();
 | `ping()` | Health check |
 | `close()` | Close the WebSocket connection |
 | `waitForClose()` | Returns a promise that resolves when the connection is closed |
-| `refreshAssets()` | Re-fetch the asset map from the clearnode |
+| `refreshAssets()` | Re-fetch the asset map from the nitronode |
 
-### Accessing the v1.0.0 SDK Directly
+### Accessing the v1 SDK Directly
 
-The underlying v1.0.0 `Client` is exposed for advanced use cases not covered by the compat surface:
+The underlying v1 `Client` is exposed for advanced use cases not covered by the compat surface:
 
 ```typescript
 const v1Client = client.innerClient;
@@ -226,7 +268,7 @@ await v1Client.getHomeChannel(wallet, 'usdc');
 
 ```typescript
 interface NitroliteClientConfig {
-  wsURL: string;                           // Clearnode WebSocket URL
+  wsURL: string;                           // Nitronode WebSocket URL
   walletClient: WalletClient;              // viem WalletClient with account
   chainId: number;                         // Chain ID (e.g. 11155111 for Sepolia)
   blockchainRPCs?: Record<number, string>; // Optional chain ID → RPC URL map
@@ -253,7 +295,7 @@ NEXT_PUBLIC_BLOCKCHAIN_RPCS=11155111:https://rpc.sepolia.io,1:https://mainnet.in
 
 ### `WalletStateSigner`
 
-A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1.0.0 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
+A v0.5.3-compatible signer class that wraps a `WalletClient`. Actual state signing in v1 is handled internally by `ChannelDefaultSigner`; this class exists so existing store types compile:
 
 ```typescript
 import { WalletStateSigner } from '@yellow-org/sdk-compat';
@@ -317,7 +359,7 @@ try {
 
 ## Event Polling
 
-v0.5.3 used server-push WebSocket events. v1.0.0 uses a polling model. The `EventPoller` bridges this gap:
+v0.5.3 used server-push WebSocket events. v1 uses a polling model. The `EventPoller` bridges this gap:
 
 ```typescript
 import { EventPoller } from '@yellow-org/sdk-compat';
@@ -366,32 +408,40 @@ await client.withdrawSecurityTokens(chainId, destinationWallet);
 
 ### Amount conventions
 
-The compat layer accepts raw amounts (smallest token unit) and converts to human-readable `Decimal` before delegating to the v1 SDK.
+The compat layer keeps the old amount conventions explicit instead of flattening them:
 
 | Method group | Input type | Example: 100 tokens (18 decimals) |
 |---|---|---|
 | `deposit`, `withdrawal`, `lockSecurityTokens`, `approveSecurityToken`, `getLockedBalance` | Raw `bigint` | `100_000_000_000_000_000_000n` |
-| `transfer` | Raw string via `TransferAllocation.amount` | `'100000000000000000000'` |
+| `transfer` | Raw asset-unit string via `TransferAllocation.amount` | `'100000000000000000000'` |
+| `createAppSession`, `closeAppSession`, `submitAppState` allocations | Human-readable decimal string | `'100.0'` |
 
 > For direct access to the v1 SDK's human-readable `Decimal` API, use `client.innerClient`.
 
 ## RPC Stubs
 
-The following functions exist so that any remaining v0.5.3 `create*Message` / `parse*Response` imports compile.
-`create*` helpers are mostly placeholders; `parse*` helpers perform lightweight normalization of known response shapes.
-Prefer calling `NitroliteClient` methods directly for new integrations:
+The following functions remain exported primarily so legacy `create*Message` / `parse*Response` imports can keep compiling while an app migrates.
+Some `create*` helpers emit real live-v1 method names and payload shapes inside the legacy `req` / `sig` envelope. Workflow-only helpers fail fast with migration guidance instead of returning fake wire payloads. `parse*` helpers only do lightweight normalization of known response shapes.
+Prefer `NitroliteClient` methods directly for new integrations:
 
 ```typescript
-// These compile but do nothing meaningful:
+// Direct v1-compatible helper mappings:
 createGetChannelsMessage, parseGetChannelsResponse,
 createGetLedgerBalancesMessage, parseGetLedgerBalancesResponse,
-parseGetLedgerEntriesResponse, parseGetAppSessionsResponse,
-createTransferMessage, createAppSessionMessage, parseCreateAppSessionResponse,
+parseGetLedgerEntriesResponse, createGetAppSessionsMessage, parseGetAppSessionsResponse,
+createGetAppDefinitionMessage, parseGetAppDefinitionResponse,
+createAppSessionMessage, parseCreateAppSessionResponse,
 createCloseAppSessionMessage, parseCloseAppSessionResponse,
+createSubmitAppStateMessage, parseSubmitAppStateResponse,
+createPingMessage,
+
+// Migration-only shims that fail fast:
+createTransferMessage,
 createCreateChannelMessage, parseCreateChannelResponse,
 createCloseChannelMessage, parseCloseChannelResponse,
 createResizeChannelMessage, parseResizeChannelResponse,
-createPingMessage,
+
+// Generic normalizers:
 convertRPCToClientChannel, convertRPCToClientState,
 parseAnyRPCResponse, NitroliteRPC
 ```
@@ -414,7 +464,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 ### Enums
 
 - `RPCMethod` — RPC method names (`Ping`, `GetConfig`, `GetChannels`, etc.)
-- `RPCChannelStatus` — Channel status values (`Open`, `Closed`, `Resizing`, `Challenged`)
+- `RPCChannelStatus` — Channel status values (`Open`, `Closed`, `Resizing`, `Challenged`, `Closing`)
 
 ### Wire Types
 
@@ -449,7 +499,7 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 - `State` — Channel state (channelId, version, data, allocations)
 - `AppLogic<T>` — Interface for custom app logic implementations
 
-### Clearnode Response Types
+### Nitronode Response Types
 
 - `AccountInfo` — `{ balances: LedgerBalance[], channelCount: bigint }`
 - `LedgerChannel` — Full ledger channel record (id, participant, status, token, amount, chain_id, etc.)
@@ -462,13 +512,13 @@ All legacy compat types are re-exported from `@yellow-org/sdk-compat`:
 
 ### `buildClientOptions`
 
-Converts a `CompatClientConfig` into v1.0.0 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
+Converts a `CompatClientConfig` into v1 `Option[]` values passed to `Client.create()`. Useful if you need to customise the underlying SDK client beyond what `NitroliteClient.create()` exposes:
 
 ```typescript
 import { buildClientOptions, type CompatClientConfig } from '@yellow-org/sdk-compat';
 
 const opts = buildClientOptions({
-  wsURL: 'wss://clearnode.example.com/ws',
+  wsURL: 'wss://nitronode.example.com/ws',
   blockchainRPCs: { 11155111: 'https://rpc.sepolia.io' },
 });
 ```
@@ -491,7 +541,7 @@ const nextConfig = {
 
 | Package | Version |
 |---|---|
-| `@yellow-org/sdk` | `>=1.0.0` |
+| `@yellow-org/sdk` | `>=1.2.0` |
 | `viem` | `^2.0.0` |
 
 ## License

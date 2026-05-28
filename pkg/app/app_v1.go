@@ -8,9 +8,22 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/layer-3/nitrolite/pkg/core"
 )
 
 var AppIDV1Regex = regexp.MustCompile(`^[a-z0-9][-a-z0-9]{0,65}$`)
+
+// ApplicationIDRegex bounds the advisory application identifier to lowercase
+// letters, digits, dashes and underscores, 1..66 chars — matching the DB
+// column width (VARCHAR(66), see
+// nitronode/config/migrations/postgres/20260420000000_add_application_id_to_writes.sql).
+var ApplicationIDRegex = regexp.MustCompile(`^[a-z0-9_-]{1,66}$`)
+
+// IsValidApplicationID reports whether id is a well-formed advisory
+// application identifier (see ApplicationIDRegex).
+func IsValidApplicationID(id string) bool {
+	return ApplicationIDRegex.MatchString(id)
+}
 
 // AppV1 represents an application registry entry.
 type AppV1 struct {
@@ -30,8 +43,10 @@ type AppInfoV1 struct {
 
 // PackAppV1 packs the AppV1 for signing using ABI encoding.
 func PackAppV1(app AppV1) ([]byte, error) {
-	if !common.IsHexAddress(app.OwnerWallet) {
-		return nil, fmt.Errorf("invalid owner wallet address: %s", app.OwnerWallet)
+	var err error
+	app.OwnerWallet, err = core.NormalizeHexAddress(app.OwnerWallet)
+	if err != nil {
+		return nil, fmt.Errorf("invalid owner wallet address: %v", err)
 	}
 
 	args := abi.Arguments{

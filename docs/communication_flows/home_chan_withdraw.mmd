@@ -5,32 +5,40 @@ sequenceDiagram
         actor HomeChain
         Note over Client: Connected to Node
         Note over HomeChain: User already has a home channel
-        Note over Node: Contains user's state with Home Chain 
+        Note over Node: Contains user's state with Home Chain
 
         User->>Client: withdraw(blockchainId, asset, amount)
         Client->>Node: GetLastState(UserWallet, asset)
-        Note right of Node: GetLastState(userWallet, asset)
         Node->>Client: Returns a state with home chain
-        %% Note over Client: Check current state transitions
         Note over Client: createNextState(currentState) returns state
-        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, cycleId, state.version))
-        Note over Client: NewTransition(withdrawalT, state.ID(), userWallet, amount)
+        Note over Client: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
+        Note over Client: NewTransition(TransitionTypeHomeWithdrawal, state.ID(), userWallet, amount)
         Note over Client: state.applyTransitions(transitions) returns true
-        Note over Client: signState(state) returns userSig
+        Note over Client: signState(state) returns userSig (prepends signer type byte)
 
         Client->>Node: SubmitState(state, userSig)
-        Note right of Node: GetLastState(userWallet, asset) returns currentState
-        Note right of Node: EnsureNoOngoingTransitions()
-        Note right of Node: ValidateStateTransition(currentState, state)
-        Note right of Node: StoreState(state)
+        Note over Node: ActionGateway.AllowAction(userWallet, GatedActionTransfer)
+        Note over Node: LockUserState(userWallet, asset)
+        Note over Node: CheckOpenChannel(userWallet, asset) → approvedSigValidators
+        Note over Node: GetLastUserState(userWallet, asset) → currentState
+        Note over Node: EnsureNoOngoingStateTransitions(userWallet, asset)
+        Note over Node: ValidateStateAdvancement(currentState, incomingState)
+        Note over Node: PackState(incomingState) → packedState
+        Note over Node: Extract signer type from userSig (0x00=default, 0x01=session key)
+        Note over Node: Verify signer type approved: IsChannelSignerSupported(approvedSigValidators, sigType)
+        Note over Node: ChannelSigValidator.Verify(userWallet, packedState, userSig)
+        Note over Node: nodeSigner.Sign(packedState) → nodeSig
+        Note over Node: NewTransactionFromTransition(state, transition) → RecordTransaction
+        Note over Node: StoreUserState(state) → also updates UserBalance
         Node->>Client: Return node signature
 
         Note over Client: PackState(channelId, state)
         Client->>HomeChain: checkpoint(channelId, packedState)
         HomeChain->>Client: Return Tx Hash
-        HomeChain-->>Node: Emits Checkpointed Event
-        Note right of Node: HandleCheckpointed()
-        Note right of Node: UpdateChannel(channel)
+        HomeChain-->>Node: Emits HomeChannelCheckpointed Event
+        Note over Node: HandleHomeChannelCheckpointed()
+        Note over Node: channel.StateVersion = event.StateVersion
+        Note over Node: If challenged → set status = Open
+        Note over Node: UpdateChannel(channel)
         Node-->>Client: Sends ChannelUpdate & BalanceUpdate
         Client-->>User: Returns success
-        

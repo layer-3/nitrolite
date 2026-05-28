@@ -1,5 +1,5 @@
 import { Address, Hex } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 
 // ============================================================================
 // Enums
@@ -24,7 +24,8 @@ export enum ChannelStatus {
   Void = 0,
   Open = 1,
   Challenged = 2,
-  Closed = 3,
+  Closing = 3,
+  Closed = 4,
 }
 
 export enum TransitionType {
@@ -208,6 +209,7 @@ export interface SessionKey {
 export interface BalanceEntry {
   asset: string;
   balance: Decimal;
+  enforced: Decimal;
 }
 
 export interface ActionAllowance {

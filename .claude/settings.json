@@ -1,0 +1,35 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(npm test*)",
+            "Bash(npm run build*)",
+            "Bash(npm run typecheck*)",
+            "Bash(npm run lint*)",
+            "Bash(npm run clean*)",
+            "Bash(npx jest*)",
+            "Bash(npx prettier*)",
+            "Bash(npx tsx *)",
+            "Bash(go test *)",
+            "Bash(go build *)",
+            "Bash(go vet *)",
+            "Bash(go run *)",
+            "Bash(forge build*)",
+            "Bash(forge test*)",
+            "Bash(forge fmt*)",
+            "Bash(git status*)",
+            "Bash(git log*)",
+            "Bash(git diff*)",
+            "Bash(git branch*)",
+            "Bash(gh pr *)",
+            "Bash(gh issue *)",
+            "Bash(gh run *)"
+        ],
+        "deny": [
+            "Bash(git push --force*)",
+            "Bash(git reset --hard*)",
+            "Bash(rm -rf *)",
+            "Bash(*>.env*)",
+            "Bash(npm publish*)"
+        ]
+    }
+}

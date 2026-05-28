@@ -1,22 +1,53 @@
 /**
  * Example: Complete App Session Lifecycle
  *
- * Prerequisites (minimum channel balances):
- *   - Wallet 1: 0.0001 USDC
- *   - Wallet 2: 0.00015 WETH
- *   - Wallet 3: no balance required (receives funds via redistribution)
+ * Requirements to run this example:
+ *
+ *  1. A reachable nitronode WebSocket endpoint (set via wsURL below).
+ *     The default points at the public sandbox.
+ *
+ *  2. Three EVM wallets with hex private keys (replace the placeholders below).
+ *     Wallet 3 may be a fresh key — it only receives funds via redistribution.
+ *
+ *  3. Minimum off-chain (channel) balances on the node:
+ *       - Wallet 1: 0.0001 YUSD     (deposited into Session 1)
+ *       - Wallet 2: 0.00015 YELLOW  (deposited into Session 2)
+ *       - Wallet 3: none required   (receives funds via redistribution)
+ *
+ *     An open channel is NOT a hard prerequisite. If a wallet already has
+ *     funds on the node but no acknowledged channel for the asset yet, the
+ *     example calls acknowledge() first to open one. Wallet 3 also needs no
+ *     pre-existing channel; the withdraw step will open/credit its ledger
+ *     automatically.
+ *
+ *  4. App registry: if the node was started with the app registry disabled
+ *     (apps.v1 group disabled), the registration step is skipped at runtime
+ *     and app sessions are created against unregistered app IDs. No action
+ *     is required from the operator — the example detects this via a probe
+ *     call to getApps().
  *
  * This example demonstrates:
- * 1. Register apps in the app registry (required before creating app sessions)
- * 2. Create first app session for wallet 1
- * 3. Deposit USDC into first app session by wallet 1
- * 4. Create second app session for wallet 2 with wallet 3 as a participant
- * 5. Deposit WETH into second app session by wallet 2
- * 6. Redistribute app state within app session so that participant with wallet 3 also has some allocation
- * 7. Wallet 3 withdraws from his app session
- * 8. Close both app sessions
- * 9. Fail case: attempt to create app session for unregistered app (expected to fail)
+ *  1. Register apps in the app registry (skipped if apps.v1 group is disabled)
+ *  2. Create first app session for wallet 1
+ *  3. Deposit YUSD into first app session by wallet 1
+ *     (auto-opens wallet 1's YUSD channel via acknowledge() if missing)
+ *  4. Create second app session for wallet 2 with wallet 3 as a participant
+ *  5. Deposit YELLOW into second app session by wallet 2
+ *     (auto-opens wallet 2's YELLOW channel via acknowledge() if missing)
+ *  6. Redistribute app state within app session so that participant with wallet 3 also has some allocation
+ *  7. Wallet 3 withdraws from his app session
+ *  8. Close both app sessions
+ *  9. Fail case: attempt to create app session for unregistered app (expected to fail).
+ *     Skipped entirely when the app registry is disabled.
  */
+
+// Node <22 does not expose a stable global WebSocket. The SDK dialer uses
+// `new WebSocket(url)` directly, so we polyfill the global from the `ws`
+// package before any client is constructed.
+import WebSocket from 'ws';
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === 'undefined') {
+  (globalThis as { WebSocket: unknown }).WebSocket = WebSocket;
+}
 
 import Decimal from 'decimal.js';
 import { Hex } from 'viem';
@@ -35,10 +66,41 @@ import {
   AppSessionKeyStateV1,
 } from '../../src/app/types';
 import { packCreateAppSessionRequestV1, packAppStateUpdateV1, packAppSessionKeyStateV1 } from '../../src/app/packing';
+import { isFinal } from '../../src/core/state';
+
+// appRegistryDisabledMsg is the error fragment returned by the node when the
+// apps.v1 RPC group is disabled by configuration. The example uses this to
+// decide whether to skip the registration step.
+const APP_REGISTRY_DISABLED_MSG = 'apps.v1 group is disabled';
+
+/**
+ * ensureChannelOpen guarantees that the given wallet has an acknowledged
+ * channel open for asset. If the node holds no state for the wallet/asset
+ * pair, or the latest state is still awaiting the user's signature (or has
+ * been finalized), acknowledge() is invoked to create or progress the channel.
+ * Already-acknowledged channels are left untouched.
+ */
+async function ensureChannelOpen(label: string, client: Client, asset: string): Promise<void> {
+    const wallet = client.getUserAddress();
+    const state = await client.getLatestState(wallet, asset, false);
+
+    const hasOpenChannel =
+        state !== null &&
+        state.homeChannelId !== undefined &&
+        !isFinal(state) &&
+        !!state.userSig;
+    if (hasOpenChannel) {
+        console.log(`✓ ${label} already has an open ${asset} channel`);
+        return;
+    }
+
+    await client.acknowledge(asset);
+    console.log(`✓ ${label} acknowledged ${asset} channel`);
+}
 
 async function main() {
   // Replace with a real deployment url
-  const wsURL = 'wss://clearnode-sandbox.yellow.org/v1/ws';
+  const wsURL = 'wss://nitronode-sandbox.yellow.org/v1/ws';
 
   // --- 0. Setup Wallets ---
   // Replace these strings with your actual hex private keys
@@ -85,6 +147,15 @@ async function main() {
     wallet3Signers.txSigner
   );
 
+  // --- Ensure Required Channels Are Open ---
+  // App session deposits require an acknowledged channel for the asset.
+  // If the wallet has funds on the node but no channel yet, acknowledge()
+  // opens it on the fly so the example only assumes a minimum balance.
+  console.log('=== Ensuring Channels Are Open ===');
+  await ensureChannelOpen('Wallet 1', wallet1Client, 'yusd');
+  await ensureChannelOpen('Wallet 2', wallet2Client, 'yellow');
+  console.log();
+
   // --- 1. Register Apps ---
   console.log('=== Step 1: Registering Apps ===');
 
@@ -92,11 +163,30 @@ async function main() {
   const app1ID = `test-app-${suffix}`;
   const app2ID = `multi-party-app-${suffix}`;
 
-  await wallet1Client.registerApp(app1ID, '{}', true);
-  console.log(`✓ Registered app: ${app1ID}`);
+  // Probe the apps.v1 group via getApps. If the node has the app registry
+  // disabled, the probe throws an error containing APP_REGISTRY_DISABLED_MSG
+  // and we skip registration entirely — app sessions can still be created
+  // against unregistered IDs in that mode.
+  let appRegistryEnabled = true;
+  try {
+    await wallet1Client.getApps();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes(APP_REGISTRY_DISABLED_MSG)) {
+      appRegistryEnabled = false;
+      console.log('ℹ App registry is disabled on the node — skipping app registration');
+    } else {
+      throw err;
+    }
+  }
 
-  await wallet1Client.registerApp(app2ID, '{}', false);
-  console.log(`✓ Registered app: ${app2ID} (owner approval required)\n`);
+  if (appRegistryEnabled) {
+    await wallet1Client.registerApp(app1ID, '{}', true);
+    console.log(`✓ Registered app: ${app1ID}`);
+
+    await wallet1Client.registerApp(app2ID, '{}', false);
+    console.log(`✓ Registered app: ${app2ID} (owner approval required)\n`);
+  }
 
   // --- 2. Create App Session 1 (Single Participant: Wallet 1) ---
   console.log('=== Step 2: Creating App Session 1 (Wallet 1 only) ===');
@@ -118,8 +208,8 @@ async function main() {
   );
   console.log(`✓ Created App Session 1: ${session1ID}\n`);
 
-  // --- 3. Deposit USDC into Session 1 ---
-  console.log('=== Step 3: Depositing USDC into Session 1 ===');
+  // --- 3. Deposit YUSD into Session 1 ---
+  console.log('=== Step 3: Depositing YUSD into Session 1 ===');
 
   const session1DepositAmount = new Decimal(0.0001);
   const session1DepositUpdate: AppStateUpdateV1 = {
@@ -127,7 +217,7 @@ async function main() {
     intent: AppStateUpdateIntent.Deposit,
     version: 2n,
     allocations: [
-      { participant: wallet1Address, asset: 'usdc', amount: session1DepositAmount },
+      { participant: wallet1Address, asset: 'yusd', amount: session1DepositAmount },
     ],
     sessionData: '{}',
   };
@@ -139,10 +229,10 @@ async function main() {
     await wallet1Client.submitAppSessionDeposit(
       session1DepositUpdate,
       [appSession1DepositSig],
-      'usdc',
+      'yusd',
       session1DepositAmount
     );
-    console.log(`✓ Deposited ${session1DepositAmount} USDC into Session 1\n`);
+    console.log(`✓ Deposited ${session1DepositAmount} YUSD into Session 1\n`);
   } catch (err) {
     console.log(`⚠ Deposit warning: ${err}`);
   }
@@ -167,12 +257,18 @@ async function main() {
     app_session_ids: [],
     expires_at: String(expiresAt),
     user_sig: '',
+    session_key_sig: '',
   };
 
   const packedAppSessionKey3State = packAppSessionKeyStateV1(appSessionKey3State);
+
+  // Wallet's user_sig authorizes the delegation.
   const wallet3MsgSigner = new EthereumMsgSigner(wallet3PrivateKey);
-  const appSessionKey3StateSig = await wallet3MsgSigner.signMessage(packedAppSessionKey3State);
-  appSessionKey3State.user_sig = appSessionKey3StateSig;
+  appSessionKey3State.user_sig = await wallet3MsgSigner.signMessage(packedAppSessionKey3State);
+
+  // Session-key holder's session_key_sig proves possession of the key being registered.
+  // Both signatures are required at submit time.
+  appSessionKey3State.session_key_sig = await sessionKey3MsgSigner.signMessage(packedAppSessionKey3State);
 
   await wallet3Client.submitSessionKeyState(appSessionKey3State);
 
@@ -203,8 +299,8 @@ async function main() {
   );
   console.log(`✓ Created App Session 2: ${session2ID}\n`);
 
-  // --- 5. Deposit WETH into Session 2 by Wallet 2 ---
-  console.log('=== Step 5: Depositing WETH into Session 2 ===');
+  // --- 5. Deposit YELLOW into Session 2 by Wallet 2 ---
+  console.log('=== Step 5: Depositing YELLOW into Session 2 ===');
 
   const session2DepositAmount = new Decimal(0.00015);
   const session2DepositUpdate: AppStateUpdateV1 = {
@@ -212,7 +308,7 @@ async function main() {
     intent: AppStateUpdateIntent.Deposit,
     version: 2n,
     allocations: [
-      { participant: wallet2Address, asset: 'weth', amount: session2DepositAmount },
+      { participant: wallet2Address, asset: 'yellow', amount: session2DepositAmount },
     ],
     sessionData: '{}',
   };
@@ -224,10 +320,10 @@ async function main() {
   const nodeSig = await wallet2Client.submitAppSessionDeposit(
     session2DepositUpdate,
     [appSession2DepositSig, appSession3DepositSig],
-    'weth',
+    'yellow',
     session2DepositAmount
   );
-  console.log(`✓ Deposited ${session2DepositAmount} WETH into Session 2 (Node Sig: ${nodeSig})\n`);
+  console.log(`✓ Deposited ${session2DepositAmount} YELLOW into Session 2 (Node Sig: ${nodeSig})\n`);
 
   // Check Session 2 state before redistribution
   const { sessions: session2InfoBeforeRedist } = await wallet2Client.getAppSessions({
@@ -247,8 +343,8 @@ async function main() {
     intent: AppStateUpdateIntent.Operate,
     version: 3n,
     allocations: [
-      { participant: wallet2Address, asset: 'weth', amount: new Decimal(0.0001) },
-      { participant: wallet3Address, asset: 'weth', amount: new Decimal(0.00005) },
+      { participant: wallet2Address, asset: 'yellow', amount: new Decimal(0.0001) },
+      { participant: wallet3Address, asset: 'yellow', amount: new Decimal(0.00005) },
     ],
     sessionData: '{}',
   };
@@ -267,7 +363,7 @@ async function main() {
       appSession2RedistributeSig,
       appSession3RedistributeSig,
     ]);
-    console.log('✓ Redistributed WETH: Wallet 2 (0.0001) -> Wallet 3 (0.00005)\n');
+    console.log('✓ Redistributed YELLOW: Wallet 2 (0.0001) -> Wallet 3 (0.00005)\n');
   } catch (err) {
     console.error(`Redistribution failed: ${err}`);
     throw err;
@@ -285,8 +381,8 @@ async function main() {
     intent: AppStateUpdateIntent.Withdraw,
     version: 4n,
     allocations: [
-      { participant: wallet2Address, asset: 'weth', amount: new Decimal(0.00005) },
-      { participant: wallet3Address, asset: 'weth', amount: new Decimal(0.00001) },
+      { participant: wallet2Address, asset: 'yellow', amount: new Decimal(0.00005) },
+      { participant: wallet3Address, asset: 'yellow', amount: new Decimal(0.00001) },
     ],
     sessionData: '{}',
   };
@@ -304,7 +400,7 @@ async function main() {
       appSession2WithdrawSig,
       appSession3WithdrawSig,
     ]);
-    console.log('✓ Wallet 3 successfully withdrew WETH back to channel\n');
+    console.log('✓ Wallet 3 successfully withdrew YELLOW back to channel\n');
   } catch (err) {
     console.log(`⚠ Withdraw Error: ${err}\n`);
   }
@@ -318,7 +414,7 @@ async function main() {
     intent: AppStateUpdateIntent.Close,
     version: 3n,
     allocations: [
-      { participant: wallet1Address, asset: 'usdc', amount: new Decimal(0.0001) },
+      { participant: wallet1Address, asset: 'yusd', amount: new Decimal(0.0001) },
     ],
     sessionData: '{}',
   };
@@ -339,8 +435,8 @@ async function main() {
     intent: AppStateUpdateIntent.Close,
     version: 5n,
     allocations: [
-      { participant: wallet2Address, asset: 'weth', amount: new Decimal(0.00005) },
-      { participant: wallet3Address, asset: 'weth', amount: new Decimal(0.00001) },
+      { participant: wallet2Address, asset: 'yellow', amount: new Decimal(0.00005) },
+      { participant: wallet3Address, asset: 'yellow', amount: new Decimal(0.00001) },
     ],
     sessionData: '{}',
   };
@@ -360,27 +456,32 @@ async function main() {
   }
 
   // --- 9. Fail Case: Create App Session for Unregistered App ---
-  console.log('\n=== Step 9: Creating App Session for Unregistered App (expected to fail) ===');
+  // Only meaningful when the app registry is enabled — with apps.v1 disabled
+  // every app ID is "unregistered" from the registry's perspective and the
+  // node accepts the create call, so the fail-case has nothing to assert.
+  if (appRegistryEnabled) {
+    console.log('\n=== Step 9: Creating App Session for Unregistered App (expected to fail) ===');
 
-  const unregisteredDefinition: AppDefinitionV1 = {
-    applicationId: `unregistered-app-${suffix}`,
-    participants: [{ walletAddress: wallet1Address, signatureWeight: 100 }],
-    quorum: 100,
-    nonce: BigInt(Date.now() * 1000000),
-  };
+    const unregisteredDefinition: AppDefinitionV1 = {
+      applicationId: `unregistered-app-${suffix}`,
+      participants: [{ walletAddress: wallet1Address, signatureWeight: 100 }],
+      quorum: 100,
+      nonce: BigInt(Date.now() * 1000000),
+    };
 
-  const unregisteredCreateRequest = packCreateAppSessionRequestV1(unregisteredDefinition, '{}');
-  const unregisteredSig = await appSession1Signer.signMessage(unregisteredCreateRequest);
+    const unregisteredCreateRequest = packCreateAppSessionRequestV1(unregisteredDefinition, '{}');
+    const unregisteredSig = await appSession1Signer.signMessage(unregisteredCreateRequest);
 
-  try {
-    await wallet1Client.createAppSession(
-      unregisteredDefinition,
-      '{}',
-      [unregisteredSig]
-    );
-    console.log('✗ Unexpected success: app session was created for unregistered app');
-  } catch (err) {
-    console.log(`✓ Expected error: ${err}`);
+    try {
+      await wallet1Client.createAppSession(
+        unregisteredDefinition,
+        '{}',
+        [unregisteredSig]
+      );
+      console.log('✗ Unexpected success: app session was created for unregistered app');
+    } catch (err) {
+      console.log(`✓ Expected error: ${err}`);
+    }
   }
 
   console.log('\n=== Example Complete ===');

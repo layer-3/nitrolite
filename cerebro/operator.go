@@ -261,7 +261,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 				}
 			case "node":
 				return []prompt.Suggest{
-					{Text: "set-ws-url", Description: "Set clearnode WebSocket URL"},
+					{Text: "set-ws-url", Description: "Set nitronode WebSocket URL"},
 					{Text: "set-home-blockchain", Description: "Set home blockchain for channels"},
 				}
 			case "session-key":
@@ -714,8 +714,12 @@ func (o *Operator) Execute(s string) {
 		}
 
 	case "exit":
-		fmt.Println("Exiting...")
-		close(o.exitCh)
+		// Actual exit is driven by go-prompt's ExitChecker on "exit" input
+		// (see cerebro/main.go). Closing exitCh here would race the prompt
+		// teardown; printing here would print before go-prompt redraws the
+		// next prompt line, leaving a stray "cerebro> " between the message
+		// and the farewell. Defer the farewell to main once the prompt has
+		// torn itself down.
 	default:
 		fmt.Printf("ERROR: Unknown command: %s (type 'help' for available commands)\n", args[0])
 	}

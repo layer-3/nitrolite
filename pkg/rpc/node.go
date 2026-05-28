@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
@@ -55,6 +56,11 @@ type Node interface {
 	// Groups can have their own middleware and can be nested to create
 	// hierarchical handler structures.
 	NewGroup(name string) HandlerGroup
+
+	// RegisteredMethods returns every RPC method name registered on the node
+	// (across the root group and all subgroups). Intended for instrumentation
+	// at startup, not for request routing.
+	RegisteredMethods() []string
 }
 
 type HandlerGroup interface {
@@ -131,6 +137,14 @@ type WebsocketNodeConfig struct {
 	WsConnWriteBufferSize int
 	// WsConnProcessBufferSize is the capacity of each connection's incoming message queue (default: 10).
 	WsConnProcessBufferSize int
+	// WsConnMaxMessageSize caps inbound WebSocket frame size in bytes per connection
+	// (default: 128 KiB). Frames exceeding this trigger close 1009 before allocation.
+	// Non-positive values fall back to the default; the cap cannot be disabled at
+	// this layer.
+	WsConnMaxMessageSize int64
+	// NewFrameRateLimiter constructs a per-connection FrameRateLimiter on each
+	// upgrade. nil → no enforcement (NoopFrameRateLimiter is used).
+	NewFrameRateLimiter func() FrameRateLimiter
 }
 
 // NewWebsocketNode creates a new WebsocketNode instance with the provided configuration.
@@ -148,7 +162,7 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 
 	if config.ObserveConnections == nil {
 		// Default implementation does nothing, but can be overridden for monitoring
-		config.ObserveConnections = func(region, origin string, count uint32) {}
+		config.ObserveConnections = func(applicationID string, count uint32) {}
 	}
 	if config.WsUpgraderReadBufferSize <= 0 {
 		// It's the optimal default value as recommended
@@ -202,6 +216,14 @@ func NewWebsocketNode(config WebsocketNodeConfig) (*WebsocketNode, error) {
 // The method ensures proper cleanup when connections close, including
 // removing the connection from the hub and invoking disconnect callbacks.
 func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	applicationID := r.URL.Query().Get(ApplicationIDQueryParam)
+	if applicationID != "" && !app.IsValidApplicationID(applicationID) {
+		wn.cfg.Logger.Warn("rejecting connection with invalid application_id",
+			"remoteAddr", r.RemoteAddr, "applicationID", applicationID)
+		http.Error(w, fmt.Sprintf("invalid %s: must match %s", ApplicationIDQueryParam, app.ApplicationIDRegex.String()), http.StatusBadRequest)
+		return
+	}
+
 	wsConnection, err := wn.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		wn.cfg.Logger.Error("failed to upgrade connection to WebSocket", "error", err)
@@ -211,13 +233,21 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	connectionID := uuid.NewString()
 
+	var limiter FrameRateLimiter
+	if wn.cfg.NewFrameRateLimiter != nil {
+		limiter = wn.cfg.NewFrameRateLimiter()
+	}
+
 	connConfig := WebsocketConnectionConfig{
 		ConnectionID:      connectionID,
 		Origin:            r.Header.Get("Origin"),
+		ApplicationID:     applicationID,
 		WebsocketConn:     wsConnection,
 		Logger:            wn.cfg.Logger,
 		ProcessBufferSize: wn.cfg.WsConnProcessBufferSize,
 		WriteBufferSize:   wn.cfg.WsConnWriteBufferSize,
+		MaxMessageSize:    wn.cfg.WsConnMaxMessageSize,
+		FrameRateLimiter:  limiter,
 	}
 	connection, err := NewWebsocketConnection(connConfig)
 	if err != nil {
@@ -247,7 +277,7 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go connection.Serve(parentCtx, childHandleClosure)
-	go wn.processRequests(connection, parentCtx, childHandleClosure)
+	go wn.processRequests(connection, applicationID, parentCtx, childHandleClosure)
 
 	wg.Wait()
 }
@@ -264,9 +294,12 @@ func (wn *WebsocketNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // The method runs until the connection closes or the context is cancelled.
 // Each connection has its own SafeStorage instance for maintaining state
 // across requests.
-func (wn *WebsocketNode) processRequests(conn Connection, parentCtx context.Context, handleClosure func(error)) {
+func (wn *WebsocketNode) processRequests(conn Connection, applicationID string, parentCtx context.Context, handleClosure func(error)) {
 	defer handleClosure(nil) // Stop other goroutines when done
 	safeStorage := NewSafeStorage()
+	if applicationID != "" {
+		safeStorage.Set(ApplicationIDQueryParam, applicationID)
+	}
 
 	for {
 		var messageBytes []byte
@@ -365,6 +398,17 @@ func (wn *WebsocketNode) NewGroup(name string) HandlerGroup {
 func (wn *WebsocketNode) Handle(method string, handler Handler) {
 	wn.handle(method, handler)
 	wn.routes[method] = []string{wn.groupId, method}
+}
+
+// RegisteredMethods returns every method registered on the node. Order is not
+// guaranteed. The underlying map is not mutex-protected, so the call must happen
+// after registration has finished (registration is expected to be single-threaded).
+func (wn *WebsocketNode) RegisteredMethods() []string {
+	methods := make([]string, 0, len(wn.routes))
+	for method := range wn.routes {
+		methods = append(methods, method)
+	}
+	return methods
 }
 
 // handle is the internal method for registering handlers.

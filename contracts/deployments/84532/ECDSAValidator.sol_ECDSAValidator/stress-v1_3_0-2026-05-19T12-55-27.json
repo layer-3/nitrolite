@@ -1,0 +1,11 @@
+{
+  "deployer": "0xf8bedb0aba14833e95f29e760487c3d34bc4ec64",
+  "deployedTo": "0xb5e7d2b8db56a173ca8c05cddcc1379852cdc095",
+  "transactionHash": "0x6569b61c32d2b85b249a9bb4d221d9312de3691351117c62598df3cb222863c8",
+  "commit": "df4e110a",
+  "timestamp": 1779195327,
+  "chainId": 84532,
+  "contractPath": "src/sigValidators/ECDSAValidator.sol:ECDSAValidator",
+  "constructorArgs": [],
+  "comment": "stress v1.3.0"
+}

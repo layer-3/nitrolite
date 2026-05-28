@@ -2,49 +2,48 @@ sequenceDiagram
         actor User
         actor SenderClient
         actor Node
-        
+
         Note over SenderClient: Connected to Node
-        Note over Node: Contains user's state with Home Chain 
+        Note over Node: Contains user's state with Home Chain
 
-        %% {
-        %%         newAppState {
-        %%                 app_session_id: appSessionId as Hex,
-        %%                 intentDeposit,
-        %%                 version,
-        %%                 allocations,
-        %%                 session_data: JSON.stringify(sessionData),
-        %%         }
-        %%         sigQuorum: []
-        %%         NewUserState
-        %% }
-
-        User->>SenderClient: submit_app_state(newAppState,sigQuorum)
+        User->>SenderClient: submit_app_state(newAppState, sigQuorum)
 
         SenderClient->>Node: GetAppSessionState(app_session_id)
-        Node->>SenderClient: Returns an actual app session state <currentAppState>
+        Node->>SenderClient: Returns current app session state
 
         SenderClient-->>SenderClient: ValidateSessionAppState(currentAppState, newAppState, sigQuorum)
-        Note right of SenderClient: intent=deposit, userWallet=appParticipant, only the participant deposits, validate quorum
+        Note right of SenderClient: intent=deposit, userWallet=appParticipant, validate quorum
 
         SenderClient->>Node: GetLastState(UserWallet, asset)
-        Note right of Node: GetLastState(userWallet, asset)
         Node->>SenderClient: Returns a state with home chain
-        %% Note over SenderClient: Check current state transitions
         Note over SenderClient: createNextState(currentState) returns state
-        Note over SenderClient: state.setID(CalculateStateID(state.userWallet, state.asset, cycleId, state.version))
+        Note over SenderClient: state.setID(CalculateStateID(state.userWallet, state.asset, epoch, state.version))
         Note over SenderClient: NewTransition(commitT, state.ID(), appSessionId, amount)
         Note over SenderClient: state.applyTransitions(transitions) returns true
-        Note over SenderClient: signState(state) returns userSig
+        Note over SenderClient: signState(state) returns userSig (prepends signer type byte)
 
         SenderClient->>Node: SubmitDepositState(newAppState, sigQuorum, state, userSig)
 
-        Note over Node: Perform existing app session state validation steps
-        Note over Node: GetLastState(userWallet, asset) returns currentState
-        Note over Node: EnsureNoOngoingTransitions()
-        Note over Node: ValidateStateTransition(currentState, state)
-        Note over Node: EnsureSameDepositTokenAmount(newAppState, newUserState)
-        Note over Node: StoreState(state)
+        Note over Node: LockUserState(userWallet, asset)
+        Note over Node: GetAppSession(appSessionId) → validate exists, open, version matches
+        Note over Node: Verify intent == Deposit
+        Note over Node: GetRegisteredApp(applicationId) → validate exists
+        Note over Node: ActionGateway.AllowAction(appOwner, GatedActionAppSessionDeposit)
+        Note over Node: GetLastUserState(userWallet, asset) → currentState
+        Note over Node: CheckOpenChannel(userWallet, asset) → approvedSigValidators
+        Note over Node: EnsureNoOngoingStateTransitions(userWallet, asset)
+        Note over Node: ValidateStateAdvancement(currentState, incomingState)
+        Note over Node: PackState(incomingState) → packedState
+        Note over Node: Extract signer type from userSig (0x00=default, 0x01=session key)
+        Note over Node: ChannelSigValidator.Verify(userWallet, packedState, userSig)
+        Note over Node: VerifyQuorum(packedAppState, sigQuorum, participants)
+        Note over Node: Validate allocations: no negatives, valid participants, asset match
+        Note over Node: RecordLedgerEntry(participant, sessionID, asset, depositAmount)
+        Note over Node: Verify total deposit == state transition amount
+        Note over Node: nodeSigner.Sign(packedState) → nodeSig
+        Note over Node: StoreUserState(incomingState) → also updates UserBalance
+        Note over Node: NewTransactionFromTransition(state, transition) → RecordTransaction
+        Note over Node: Update app session version + store
 
-        Node->>SenderClient: Sends AppSessionUpdate
-        Node->>SenderClient: Return node signature
+        Node->>SenderClient: Return node signature (StateNodeSig)
         SenderClient->>User: Returns success & tx hash

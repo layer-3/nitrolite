@@ -67,10 +67,14 @@ type ChannelSessionKeyStateV1 struct {
 	Version string `json:"version"`
 	// Assets associated with this session key
 	Assets []string `json:"assets"`
-	// Expiration time as unix timestamp of this session key
+	// ExpiresAt is the unix timestamp (seconds) at which the session key stops
+	// authorizing requests. A future value activates the key; a value at or before
+	// the current time revokes it immediately. Negative values are rejected.
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`
+	// SessionKeySig is the session-key holder's signature proving possession of the key being registered.
+	SessionKeySig string `json:"session_key_sig"`
 }
 
 // ============================================================================
@@ -210,10 +214,14 @@ type AppSessionKeyStateV1 struct {
 	ApplicationIDs []string `json:"application_ids"`
 	// AppSessionID is the application session IDs associated with this session key
 	AppSessionIDs []string `json:"app_session_ids"`
-	// ExpiresAt is Unix timestamp in seconds indicating when the session key expires
+	// ExpiresAt is the unix timestamp (seconds) at which the session key stops
+	// authorizing requests. A future value activates the key; a value at or before
+	// the current time revokes it immediately. Negative values are rejected.
 	ExpiresAt string `json:"expires_at"`
 	// UserSig is the user's signature over the session key metadata to authorize the registration/update of the session key
 	UserSig string `json:"user_sig"`
+	// SessionKeySig is the session-key holder's signature proving possession of the key being registered.
+	SessionKeySig string `json:"session_key_sig"`
 }
 
 // ============================================================================
@@ -297,6 +305,8 @@ type BalanceEntryV1 struct {
 	Asset string `json:"asset"`
 	// Amount is the balance amount
 	Amount string `json:"amount"`
+	// Enforced is the on-chain enforced balance
+	Enforced string `json:"enforced"`
 }
 
 // TransactionV1 represents a transaction record.
@@ -362,3 +372,8 @@ type PaginationMetadataV1 struct {
 	// PageCount is the total number of pages
 	PageCount uint32 `json:"page_count"`
 }
+
+// GetLastKeyStatesPageLimit is the API contract for the channels.v1 / app_sessions.v1
+// get_last_key_states endpoints: both the default and the maximum page size are 10.
+// Defined in pkg/rpc so the two handler packages share a single source of truth.
+const GetLastKeyStatesPageLimit uint32 = 10

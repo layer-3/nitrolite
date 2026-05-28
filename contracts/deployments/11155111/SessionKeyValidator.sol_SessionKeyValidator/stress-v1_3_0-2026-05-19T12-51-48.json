@@ -1,0 +1,11 @@
+{
+  "deployer": "0xF8bedb0aBa14833e95F29e760487C3d34Bc4Ec64",
+  "deployedTo": "0xe2B33Aa3922d7ac386e6801Ae7D9498C4DF45F1f",
+  "transactionHash": "0x7d8ed6acc062b28137ac08e8d1a0ed3368f39b2bf89f18910fec81ae77dffb55",
+  "commit": "df4e110a38ca3a4b17e46b606cc3233bbb7521c2",
+  "timestamp": 1779195108,
+  "chainId": 11155111,
+  "contractPath": "src/sigValidators/SessionKeyValidator.sol:SessionKeyValidator",
+  "constructorArgs": [],
+  "comment": "stress v1.3.0"
+}

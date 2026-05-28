@@ -75,35 +75,6 @@ func TestNewBlockchainClient(t *testing.T) {
 	mock.AssertExpectationsForObjects(t, mockEVMClient, mockAssetStore, mockSigner)
 }
 
-func TestBlockchainClient_GetAccountsBalances(t *testing.T) {
-	t.Parallel()
-	mockEVMClient := new(MockEVMClient)
-	mockAssetStore := new(MockAssetStore)
-	mockSigner := new(MockSigner)
-
-	setupMockSigner(t, mockSigner)
-
-	contractAddress := common.HexToAddress("0xContract")
-	client, err := NewBlockchainClient(contractAddress, mockEVMClient, mockSigner, 1, "0xNode", mockAssetStore)
-	require.NoError(t, err)
-
-	accounts := []string{"0xUser1", "0xUser2"}
-	tokens := []string{"0xToken1"}
-
-	// Mock successful return (uint256 = 100)
-	ret := common.LeftPadBytes(big.NewInt(100).Bytes(), 32)
-	mockEVMClient.On("CallContract", mock.Anything, mock.Anything, mock.Anything).Return(ret, nil)
-
-	balances, err := client.GetAccountsBalances(accounts, tokens)
-	require.NoError(t, err)
-	assert.Len(t, balances, 2)
-	assert.Len(t, balances[0], 1)
-	assert.Equal(t, "100", balances[0][0].String())
-	assert.Equal(t, "100", balances[1][0].String())
-
-	mock.AssertExpectationsForObjects(t, mockEVMClient, mockAssetStore, mockSigner)
-}
-
 func TestBlockchainClient_GetNodeBalance(t *testing.T) {
 	t.Parallel()
 	mockEVMClient := new(MockEVMClient)

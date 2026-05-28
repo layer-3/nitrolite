@@ -135,6 +135,43 @@ func TestClientAssetStore_Caching(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestClientAssetStore_DecimalsValidation(t *testing.T) {
+	t.Parallel()
+	mockDialer := NewMockDialer()
+	mockDialer.Dial(context.Background(), "", nil)
+
+	mockResp := rpc.NodeV1GetAssetsResponse{
+		Assets: []rpc.AssetV1{
+			{
+				Name:                  "USDC",
+				Symbol:                "USDC",
+				Decimals:              18,
+				SuggestedBlockchainID: "137",
+				Tokens: []rpc.TokenV1{
+					{
+						BlockchainID: "137",
+						Address:      "0xToken137",
+						Name:         "USDC (Polygon)",
+						Symbol:       "USDC",
+						Decimals:     6,
+					},
+				},
+			},
+		},
+	}
+	mockDialer.RegisterResponse(rpc.NodeV1GetAssetsMethod.String(), mockResp)
+
+	rpcClient := rpc.NewClient(mockDialer)
+	client := &Client{
+		rpcClient: rpcClient,
+	}
+	store := newClientAssetStore(client)
+
+	_, err := store.GetAssetDecimals("USDC")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "asset USDC decimals (18) must not exceed token USDC decimals (6)")
+}
+
 func TestDefaultWebsocketDialerConfig(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, 5*time.Second, rpc.DefaultWebsocketDialerConfig.HandshakeTimeout)

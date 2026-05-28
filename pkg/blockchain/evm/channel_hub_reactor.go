@@ -9,14 +9,116 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
+// ChannelHubReactorStoreTxHandler is a function that executes Store operations within a transaction.
+// If the handler returns an error, the transaction is rolled back; otherwise it's committed.
+type ChannelHubReactorStoreTxHandler func(ChannelHubReactorStore) error
+
+// ChannelHubReactorStoreTxProvider wraps Store operations in a database transaction.
+// It accepts a ChannelHubReactorStoreTxHandler and manages transaction lifecycle (begin, commit, rollback).
+// Returns an error if the handler fails or the transaction cannot be committed.
+type ChannelHubReactorStoreTxProvider func(ChannelHubReactorStoreTxHandler) error
+
+// ChannelHubReactorStore defines the persistence layer interface for channel and state data.
+// All methods should be implemented to work within database transactions.
+// Implementations are typically provided by the database layer and wrapped by ChannelHubReactorStoreTxProvider.
+type ChannelHubReactorStore interface {
+	// GetLastStateByChannelID retrieves the most recent state for a given channel.
+	// If signed is true, only returns states with both user and node signatures.
+	// Returns nil if no matching state exists.
+	GetLastStateByChannelID(channelID string, signed bool) (*core.State, error)
+
+	// GetLastUserState retrieves the most recent state for a user's asset across all
+	// channels and detached chain entries. Returns nil if no matching state exists.
+	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
+
+	// GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
+	// Returns nil if the state with the specified version does not exist.
+	GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	// The channel must already exist in the database.
+	UpdateChannel(channel core.Channel) error
+
+	// GetChannelByID retrieves a channel by its unique identifier.
+	// Returns nil if the channel does not exist.
+	GetChannelByID(channelID string) (*core.Channel, error)
+
+	// ScheduleCheckpoint schedules a checkpoint operation for a home channel state.
+	// This queues the state to be submitted on-chain to update the channel's on-chain state.
+	ScheduleCheckpoint(stateID string, chainID uint64) error
+
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
+	// ScheduleInitiateEscrowDeposit schedules an initiate for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowDeposit schedules a finalize for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleFinalizeEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowWithdrawal schedules a checkpoint for an escrow withdrawal operation.
+	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
+	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
+
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
+
+	// LockUserState acquires SELECT ... FOR UPDATE on the user's balance row so the
+	// caller's transaction serializes against concurrent RPC paths that already lock
+	// the same row before issuing receiver states. Postgres-only; SQLite is a no-op
+	// in tests.
+	LockUserState(wallet, asset string) (decimal.Decimal, error)
+
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
+	// state when the corresponding column is currently NULL. Either signature may be
+	// empty to skip that side.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
+
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel.
+	HasSignedFinalize(channelID string) (bool, error)
+
+
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
+	// sender debits (TransferSend, Commit) contribute negatively.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+
+	// StoreUserState persists a user state row. Used to record a ChallengeRescue squash
+	// state derived from a closed challenged channel.
+	StoreUserState(state core.State, applicationID string) error
+
+	// RecordTransaction creates a transaction row linking state transitions.
+	RecordTransaction(tx core.Transaction, applicationID string) error
+
+	// StoreContractEvent persists a blockchain event to the database.
+	StoreContractEvent(ev core.BlockchainEvent) error
+}
+
 var channelHubAbi *abi.ABI
 var channelHubFilterer *ChannelHubFilterer
 var channelHubEventMapping map[common.Hash]string
+
+// encodeSig hex-encodes a signature byte slice or returns an empty string when absent.
+func encodeSig(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	return hexutil.Encode(b)
+}
 
 func initChannelHub() {
 	var err error
@@ -36,17 +138,21 @@ func initChannelHub() {
 }
 
 type ChannelHubReactor struct {
-	blockchainID       uint64
-	eventHandler       core.ChannelHubEventHandler
-	storeContractEvent StoreContractEvent
-	onEventProcessed   func(blockchainID uint64, success bool)
+	blockchainID     uint64
+	nodeAddress      string
+	eventHandler     core.ChannelHubEventHandler
+	assetStore       AssetStore
+	useStoreInTx     ChannelHubReactorStoreTxProvider
+	onEventProcessed func(blockchainID uint64, success bool)
 }
 
-func NewChannelHubReactor(blockchainID uint64, eventHandler core.ChannelHubEventHandler, storeContractEvent StoreContractEvent) *ChannelHubReactor {
+func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider) *ChannelHubReactor {
 	return &ChannelHubReactor{
-		blockchainID:       blockchainID,
-		eventHandler:       eventHandler,
-		storeContractEvent: storeContractEvent,
+		blockchainID: blockchainID,
+		nodeAddress:  nodeAddress,
+		eventHandler: eventHandler,
+		assetStore:   assetStore,
+		useStoreInTx: useStoreInTx,
 	}
 }
 
@@ -66,96 +172,135 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	var err error
-	switch eventID {
-	case channelHubAbi.Events["ChannelCreated"].ID:
-		err = r.handleHomeChannelCreated(ctx, l)
-	case channelHubAbi.Events["ChannelCheckpointed"].ID:
-		err = r.handleHomeChannelCheckpointed(ctx, l)
-	case channelHubAbi.Events["ChannelDeposited"].ID:
-		err = r.handleChannelDeposited(ctx, l)
-	case channelHubAbi.Events["ChannelWithdrawn"].ID:
-		err = r.handleChannelWithdrawn(ctx, l)
-	case channelHubAbi.Events["ChannelChallenged"].ID:
-		err = r.handleHomeChannelChallenged(ctx, l)
-	case channelHubAbi.Events["ChannelClosed"].ID:
-		err = r.handleHomeChannelClosed(ctx, l)
-	case channelHubAbi.Events["EscrowDepositInitiated"].ID:
-		err = r.handleEscrowDepositInitiated(ctx, l)
-	case channelHubAbi.Events["EscrowDepositChallenged"].ID:
-		err = r.handleEscrowDepositChallenged(ctx, l)
-	case channelHubAbi.Events["EscrowDepositFinalized"].ID:
-		err = r.handleEscrowDepositFinalized(ctx, l)
-	case channelHubAbi.Events["EscrowWithdrawalInitiated"].ID:
-		err = r.handleEscrowWithdrawalInitiated(ctx, l)
-	case channelHubAbi.Events["EscrowWithdrawalChallenged"].ID:
-		err = r.handleEscrowWithdrawalChallenged(ctx, l)
-	case channelHubAbi.Events["EscrowWithdrawalFinalized"].ID:
-		err = r.handleEscrowWithdrawalFinalized(ctx, l)
-	case channelHubAbi.Events["EscrowDepositInitiatedOnHome"].ID:
-		err = r.handleEscrowDepositInitiatedOnHome(ctx, l)
-	case channelHubAbi.Events["EscrowDepositFinalizedOnHome"].ID:
-		err = r.handleEscrowDepositFinalizedOnHome(ctx, l)
-	case channelHubAbi.Events["EscrowWithdrawalInitiatedOnHome"].ID:
-		err = r.handleEscrowWithdrawalInitiatedOnHome(ctx, l)
-	case channelHubAbi.Events["EscrowWithdrawalFinalizedOnHome"].ID:
-		err = r.handleEscrowWithdrawalFinalizedOnHome(ctx, l)
-	// NOTE: Unimplemented handlers:
-	case channelHubAbi.Events["MigrationInInitiated"].ID:
-		err = r.handleHomeChannelMigrated(ctx, l)
-	case channelHubAbi.Events["MigrationInFinalized"].ID:
-		err = r.handleMigrationInFinalized(ctx, l)
-	case channelHubAbi.Events["MigrationOutInitiated"].ID:
-		err = r.handleMigrationOutInitiated(ctx, l)
-	case channelHubAbi.Events["MigrationOutFinalized"].ID:
-		err = r.handleMigrationOutFinalized(ctx, l)
-	case channelHubAbi.Events["Deposited"].ID:
-		err = r.handleDeposited(ctx, l)
-	case channelHubAbi.Events["Withdrawn"].ID:
-		err = r.handleWithdrawn(ctx, l)
-	case channelHubAbi.Events["EscrowDepositsPurged"].ID:
-		err = r.handleEscrowDepositsPurged(ctx, l)
-	default:
-		logger.Warn("unknown event: " + eventID.Hex())
-	}
+	err := r.useStoreInTx(func(store ChannelHubReactorStore) error {
+		var err error
+		switch eventID {
+		case channelHubAbi.Events["NodeBalanceUpdated"].ID:
+			err = r.handleNodeBalanceUpdated(ctx, store, l)
+		case channelHubAbi.Events["ChannelCreated"].ID:
+			err = r.handleHomeChannelCreated(ctx, store, l)
+		case channelHubAbi.Events["ChannelCheckpointed"].ID:
+			err = r.handleHomeChannelCheckpointed(ctx, store, l)
+		case channelHubAbi.Events["ChannelDeposited"].ID:
+			err = r.handleChannelDeposited(ctx, store, l)
+		case channelHubAbi.Events["ChannelWithdrawn"].ID:
+			err = r.handleChannelWithdrawn(ctx, store, l)
+		case channelHubAbi.Events["ChannelChallenged"].ID:
+			err = r.handleHomeChannelChallenged(ctx, store, l)
+		case channelHubAbi.Events["ChannelClosed"].ID:
+			err = r.handleHomeChannelClosed(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositInitiated"].ID:
+			err = r.handleEscrowDepositInitiated(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositChallenged"].ID:
+			err = r.handleEscrowDepositChallenged(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositFinalized"].ID:
+			err = r.handleEscrowDepositFinalized(ctx, store, l)
+		case channelHubAbi.Events["EscrowWithdrawalInitiated"].ID:
+			err = r.handleEscrowWithdrawalInitiated(ctx, store, l)
+		case channelHubAbi.Events["EscrowWithdrawalChallenged"].ID:
+			err = r.handleEscrowWithdrawalChallenged(ctx, store, l)
+		case channelHubAbi.Events["EscrowWithdrawalFinalized"].ID:
+			err = r.handleEscrowWithdrawalFinalized(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositInitiatedOnHome"].ID:
+			err = r.handleEscrowDepositInitiatedOnHome(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositFinalizedOnHome"].ID:
+			err = r.handleEscrowDepositFinalizedOnHome(ctx, store, l)
+		case channelHubAbi.Events["EscrowWithdrawalInitiatedOnHome"].ID:
+			err = r.handleEscrowWithdrawalInitiatedOnHome(ctx, store, l)
+		case channelHubAbi.Events["EscrowWithdrawalFinalizedOnHome"].ID:
+			err = r.handleEscrowWithdrawalFinalizedOnHome(ctx, store, l)
+		// NOTE: Unimplemented handlers:
+		case channelHubAbi.Events["MigrationInInitiated"].ID:
+			err = r.handleHomeChannelMigrated(ctx, store, l)
+		case channelHubAbi.Events["MigrationInFinalized"].ID:
+			err = r.handleMigrationInFinalized(ctx, store, l)
+		case channelHubAbi.Events["MigrationOutInitiated"].ID:
+			err = r.handleMigrationOutInitiated(ctx, store, l)
+		case channelHubAbi.Events["MigrationOutFinalized"].ID:
+			err = r.handleMigrationOutFinalized(ctx, store, l)
+		case channelHubAbi.Events["Deposited"].ID:
+			err = r.handleDeposited(ctx, store, l)
+		case channelHubAbi.Events["Withdrawn"].ID:
+			err = r.handleWithdrawn(ctx, store, l)
+		case channelHubAbi.Events["EscrowDepositsPurged"].ID:
+			err = r.handleEscrowDepositsPurged(ctx, store, l)
+		default:
+			logger.Warn("unknown event: " + eventID.Hex())
+		}
+		if err != nil {
+			logger.Warn("error processing event", "error", err)
+			return errors.Wrap(err, "error processing event")
+		}
+
+		if err := store.StoreContractEvent(core.BlockchainEvent{
+			BlockNumber:     l.BlockNumber,
+			BlockchainID:    r.blockchainID,
+			Name:            eventName,
+			ContractAddress: l.Address.Hex(),
+			TransactionHash: l.TxHash.String(),
+			LogIndex:        uint32(l.Index),
+		}); err != nil {
+			logger.Warn("error storing contract event", "error", err, "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
+			return errors.Wrap(err, "error storing contract event")
+		}
+
+		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
+		return nil
+	})
 	if r.onEventProcessed != nil {
 		r.onEventProcessed(r.blockchainID, err == nil)
 	}
-	if err != nil {
-		logger.Warn("error processing event", "error", err)
-		return errors.Wrap(err, "error processing event")
-	}
-
-	if err := r.storeContractEvent(core.BlockchainEvent{
-		BlockNumber:     l.BlockNumber,
-		BlockchainID:    r.blockchainID,
-		Name:            eventName,
-		ContractAddress: l.Address.Hex(),
-		TransactionHash: l.TxHash.String(),
-		LogIndex:        uint32(l.Index),
-	}); err != nil {
-		logger.Warn("error storing contract event", "error", err, "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
-		return errors.Wrap(err, "error storing contract event")
-	}
-
-	logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
-	return nil
+	return err
 }
 
-func (r *ChannelHubReactor) handleHomeChannelCreated(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
+	event, err := channelHubFilterer.ParseNodeBalanceUpdated(l)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse NodeBalanceUpdated event")
+	}
+
+	asset, err := r.assetStore.GetTokenAsset(r.blockchainID, event.Token.String())
+	if err != nil {
+		return errors.Wrap(err, "failed to get token asset")
+	}
+
+	decimals, err := r.assetStore.GetTokenDecimals(r.blockchainID, event.Token.String())
+	if err != nil {
+		return errors.Wrap(err, "failed to get token decimals")
+	}
+
+	balance := decimal.NewFromBigInt(event.Amount, -int32(decimals))
+
+	ev := core.NodeBalanceUpdatedEvent{
+		BlockchainID: r.blockchainID,
+		Asset:        asset,
+		Balance:      balance,
+	}
+	return r.eventHandler.HandleNodeBalanceUpdated(ctx, store, &ev)
+}
+
+func (r *ChannelHubReactor) handleHomeChannelCreated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
+	logger := log.FromContext(ctx)
+
 	event, err := channelHubFilterer.ParseChannelCreated(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelCreated event")
 	}
 
+	if common.HexToAddress(r.nodeAddress) != event.Definition.Node {
+		logger.Warn("ignoring ChannelCreated for different node", "eventNode", event.Definition.Node.Hex(), "ourNode", r.nodeAddress)
+		return nil
+	}
+
 	ev := core.HomeChannelCreatedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.InitialState.Version,
+		UserSig:      encodeSig(event.InitialState.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCreated(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCreated(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleHomeChannelMigrated(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleHomeChannelMigrated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseMigrationInInitiated(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse MigrationInInitiated event")
@@ -164,11 +309,12 @@ func (r *ChannelHubReactor) handleHomeChannelMigrated(ctx context.Context, l typ
 	ev := core.HomeChannelMigratedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelMigrated(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelMigrated(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseChannelCheckpointed(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelCheckpointed event")
@@ -177,11 +323,12 @@ func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, l
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseChannelDeposited(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelDeposited event")
@@ -190,11 +337,12 @@ func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, l types.
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseChannelWithdrawn(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelWithdrawn event")
@@ -203,11 +351,12 @@ func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, l types.
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.Candidate.Version,
+		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseChannelChallenged(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelChallenged event")
@@ -217,11 +366,12 @@ func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, l t
 		ChannelID:       hexutil.Encode(event.ChannelId[:]),
 		StateVersion:    event.Candidate.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelChallenged(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseChannelClosed(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse ChannelClosed event")
@@ -230,11 +380,12 @@ func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, l types
 	ev := core.HomeChannelClosedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.FinalState.Version,
+		UserSig:      encodeSig(event.FinalState.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelClosed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelClosed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositInitiated(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositInitiated event")
@@ -243,11 +394,12 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, l 
 	ev := core.EscrowDepositInitiatedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowDepositInitiated(ctx, &ev)
+	return r.eventHandler.HandleEscrowDepositInitiated(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositChallenged(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositChallenged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositChallenged(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositChallenged event")
@@ -257,11 +409,12 @@ func (r *ChannelHubReactor) handleEscrowDepositChallenged(ctx context.Context, l
 		ChannelID:       hexutil.Encode(event.EscrowId[:]),
 		StateVersion:    event.State.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowDepositChallenged(ctx, &ev)
+	return r.eventHandler.HandleEscrowDepositChallenged(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositFinalized(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositFinalized(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositFinalized(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositFinalized event")
@@ -270,11 +423,12 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalized(ctx context.Context, l 
 	ev := core.EscrowDepositFinalizedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowDepositFinalized(ctx, &ev)
+	return r.eventHandler.HandleEscrowDepositFinalized(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowWithdrawalInitiated(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowWithdrawalInitiated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowWithdrawalInitiated(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowWithdrawalInitiated event")
@@ -283,11 +437,12 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiated(ctx context.Context,
 	ev := core.EscrowWithdrawalInitiatedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowWithdrawalInitiated(ctx, &ev)
+	return r.eventHandler.HandleEscrowWithdrawalInitiated(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowWithdrawalChallenged(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowWithdrawalChallenged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowWithdrawalChallenged(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowWithdrawalChallenged event")
@@ -297,11 +452,12 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalChallenged(ctx context.Context
 		ChannelID:       hexutil.Encode(event.EscrowId[:]),
 		StateVersion:    event.State.Version,
 		ChallengeExpiry: event.ChallengeExpireAt,
+		UserSig:         encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowWithdrawalChallenged(ctx, &ev)
+	return r.eventHandler.HandleEscrowWithdrawalChallenged(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowWithdrawalFinalized(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowWithdrawalFinalized(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowWithdrawalFinalized(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowWithdrawalFinalized event")
@@ -310,11 +466,12 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalized(ctx context.Context,
 	ev := core.EscrowWithdrawalFinalizedEvent{
 		ChannelID:    hexutil.Encode(event.EscrowId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleEscrowWithdrawalFinalized(ctx, &ev)
+	return r.eventHandler.HandleEscrowWithdrawalFinalized(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositInitiatedOnHome(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositInitiatedOnHome event")
@@ -323,11 +480,12 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Conte
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositFinalizedOnHome(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositFinalizedOnHome event")
@@ -336,11 +494,12 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Conte
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowWithdrawalInitiatedOnHome(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowWithdrawalInitiatedOnHome event")
@@ -349,11 +508,12 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Co
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
-func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowWithdrawalFinalizedOnHome(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowWithdrawalFinalizedOnHome event")
@@ -362,13 +522,14 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Co
 	ev := core.HomeChannelCheckpointedEvent{
 		ChannelID:    hexutil.Encode(event.ChannelId[:]),
 		StateVersion: event.State.Version,
+		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
 }
 
 // Additional event handlers for events not yet defined in core.BlockchainEventHandler
 
-func (r *ChannelHubReactor) handleMigrationInFinalized(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleMigrationInFinalized(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseMigrationInFinalized(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse MigrationInFinalized event")
@@ -381,7 +542,7 @@ func (r *ChannelHubReactor) handleMigrationInFinalized(ctx context.Context, l ty
 	return nil
 }
 
-func (r *ChannelHubReactor) handleMigrationOutInitiated(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleMigrationOutInitiated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseMigrationOutInitiated(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse MigrationOutInitiated event")
@@ -394,7 +555,7 @@ func (r *ChannelHubReactor) handleMigrationOutInitiated(ctx context.Context, l t
 	return nil
 }
 
-func (r *ChannelHubReactor) handleMigrationOutFinalized(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleMigrationOutFinalized(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseMigrationOutFinalized(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse MigrationOutFinalized event")
@@ -407,41 +568,43 @@ func (r *ChannelHubReactor) handleMigrationOutFinalized(ctx context.Context, l t
 	return nil
 }
 
-func (r *ChannelHubReactor) handleDeposited(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleDeposited(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseDeposited(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse Deposited event")
 	}
 	logger := log.FromContext(ctx)
 	logger.Info("Deposited event",
-		"wallet", event.Wallet.Hex(),
 		"token", event.Token.Hex(),
 		"amount", event.Amount.String())
 
 	return nil
 }
 
-func (r *ChannelHubReactor) handleWithdrawn(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleWithdrawn(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseWithdrawn(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse Withdrawn event")
 	}
 	logger := log.FromContext(ctx)
 	logger.Info("Withdrawn event",
-		"wallet", event.Wallet.Hex(),
 		"token", event.Token.Hex(),
 		"amount", event.Amount.String())
 
 	return nil
 }
 
-func (r *ChannelHubReactor) handleEscrowDepositsPurged(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) handleEscrowDepositsPurged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
 	event, err := channelHubFilterer.ParseEscrowDepositsPurged(l)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse EscrowDepositsPurged event")
 	}
-	logger := log.FromContext(ctx)
-	logger.Info("EscrowDepositsPurged event", "purgedCount", event.PurgedCount.String())
 
-	return nil
+	escrowIDs := make([]string, len(event.EscrowIds))
+	for i, id := range event.EscrowIds {
+		escrowIDs[i] = hexutil.Encode(id[:])
+	}
+
+	ev := core.EscrowDepositsPurgedEvent{EscrowIDs: escrowIDs}
+	return r.eventHandler.HandleEscrowDepositsPurged(ctx, store, &ev)
 }

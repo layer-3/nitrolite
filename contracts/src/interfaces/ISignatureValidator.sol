@@ -39,4 +39,22 @@ interface ISignatureValidator {
         bytes calldata signature,
         address participant
     ) external view returns (ValidationResult);
+
+    /**
+     * @notice Validates a challenge signature
+     * @dev The validator constructs the challenge message internally (e.g., appending "challenge"
+     *      and any validator-specific data to signingData). This allows each validator to define
+     *      its own challenge signature format and enforce validator-specific constraints.
+     * @param channelId The channel identifier to be included in the signed message
+     * @param signingData The encoded state data
+     * @param signature The challenge signature to validate
+     * @param participant The expected challenger's address
+     * @return result ValidationResult indicating success or failure
+     */
+    function validateChallengeSignature(
+        bytes32 channelId,
+        bytes calldata signingData,
+        bytes calldata signature,
+        address participant
+    ) external view returns (ValidationResult);
 }

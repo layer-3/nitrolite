@@ -30,7 +30,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	wsURL := "wss://clearnode-sandbox.yellow.org/v1/ws"
+	wsURL := "wss://nitronode-sandbox.yellow.org/v1/ws"
 	privateKeyHex := "0x7d6..."
 	chainID := uint64(11155111)
 	rpcUrl := "https://sepolia.drpc.org"
@@ -89,6 +89,9 @@ func main() {
 	preTransferState, err := client.GetLatestState(ctx, walletAddress, "usdc", true)
 	if err != nil {
 		log.Fatalf("Failed to get latest state: %v", err)
+	}
+	if preTransferState == nil {
+		log.Fatalf("No signed state available to save")
 	}
 	fmt.Printf("Saved state at version %d (balance: %s USDC)\n\n",
 		preTransferState.Version, preTransferState.HomeLedger.UserBalance)

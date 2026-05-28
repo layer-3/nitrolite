@@ -1,0 +1,26 @@
+blockchains:
+- name: "linea_sepolia"
+  id: 59141
+  channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
+  channel_hub_sig_validators:
+    1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+- name: "polygon_amoy"
+  id: 80002
+  channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
+  channel_hub_sig_validators:
+    1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+- name: "base_sepolia"
+  id: 84532
+  channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
+  channel_hub_sig_validators:
+    1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+- name: "xrpl_evm_testnet"
+  id: 1449000
+  channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
+  channel_hub_sig_validators:
+    1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+- name: "ethereum_sepolia"
+  id: 11155111
+  channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
+  channel_hub_sig_validators:
+    1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"

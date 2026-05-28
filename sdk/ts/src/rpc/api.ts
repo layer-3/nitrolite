@@ -19,16 +19,15 @@ import {
   AppV1,
   AppInfoV1,
   ActionAllowanceV1,
-} from './types';
+} from './types.js';
 import {
   AppDefinitionV1,
   AppStateUpdateV1,
   AppSessionInfoV1,
-  AppAllocationV1,
   AppSessionKeyStateV1,
   SignedAppStateUpdateV1,
-} from '../app/types';
-import { TransactionType } from '../core/types';
+} from '../app/types.js';
+import { TransactionType } from '../core/types.js';
 
 // ============================================================================
 // Channels Group - V1 API
@@ -42,8 +41,11 @@ export interface ChannelsV1GetHomeChannelRequest {
 }
 
 export interface ChannelsV1GetHomeChannelResponse {
-  /** On-chain channel information */
-  channel: ChannelV1;
+  /**
+   * On-chain channel information, or null/absent when no home channel exists
+   * for the requested wallet/asset pair. Absence is a successful response.
+   */
+  channel?: ChannelV1 | null;
 }
 
 export interface ChannelsV1GetEscrowChannelRequest {
@@ -52,8 +54,11 @@ export interface ChannelsV1GetEscrowChannelRequest {
 }
 
 export interface ChannelsV1GetEscrowChannelResponse {
-  /** On-chain channel information */
-  channel: ChannelV1;
+  /**
+   * On-chain channel information, or null/absent when no escrow channel exists
+   * for the requested ID. Absence is a successful response.
+   */
+  channel?: ChannelV1 | null;
 }
 
 export interface ChannelsV1GetChannelsRequest {
@@ -86,30 +91,11 @@ export interface ChannelsV1GetLatestStateRequest {
 }
 
 export interface ChannelsV1GetLatestStateResponse {
-  /** Current state of the user */
-  state: StateV1;
-}
-
-export interface ChannelsV1GetStatesRequest {
-  /** User's wallet address */
-  wallet: Address;
-  /** Asset symbol */
-  asset: string;
-  /** User epoch index filter */
-  epoch?: bigint; // uint64
-  /** Home/Escrow Channel ID filter */
-  channel_id?: string;
-  /** Return only signed states */
-  only_signed: boolean;
-  /** Pagination parameters */
-  pagination?: PaginationParamsV1;
-}
-
-export interface ChannelsV1GetStatesResponse {
-  /** List of states */
-  states: StateV1[];
-  /** Pagination information */
-  metadata: PaginationMetadataV1;
+  /**
+   * Current state of the user, or null/absent when no state is stored for the
+   * requested wallet/asset pair. Absence is a successful response.
+   */
+  state?: StateV1 | null;
 }
 
 export interface ChannelsV1RequestCreationRequest {
@@ -157,11 +143,20 @@ export interface ChannelsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /**
+   * When true, include latest states whose expires_at is in the past (expired or
+   * revoked). Defaults to false on the server when omitted, returning active-only.
+   */
+  include_inactive?: boolean;
+  /** Pagination parameters */
+  pagination?: PaginationParamsV1;
 }
 
 export interface ChannelsV1GetLastKeyStatesResponse {
   /** List of active channel session key states for the user */
   states: ChannelSessionKeyStateV1[];
+  /** Pagination metadata */
+  metadata: PaginationMetadataV1;
 }
 
 // ============================================================================
@@ -207,8 +202,11 @@ export interface AppSessionsV1GetAppDefinitionRequest {
 }
 
 export interface AppSessionsV1GetAppDefinitionResponse {
-  /** Application definition */
-  definition: AppDefinitionV1;
+  /**
+   * Application definition, or null/absent when no app session exists for the
+   * requested ID. Absence is a successful response.
+   */
+  definition?: AppDefinitionV1 | null;
 }
 
 export interface AppSessionsV1GetAppSessionsRequest {
@@ -249,24 +247,6 @@ export interface AppSessionsV1CreateAppSessionResponse {
   status: string;
 }
 
-export interface AppSessionsV1CloseAppSessionRequest {
-  /** Application session ID to close */
-  app_session_id: string;
-  /** Final asset allocations when closing the session */
-  allocations: AppAllocationV1[];
-  /** Optional final JSON stringified session data */
-  session_data?: string;
-}
-
-export interface AppSessionsV1CloseAppSessionResponse {
-  /** Closed application session ID */
-  app_session_id: string;
-  /** Final version of the session */
-  version: string;
-  /** Status of the session (closed) */
-  status: string;
-}
-
 // ============================================================================
 // App Session Key State Group - V1 API
 // ============================================================================
@@ -283,11 +263,20 @@ export interface AppSessionsV1GetLastKeyStatesRequest {
   user_address: string;
   /** Optionally filter by session key address */
   session_key?: string;
+  /**
+   * When true, include latest states whose expires_at is in the past (expired or
+   * revoked). Defaults to false on the server when omitted, returning active-only.
+   */
+  include_inactive?: boolean;
+  /** Pagination parameters */
+  pagination?: PaginationParamsV1;
 }
 
 export interface AppSessionsV1GetLastKeyStatesResponse {
   /** List of active session key states for the user */
   states: AppSessionKeyStateV1[];
+  /** Pagination metadata */
+  metadata: PaginationMetadataV1;
 }
 
 // ============================================================================

@@ -1,0 +1,21 @@
+{{- $svc := .Values.service }}
+{{- if $svc.http.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nitronode.common.fullname" . }}
+  labels:
+    {{- include "nitronode.common.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    {{- with $svc.http }}
+    - name: http
+      port: {{ default .port .externalPort }}
+      targetPort: {{ default .port .internalPort }}
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "nitronode.common.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+{{- end }}

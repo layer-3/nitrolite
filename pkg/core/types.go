@@ -30,7 +30,8 @@ var (
 	ChannelStatusVoid       ChannelStatus = 0
 	ChannelStatusOpen       ChannelStatus = 1
 	ChannelStatusChallenged ChannelStatus = 2
-	ChannelStatusClosed     ChannelStatus = 3
+	ChannelStatusClosing    ChannelStatus = 3 // co-signed Finalize stored off-chain; on-chain close pending
+	ChannelStatusClosed     ChannelStatus = 4
 )
 
 func (s ChannelStatus) String() string {
@@ -41,6 +42,8 @@ func (s ChannelStatus) String() string {
 		return "open"
 	case ChannelStatusChallenged:
 		return "challenged"
+	case ChannelStatusClosing:
+		return "closing"
 	case ChannelStatusClosed:
 		return "closed"
 	default:
@@ -81,6 +84,8 @@ func (s *ChannelStatus) scanString(v string) error {
 		*s = ChannelStatusOpen
 	case ChannelStatusChallenged.String():
 		*s = ChannelStatusChallenged
+	case ChannelStatusClosing.String():
+		*s = ChannelStatusClosing
 	case ChannelStatusClosed.String():
 		*s = ChannelStatusClosed
 	default:
@@ -170,6 +175,72 @@ func NewVoidState(asset, userWallet string) *State {
 	}
 }
 
+// NewChallengeRescueState constructs a ChallengeRescue state crediting amount to the
+// user against closedChannelID. Placement depends on prev:
+//
+//   - prev is in-channel (HomeChannelID != nil): the rescue opens a fresh epoch at
+//     (prev.Epoch+1, version=0) with a clean ledger seeded by amount. Used when no
+//     node-signed Finalize exists locally for the closed channel — the user's chain
+//     has not been advanced past prev yet.
+//
+//   - prev is detached (HomeChannelID == nil): the rescue appends at (prev.Epoch,
+//     prev.Version+1), inheriting prev's ledger and adding amount on top. Used after
+//     a path-1 timeout close when a node-signed Finalize is on file: the sign-time
+//     NextState() has already advanced the user to a fresh epoch and post-Finalize
+//     receiver credits may already live there. Placing rescue at v=0 would collide
+//     on deterministic state ID; appending after the detached tip avoids that.
+//
+// closedChannelID is the on-chain channel whose close triggers the rescue. It is
+// recorded as the rescue's transition AccountID so the credit is traceable back to
+// the settlement.
+func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.Decimal) (*State, error) {
+	if closedChannelID == "" {
+		return nil, fmt.Errorf("closed channel ID is empty")
+	}
+	if amount.IsNegative() {
+		return nil, fmt.Errorf("challenge rescue amount must be non-negative")
+	}
+
+	var rescue *State
+	if prev.HomeChannelID == nil {
+		// Detached tip: append at (prev.Epoch, prev.Version+1), carry ledger forward.
+		rescue = &State{
+			Asset:      prev.Asset,
+			UserWallet: prev.UserWallet,
+			Epoch:      prev.Epoch,
+			Version:    prev.Version + 1,
+			HomeLedger: Ledger{
+				UserBalance: prev.HomeLedger.UserBalance.Add(amount),
+				UserNetFlow: prev.HomeLedger.UserNetFlow,
+				NodeBalance: prev.HomeLedger.NodeBalance,
+				NodeNetFlow: prev.HomeLedger.NodeNetFlow.Add(amount),
+			},
+		}
+	} else {
+		// In-channel prev: wrap to a fresh epoch with a clean ledger seeded by amount.
+		rescue = &State{
+			Asset:      prev.Asset,
+			UserWallet: prev.UserWallet,
+			Epoch:      prev.Epoch + 1,
+			Version:    0,
+			HomeLedger: Ledger{
+				UserBalance: amount,
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: amount,
+			},
+		}
+	}
+	rescue.ID = GetStateID(rescue.UserWallet, rescue.Asset, rescue.Epoch, rescue.Version)
+
+	txID, err := GetReceiverTransactionID(closedChannelID, rescue.ID)
+	if err != nil {
+		return nil, err
+	}
+	rescue.Transition = *NewTransition(TransitionTypeChallengeRescue, txID, closedChannelID, amount)
+	return rescue, nil
+}
+
 func (state State) NextState() *State {
 	var nextState *State
 	if state.IsFinal() {
@@ -248,6 +319,15 @@ func (state *State) IsFinal() bool {
 	return state.Transition.Type == TransitionTypeFinalize
 }
 
+// validateTransitionInputs checks that the state has no active transition yet,
+// and may be extended in the future to validate other common preconditions for applying transitions.
+func (state *State) validateTransitionInputs() error {
+	if state.Transition.Type != TransitionTypeVoid {
+		return fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	}
+	return nil
+}
+
 func (state *State) ApplyAcknowledgementTransition() (Transition, error) {
 	if state.Transition.Type != TransitionTypeVoid {
 		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
@@ -262,8 +342,8 @@ func (state *State) ApplyAcknowledgementTransition() (Transition, error) {
 }
 
 func (state *State) ApplyHomeDepositTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -284,8 +364,8 @@ func (state *State) ApplyHomeDepositTransition(amount decimal.Decimal) (Transiti
 }
 
 func (state *State) ApplyHomeWithdrawalTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -306,8 +386,8 @@ func (state *State) ApplyHomeWithdrawalTransition(amount decimal.Decimal) (Trans
 }
 
 func (state *State) ApplyTransferSendTransition(recipient string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	accountID := recipient
@@ -325,8 +405,8 @@ func (state *State) ApplyTransferSendTransition(recipient string, amount decimal
 }
 
 func (state *State) ApplyTransferReceiveTransition(sender string, amount decimal.Decimal, txID string) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	accountID := sender
@@ -339,8 +419,8 @@ func (state *State) ApplyTransferReceiveTransition(sender string, amount decimal
 }
 
 func (state *State) ApplyCommitTransition(accountID string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that AccountID has correct AppSessionID format
 	txID, err := GetSenderTransactionID(accountID, state.ID)
@@ -357,8 +437,8 @@ func (state *State) ApplyCommitTransition(accountID string, amount decimal.Decim
 }
 
 func (state *State) ApplyReleaseTransition(accountID string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	// TODO: maybe validate that recipient is a correct UserWallet format
 	txID, err := GetReceiverTransactionID(accountID, state.ID)
@@ -374,8 +454,8 @@ func (state *State) ApplyReleaseTransition(accountID string, amount decimal.Deci
 }
 
 func (state *State) ApplyMutualLockTransition(blockchainID uint64, tokenAddress string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -418,8 +498,8 @@ func (state *State) ApplyMutualLockTransition(blockchainID uint64, tokenAddress 
 }
 
 func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.EscrowChannelID == nil {
 		return Transition{}, fmt.Errorf("internal error: escrow channel ID is nil")
@@ -438,7 +518,7 @@ func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transi
 	state.Transition = *newTransition
 
 	state.HomeLedger.UserBalance = state.HomeLedger.UserBalance.Add(newTransition.Amount)
-	state.HomeLedger.NodeNetFlow = state.HomeLedger.NodeNetFlow.Add(newTransition.Amount)
+	state.HomeLedger.NodeBalance = decimal.Zero
 
 	state.EscrowLedger.UserBalance = state.EscrowLedger.UserBalance.Sub(newTransition.Amount)
 	state.EscrowLedger.NodeNetFlow = state.EscrowLedger.NodeNetFlow.Sub(newTransition.Amount)
@@ -447,8 +527,8 @@ func (state *State) ApplyEscrowDepositTransition(amount decimal.Decimal) (Transi
 }
 
 func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress string, amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.HomeChannelID == nil {
 		return Transition{}, fmt.Errorf("missing home channel ID")
@@ -458,6 +538,9 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 	}
 	if tokenAddress == "" {
 		return Transition{}, fmt.Errorf("invalid token address")
+	}
+	if state.HomeLedger.UserBalance.LessThan(amount) {
+		return Transition{}, fmt.Errorf("insufficient user balance for escrow lock")
 	}
 
 	escrowChannelID, err := GetEscrowChannelID(*state.HomeChannelID, state.Version)
@@ -475,6 +558,8 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 	newTransition := NewTransition(TransitionTypeEscrowLock, txID, accountID, amount)
 	state.Transition = *newTransition
 
+	state.HomeLedger.NodeBalance = decimal.Zero
+
 	state.EscrowLedger = &Ledger{
 		BlockchainID: blockchainID,
 		TokenAddress: tokenAddress,
@@ -488,8 +573,8 @@ func (state *State) ApplyEscrowLockTransition(blockchainID uint64, tokenAddress 
 }
 
 func (state *State) ApplyEscrowWithdrawTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	if state.EscrowChannelID == nil {
 		return Transition{}, fmt.Errorf("internal error: escrow channel ID is nil")
@@ -517,12 +602,14 @@ func (state *State) ApplyEscrowWithdrawTransition(amount decimal.Decimal) (Trans
 }
 
 func (state *State) ApplyMigrateTransition(amount decimal.Decimal) (Transition, error) {
-	if state.Transition.Type != TransitionTypeVoid {
-		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
+	if err := state.validateTransitionInputs(); err != nil {
+		return Transition{}, err
 	}
 	return Transition{}, fmt.Errorf("migrate transition not implemented yet")
 }
 
+// This transition can also contain non-zero amount in case previous state had a non-zero user balance.
+// Basically, amount in this transition means that user is withdrawing it from the channel as part of finalization.
 func (state *State) ApplyFinalizeTransition() (Transition, error) {
 	if state.Transition.Type != TransitionTypeVoid {
 		return Transition{}, fmt.Errorf("state already has a transition: %s", state.Transition.Type.String())
@@ -579,7 +666,12 @@ func (l1 Ledger) Equal(l2 Ledger) error {
 	return nil
 }
 
-func (l Ledger) Validate() error {
+// Validate checks ledger invariants and ensures all four scaled values fit the
+// Solidity ABI ranges used for signing and onchain calls. Balances must fit
+// uint256 ([0, 2^256-1]); net flows must fit int256 ([-2^255, 2^255-1]).
+// assetDecimals is the token's decimal exponent, used to scale decimal values
+// to their smallest onchain units before the range check.
+func (l Ledger) Validate(assetDecimals uint8) error {
 	if l.TokenAddress == "" {
 		return fmt.Errorf("invalid token address")
 	}
@@ -596,6 +688,30 @@ func (l Ledger) Validate() error {
 	sumNetFlows := l.UserNetFlow.Add(l.NodeNetFlow)
 	if !sumBalances.Equal(sumNetFlows) {
 		return fmt.Errorf("ledger balances do not match net flows: balances=%s, net_flows=%s", sumBalances.String(), sumNetFlows.String())
+	}
+
+	if _, err := DecimalToUint256(l.UserBalance, assetDecimals); err != nil {
+		return fmt.Errorf("user balance out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToUint256(l.NodeBalance, assetDecimals); err != nil {
+		return fmt.Errorf("node balance out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(l.UserNetFlow, assetDecimals); err != nil {
+		return fmt.Errorf("user net flow out of int256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(l.NodeNetFlow, assetDecimals); err != nil {
+		return fmt.Errorf("node net flow out of int256 range: %w", err)
+	}
+
+	// Solidity computes `userAllocation + nodeAllocation` as uint256 and
+	// `userNetFlow + nodeNetFlow` as int256. Individually-valid scaled values
+	// can still overflow these aggregates, producing a state the contract will
+	// reject.
+	if _, err := DecimalToUint256(sumBalances, assetDecimals); err != nil {
+		return fmt.Errorf("allocation sum out of uint256 range: %w", err)
+	}
+	if _, err := DecimalToInt256(sumNetFlows, assetDecimals); err != nil {
+		return fmt.Errorf("net flow sum out of int256 range: %w", err)
 	}
 
 	return nil
@@ -622,6 +738,10 @@ const (
 	TransactionTypeMutualLock TransactionType = 120
 
 	TransactionTypeFinalize = 200
+
+	// TransactionTypeChallengeRescue mirrors TransitionTypeChallengeRescue and records
+	// the squashed credit produced when a challenged home channel is closed onchain.
+	TransactionTypeChallengeRescue TransactionType = 201
 )
 
 // String returns the human-readable name of the transaction type
@@ -651,6 +771,8 @@ func (t TransactionType) String() string {
 		return "rebalance"
 	case TransactionTypeFinalize:
 		return "finalize"
+	case TransactionTypeChallengeRescue:
+		return "challenge_rescue"
 	default:
 		return "unknown"
 	}
@@ -690,8 +812,8 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	var toAccount, fromAccount string
 	// Transition validator is expected to make sure that all the fields are present and valid.
 
-	if transition.Type != TransitionTypeRelease && senderState == nil {
-		return nil, fmt.Errorf("sender state must not be nil for non-release transitions")
+	if transition.Type != TransitionTypeRelease && transition.Type != TransitionTypeChallengeRescue && senderState == nil {
+		return nil, fmt.Errorf("sender state must not be nil for non-release / non-challenge-rescue transitions")
 	}
 
 	var senderStateID *string
@@ -794,6 +916,13 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 		txType = TransactionTypeFinalize
 		fromAccount = senderState.UserWallet
 		toAccount = *senderState.HomeChannelID
+	case TransitionTypeChallengeRescue:
+		if receiverState == nil {
+			return nil, fmt.Errorf("receiver state must not be nil for 'challenge_rescue' transition")
+		}
+		txType = TransactionTypeChallengeRescue
+		fromAccount = transition.AccountID
+		toAccount = receiverState.UserWallet
 	default:
 		return nil, fmt.Errorf("invalid transition type")
 	}
@@ -847,7 +976,34 @@ const (
 	TransitionTypeMutualLock TransitionType = 120 // AccountID: EscrowChannelID
 
 	TransitionTypeFinalize TransitionType = 200 // AccountID: HomeChannelID
+
+	// TransitionTypeChallengeRescue is issued by the node when a challenged home channel
+	// is closed onchain with a non-finalize transition. It squashes the sum of receiver
+	// states accrued under the no-sign-while-challenged rule into a single credit on the
+	// user's ledger, with AccountID set to the closed channel ID and HomeChannelID nil.
+	// Only the node can produce this transition; it has no state-advancer validation rule.
+	TransitionTypeChallengeRescue TransitionType = 201 // AccountID: closed HomeChannelID
 )
+
+// AllTransitionTypes enumerates every defined transition. Kept beside the const
+// block so adding a new transition here is the natural place to update consumers
+// that iterate the full domain (metrics seeding, drift tests).
+var AllTransitionTypes = []TransitionType{
+	TransitionTypeVoid,
+	TransitionTypeAcknowledgement,
+	TransitionTypeHomeDeposit,
+	TransitionTypeHomeWithdrawal,
+	TransitionTypeEscrowDeposit,
+	TransitionTypeEscrowWithdraw,
+	TransitionTypeTransferSend,
+	TransitionTypeTransferReceive,
+	TransitionTypeCommit,
+	TransitionTypeRelease,
+	TransitionTypeMigrate,
+	TransitionTypeEscrowLock,
+	TransitionTypeMutualLock,
+	TransitionTypeFinalize,
+}
 
 // String returns the human-readable name of the transition type
 func (t TransitionType) String() string {
@@ -880,6 +1036,8 @@ func (t TransitionType) String() string {
 		return "migrate"
 	case TransitionTypeFinalize:
 		return "finalize"
+	case TransitionTypeChallengeRescue:
+		return "challenge_rescue"
 	default:
 		return "unknown"
 	}
@@ -1045,6 +1203,7 @@ type EscrowWithdrawalDataResponse struct {
 type BalanceEntry struct {
 	Asset   string          `json:"asset"`   // Asset symbol
 	Balance decimal.Decimal `json:"balance"` // Balance amount
+	Enforced decimal.Decimal `json:"enforced"` // On-chain enforced balance
 }
 
 // PaginationParams provides pagination configuration for getters
@@ -1079,13 +1238,13 @@ type PaginationMetadata struct {
 	PageCount  uint32 `json:"page_count"`  // Total number of pages
 }
 
-// NodeConfig represents the configuration of a Clearnode instance.
+// NodeConfig represents the configuration of a Nitronode instance.
 // It includes the node's identity, version, and supported blockchain networks.
 type NodeConfig struct {
-	// NodeAddress is the Ethereum address of the clearnode operator
+	// NodeAddress is the Ethereum address of the nitronode operator
 	NodeAddress string
 
-	// NodeVersion is the software version of the clearnode instance
+	// NodeVersion is the software version of the nitronode instance
 	NodeVersion string
 
 	// SupportedSigValidators is the list of supported signature validator types

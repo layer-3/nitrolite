@@ -13,7 +13,7 @@ import (
 // Node Information Methods
 // ============================================================================
 
-// Ping checks connectivity to the clearnode server.
+// Ping checks connectivity to the nitronode server.
 // This is useful for health checks and verifying the connection is active.
 //
 // Example:
@@ -28,7 +28,7 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
-// GetConfig retrieves the clearnode configuration including node identity and supported blockchains.
+// GetConfig retrieves the nitronode configuration including node identity and supported blockchains.
 //
 // Returns:
 //   - NodeConfig containing the node address, version, and list of supported blockchain networks

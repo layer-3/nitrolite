@@ -1,5 +1,5 @@
 import { Address } from 'viem';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';
 
 // ============================================================================
 // Enums
@@ -176,6 +176,8 @@ export interface AppSessionKeyStateV1 {
   expires_at: string;
   /** User's signature over the session key metadata */
   user_sig: string;
+  /** Session-key holder's signature proving possession of the key being registered */
+  session_key_sig: string;
 }
 
 /**

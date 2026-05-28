@@ -6,15 +6,15 @@
  */
 
 import { Address, Hex, createPublicClient, createWalletClient, http, custom, verifyMessage } from 'viem';
-import Decimal from 'decimal.js';
-import * as core from './core';
-import * as app from './app';
-import * as API from './rpc/api';
-import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types';
-import { RPCClient } from './rpc/client';
-import { WebsocketDialer } from './rpc/dialer';
-import { ClientAssetStore } from './asset_store';
-import { Config, DefaultConfig, Option } from './config';
+import { Decimal } from 'decimal.js';
+import * as core from './core/index.js';
+import * as app from './app/index.js';
+import * as API from './rpc/api.js';
+import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types.js';
+import { RPCClient } from './rpc/client.js';
+import { WebsocketDialer } from './rpc/dialer.js';
+import { ClientAssetStore } from './asset_store.js';
+import { appendApplicationIDQueryParam, Config, DefaultConfig, Option } from './config.js';
 import {
   generateNonce,
   transformNodeConfig,
@@ -30,12 +30,16 @@ import {
   transformAppSessionInfo,
   transformAppDefinitionFromRPC,
   transformActionAllowance,
-} from './utils';
-import * as blockchain from './blockchain';
-import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state';
-import { newVoidState } from './core/types';
-import { packState, packChallengeState } from './core/state_packer';
-import { StateSigner, TransactionSigner } from './signers';
+} from './utils.js';
+import {
+  transformChannelSessionKeyState,
+  transformAppSessionKeyState,
+} from './session_key_state_transforms.js';
+import * as blockchain from './blockchain/index.js';
+import { nextState, applyChannelCreation, applyAcknowledgementTransition, applyHomeDepositTransition, applyHomeWithdrawalTransition, applyTransferSendTransition, applyFinalizeTransition, applyCommitTransition } from './core/state.js';
+import { newVoidState } from './core/types.js';
+import { packState, packChallengeState } from './core/state_packer.js';
+import { EthereumMsgSigner, StateSigner, TransactionSigner } from './signers.js';
 
 /**
  * Default challenge period for channels (1 day in seconds)
@@ -108,6 +112,7 @@ export class Client {
   private stateSigner: StateSigner;
   private txSigner: TransactionSigner;
   private assetStore: ClientAssetStore;
+  private stateAdvancer: core.StateAdvancerV1;
 
   private constructor(
     rpcClient: RPCClient,
@@ -124,6 +129,7 @@ export class Client {
     this.blockchainClients = new Map();
     this.blockchainLockingClients = new Map();
     this.homeBlockchains = new Map();
+    this.stateAdvancer = new core.StateAdvancerV1(assetStore);
 
     // Create exit promise
     this.exitPromise = new Promise((resolve) => {
@@ -135,7 +141,7 @@ export class Client {
    * Create a new Nitrolite client with both high-level and low-level methods.
    * This is the recommended constructor for most use cases.
    *
-   * @param wsURL - WebSocket URL of the Nitrolite server (e.g., "wss://clearnode-sandbox.yellow.org/v1/ws")
+   * @param wsURL - WebSocket URL of the Nitrolite server (e.g., "wss://nitronode-sandbox.yellow.org/v1/ws")
    * @param stateSigner - Signer for signing channel states (EthereumMsgSigner)
    * @param txSigner - Signer for blockchain transactions (EthereumRawSigner)
    * @param opts - Optional configuration (withBlockchainRPC, withHandshakeTimeout, etc.)
@@ -197,8 +203,9 @@ export class Client {
       client.exitResolve?.();
     };
 
-    // Establish connection
-    await rpcClient.start(wsURL, handleError);
+    // Establish connection (append app_id query param if configured)
+    const dialURL = appendApplicationIDQueryParam(wsURL, config.applicationID);
+    await rpcClient.start(dialURL, handleError);
 
     return client;
   }
@@ -252,6 +259,7 @@ export class Client {
    */
   async close(): Promise<void> {
     this.exitResolve?.();
+    await this.rpcClient.close();
   }
 
   /**
@@ -300,19 +308,32 @@ export class Client {
   }
 
   /**
-   * SignAndSubmitState is a helper that signs a state and submits it to the node.
+   * ValidateAndSignState validates that the proposed state is a valid advancement of the
+   * current state, then signs it. Returns the signature as a hex-encoded string (with 0x prefix).
+   *
+   * This is a low-level method exposed for advanced users who want to manually
+   * construct and sign states. Most users should use the high-level methods like
+   * transfer, deposit, and withdraw instead.
+   */
+  async validateAndSignState(currentState: core.State, proposedState: core.State): Promise<Hex> {
+    await this.stateAdvancer.validateAdvancement(currentState, proposedState);
+    return this.signState(proposedState);
+  }
+
+  /**
+   * SignAndSubmitState is a helper that validates, signs a state and submits it to the node.
    * Returns the node's signature.
    */
-  private async signAndSubmitState(state: core.State): Promise<Hex> {
-    // Sign state
-    const sig = await this.signState(state);
-    state.userSig = sig;
+  private async signAndSubmitState(currentState: core.State, proposedState: core.State): Promise<Hex> {
+    // Validate and sign state
+    const sig = await this.validateAndSignState(currentState, proposedState);
+    proposedState.userSig = sig;
 
     // Submit to node
-    const nodeSig = await this.submitState(state);
+    const nodeSig = await this.submitState(proposedState);
 
     // Update state with node signature
-    state.nodeSig = nodeSig as Hex;
+    proposedState.nodeSig = nodeSig as Hex;
 
     return nodeSig as Hex;
   }
@@ -357,25 +378,19 @@ export class Client {
       throw new Error(`token address not found for asset ${asset} on blockchain ${blockchainId}`);
     }
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
     let channelIsOpen = false;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-
-      // If state has a home channel ID, check if it's usable
-      if (state && state.homeChannelId) {
-        // Check if state has a finalize transition (channel is being closed)
-        const hasFinalize = state.transition.type === core.TransitionType.Finalize;
-        // If no finalize transition, channel is still open and usable
-        channelIsOpen = !hasFinalize;
-      }
-    } catch (err) {
-      // Channel doesn't exist, will create it
+    if (state && state.homeChannelId) {
+      // Check if state has a finalize transition (channel is being closed)
+      const hasFinalize = state.transition.type === core.TransitionType.Finalize;
+      // If no finalize transition, channel is still open and usable
+      channelIsOpen = !hasFinalize;
     }
 
     // Scenario A: Channel doesn't exist or is closed - create it
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -386,6 +401,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -403,6 +422,13 @@ export class Client {
       newState.nodeSig = nodeSig as Hex;
 
       return newState;
+    } else if (state.homeLedger.blockchainId !== blockchainId) {
+      // Active home channel is bound to the chain it was created on.
+      // Silently advancing it onto a different chain would surface as a
+      // confusing on-chain failure later.
+      throw new Error(
+        `active home channel for asset "${asset}" is on chain ${state.homeLedger.blockchainId}, cannot deposit on chain ${blockchainId}`
+      );
     }
 
     // Scenario B: Channel exists and is open - advance state with deposit
@@ -410,7 +436,7 @@ export class Client {
     applyHomeDepositTransition(newState, amount);
 
     // Sign and submit state to node
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -451,25 +477,19 @@ export class Client {
       throw new Error(`token address not found for asset ${asset} on blockchain ${blockchainId}`);
     }
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
     let channelIsOpen = false;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-
-      // If state has a home channel ID, check if it's usable
-      if (state && state.homeChannelId) {
-        // Check if state has a finalize transition (channel is being closed)
-        const hasFinalize = state.transition.type === core.TransitionType.Finalize;
-        // If no finalize transition, channel is still open and usable
-        channelIsOpen = !hasFinalize;
-      }
-    } catch (err) {
-      // Channel doesn't exist, will create it
+    if (state && state.homeChannelId) {
+      // Check if state has a finalize transition (channel is being closed)
+      const hasFinalize = state.transition.type === core.TransitionType.Finalize;
+      // If no finalize transition, channel is still open and usable
+      channelIsOpen = !hasFinalize;
     }
 
     // Channel doesn't exist or is closed - create it and withdraw
-    if (!state || !state.homeChannelId || !channelIsOpen) {
+    if (!state || !channelIsOpen) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
 
@@ -480,6 +500,10 @@ export class Client {
         approvedSigValidators: bitmap,
       };
 
+      // homeChannelId is intentionally not checked here: a non-null state with
+      // an undefined homeChannelId is valid — it represents a user who received
+      // funds but has not yet opened a channel. Only replace with a void state
+      // when there is truly no prior state at all.
       if (!state) {
         state = newVoidState(asset, userWallet);
       }
@@ -497,6 +521,13 @@ export class Client {
       newState.nodeSig = nodeSig as Hex;
 
       return newState;
+    } else if (state.homeLedger.blockchainId !== blockchainId) {
+      // Active home channel is bound to the chain it was created on.
+      // Silently advancing it onto a different chain would surface as a
+      // confusing on-chain failure later.
+      throw new Error(
+        `active home channel for asset "${asset}" is on chain ${state.homeLedger.blockchainId}, cannot withdraw on chain ${blockchainId}`
+      );
     }
 
     // Create next state
@@ -504,7 +535,7 @@ export class Client {
     applyHomeWithdrawalTransition(newState, amount);
 
     // Sign and submit state to node
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -512,7 +543,8 @@ export class Client {
   /**
    * Transfer prepares a transfer state to send funds to another wallet address.
    * This method handles two scenarios automatically:
-   * 1. If no channel exists: Creates a new channel with the transfer transition
+   * 1. If no open channel exists, including received off-chain funds before channel creation:
+   *    Creates a new channel with the transfer transition
    * 2. If channel exists: Advances the state with a transfer send transition
    *
    * The returned state is signed by both the user and the node. For existing channels,
@@ -533,14 +565,13 @@ export class Client {
   async transfer(recipientWallet: string, asset: string, amount: Decimal): Promise<core.State> {
     const senderWallet = this.getUserAddress();
 
-    // Get sender's latest state
-    let state: core.State | null = null;
-    try {
-      state = await this.getLatestState(senderWallet, asset, false);
-    } catch (err) {
-      // Channel doesn't exist
-    }
+    // Get sender's latest state. Absence returns null (not an error); real RPC
+    // failures still throw.
+    let state = await this.getLatestState(senderWallet, asset, false);
 
+    // No open channel path - create channel with transfer. A non-null state
+    // without a homeChannelId represents received off-chain funds before the
+    // user has opened a home channel.
     if (!state || !state.homeChannelId) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
@@ -596,7 +627,7 @@ export class Client {
     applyTransferSendTransition(newState, recipientWallet, amount);
 
     // Sign and submit state
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -607,7 +638,8 @@ export class Client {
    * or to acknowledge channel creation without a deposit.
    *
    * This method handles two scenarios automatically:
-   * 1. If no channel exists: Creates a new channel with the acknowledgement transition
+   * 1. If no channel exists, including received off-chain funds before channel creation:
+   *    Creates a new channel with the acknowledgement transition
    * 2. If channel exists: Advances the state with an acknowledgement transition
    *
    * The returned state is signed by both the user and the node.
@@ -623,15 +655,17 @@ export class Client {
   async acknowledge(asset: string): Promise<core.State> {
     const userWallet = this.getUserAddress();
 
-    // Try to get latest state to determine if channel exists
-    let state: core.State | null = null;
-    try {
-      state = await this.getLatestState(userWallet, asset, false);
-    } catch (err) {
-      // No state exists
+    // Try to get latest state to determine if channel exists. Absence returns
+    // null (not an error); real RPC failures still throw.
+    let state = await this.getLatestState(userWallet, asset, false);
+
+    if (state?.userSig) {
+      throw new Error('state already acknowledged by user');
     }
 
-    // No channel path - create channel with acknowledgement
+    // No open channel path - create channel with acknowledgement. A non-null
+    // state without a homeChannelId represents received off-chain funds before
+    // the user has opened a home channel.
     if (!state || !state.homeChannelId) {
       // Get supported sig validators bitmap from node config
       const bitmap = await this.getSupportedSigValidatorsBitmap();
@@ -678,15 +712,11 @@ export class Client {
       return newState;
     }
 
-    if (state.userSig) {
-      throw new Error('state already acknowledged by user');
-    }
-
     // Has channel path - submit acknowledgement
     const newState = nextState(state);
     applyAcknowledgementTransition(newState);
 
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -713,7 +743,7 @@ export class Client {
 
     const state = await this.getLatestState(senderWallet, asset, false);
 
-    if (!state.homeChannelId) {
+    if (!state || !state.homeChannelId) {
       throw new Error(`no channel exists for asset ${asset}`);
     }
 
@@ -722,7 +752,7 @@ export class Client {
     applyFinalizeTransition(newState);
 
     // Sign and submit state
-    await this.signAndSubmitState(newState);
+    await this.signAndSubmitState(state, newState);
 
     return newState;
   }
@@ -758,6 +788,10 @@ export class Client {
     // Get latest signed state (both user and node signatures must be present)
     const state = await this.getLatestState(userWallet, asset, true);
 
+    if (!state) {
+      throw new Error(`no signed state exists for asset ${asset}`);
+    }
+
     if (!state.homeChannelId) {
       // NOTE: this should never happen, because signed state MUST have a channel ID
       throw new Error(`no channel exists for asset ${asset}`);
@@ -771,6 +805,11 @@ export class Client {
 
     // Get home channel info to determine on-chain status
     const channel = await this.getHomeChannel(userWallet, asset);
+    if (!channel) {
+      // Signed state existed but home channel record is missing — node is in
+      // an inconsistent state.
+      throw new Error(`home channel missing for asset ${asset} despite signed state`);
+    }
 
     switch (state.transition.type) {
       case core.TransitionType.Acknowledgement:
@@ -779,7 +818,7 @@ export class Client {
       case core.TransitionType.TransferSend:
       case core.TransitionType.TransferReceive:
       case core.TransitionType.Commit:
-      case core.TransitionType.Release:  
+      case core.TransitionType.Release:
       {
         if (channel.status === core.ChannelStatus.Void) {
           // Channel not yet created on-chain, reconstruct definition and call Create
@@ -886,6 +925,21 @@ export class Client {
     const blockchainClient = this.blockchainClients.get(chainId)!;
 
     return await blockchainClient.approve(asset, amount);
+  }
+
+  /**
+   * Query the on-chain token balance (ERC-20 or native ETH) for a wallet on a specific blockchain.
+   *
+   * @param chainId - The blockchain network ID (e.g., 11155111n for Sepolia)
+   * @param asset - The asset symbol to query (e.g., "usdc")
+   * @param wallet - The wallet address to query
+   * @returns The balance adjusted using token decimals for that chain/token
+   */
+  async getOnChainBalance(chainId: bigint, asset: string, wallet: Address): Promise<Decimal> {
+    await this.initializeBlockchainClient(chainId);
+    const blockchainClient = this.blockchainClients.get(chainId)!;
+
+    return await blockchainClient.getTokenBalance(asset, wallet);
   }
 
   /**
@@ -1207,66 +1261,95 @@ export class Client {
   /**
    * GetHomeChannel retrieves home channel information for a user's asset.
    *
+   * Returns `null` when no home channel exists for the wallet/asset pair —
+   * absence is a successful response, not an error.
+   *
    * @param wallet - The user's wallet address
    * @param asset - The asset symbol
-   * @returns Channel information for the home channel
+   * @returns Channel information for the home channel, or `null` if absent
    *
    * @example
    * ```typescript
    * const channel = await client.getHomeChannel('0x1234...', 'usdc');
-   * console.log(`Channel: ${channel.channelId} (Version: ${channel.stateVersion})`);
+   * if (channel === null) {
+   *   // no channel yet
+   * }
    * ```
    */
-  async getHomeChannel(wallet: Address, asset: string): Promise<core.Channel> {
+  async getHomeChannel(wallet: Address, asset: string): Promise<core.Channel | null> {
     const req: API.ChannelsV1GetHomeChannelRequest = {
       wallet,
       asset,
     };
     const resp = await this.rpcClient.channelsV1GetHomeChannel(req);
+    if (resp.channel == null) {
+      return null;
+    }
     return transformChannel(resp.channel);
   }
 
   /**
    * GetEscrowChannel retrieves escrow channel information for a specific channel ID.
    *
+   * Returns `null` when no escrow channel exists for the given ID — absence is
+   * a successful response, not an error.
+   *
+   * Note: when the escrow channel has been closed by the on-chain purge queue
+   * (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), `stateVersion`
+   * on the returned channel reflects the initiate version (N) and does not advance
+   * to the finalize version (N+1).
+   *
    * @param escrowChannelId - The escrow channel ID to query
-   * @returns Channel information for the escrow channel
+   * @returns Channel information for the escrow channel, or `null` if absent
    *
    * @example
    * ```typescript
    * const channel = await client.getEscrowChannel('0x1234...');
-   * console.log(`Channel: ${channel.channelId} (Version: ${channel.stateVersion})`);
+   * if (channel === null) {
+   *   // not found
+   * }
    * ```
    */
-  async getEscrowChannel(escrowChannelId: string): Promise<core.Channel> {
+  async getEscrowChannel(escrowChannelId: string): Promise<core.Channel | null> {
     const req: API.ChannelsV1GetEscrowChannelRequest = {
       escrow_channel_id: escrowChannelId,
     };
     const resp = await this.rpcClient.channelsV1GetEscrowChannel(req);
+    if (resp.channel == null) {
+      return null;
+    }
     return transformChannel(resp.channel);
   }
 
   /**
    * GetLatestState retrieves the latest state for a user's asset.
    *
+   * Returns `null` when the node has no stored state for the wallet/asset
+   * pair — absence is a successful response, not an error.
+   *
    * @param wallet - The user's wallet address
    * @param asset - The asset symbol (e.g., "usdc")
    * @param onlySigned - If true, returns only the latest signed state
-   * @returns State containing all state information
+   * @returns State containing all state information, or `null` if absent
    *
    * @example
    * ```typescript
    * const state = await client.getLatestState('0x1234...', 'usdc', false);
-   * console.log(`Version: ${state.version}, Balance: ${state.homeLedger.userBalance}`);
+   * if (state === null) {
+   *   // no state yet
+   * }
    * ```
    */
-  async getLatestState(wallet: Address, asset: string, onlySigned: boolean): Promise<core.State> {
+  async getLatestState(wallet: Address, asset: string, onlySigned: boolean): Promise<core.State | null> {
     const req: API.ChannelsV1GetLatestStateRequest = {
       wallet,
       asset,
       only_signed: onlySigned,
     };
     const resp = await this.rpcClient.channelsV1GetLatestState(req);
+    if (resp.state == null) {
+      return null;
+    }
     return transformState(resp.state);
   }
 
@@ -1316,20 +1399,28 @@ export class Client {
   /**
    * GetAppDefinition retrieves the definition for a specific app session.
    *
+   * Returns `null` when no app session exists for the given ID — absence is a
+   * successful response, not an error.
+   *
    * @param appSessionId - The app session ID
-   * @returns App session definition
+   * @returns App session definition, or `null` if absent
    *
    * @example
    * ```typescript
    * const definition = await client.getAppDefinition('0x1234...');
-   * console.log('Participants:', definition.participants);
+   * if (definition === null) {
+   *   // not found
+   * }
    * ```
    */
-  async getAppDefinition(appSessionId: string): Promise<app.AppDefinitionV1> {
+  async getAppDefinition(appSessionId: string): Promise<app.AppDefinitionV1 | null> {
     const req: API.AppSessionsV1GetAppDefinitionRequest = {
       app_session_id: appSessionId,
     };
     const resp = await this.rpcClient.appSessionsV1GetAppDefinition(req);
+    if (resp.definition == null) {
+      return null;
+    }
     return transformAppDefinitionFromRPC(resp.definition);
   }
 
@@ -1419,6 +1510,9 @@ export class Client {
   ): Promise<string> {
     // Get current state
     const currentState = await this.getLatestState(this.getUserAddress(), asset, false);
+    if (!currentState) {
+      throw new Error('no channel state to advance for AppSession');
+    }
 
     // Create next state with commit transition (use app session ID as account ID)
     const newState = nextState(currentState);
@@ -1606,13 +1700,16 @@ export class Client {
   /**
    * Sign a channel session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitChannelSessionKeyState.
+   * user_sig field before submitting via submitChannelSessionKeyState. The matching
+   * session_key_sig (see signChannelSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The channel session key state to sign (user_sig field is excluded from signing)
+   * @param state - The channel session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signChannelSessionKeyState(state: ChannelSessionKeyStateV1): Promise<Hex> {
     const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
       BigInt(state.version),
       state.assets,
       BigInt(state.expires_at)
@@ -1626,8 +1723,49 @@ export class Client {
   }
 
   /**
-   * Submit a channel session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * Produce the session-key holder's ownership signature for a channel session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. session_key is
+   * bound into the metadata hash so a signature minted for one key cannot be replayed for
+   * another.
+   *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. ChannelDefaultSigner, ChannelSessionKeyStateSigner)
+   * that the server rejects.
+   *
+   * @param state - The channel session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signChannelSessionKeyOwnership(
+    state: ChannelSessionKeyStateV1,
+    sessionKeySigner: EthereumMsgSigner
+  ): Promise<Hex> {
+    const metadataHash = core.getChannelSessionKeyAuthMetadataHashV1(
+      state.user_address as Address,
+      BigInt(state.version),
+      state.assets,
+      BigInt(state.expires_at)
+    );
+    const packed = core.packChannelKeyStateV1(
+      state.session_key as Address,
+      metadataHash
+    );
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
+   * Submit a channel session key state. Used for three flows:
+   *   - registration: first submit for a (user, session_key) pair (version=1, future expires_at)
+   *   - rotation/update: bump version with a future expires_at to change assets or extend lifetime
+   *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
+   *     for the per-user cap and the auth path stops accepting state signed by it
+   *
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
+   * are rejected.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1639,22 +1777,33 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest channel session key states for a user.
+   * Retrieve the latest channel session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active channel session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of channel session key states matching the filter
    */
   async getLastChannelKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<ChannelSessionKeyStateV1[]> {
     const req: API.ChannelsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.channelsV1GetLastKeyStates(req);
-    return resp.states;
+    if (!Array.isArray(resp.states)) {
+      throw new Error('Invalid channel key states response: expected states to be an array');
+    }
+    return resp.states.map((state, index) =>
+      transformChannelSessionKeyState(state, `channel session key state[${index}]`)
+    );
   }
 
   // ============================================================================
@@ -1664,9 +1813,11 @@ export class Client {
   /**
    * Sign an app session key state using the client's state signer.
    * This creates a properly formatted EIP-191 signature that can be set on the state's
-   * user_sig field before submitting via submitSessionKeyState.
+   * user_sig field before submitting via submitSessionKeyState. The matching
+   * session_key_sig (see signAppSessionKeyOwnership) must also be populated — submits
+   * with only one of the two are rejected.
    *
-   * @param state - The app session key state to sign (user_sig field is excluded from signing)
+   * @param state - The app session key state to sign (user_sig and session_key_sig fields are excluded from signing)
    * @returns The hex-encoded signature string
    */
   async signSessionKeyState(state: app.AppSessionKeyStateV1): Promise<Hex> {
@@ -1676,8 +1827,39 @@ export class Client {
   }
 
   /**
-   * Submit an app session key state for registration or update.
-   * The state must be signed by the user's wallet to authorize the session key delegation.
+   * Produce the session-key holder's ownership signature for an app session key
+   * registration. The caller-supplied signer must hold the session key being registered;
+   * the returned hex string populates state.session_key_sig before submit. The packed
+   * app-session state already binds user_address, so the same packed bytes are used for
+   * both the wallet's user_sig and the session-key holder's session_key_sig.
+   *
+   * The parameter is narrowed to EthereumMsgSigner because the server recovers
+   * session_key_sig as a raw 65-byte EIP-191 signature — a broader StateSigner could wrap
+   * the signature with type-prefix bytes (e.g. AppSessionWalletSignerV1) that the server rejects.
+   *
+   * @param state - The app session key state to sign (session_key_sig field is excluded)
+   * @param sessionKeySigner - EthereumMsgSigner whose address equals state.session_key
+   * @returns The hex-encoded signature string
+   */
+  async signAppSessionKeyOwnership(
+    state: app.AppSessionKeyStateV1,
+    sessionKeySigner: EthereumMsgSigner
+  ): Promise<Hex> {
+    const packed = app.packAppSessionKeyStateV1(state);
+    return await sessionKeySigner.signMessage(packed);
+  }
+
+  /**
+   * Submit an app session key state. Used for three flows:
+   *   - registration: first submit for a (user, session_key) pair (version=1, future expires_at)
+   *   - rotation/update: bump version with a future expires_at to change app/session IDs or extend lifetime
+   *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
+   *     for the per-user cap and the auth path stops accepting state signed by it
+   *
+   * The state must carry both the wallet's user_sig (proving the user authorized the
+   * delegation) and the session-key holder's session_key_sig (proving possession of the
+   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
+   * are rejected.
    *
    * @param state - The session key state containing delegation information
    */
@@ -1689,22 +1871,89 @@ export class Client {
   }
 
   /**
-   * Retrieve the latest session key states for a user.
+   * Retrieve the latest app session key states for a user. Defaults to
+   * active-only (server filters expired states); pass `includeInactive: true`
+   * to surface expired or revoked latest states (e.g. for rotation flows that
+   * need to read the prior version after expiry).
    *
    * @param userAddress - The user's wallet address
    * @param sessionKey - Optional session key address to filter by
-   * @returns List of active session key states
+   * @param options - Optional include-inactive flag
+   * @returns List of app session key states matching the filter
    */
-  async getLastKeyStates(
+  async getLastAppKeyStates(
     userAddress: string,
-    sessionKey?: string
+    sessionKey?: string,
+    options?: { includeInactive?: boolean }
   ): Promise<app.AppSessionKeyStateV1[]> {
     const req: API.AppSessionsV1GetLastKeyStatesRequest = {
       user_address: userAddress,
       session_key: sessionKey,
+      include_inactive: options?.includeInactive,
     };
     const resp = await this.rpcClient.appSessionsV1GetLastKeyStates(req);
-    return resp.states;
+    if (!Array.isArray(resp.states)) {
+      throw new Error('Invalid app key states response: expected states to be an array');
+    }
+    return resp.states.map((state, index) =>
+      transformAppSessionKeyState(state, `app session key state[${index}]`)
+    );
+  }
+
+  // ============================================================================
+  // On-Chain Event Watching
+  // ============================================================================
+
+  /**
+   * Subscribes to ValidatorRegistered events emitted by the ChannelHub contract
+   * on the given chain and yields them as an async stream.
+   *
+   * Gap-free monitoring: pass fromBlock = 0n on the first call. On reconnect,
+   * pass lastEvent.blockNumber + 1n so any events emitted during the outage
+   * are replayed before live events resume. This preserves the 1-day
+   * VALIDATOR_ACTIVATION_DELAY safety window across network interruptions.
+   *
+   * The generator completes when the AbortSignal fires or the subscription is
+   * lost. Reconnect by calling watchValidatorRegistered again with the last
+   * received blockNumber + 1n as fromBlock.
+   *
+   * The RPC URL configured via withBlockchainRPC for chainId should be a
+   * WebSocket endpoint (wss://) for push-based delivery. With an HTTP endpoint
+   * viem falls back to polling getLogs at a 4-second interval.
+   *
+   * @example
+   * ```ts
+   * const ac = new AbortController();
+   * let fromBlock = 0n;
+   * while (!ac.signal.aborted) {
+   *   for await (const ev of client.watchValidatorRegistered(chainId, fromBlock, ac.signal)) {
+   *     console.warn(`Unexpected validator ${ev.validatorId} at block ${ev.blockNumber}`);
+   *     fromBlock = ev.blockNumber + 1n;
+   *   }
+   *   await new Promise(r => setTimeout(r, 5_000)); // back off before reconnect
+   * }
+   * ```
+   */
+  async *watchValidatorRegistered(
+      chainId: bigint,
+      fromBlock: bigint = 0n,
+      signal?: AbortSignal,
+  ): AsyncGenerator<core.ValidatorRegisteredEvent> {
+      const { rpcUrl, blockchainInfo } = await this.getBlockchainRPCInfo(chainId);
+
+      if (!blockchainInfo.channelHubAddress) {
+          throw new Error(`channel hub address not configured for blockchain ${chainId}`);
+      }
+
+      const { publicClient } = this.createEVMClients(chainId, rpcUrl);
+
+      yield* blockchain.evm.watchValidatorRegistered(
+          blockchainInfo.channelHubAddress as Address,
+          publicClient,
+          chainId,
+          fromBlock,
+          signal,
+      );
   }
 
   // ============================================================================

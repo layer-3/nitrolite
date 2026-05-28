@@ -1,0 +1,327 @@
+package database
+
+import (
+	"time"
+
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/shopspring/decimal"
+)
+
+// StoreTxHandler is a function that executes Store operations within a transaction.
+type StoreTxHandler func(DatabaseStore) error
+
+// DatabaseStore defines the unified persistence layer.
+type DatabaseStore interface {
+	// ExecuteInTransaction runs the provided handler within a database transaction.
+	// If the handler returns an error, the transaction is rolled back.
+	// If the handler completes successfully, the transaction is committed.
+	ExecuteInTransaction(handler StoreTxHandler) error
+
+	// --- User & Balance Operations ---
+
+	// GetUserBalances retrieves the balances for a user's wallet.
+	GetUserBalances(wallet string) ([]core.BalanceEntry, error)
+
+	// LockUserState locks a user's balance row for update (postgres only, must be used within a transaction).
+	// Uses INSERT ... ON CONFLICT DO NOTHING to ensure the row exists, then SELECT ... FOR UPDATE to lock it.
+	// Returns the current balance or zero if the row was just inserted.
+	LockUserState(wallet, asset string) (decimal.Decimal, error)
+
+	// GetUserTransactions retrieves transaction history for a user with optional filters.
+	GetUserTransactions(wallet string, asset *string, txType *core.TransactionType, fromTime *uint64, toTime *uint64, paginate *core.PaginationParams) ([]core.Transaction, core.PaginationMetadata, error)
+
+	// RecordTransaction creates a transaction record linking state transitions.
+	// applicationID is the self-declared origin tag of the client that caused
+	// the transaction (see rpc.ApplicationIDQueryParam); empty string means no
+	// app_id was supplied and the column is persisted as NULL.
+	RecordTransaction(tx core.Transaction, applicationID string) error
+
+	// --- Channel Operations ---
+
+	// CreateChannel creates a new channel entity in the database.
+	CreateChannel(channel core.Channel) error
+
+	// GetChannelByID retrieves a channel by its unique identifier.
+	GetChannelByID(channelID string) (*core.Channel, error)
+
+	// GetActiveHomeChannel retrieves the active home channel for a user's wallet and asset.
+	// "Active" includes both Void (DB-only) and Open (materialized onchain).
+	GetActiveHomeChannel(wallet, asset string) (*core.Channel, error)
+
+	// GetNotClosedHomeChannel retrieves the home channel for a user's wallet and asset
+	// regardless of status, as long as it has not reached ChannelStatusClosed. Intended
+	// for read paths (e.g. GetHomeChannel RPC) that must remain functional after an
+	// off-chain Finalize flips the channel to Closing.
+	GetNotClosedHomeChannel(wallet, asset string) (*core.Channel, error)
+
+	// CheckActiveChannel verifies if a user has an active home channel for the given asset
+	// and returns its approved signature validators and current status. A nil status means
+	// no active channel exists. "Active" includes Void (DB-only, awaiting onchain confirmation)
+	// and Open (materialized onchain); callers needing onchain materialization must additionally
+	// require Status == core.ChannelStatusOpen.
+	CheckActiveChannel(wallet, asset string) (string, *core.ChannelStatus, error)
+
+	// HasNonClosedHomeChannel returns true if any home channel for (wallet, asset) exists
+	// with a status other than Closed, indicating an in-progress channel lifecycle.
+	HasNonClosedHomeChannel(wallet, asset string) (bool, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	UpdateChannel(channel core.Channel) error
+
+	// GetUserChannels retrieves all channels for a user with optional status, asset, and type filters.
+	GetUserChannels(wallet string, status *core.ChannelStatus, asset *string, channelType *core.ChannelType, limit, offset uint32) ([]core.Channel, uint32, error)
+
+	// --- State Management ---
+
+	// GetLastStateByChannelID retrieves the most recent state for a given channel.
+	// If signed is true, only returns states with both user and node signatures.
+	GetLastStateByChannelID(channelID string, signed bool) (*core.State, error)
+
+	// GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
+	// Returns nil if the state with the specified version does not exist.
+	GetStateByChannelIDAndVersion(channelID string, version uint64) (*core.State, error)
+
+	// GetLastUserState retrieves the most recent state for a user's asset.
+	GetLastUserState(wallet, asset string, signed bool) (*core.State, error)
+
+	// StoreUserState persists a new user state to the database.
+	// applicationID is the self-declared origin tag of the client that caused
+	// the transition (see rpc.ApplicationIDQueryParam); empty string means no
+	// app_id was supplied and the column is persisted as NULL.
+	StoreUserState(state core.State, applicationID string) error
+
+	// EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
+	EnsureNoOngoingStateTransitions(wallet, asset string) error
+
+	// EnsureNoOngoingEscrowOperation validates that the user has no in-flight escrow
+	// operation (escrow_lock, mutual_lock, or unfinalized escrow_deposit/escrow_withdraw)
+	// that would prevent issuing a receiver-side state.
+	EnsureNoOngoingEscrowOperation(wallet, asset string) error
+
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
+	// state when the corresponding column is currently NULL. Either signature may be
+	// empty to skip that side.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
+
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel. Used by event handlers to detect the post-Finalize lifecycle when the
+	// channel status field has been temporarily overwritten by an on-chain challenge.
+	HasSignedFinalize(channelID string) (bool, error)
+
+
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
+	// sender debits (TransferSend, Commit) contribute negatively. Other transition
+	// kinds are excluded. Used to compute the ChallengeRescue amount when a
+	// challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+
+	// --- Blockchain Action Operations ---
+
+	// ScheduleInitiateEscrowWithdrawal queues a blockchain action to initiate withdrawal.
+	// This queues the state to be submitted on-chain to initiate an escrow withdrawal.
+	ScheduleInitiateEscrowWithdrawal(stateID string, chainID uint64) error
+
+	// ScheduleCheckpoint schedules a checkpoint operation for a home channel state.
+	// This queues the state to be submitted on-chain to update the channel's on-chain state.
+	ScheduleCheckpoint(stateID string, chainID uint64) error
+
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowDeposit schedules a checkpoint for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleFinalizeEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowWithdrawal schedules a checkpoint for an escrow withdrawal operation.
+	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
+	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
+
+	// ScheduleInitiateEscrowDeposit schedules a checkpoint for an escrow deposit operation.
+	// This queues the state to be submitted on-chain for an escrow deposit on home chain.
+	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
+
+	// Fail marks a blockchain action as failed and increments the retry counter.
+	Fail(actionID int64, err string) error
+
+	// FailNoRetry marks a blockchain action as failed without incrementing the retry counter.
+	FailNoRetry(actionID int64, err string) error
+
+	// RecordAttempt records a failed attempt for a blockchain action and increments the retry counter.
+	// The action remains in pending status.
+	RecordAttempt(actionID int64, err string) error
+
+	// Complete marks a blockchain action as completed with the given transaction hash.
+	Complete(actionID int64, txHash string) error
+
+	// GetActions retrieves pending blockchain actions, optionally limited by count.
+	GetActions(limit uint8, chainID uint64) ([]BlockchainAction, error)
+
+	// GetStateByID retrieves a state by its deterministic ID.
+	GetStateByID(stateID string) (*core.State, error)
+
+	// --- App Registry Operations ---
+
+	// CreateApp registers a new application. Returns an error if the app ID already exists.
+	CreateApp(entry app.AppV1) error
+
+	// GetApp retrieves a single application by ID. Returns nil if not found.
+	GetApp(appID string) (*app.AppInfoV1, error)
+
+	// GetApps retrieves applications with optional filtering by app ID, owner wallet, and pagination.
+	GetApps(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error)
+
+	// GetAppCount returns the total number of applications owned by a specific wallet.
+	GetAppCount(ownerWallet string) (uint64, error)
+
+	// --- App Session Operations ---
+
+	// CreateAppSession initializes a new application session.
+	CreateAppSession(session app.AppSessionV1) error
+
+	// GetAppSession retrieves a specific session by ID.
+	GetAppSession(sessionID string) (*app.AppSessionV1, error)
+
+	// GetAppSessions retrieves filtered sessions with pagination.
+	GetAppSessions(appSessionID *string, participant *string, status app.AppSessionStatus, pagination *core.PaginationParams) ([]app.AppSessionV1, core.PaginationMetadata, error)
+
+	// UpdateAppSession updates existing session data.
+	UpdateAppSession(session app.AppSessionV1) error
+
+	// --- App Ledger Operations ---
+
+	// GetAppSessionBalances retrieves the total balances associated with a session.
+	GetAppSessionBalances(sessionID string) (map[string]decimal.Decimal, error)
+
+	// GetParticipantAllocations retrieves specific asset allocations per participant.
+	GetParticipantAllocations(sessionID string) (map[string]map[string]decimal.Decimal, error)
+
+	// RecordLedgerEntry logs a movement of funds within the internal ledger.
+	RecordLedgerEntry(userWallet, accountID, asset string, amount decimal.Decimal) error
+
+	// --- Session Key State Pointer Operations ---
+
+	// LockSessionKeyState seeds the pointer row for (user, session_key, kind) if absent and
+	// locks the (session_key, kind) row for the surrounding transaction. Returns the latest
+	// stored version for the caller's row and the latestExpiresAt of that version (zero time
+	// when the latest version is 0, i.e. no history row exists yet). Returns
+	// ErrSessionKeyNotAllowed if the key is bound to a different wallet for this kind.
+	// The latestExpiresAt return lets submit handlers distinguish a reactivation
+	// (prev inactive → submitted active) from a rotation (prev already active) so the
+	// per-user cap can be re-checked when a revoked slot is brought back.
+	LockSessionKeyState(userAddress, sessionKey string, kind SessionKeyKind) (latestVersion uint64, latestExpiresAt time.Time, err error)
+
+	// CountSessionKeysForUser returns the number of distinct session keys recorded for the
+	// wallet across both kinds. Used to enforce the per-user cap at submit time.
+	CountSessionKeysForUser(userAddress string) (uint32, error)
+
+	// --- App Session Key State Operations ---
+
+	// StoreAppSessionKeyState stores or updates a session key state.
+	StoreAppSessionKeyState(state app.AppSessionKeyStateV1) error
+
+	GetAppSessionKeyOwner(sessionKey, appSessionId, applicationId string) (string, error)
+
+	// SessionKeyStateExists returns the latest version of a non-expired session key state for a user.
+	// Returns 0 if no state exists.
+	GetLastAppSessionKeyVersion(wallet, sessionKey string) (uint64, error)
+
+	// GetLatestSessionKeyState retrieves the latest version of a specific session key for a user.
+	// Returns nil if no state exists.
+	GetLastAppSessionKeyState(wallet, sessionKey string) (*app.AppSessionKeyStateV1, error)
+
+	// GetLastAppSessionKeyStates retrieves the latest session key states for a user with optional
+	// filtering. When includeInactive is false, only states whose expires_at is in the future are
+	// returned; when true, all latest states are returned regardless of expiry. Results are
+	// paginated; totalCount is the unpaginated total matching the filter.
+	GetLastAppSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]app.AppSessionKeyStateV1, uint32, error)
+
+	// --- Channel Session Key State Operations ---
+
+	// StoreChannelSessionKeyState stores or updates a channel session key state.
+	StoreChannelSessionKeyState(state core.ChannelSessionKeyStateV1) error
+
+	// GetLastChannelSessionKeyVersion returns the latest version for a (wallet, sessionKey) pair.
+	// Returns 0 if no state exists.
+	GetLastChannelSessionKeyVersion(wallet, sessionKey string) (uint64, error)
+
+	// GetLastChannelSessionKeyStates retrieves the latest channel session key states for a user,
+	// optionally filtered by session key. When includeInactive is false, only states whose
+	// expires_at is in the future are returned; when true, all latest states are returned
+	// regardless of expiry. Results are paginated; totalCount is the unpaginated total matching
+	// the filter.
+	GetLastChannelSessionKeyStates(wallet string, sessionKey *string, includeInactive bool, limit, offset uint32) ([]core.ChannelSessionKeyStateV1, uint32, error)
+
+	// ValidateChannelSessionKeyForAsset checks that a valid, non-expired session key state
+	// exists at its latest version for the (wallet, sessionKey) pair, includes the given asset,
+	// and matches the metadata hash.
+	ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error)
+
+	// --- Metric Aggregation ---
+
+	// CountActiveUsers returns distinct user counts per asset within the given window.
+	CountActiveUsers(window time.Duration) ([]ActiveCountByLabel, error)
+
+	// CountActiveAppSessions returns app session counts per application within the given window.
+	CountActiveAppSessions(window time.Duration) ([]ActiveCountByLabel, error)
+
+	// --- Lifespan Metric Operations ---
+
+	// GetLifetimeMetricLastTimestamp returns the most recent last_timestamp among all metrics with the given name.
+	GetLifetimeMetricLastTimestamp(name string) (time.Time, error)
+
+	// GetAppSessionsCountByLabels computes app session count deltas, upserts as lifespan metrics, and returns updated totals.
+	GetAppSessionsCountByLabels() ([]AppSessionCount, error)
+
+	// GetChannelsCountByLabels computes channel count deltas, upserts as lifespan metrics, and returns updated totals.
+	GetChannelsCountByLabels() ([]ChannelCount, error)
+
+	// GetTotalValueLocked computes TVL deltas by domain (channels, app_sessions) and asset, upserts as lifespan metrics, and returns updated totals.
+	GetTotalValueLocked() ([]TotalValueLocked, error)
+
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
+
+	// GetNodeBalance returns the on-chain liquidity per blockchain and asset.
+	GetNodeBalance() ([]NodeBalance, error)
+
+	// GetUserBalanceSummary returns the off-chain liquidity requirement per blockchain and asset.
+	GetUserBalanceSummary() ([]UserBalanceSummary, error)
+
+	// --- User Staked Operations ---
+
+	// UpdateUserStaked upserts the staked amount for a user on a specific blockchain.
+	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
+
+	// GetTotalUserStaked returns the total staked amount for a user across all blockchains.
+	GetTotalUserStaked(wallet string) (decimal.Decimal, error)
+
+	// --- Action Log Operations ---
+
+	// RecordAction inserts a new action log entry for a user.
+	RecordAction(wallet string, gatedAction core.GatedAction) error
+
+	// GetUserActionCount returns the number of actions matching the given wallet, method, and path
+	// within the specified time window.
+	GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error)
+
+	// GetUserActionCounts returns a map of gated actions to their respective counts for a user within the specified time window.
+	GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error)
+
+	// --- Contract Event Operations ---
+
+	// StoreContractEvent stores a blockchain event to prevent duplicate processing.
+	StoreContractEvent(ev core.BlockchainEvent) error
+
+	// GetLatestContractEventBlockNumber returns the highest block number for a given contract.
+	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
+
+	// IsContractEventPresent checks if a specific contract event has already been stored.
+	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+}

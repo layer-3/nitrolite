@@ -1,0 +1,42 @@
+{{- if .Values.networking.ingressRootRedirect.enabled }}
+{{- $svcPath := trimSuffix "/" .Values.service.http.path }}
+{{- $target := printf "https://%s%s/" .Values.networking.externalHostname $svcPath }}
+apiVersion: {{ include "playground.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ printf "%s-root-redirect" (include "playground.common.fullname" .) }}
+  labels:
+    {{- include "playground.common.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ default "nginx" .Values.networking.ingress.className }}
+    nginx.ingress.kubernetes.io/permanent-redirect: {{ $target | quote }}
+    nginx.ingress.kubernetes.io/permanent-redirect-code: {{ .Values.networking.ingressRootRedirect.statusCode | quote }}
+    {{- if .Values.networking.ingress.tls.enabled }}
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: {{ .Values.networking.tlsClusterIssuer }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    {{- end }}
+spec:
+  rules:
+    - host: {{ .Values.networking.externalHostname }}
+      http:
+        paths:
+          # `/` is a less-specific prefix than the other Ingresses on this
+          # host (e.g. `/v1/ws`, `/v1/faucet-app`, `/v1/playground`), so
+          # ingress-nginx's longest-match routing keeps those intact and
+          # only routes the bare-domain / unmatched paths through this
+          # redirect rule.
+          - path: /
+            pathType: Prefix
+            backend:
+              {{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version }}
+              service:
+                name: {{ include "playground.common.fullname" . }}
+                port:
+                  number: {{ .Values.service.http.port }}
+              {{- else }}
+              serviceName: {{ include "playground.common.fullname" . }}
+              servicePort: {{ .Values.service.http.port }}
+              {{- end }}
+  {{- include "playground.ingress.tls" . | nindent 2 }}
+{{- end }}

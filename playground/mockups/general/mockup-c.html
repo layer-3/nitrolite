@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nitrolite Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base:      #0a0a0a;
+    --bg-surface:   #141414;
+    --bg-elevated:  #1c1c1c;
+    --border:       #242424;
+    --text-primary: #f0f0f0;
+    --text-muted:   #666666;
+    --accent:       #f5a623;
+    --accent-dim:   rgba(245, 166, 35, 0.12);
+    --error:        #ef4444;
+    --success:      #22c55e;
+    --blue:         #3b82f6;
+    --blue-dim:     rgba(59, 130, 246, 0.12);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(ellipse at 20% 50%, rgba(245,166,35,0.03) 0%, #0a0a0a 60%);
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ─── NAVBAR ─────────────────────────────────────────── */
+  .navbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,10,10,0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .navbar-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 15px; letter-spacing: -0.02em;
+  }
+  .brand-logo {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: linear-gradient(135deg, #f5a623, #e8950f);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: #0a0a0a;
+    box-shadow: 0 0 12px rgba(245,166,35,0.3);
+  }
+  .navbar-meta { display: flex; align-items: center; gap: 16px; }
+  .chain-pill {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+  }
+  .nav-addr {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted);
+  }
+
+  /* ─── LAYOUT ─────────────────────────────────────────── */
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 400px 1fr;
+    gap: 16px;
+    padding: 20px 24px;
+    max-width: 1280px;
+    align-items: start;
+  }
+
+  /* ─── CARD ───────────────────────────────────────────── */
+  .card {
+    background: rgba(20,20,20,0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-body { padding: 16px; }
+  .card-section { padding: 16px; }
+  .card-divider { height: 1px; background: var(--border); }
+
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  /* ─── LEFT COLUMN ────────────────────────────────────── */
+  .wallet-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #f5a623 0%, #7c3aed 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #fff;
+    flex-shrink: 0;
+  }
+  .wallet-info { flex: 1; min-width: 0; }
+  .wallet-addr-row {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .copy-icon {
+    cursor: pointer; color: var(--text-muted); font-size: 11px;
+    opacity: 0.6; transition: opacity 0.15s;
+  }
+  .copy-icon:hover { opacity: 1; color: var(--accent); }
+  .wallet-row { display: flex; align-items: center; gap: 10px; }
+  .pill {
+    display: inline-flex; align-items: center;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .disconnect { font-size: 11px; color: var(--error); cursor: pointer; opacity: 0.8; }
+  .disconnect:hover { opacity: 1; text-decoration: underline; }
+
+  /* Node status */
+  .node-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .dot-wrap { position: relative; width: 10px; height: 10px; flex-shrink: 0; }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--success); position: relative; z-index: 1;
+  }
+  .dot-ring {
+    position: absolute; inset: -3px; border-radius: 50%;
+    border: 2px solid var(--success);
+    animation: pulse 2s ease-in-out infinite;
+    opacity: 0.5;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0; transform: scale(1.5); } }
+  .node-label { font-size: 13px; font-weight: 500; }
+  .node-meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--text-muted); line-height: 1.7;
+  }
+  .node-url {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  /* ─── CENTER COLUMN ──────────────────────────────────── */
+  .panel-header {
+    padding: 16px 16px 0;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .asset-select {
+    width: 100%; background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-primary); font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 600; padding: 10px 12px;
+    border-radius: 8px; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    margin-bottom: 16px;
+  }
+  .asset-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+  .balance-big {
+    font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 600;
+    color: var(--accent); letter-spacing: -0.02em; line-height: 1;
+  }
+  .balance-unit { font-size: 16px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+  .balance-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .balance-block { margin-bottom: 20px; }
+
+  /* Tabs */
+  .tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 16px; }
+  .tab {
+    padding: 8px; text-align: center; border-radius: 7px; cursor: pointer;
+    font-size: 13px; font-weight: 500; border: 1px solid var(--border);
+    color: var(--text-muted); transition: all 0.15s; user-select: none;
+  }
+  .tab.active {
+    background: rgba(245,166,35,0.15); border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px rgba(245,166,35,0.2);
+  }
+
+  /* Inputs */
+  .input-wrap { position: relative; margin-bottom: 12px; }
+  .input {
+    width: 100%; background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-primary); font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; padding: 10px 12px; border-radius: 8px; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input::placeholder { color: var(--text-muted); }
+  .input:focus, .input.focused { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+  .input.error { border-color: var(--error); box-shadow: 0 0 0 2px rgba(239,68,68,0.12); }
+  .input.disabled, .input:disabled { opacity: 0.4; cursor: not-allowed; }
+  .input-max {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer;
+    font-family: 'Inter', sans-serif; letter-spacing: 0.04em;
+  }
+  .input-error { font-size: 11px; color: var(--error); margin-top: -8px; margin-bottom: 10px; }
+  .input-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%; padding: 12px; border-radius: 8px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #f5a623, #e8950f);
+    color: #0a0a0a; font-size: 14px; font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 0 20px rgba(245,166,35,0.35), 0 4px 12px rgba(0,0,0,0.4);
+    transition: box-shadow 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover { box-shadow: 0 0 28px rgba(245,166,35,0.5), 0 4px 16px rgba(0,0,0,0.5); transform: translateY(-1px); }
+  .btn-primary:disabled {
+    opacity: 0.35; cursor: not-allowed; transform: none;
+    box-shadow: none; background: var(--bg-elevated); color: var(--text-muted);
+  }
+
+  .btn-sm {
+    padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); font-family: 'Inter', sans-serif;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-sm.neutral { background: var(--bg-elevated); color: var(--text-muted); }
+  .btn-sm.neutral:hover { border-color: var(--text-muted); color: var(--text-primary); }
+  .btn-sm.accent { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .btn-sm.accent:hover { box-shadow: 0 0 10px rgba(245,166,35,0.3); }
+  .btn-sm.blue { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+  .btn-sm.blue:hover { box-shadow: 0 0 10px rgba(59,130,246,0.25); }
+  .btn-sm.danger { background: rgba(239,68,68,0.08); border-color: var(--error); color: var(--error); }
+
+  /* Transfer form preview */
+  .form-section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
+  .form-section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;
+  }
+
+  /* ─── RIGHT COLUMN ───────────────────────────────────── */
+  .channels-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .channels-title { font-size: 15px; font-weight: 600; }
+  .count-badge {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    padding: 1px 8px; border-radius: 20px; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace; color: var(--text-muted);
+  }
+  .channels-list { display: flex; flex-direction: column; gap: 10px; }
+
+  /* Channel cards */
+  .channel-card {
+    background: rgba(20,20,20,0.75);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  .channel-card.expanded { border-color: var(--accent); }
+  .channel-card.expanded { border-left: 4px solid var(--accent); }
+  .channel-card.dimmed { opacity: 0.5; }
+
+  .channel-header {
+    padding: 14px 14px 12px; display: flex;
+    align-items: center; gap: 10px; cursor: pointer;
+  }
+  .asset-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11px; flex-shrink: 0;
+  }
+  .asset-icon.amber { background: rgba(245,166,35,0.15); color: var(--accent); border: 1px solid rgba(245,166,35,0.3); }
+  .asset-icon.gray  { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+  .channel-meta { flex: 1; min-width: 0; }
+  .channel-name { font-weight: 600; font-size: 13px; }
+  .channel-sub { font-size: 11px; color: var(--text-muted); }
+  .channel-id {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text-muted); margin-top: 2px;
+  }
+  .channel-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .chevron { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+  .closed-badge {
+    padding: 2px 8px; border-radius: 20px; border: 1px solid var(--border);
+    font-size: 10px; font-weight: 500; color: var(--text-muted);
+  }
+
+  .channel-actions {
+    padding: 0 14px 12px; display: flex; gap: 6px;
+  }
+
+  /* Warning strip */
+  .warning-strip {
+    margin: 0 14px 12px; padding: 8px 10px; border-radius: 6px;
+    background: var(--accent-dim); border: 1px solid rgba(245,166,35,0.2);
+    font-size: 11px; color: var(--accent); line-height: 1.4;
+  }
+
+  /* State viewer */
+  .state-viewer {
+    margin: 0 14px 14px;
+    background: rgba(10,10,10,0.5);
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden;
+  }
+  .state-viewer-header {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted);
+    display: grid; grid-template-columns: 1fr 60px 90px 80px; gap: 8px;
+  }
+  .state-row {
+    padding: 10px 12px; display: grid;
+    grid-template-columns: 1fr 60px 90px 80px;
+    gap: 8px; align-items: center; border-bottom: 1px solid rgba(36,36,36,0.5);
+  }
+  .state-row:last-child { border-bottom: none; }
+  .state-name-cell { display: flex; align-items: center; gap: 8px; }
+  .state-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    position: relative;
+  }
+  .state-dot.green { background: var(--success); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .state-dot.blue  { background: var(--blue);    box-shadow: 0 0 6px rgba(59,130,246,0.4); }
+  .state-dot.amber { background: var(--accent);  box-shadow: 0 0 6px rgba(245,166,35,0.5); }
+  .state-name-text { font-size: 12px; font-weight: 500; }
+  .tooltip-wrap { position: relative; display: inline-flex; cursor: help; }
+  .tooltip-icon {
+    width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border);
+    font-size: 9px; color: var(--text-muted); display: flex;
+    align-items: center; justify-content: center;
+  }
+  .tooltip-wrap::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 11px; padding: 6px 10px;
+    border-radius: 6px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s; z-index: 50;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .tooltip-wrap:hover::after { opacity: 1; }
+  .state-version {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--text-muted);
+  }
+  .state-amount {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    font-weight: 500;
+  }
+  .state-amount.green { color: var(--success); }
+  .state-amount.blue  { color: var(--blue); }
+  .state-amount.amber { color: var(--accent); }
+  .state-action { display: flex; justify-content: flex-end; }
+
+  /* ─── MODAL SECTION ──────────────────────────────────── */
+  .modal-section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .modal-previews {
+    padding: 24px; display: flex; gap: 24px; align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* Overlay demo */
+  .overlay-demo {
+    position: relative; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border); flex: 1; min-width: 340px;
+  }
+  .overlay-bg {
+    padding: 24px; background: rgba(10,10,10,0.9);
+    filter: blur(1px); pointer-events: none; min-height: 180px;
+    display: flex; gap: 12px;
+  }
+  .overlay-bg-col {
+    flex: 1; border-radius: 8px; background: var(--bg-elevated);
+    border: 1px solid var(--border); height: 130px;
+  }
+  .overlay-scrim {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-card {
+    background: rgba(20,20,20,0.95);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(245,166,35,0.35);
+    border-radius: 14px; padding: 28px 24px;
+    box-shadow: 0 0 40px rgba(245,166,35,0.15), 0 20px 60px rgba(0,0,0,0.6);
+    width: 300px;
+  }
+  .modal-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(245,166,35,0.15); border: 1px solid rgba(245,166,35,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; margin: 0 auto 14px;
+  }
+  .modal-title { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+  .modal-body { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 18px; line-height: 1.6; }
+  .chain-btn {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 13px;
+    cursor: pointer; margin-bottom: 6px; text-align: left; display: flex;
+    align-items: center; gap: 8px; transition: all 0.15s;
+  }
+  .chain-btn:hover { border-color: var(--accent); box-shadow: 0 0 10px rgba(245,166,35,0.2); }
+  .chain-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+
+  /* Homechain modal */
+  .homechain-card {
+    background: rgba(20,20,20,0.95);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 14px; padding: 24px;
+    width: 320px;
+  }
+  .homechain-header { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .homechain-title { font-size: 16px; font-weight: 700; }
+  .asset-badge {
+    background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3);
+    color: var(--accent); font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px;
+  }
+  .radio-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    cursor: pointer; margin-bottom: 6px; display: flex; align-items: center;
+    gap: 10px; transition: all 0.15s;
+  }
+  .radio-card.selected {
+    border-color: var(--accent); background: var(--accent-dim);
+    box-shadow: 0 0 12px rgba(245,166,35,0.15);
+  }
+  .radio-ring {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--border); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s;
+  }
+  .radio-ring.selected { border-color: var(--accent); }
+  .radio-inner {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    display: none;
+  }
+  .radio-ring.selected .radio-inner { display: block; }
+  .radio-chain-name { font-size: 13px; font-weight: 500; }
+  .radio-chain-sub { font-size: 11px; color: var(--text-muted); }
+  .modal-btn-row { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-ghost {
+    flex: 1; padding: 9px; border-radius: 7px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); font-size: 13px;
+    font-family: 'Inter', sans-serif; cursor: pointer;
+  }
+  .btn-confirm {
+    flex: 2; padding: 9px; border-radius: 7px; border: none;
+    background: linear-gradient(135deg, #f5a623, #e8950f);
+    color: #0a0a0a; font-size: 13px; font-weight: 700;
+    font-family: 'Inter', sans-serif; cursor: pointer;
+    box-shadow: 0 0 14px rgba(245,166,35,0.3);
+  }
+
+  /* section spacer */
+  .spacer { height: 20px; }
+  .full-width { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="brand-logo">N</div>
+    Nitrolite Playground
+  </div>
+  <div class="navbar-meta">
+    <span class="chain-pill">⬡ Sepolia</span>
+    <span class="nav-addr">0x742d35Cc...b1c7</span>
+  </div>
+</nav>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT COLUMN: Wallet & Node -->
+  <div>
+    <div class="card">
+      <!-- Wallet section -->
+      <div class="card-section">
+        <div class="section-label">Wallet</div>
+        <div class="wallet-row" style="margin-bottom:10px;">
+          <div class="wallet-avatar">0x</div>
+          <div class="wallet-info">
+            <div class="wallet-addr-row">
+              0x742d35Cc...b1c7
+              <span class="copy-icon" title="Copy address">⧉</span>
+            </div>
+            <div style="margin-top:4px; display:flex; align-items:center; gap:6px;">
+              <span class="pill">Sepolia</span>
+            </div>
+          </div>
+        </div>
+        <div><span class="disconnect">Disconnect</span></div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <!-- Node section -->
+      <div class="card-section">
+        <div class="section-label">Nitronode</div>
+        <div class="node-row">
+          <div class="dot-wrap">
+            <div class="dot"></div>
+            <div class="dot-ring"></div>
+          </div>
+          <span class="node-label" style="color: var(--success);">Connected</span>
+        </div>
+        <div class="node-meta">
+          <div>Last seen: <span style="color: var(--text-primary);">2s ago</span></div>
+          <div class="node-url" style="margin-top:4px;" title="wss://nitronode.yellow.org/ws">wss://nitronode.yellow.org/ws</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER COLUMN: Action Panel -->
+  <div>
+    <div class="card">
+      <div class="panel-header">Balances &amp; Actions</div>
+      <div class="card-body" style="padding-top:0;">
+
+        <select class="asset-select">
+          <option>USDC</option>
+          <option>ETH</option>
+          <option>WBTC</option>
+        </select>
+
+        <div class="balance-block">
+          <div>
+            <span class="balance-big">125.00</span>
+            <span class="balance-unit">USDC</span>
+          </div>
+          <div class="balance-sub">On-chain: 900.00 USDC</div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <div class="tab active">Deposit</div>
+          <div class="tab">Withdraw</div>
+          <div class="tab">Transfer</div>
+        </div>
+
+        <!-- Deposit form -->
+        <div class="input-label">Amount</div>
+        <div class="input-wrap">
+          <input class="input focused" type="text" value="50.00" placeholder="0.00">
+          <span class="input-max">MAX</span>
+        </div>
+
+        <button class="btn-primary">Deposit via MetaMask</button>
+
+        <!-- Transfer preview -->
+        <div class="form-section">
+          <div class="form-section-label">Transfer Preview</div>
+
+          <div class="input-label">Recipient Address</div>
+          <div class="input-wrap">
+            <input class="input error" type="text" value="0xZZZ_invalid" placeholder="0x...">
+          </div>
+          <div class="input-error">⚠ Invalid address format</div>
+
+          <div class="input-label">Amount</div>
+          <div class="input-wrap">
+            <input class="input disabled" type="text" disabled placeholder="0.00">
+          </div>
+
+          <button class="btn-primary" disabled>Transfer</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Channels -->
+  <div>
+    <div class="channels-header">
+      <span class="channels-title">State Channels</span>
+      <span class="count-badge">3</span>
+    </div>
+
+    <div class="channels-list">
+
+      <!-- Channel 1: EXPANDED -->
+      <div class="channel-card expanded">
+        <div class="channel-header">
+          <div class="asset-icon amber">USDC</div>
+          <div class="channel-meta">
+            <div class="channel-name">USDC</div>
+            <div class="channel-sub">Ethereum Mainnet</div>
+            <div class="channel-id">0xabc1...d4e5</div>
+          </div>
+          <div class="channel-right">
+            <span class="chevron open">▸</span>
+          </div>
+        </div>
+
+        <div class="channel-actions">
+          <button class="btn-sm neutral">Deposit</button>
+          <button class="btn-sm neutral">Withdraw</button>
+          <button class="btn-sm danger">Close</button>
+        </div>
+
+        <!-- State Viewer -->
+        <div class="state-viewer">
+          <div class="state-viewer-header">
+            <span>State</span>
+            <span>Version</span>
+            <span>Balance</span>
+            <span></span>
+          </div>
+
+          <!-- Enforced -->
+          <div class="state-row">
+            <div class="state-name-cell">
+              <div class="state-dot green"></div>
+              <span class="state-name-text">Enforced</span>
+              <div class="tooltip-wrap" data-tip="On-chain finalized state. Cannot be rolled back.">
+                <div class="tooltip-icon">?</div>
+              </div>
+            </div>
+            <div class="state-version">v12</div>
+            <div class="state-amount green">125.00 USDC</div>
+            <div class="state-action"><span style="color:var(--text-muted);font-size:12px;">—</span></div>
+          </div>
+
+          <!-- Signed -->
+          <div class="state-row">
+            <div class="state-name-cell">
+              <div class="state-dot blue"></div>
+              <span class="state-name-text">Signed</span>
+              <div class="tooltip-wrap" data-tip="Mutually signed off-chain state. Can be checkpointed on-chain.">
+                <div class="tooltip-icon">?</div>
+              </div>
+            </div>
+            <div class="state-version">v14</div>
+            <div class="state-amount blue">115.00 USDC</div>
+            <div class="state-action">
+              <button class="btn-sm blue">Checkpoint</button>
+            </div>
+          </div>
+
+          <!-- Issued -->
+          <div class="state-row">
+            <div class="state-name-cell">
+              <div class="state-dot amber"></div>
+              <span class="state-name-text">Issued</span>
+              <div class="tooltip-wrap" data-tip="Pending acknowledgment from counterparty. Not yet signed.">
+                <div class="tooltip-icon">?</div>
+              </div>
+            </div>
+            <div class="state-version">v15</div>
+            <div class="state-amount amber">105.00 USDC</div>
+            <div class="state-action">
+              <button class="btn-sm accent">Acknowledge</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Channel 2: COLLAPSED with warning -->
+      <div class="channel-card">
+        <div class="channel-header">
+          <div class="asset-icon gray">ETH</div>
+          <div class="channel-meta">
+            <div class="channel-name">ETH</div>
+            <div class="channel-sub">Sepolia Testnet</div>
+            <div class="channel-id">0xdef4...9fa2</div>
+          </div>
+          <div class="channel-right">
+            <span class="chevron">▸</span>
+          </div>
+        </div>
+        <div class="warning-strip">
+          ⚠ Wallet is on Ethereum — switch to Sepolia to interact
+        </div>
+      </div>
+
+      <!-- Channel 3: CLOSED -->
+      <div class="channel-card dimmed">
+        <div class="channel-header">
+          <div class="asset-icon gray">USDC</div>
+          <div class="channel-meta">
+            <div class="channel-name">USDC</div>
+            <div class="channel-sub">Sepolia Testnet</div>
+            <div class="channel-id">0x8fe3...c011</div>
+          </div>
+          <div class="channel-right">
+            <span class="closed-badge">Closed</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /channels-list -->
+  </div><!-- /right column -->
+
+</div><!-- /layout -->
+
+<!-- ─── MODAL PREVIEWS ─────────────────────────────────────── -->
+<div style="border-top: 1px solid var(--border); margin: 8px 24px 0;">
+  <div class="modal-previews" style="padding-top:24px;">
+    <div style="color:var(--text-muted); font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; width:100%; margin-bottom:8px;">
+      Modal Previews
+    </div>
+
+    <!-- UnsupportedChainModal -->
+    <div style="flex:1; min-width:300px;">
+      <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">UnsupportedChainModal</div>
+      <div class="overlay-demo">
+        <div class="overlay-bg">
+          <div class="overlay-bg-col"></div>
+          <div class="overlay-bg-col"></div>
+          <div class="overlay-bg-col"></div>
+        </div>
+        <div class="overlay-scrim">
+          <div class="modal-card">
+            <div class="modal-icon">⚠</div>
+            <div class="modal-title">Unsupported Network</div>
+            <div class="modal-body">
+              Your wallet is connected to Ethereum Mainnet. Please switch to a supported network to continue.
+            </div>
+            <button class="chain-btn">
+              <div class="chain-dot"></div>
+              Sepolia Testnet
+            </button>
+            <button class="chain-btn">
+              <div class="chain-dot" style="background: var(--blue);"></div>
+              Arbitrum Sepolia
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SetHomechainModal -->
+    <div style="flex:1; min-width:300px;">
+      <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">SetHomechainModal</div>
+      <div class="homechain-card">
+        <div class="homechain-header">
+          <span class="homechain-title">Set Home Chain</span>
+          <span class="asset-badge">USDC</span>
+        </div>
+
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
+          Select the chain where your USDC channel will be enforced on-chain.
+        </div>
+
+        <div class="radio-card selected">
+          <div class="radio-ring selected">
+            <div class="radio-inner"></div>
+          </div>
+          <div>
+            <div class="radio-chain-name">Ethereum Mainnet</div>
+            <div class="radio-chain-sub">Chain ID: 1</div>
+          </div>
+        </div>
+
+        <div class="radio-card">
+          <div class="radio-ring">
+            <div class="radio-inner"></div>
+          </div>
+          <div>
+            <div class="radio-chain-name">Arbitrum One</div>
+            <div class="radio-chain-sub">Chain ID: 42161</div>
+          </div>
+        </div>
+
+        <div class="radio-card">
+          <div class="radio-ring">
+            <div class="radio-inner"></div>
+          </div>
+          <div>
+            <div class="radio-chain-name">Sepolia Testnet</div>
+            <div class="radio-chain-sub">Chain ID: 11155111</div>
+          </div>
+        </div>
+
+        <div class="modal-btn-row">
+          <button class="btn-ghost">Cancel</button>
+          <button class="btn-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /modal-previews -->
+</div>
+
+</body>
+</html>

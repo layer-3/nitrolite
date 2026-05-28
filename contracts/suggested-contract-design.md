@@ -38,6 +38,10 @@ Instead of scattering this logic across many functions, you can centralize it in
 
 ## The Proposed Architecture
 
+### Single-node deployment model
+
+Each `ChannelHub` deployment serves exactly **one node**, identified by the `NODE` immutable set at construction time. The protocol design is node-agnostic (any address can be a node), but this implementation intentionally restricts one hub to one node. Operators who wish to run multiple nodes must deploy a separate `ChannelHub` per node.
+
 ### High-Level Structure
 
 The main contract, `ChannelHub.sol`, remains the single source of storage and fund transfers. It contains:

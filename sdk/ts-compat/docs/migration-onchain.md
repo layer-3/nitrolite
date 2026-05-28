@@ -8,7 +8,6 @@ This guide covers on-chain operations when migrating from v0.5.3 to the compat l
 
 ```typescript
 await approveToken(custody, tokenAddress, amount);
-await sendRequest(createDepositMessage(signer.sign, { token: tokenAddress, amount }));
 await sendRequest(createCreateChannelMessage(signer.sign, { token: tokenAddress, amount }));
 ```
 
@@ -18,6 +17,10 @@ await sendRequest(createCreateChannelMessage(signer.sign, { token: tokenAddress,
 await client.deposit(tokenAddress, amount);
 ```
 
+The legacy `createChannel()` client method and `createCreateChannelMessage(...)` helper still exist for migration, but they now throw with migration guidance instead of warning or fabricating a fake wire payload. Use `deposit(...)` or `depositAndCreateChannel(...)` instead.
+
+`createCreateChannelMessage` remains exported so old imports keep compiling, but it now fails fast with migration guidance because channel creation is no longer a standalone protocol-backed RPC in v1.
+
 ## 2. Withdrawals
 
 **Before (v0.5.3):** Manual close → checkpoint → withdraw
@@ -26,7 +29,6 @@ await client.deposit(tokenAddress, amount);
 const closeMsg = await createCloseChannelMessage(signer.sign, { channel_id });
 const raw = await sendRequest(closeMsg);
 // ... checkpoint on-chain ...
-await sendRequest(createWithdrawMessage(signer.sign, { token, amount }));
 ```
 
 **After (compat):** Single call
@@ -35,22 +37,21 @@ await sendRequest(createWithdrawMessage(signer.sign, { token, amount }));
 await client.withdrawal(tokenAddress, amount);
 ```
 
+`createCloseChannelMessage` now fails fast with migration guidance instead of pretending to be a real v1 wire helper.
+
 ## 3. Channel Operations
+
+Legacy channel helper imports may still exist to keep migration moving, but the supported path is the compat client methods below. Do not treat every legacy helper name as a protocol-backed one-to-one v1 RPC.
 
 | Operation | v0.5.3 | Compat |
 |-----------|--------|--------|
-| Create | Explicit `createChannel()` | Implicit on first `deposit()` |
-| Close | `createCloseChannelMessage` + send + parse | `client.closeChannel()` |
-| Resize | `createResizeChannelMessage` + send + parse | `client.resizeChannel({ allocate_amount, token })` |
+| Create | Explicit `createChannel()` (now throwing migration shim) | Implicit on first `deposit()` |
+| Close | `createCloseChannelMessage` (now fail-fast shim) | `client.closeChannel()` |
+| Resize | `createResizeChannelMessage` (now fail-fast shim) | `client.resizeChannel({ allocate_amount, token })` |
 
 **Example — close:**
 
 ```typescript
-// Before
-const msg = await createCloseChannelMessage(signer.sign, { channel_id });
-const raw = await sendRequest(msg);
-const parsed = parseCloseChannelResponse(raw);
-
 // After
 await client.closeChannel();
 ```
@@ -64,7 +65,7 @@ const amount = 11_000_000n; // 11 USDC (6 decimals)
 // Manual conversion for display: formatUnits(amount, 6)
 ```
 
-**After (compat):** Accepts both; conversion handled internally
+**After (compat):** On-chain app-facing methods still accept raw token amounts, and the compat layer handles the conversion needed to call the v1 SDK correctly
 
 ```typescript
 // Raw BigInt still works
@@ -75,7 +76,9 @@ const formatted = client.formatAmount(tokenAddress, 11_000_000n); // "11.0"
 const parsed = client.parseAmount(tokenAddress, "11.0");         // 11_000_000n
 ```
 
-For transfers and allocations, compat accepts human-readable strings: `{ asset: 'usdc', amount: '5.0' }`.
+Transfer allocations still use raw asset-unit strings, for example `{ asset: 'usdc', amount: '5000000' }` for 5 USDC when USDC has 6 asset decimals.
+
+App-session allocations are different: those remain human-readable decimal strings such as `{ asset: 'usdc', amount: '5.0' }`.
 
 ## 5. Contract Addresses
 
@@ -88,4 +91,4 @@ const addresses = {
 };
 ```
 
-**After (compat):** Fetched from clearnode `get_config` — no manual setup. The `addresses` field in config is deprecated and ignored.
+**After (compat):** Fetched from nitronode `get_config` — no manual setup. The `addresses` field in config is deprecated and ignored.

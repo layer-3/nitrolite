@@ -132,7 +132,7 @@
 //	client := rpc.NewClient(dialer)
 //
 //	// Connect to server
-//	err := client.Start(ctx, "wss://clearnode-sandbox.yellow.org/v1/ws", func(err error) {
+//	err := client.Start(ctx, "wss://nitronode-sandbox.yellow.org/v1/ws", func(err error) {
 //	    if err != nil {
 //	        log.Error("Connection closed", "error", err)
 //	    }

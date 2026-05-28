@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>History — C: Expandable Rows + Column Filters</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-base:     #0a0a0a;
+      --bg-surface:  #141414;
+      --bg-elevated: #1c1c1c;
+      --border:      #242424;
+      --text-primary:#f0f0f0;
+      --text-muted:  #666666;
+      --accent:      #f5a623;
+      --accent-dim:  rgba(245,166,35,0.12);
+      --error:       #ef4444;
+      --success:     #22c55e;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ── WalletBar ── */
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; height: 56px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand { display: flex; align-items: center; gap: 12px; }
+    .brand-name { color: var(--accent); font-weight: 600; letter-spacing: -0.02em; font-size: 15px; }
+    .brand-sub  { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ── Chip ── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 8px; padding: 5px 10px;
+      font-size: 12px; color: var(--text-primary);
+    }
+    .chip-sk { border-color: rgba(245,166,35,0.4); color: var(--accent); }
+
+    /* ── Dot ── */
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; flex-shrink: 0; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-primary);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      font-family: inherit; transition: background 0.12s;
+    }
+    .btn:hover { background: #1f1f1f; }
+    .btn-ghost { background: transparent; color: var(--text-muted); }
+    .btn-ghost:hover { color: var(--text-primary); border-color: #333; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      padding: 7px 16px; border-radius: 999px; border: none;
+      background: transparent; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 500; color: var(--text-muted);
+      cursor: pointer; transition: background 0.12s, color 0.12s;
+    }
+    .tab:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .tab.active { color: var(--accent); background: var(--accent-dim); }
+
+    /* ── Card ── */
+    .card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: 15px; font-weight: 600; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; position: relative; }
+    table { width: 100%; border-collapse: collapse; }
+
+    /* Column headers */
+    thead th {
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-surface);
+      white-space: nowrap;
+    }
+    .th-inner {
+      display: flex; align-items: center; gap: 5px;
+      padding: 10px 16px;
+      font-size: 11px; font-weight: 500; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      cursor: default; user-select: none;
+    }
+    .th-inner.filterable { cursor: pointer; }
+    .th-inner.filterable:hover .th-filter-icon { opacity: 1; color: var(--text-primary); }
+    .th-inner.filter-active .th-filter-icon { opacity: 1; color: var(--accent); }
+    .th-inner.filter-active { color: var(--accent); }
+    .th-filter-icon { opacity: 0.3; transition: opacity 0.12s, color 0.12s; flex-shrink: 0; }
+
+    /* Column header filter popover */
+    .th-popover-wrap { position: relative; }
+    .th-popover {
+      position: absolute; top: calc(100% + 2px); left: 0; z-index: 200;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px;
+      min-width: 170px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .th-popover-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px; }
+    .th-popover-opts { display: flex; flex-direction: column; gap: 4px; }
+    .th-opt {
+      display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+      border-radius: 6px; cursor: pointer; font-size: 12px;
+      transition: background 0.1s;
+    }
+    .th-opt:hover { background: rgba(255,255,255,0.04); }
+    .th-opt.selected { background: var(--accent-dim); }
+    .th-opt-check {
+      width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border);
+      background: var(--bg-surface); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .th-opt.selected .th-opt-check { background: var(--accent); border-color: var(--accent); }
+    .th-opt-check-inner { display: none; }
+    .th-opt.selected .th-opt-check-inner {
+      display: block; width: 4px; height: 7px; border: 2px solid #0a0a0a;
+      border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px);
+    }
+    .th-popover-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .th-popover-actions button {
+      flex: 1; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border);
+      background: none; font-family: inherit; font-size: 11px; cursor: pointer; color: var(--text-muted);
+    }
+    .th-popover-actions .apply { background: var(--accent); color: #0a0a0a; border-color: var(--accent); font-weight: 600; }
+
+    /* Text input inside address filter popover */
+    .th-text-input {
+      background: var(--bg-base); border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 8px;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary); outline: none;
+    }
+    .th-text-input::placeholder { color: var(--text-muted); }
+    .th-text-input:focus { border-color: var(--accent); }
+
+    /* ── Quick-filter wrapper for cell values ── */
+    .qf {
+      position: relative;
+      display: inline-flex; align-items: center;
+      cursor: pointer;
+      border-radius: 5px;
+      padding: 2px 4px; margin: -2px -4px;
+      transition: background 0.1s;
+    }
+    .qf:hover { background: rgba(255,255,255,0.05); }
+    /* Active = this value is currently filtered */
+    .qf.qf-on { background: var(--accent-dim); }
+    .qf.qf-on:hover { background: rgba(245,166,35,0.2); }
+
+    /* CSS tooltip via ::after */
+    .qf::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%; transform: translateX(-50%);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 9px;
+      font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;
+      color: var(--text-primary); white-space: nowrap;
+      pointer-events: none;
+      opacity: 0; transition: opacity 0.12s;
+      z-index: 300;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .qf:hover::after { opacity: 1; }
+
+    /* ── Body rows ── */
+    tbody tr.data-row { cursor: pointer; }
+    tbody tr.data-row td {
+      padding: 11px 16px; font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; color: var(--text-primary);
+      transition: background 0.1s;
+    }
+    tbody tr.data-row:hover td { background: rgba(255,255,255,0.018); }
+    tbody tr.data-row.expanded td { background: rgba(255,255,255,0.02); border-bottom: none; }
+    tbody tr.data-row.confirming td { background: rgba(245,166,35,0.03); }
+
+    /* Expand arrow */
+    .expand-cell { width: 40px; }
+    .expand-arrow {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; color: var(--text-muted);
+      transition: transform 0.15s, color 0.12s;
+    }
+    .expand-arrow.open { transform: rotate(180deg); color: var(--accent); }
+
+    /* ── Expanded detail panel ── */
+    tr.detail-row td { padding: 0; border-bottom: 1px solid var(--border); }
+    .detail-panel {
+      padding: 16px 20px 20px;
+      background: rgba(10,10,10,0.5);
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 28px;
+    }
+    .detail-section { display: flex; flex-direction: column; gap: 5px; }
+    .detail-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-muted);
+    }
+    .detail-value {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-primary); display: flex; align-items: flex-start; gap: 6px;
+      word-break: break-all; white-space: normal;
+    }
+    .detail-value.plain { font-family: 'Inter', sans-serif; font-size: 12px; white-space: nowrap; }
+    .copy-btn-sm {
+      background: none; border: none; cursor: pointer; padding: 1px;
+      color: var(--text-muted); display: inline-flex; line-height: 1; flex-shrink: 0;
+      margin-top: 1px;
+      transition: color 0.12s;
+    }
+    .copy-btn-sm:hover { color: var(--accent); }
+
+    /* Confirmation timeline */
+    .timeline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+    .tl-step { display: flex; align-items: center; gap: 5px; }
+    .tl-dot {
+      width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .tl-dot.done { background: var(--success); border-color: var(--success); }
+    .tl-dot.done::after { content: '✓'; color: #0a0a0a; font-weight: 700; font-size: 9px; }
+    .tl-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .tl-label.done { color: var(--success); }
+    .tl-line { width: 18px; height: 2px; background: var(--border); flex-shrink: 0; }
+    .tl-line.done { background: var(--success); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 8px; border-radius: 6px;
+      font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+    .badge-deposit  { background: rgba(34,197,94,0.1);   color: #22c55e; }
+    .badge-withdraw { background: rgba(239,68,68,0.1);   color: #ef4444; }
+    .badge-transfer { background: rgba(59,130,246,0.1);  color: #3b82f6; }
+    .badge-finalize { background: rgba(168,85,247,0.1);  color: #a855f7; }
+    .badge-confirming {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 500;
+      background: var(--accent-dim); color: var(--accent); white-space: nowrap;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block; width: 10px; height: 10px;
+      border: 1.5px solid currentColor; border-right-color: transparent;
+      border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Amount ── */
+    .amt { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .amt-in  { color: var(--success); }
+    .amt-out { color: var(--error); }
+
+    /* ── Address cell ── */
+    .addr-cell { display: inline-flex; align-items: center; gap: 5px; }
+    .addr { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .addr-self { color: var(--text-primary); }
+    .copy-btn-addr {
+      background: none; border: none; cursor: pointer; padding: 1px;
+      color: var(--text-muted); display: inline-flex; line-height: 1; flex-shrink: 0;
+      transition: color 0.12s; opacity: 0;
+    }
+    /* Show copy button when hovering the addr-cell wrapper */
+    .addr-cell:hover .copy-btn-addr { opacity: 1; }
+    .copy-btn-addr:hover { color: var(--accent); opacity: 1 !important; }
+
+    /* ── Hash link ── */
+    .hash-link {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-muted); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .hash-link:hover { color: var(--accent); }
+
+    /* ── Asset cell ── */
+    .asset-cell { display: flex; align-items: center; gap: 7px; }
+    .asset-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 600; flex-shrink: 0;
+    }
+    .asset-icon.eth  { background: rgba(98,126,234,0.15); color: #627eea; }
+    .asset-icon.usdt { background: rgba(38,161,123,0.15); color: #26a17b; }
+
+    /* ── Chain pill ── */
+    .chain-pill {
+      font-size: 11px; color: var(--text-muted);
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 6px; padding: 2px 6px; white-space: nowrap;
+    }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; border-top: 1px solid var(--border);
+    }
+    .page-info { font-size: 12px; color: var(--text-muted); }
+    .page-btns { display: flex; gap: 6px; }
+
+    .text-muted { color: var(--text-muted); }
+    .em-dash { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+    /* SVG helpers */
+    .icon-copy { display: inline-block; }
+    .icon-ext  { display: inline-block; }
+  </style>
+</head>
+<body>
+
+<!-- ── WalletBar ── -->
+<nav>
+  <div class="nav-brand">
+    <span class="brand-name">Nitrolite</span>
+    <span class="brand-sub">Playground</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <span class="dot"></span>
+    <span class="mono text-muted" style="font-size:12px;">3s ago</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="chip chip-sk">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="3"/><path d="M10.5 13.5L21 3"/><path d="M15 9l1.5 1.5"/><path d="M18 6l1.5 1.5"/></svg>
+      SK · 23h
+      <span style="color:var(--text-muted);cursor:pointer;line-height:1;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </span>
+    </span>
+    <span class="chip mono" style="font-size:11px;cursor:pointer;">
+      Ethereum Sepolia
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </span>
+    <span class="chip mono" style="font-size:12px;">
+      0x1234…Cafe
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    </span>
+    <button class="btn btn-ghost btn-sm">Disconnect</button>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<main style="margin:0 auto;width:100%;max-width:1100px;padding:32px 24px;">
+
+  <div class="tabs" style="margin-bottom:20px;">
+    <button class="tab">Overview</button>
+    <button class="tab active">History</button>
+  </div>
+
+  <div class="card">
+
+    <div class="card-header">
+      <span class="card-title">Transaction History</span>
+      <span class="text-muted" style="font-size:12px;">47 transactions · 1 active filter</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;"><div class="th-inner"></div></th>
+
+            <!-- Time -->
+            <th><div class="th-inner">Time</div></th>
+
+            <!-- Type — filterable, popover open -->
+            <th>
+              <div class="th-popover-wrap">
+                <div class="th-inner filterable filter-active">
+                  Type
+                  <svg class="th-filter-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </div>
+                <div class="th-popover">
+                  <div class="th-popover-title">Filter by type</div>
+                  <div class="th-popover-opts">
+                    <div class="th-opt selected">
+                      <div class="th-opt-check"><div class="th-opt-check-inner"></div></div>
+                      <span class="badge badge-deposit" style="font-size:10px;padding:2px 6px;">Deposit</span>
+                    </div>
+                    <div class="th-opt">
+                      <div class="th-opt-check"></div>
+                      <span class="badge badge-withdraw" style="font-size:10px;padding:2px 6px;">Withdraw</span>
+                    </div>
+                    <div class="th-opt">
+                      <div class="th-opt-check"></div>
+                      <span class="badge badge-transfer" style="font-size:10px;padding:2px 6px;">Transfer</span>
+                    </div>
+                    <div class="th-opt">
+                      <div class="th-opt-check"></div>
+                      <span class="badge badge-finalize" style="font-size:10px;padding:2px 6px;">Finalize</span>
+                    </div>
+                  </div>
+                  <div class="th-popover-actions">
+                    <button>Clear</button>
+                    <button class="apply">Apply</button>
+                  </div>
+                </div>
+              </div>
+            </th>
+
+            <!-- Asset — filterable -->
+            <th>
+              <div class="th-inner filterable">
+                Asset
+                <svg class="th-filter-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              </div>
+            </th>
+
+            <!-- Amount -->
+            <th><div class="th-inner">Amount</div></th>
+
+            <!-- From — filterable, popover with text input (shown open as demo) -->
+            <th>
+              <div class="th-popover-wrap">
+                <div class="th-inner filterable">
+                  From
+                  <svg class="th-filter-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </div>
+                <div class="th-popover" style="min-width:200px;">
+                  <div class="th-popover-title">Filter by from address</div>
+                  <input class="th-text-input" type="text" placeholder="0x…" style="width:100%;margin-bottom:8px;" />
+                  <div class="th-popover-actions">
+                    <button>Clear</button>
+                    <button class="apply">Apply</button>
+                  </div>
+                </div>
+              </div>
+            </th>
+
+            <!-- To — filterable, popover with text input (collapsed) -->
+            <th>
+              <div class="th-popover-wrap">
+                <div class="th-inner filterable">
+                  To
+                  <svg class="th-filter-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </div>
+              </div>
+            </th>
+
+            <!-- Chain — filterable -->
+            <th>
+              <div class="th-inner filterable">
+                Chain
+                <svg class="th-filter-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              </div>
+            </th>
+
+            <th><div class="th-inner">Tx Hash</div></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- ═══════════════════════════════════════════════════
+               Row 1 — just now — Deposit USDT — CONFIRMING
+               ═══════════════════════════════════════════════════ -->
+          <tr class="data-row confirming">
+            <td class="expand-cell">
+              <span class="expand-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </td>
+            <td><span style="font-size:12px;color:var(--text-muted);">just now</span></td>
+            <td>
+              <!-- Deposit = filter is ON → qf-on + "Remove filter" tip -->
+              <span class="qf qf-on" data-tip="Remove filter: Deposit" onclick="event.stopPropagation()">
+                <span class="badge badge-deposit">Deposit</span>
+              </span>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: USDT" onclick="event.stopPropagation()">
+                <div class="asset-cell">
+                  <span class="asset-icon usdt">USDT</span>
+                  <span style="font-weight:500;">USDT</span>
+                </div>
+              </span>
+            </td>
+            <td><span class="amt amt-in">+500.00</span></td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x9B4F…N0DE" onclick="event.stopPropagation()">
+                  <span class="addr">0x9B4F…N0DE</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Base Sepolia" onclick="event.stopPropagation()">
+                <span class="chain-pill">Base Sepolia</span>
+              </span>
+            </td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <a href="#" class="hash-link" onclick="event.stopPropagation()">
+                  0x789c…2d5f
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+                <span class="badge-confirming"><span class="spinner"></span>Confirming</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ═══════════════════════════════════════════════════
+               Row 2 — 45m ago — Transfer USDT — EXPANDED
+               ═══════════════════════════════════════════════════ -->
+          <tr class="data-row expanded">
+            <td class="expand-cell">
+              <span class="expand-arrow open">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </td>
+            <td><span style="font-size:12px;color:var(--text-muted);">45m ago</span></td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Transfer" onclick="event.stopPropagation()">
+                <span class="badge badge-transfer">Transfer</span>
+              </span>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: USDT" onclick="event.stopPropagation()">
+                <div class="asset-cell">
+                  <span class="asset-icon usdt">USDT</span>
+                  <span style="font-weight:500;">USDT</span>
+                </div>
+              </span>
+            </td>
+            <td><span class="amt" style="color:var(--text-primary);">100.00</span></td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x5678…Feed" onclick="event.stopPropagation()">
+                  <span class="addr">0x5678…Feed</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td><span class="em-dash">—</span></td>
+            <td><span class="em-dash">—</span></td>
+          </tr>
+          <!-- ── Detail panel ── -->
+          <tr class="detail-row">
+            <td colspan="9">
+              <div class="detail-panel">
+
+                <!-- Sender new state ID -->
+                <div class="detail-section">
+                  <span class="detail-label">Sender new state ID</span>
+                  <span class="detail-value">
+                    state_c8f2a4d7e1b39f2a
+                    <button class="copy-btn-sm" title="Copy" onclick="event.stopPropagation()">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>
+                  </span>
+                </div>
+
+                <!-- Receiver new state ID -->
+                <div class="detail-section">
+                  <span class="detail-label">Receiver new state ID</span>
+                  <span class="detail-value">
+                    state_a1b2c3d4e5f62a8d
+                    <button class="copy-btn-sm" title="Copy" onclick="event.stopPropagation()">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>
+                  </span>
+                </div>
+
+                <!-- Timestamp -->
+                <div class="detail-section">
+                  <span class="detail-label">Timestamp</span>
+                  <span class="detail-value plain">2026-05-27 12:47:03 UTC</span>
+                </div>
+
+                <!-- Confirmation timeline — spans all 3 cols -->
+                <div class="detail-section" style="grid-column: 1 / -1;">
+                  <span class="detail-label">Confirmation</span>
+                  <div class="timeline" style="margin-top:5px;">
+                    <div class="tl-step">
+                      <div class="tl-dot done"></div>
+                      <span class="tl-label done">Signed</span>
+                    </div>
+                    <div class="tl-line done"></div>
+                    <div class="tl-step">
+                      <div class="tl-dot done"></div>
+                      <span class="tl-label done">Co-signed</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </td>
+          </tr>
+
+          <!-- ═══════════════════════════════════════════════════
+               Row 3 — 55m ago — Finalize ETH
+               ═══════════════════════════════════════════════════ -->
+          <tr class="data-row">
+            <td class="expand-cell">
+              <span class="expand-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </td>
+            <td><span style="font-size:12px;color:var(--text-muted);">55m ago</span></td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Finalize" onclick="event.stopPropagation()">
+                <span class="badge badge-finalize">Finalize</span>
+              </span>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: ETH" onclick="event.stopPropagation()">
+                <div class="asset-cell">
+                  <span class="asset-icon eth">ETH</span>
+                  <span style="font-weight:500;">ETH</span>
+                </div>
+              </span>
+            </td>
+            <td><span class="amt" style="color:var(--text-primary);">7.50</span></td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Eth Sepolia" onclick="event.stopPropagation()">
+                <span class="chain-pill">Eth Sepolia</span>
+              </span>
+            </td>
+            <td>
+              <a href="#" class="hash-link" onclick="event.stopPropagation()">
+                0x012d…8e9a
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </td>
+          </tr>
+
+          <!-- ═══════════════════════════════════════════════════
+               Row 4 — 1h ago — Withdraw ETH
+               ═══════════════════════════════════════════════════ -->
+          <tr class="data-row">
+            <td class="expand-cell">
+              <span class="expand-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </td>
+            <td><span style="font-size:12px;color:var(--text-muted);">1h ago</span></td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Withdraw" onclick="event.stopPropagation()">
+                <span class="badge badge-withdraw">Withdraw</span>
+              </span>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: ETH" onclick="event.stopPropagation()">
+                <div class="asset-cell">
+                  <span class="asset-icon eth">ETH</span>
+                  <span style="font-weight:500;">ETH</span>
+                </div>
+              </span>
+            </td>
+            <td><span class="amt amt-out">-2.50</span></td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x9B4F…N0DE" onclick="event.stopPropagation()">
+                  <span class="addr">0x9B4F…N0DE</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Eth Sepolia" onclick="event.stopPropagation()">
+                <span class="chain-pill">Eth Sepolia</span>
+              </span>
+            </td>
+            <td>
+              <a href="#" class="hash-link" onclick="event.stopPropagation()">
+                0xdef2…7a1b
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </td>
+          </tr>
+
+          <!-- ═══════════════════════════════════════════════════
+               Row 5 — 2h ago — Deposit ETH
+               ═══════════════════════════════════════════════════ -->
+          <tr class="data-row">
+            <td class="expand-cell">
+              <span class="expand-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+            </td>
+            <td><span style="font-size:12px;color:var(--text-muted);">2h ago</span></td>
+            <td>
+              <!-- Deposit = filter ON → qf-on -->
+              <span class="qf qf-on" data-tip="Remove filter: Deposit" onclick="event.stopPropagation()">
+                <span class="badge badge-deposit">Deposit</span>
+              </span>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: ETH" onclick="event.stopPropagation()">
+                <div class="asset-cell">
+                  <span class="asset-icon eth">ETH</span>
+                  <span style="font-weight:500;">ETH</span>
+                </div>
+              </span>
+            </td>
+            <td><span class="amt amt-in">+5.00</span></td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x1234…Cafe" onclick="event.stopPropagation()">
+                  <span class="addr addr-self">0x1234…Cafe</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div class="addr-cell">
+                <span class="qf" data-tip="Quick filter: 0x9B4F…N0DE" onclick="event.stopPropagation()">
+                  <span class="addr">0x9B4F…N0DE</span>
+                </span>
+                <button class="copy-btn-addr" title="Copy address" onclick="event.stopPropagation()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </td>
+            <td>
+              <span class="qf" data-tip="Quick filter: Eth Sepolia" onclick="event.stopPropagation()">
+                <span class="chain-pill">Eth Sepolia</span>
+              </span>
+            </td>
+            <td>
+              <a href="#" class="hash-link" onclick="event.stopPropagation()">
+                0xabc1…3f4e
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <span class="page-info">Showing 1–25 of 47 transactions</span>
+      <div class="page-btns">
+        <button class="btn btn-ghost btn-sm" style="opacity:0.4;cursor:not-allowed;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          Prev
+        </button>
+        <button class="btn btn-sm">
+          Next
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+</body>
+</html>

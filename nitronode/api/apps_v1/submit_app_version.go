@@ -1,0 +1,109 @@
+package apps_v1
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
+)
+
+// SubmitAppVersion updates an entry in the app registry.
+func (h *Handler) SubmitAppVersion(c *rpc.Context) {
+	var req rpc.AppsV1SubmitAppVersionRequest
+	if err := c.Request.Payload.Translate(&req); err != nil {
+		c.Fail(err, "failed to parse parameters")
+		return
+	}
+
+	if !app.AppIDV1Regex.MatchString(req.App.ID) {
+		c.Fail(rpc.Errorf("invalid app ID: should match regex %s", app.AppIDV1Regex.String()), "")
+		return
+	}
+	if req.App.OwnerWallet == "" {
+		c.Fail(nil, "owner_wallet is required")
+		return
+	}
+	normalizedOwnerWallet, err := core.NormalizeHexAddress(req.App.OwnerWallet)
+	if err != nil {
+		c.Fail(rpc.Errorf("invalid owner_wallet: %v", err), "")
+		return
+	}
+	if req.OwnerSig == "" {
+		c.Fail(nil, "owner_sig is required")
+		return
+	}
+	if len(req.App.Metadata) > h.maxAppMetadataLen {
+		c.Fail(rpc.Errorf("metadata exceeds maximum length of %d characters", h.maxAppMetadataLen), "")
+		return
+	}
+
+	version, err := strconv.ParseUint(req.App.Version, 10, 64)
+	if err != nil {
+		c.Fail(err, "invalid version")
+		return
+	}
+
+	// Only creation (version 1) is supported for now
+	if version != 1 {
+		c.Fail(nil, "only version 1 (creation) is currently supported")
+		return
+	}
+
+	err = h.useStoreInTx(func(tx Store) error {
+		err := h.actionGateway.AllowAppRegistration(tx, normalizedOwnerWallet)
+		if err != nil {
+			return rpc.NewError(err)
+		}
+
+		appEntry := app.AppV1{
+			ID:                          strings.ToLower(req.App.ID),
+			OwnerWallet:                 normalizedOwnerWallet,
+			Metadata:                    req.App.Metadata,
+			Version:                     version,
+			CreationApprovalNotRequired: req.App.CreationApprovalNotRequired,
+		}
+
+		packedApp, err := app.PackAppV1(appEntry)
+		if err != nil {
+			return rpc.Errorf("failed to pack app data: %v", err)
+		}
+
+		sigBytes, err := hexutil.Decode(req.OwnerSig)
+		if err != nil {
+			return rpc.Errorf("failed to decode owner signature: %v", err)
+		}
+
+		sigValidator, err := sign.NewSigValidator(sign.TypeEthereumMsg)
+		if err != nil {
+			return rpc.Errorf("failed to create signature validator: %v", err)
+		}
+
+		if err := sigValidator.Verify(appEntry.OwnerWallet, packedApp, sigBytes); err != nil {
+			return rpc.Errorf("invalid owner signature: %v", err)
+		}
+
+		if err := tx.CreateApp(appEntry); err != nil {
+			return rpc.Errorf("failed to create app")
+		}
+
+		return nil
+	})
+	if err != nil {
+		c.Fail(err, "failed to create app")
+		return
+	}
+
+	resp := rpc.AppsV1SubmitAppVersionResponse{}
+	payload, err := rpc.NewPayload(resp)
+	if err != nil {
+		c.Fail(err, "failed to create response")
+		return
+	}
+
+	c.Succeed(c.Request.Method, payload)
+}

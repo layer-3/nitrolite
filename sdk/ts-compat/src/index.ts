@@ -1,15 +1,19 @@
 // =============================================================================
 // @yellow-org/sdk-compat barrel export
 //
-// Re-exports everything apps previously imported from '@layer-3/nitrolite'
-// (v0.5.3) but backed by the v1.0.0+ SDK (@yellow-org/sdk).
+// Curated migration-layer exports for apps moving off '@layer-3/nitrolite'
+// (v0.5.3) onto the v1 runtime (@yellow-org/sdk).
+//
+// This barrel preserves selected app-facing surfaces. It is not full package
+// parity with the published v0.5.3 package, and it is not a promise that every
+// legacy helper here is a runtime-faithful one-to-one v1 protocol mapping.
 // =============================================================================
 
 // --- Client facade ---
-export { NitroliteClient, type NitroliteClientConfig } from './client';
+export { NitroliteClient, type NitroliteClientConfig } from './client.js';
 
 // --- Signers ---
-export { WalletStateSigner, createECDSAMessageSigner } from './signers';
+export { WalletStateSigner, createECDSAMessageSigner } from './signers.js';
 
 // --- Auth helpers ---
 export {
@@ -18,7 +22,7 @@ export {
     createAuthVerifyMessageWithJWT,
     createEIP712AuthMessageSigner,
     type AuthRequestParams,
-} from './auth';
+} from './auth.js';
 
 // --- App session signing helpers ---
 export {
@@ -30,7 +34,7 @@ export {
     type CreateAppSessionHashParams,
     type SubmitAppStateHashAllocation,
     type SubmitAppStateHashParams,
-} from './app-signing';
+} from './app-signing.js';
 
 // --- RPC helpers ---
 export {
@@ -61,7 +65,7 @@ export {
     createPingMessage,
     convertRPCToClientChannel,
     convertRPCToClientState,
-} from './rpc';
+} from './rpc.js';
 
 // --- Types ---
 export {
@@ -104,9 +108,9 @@ export {
     type AuthChallengeResponse,
     type TransferNotificationResponseParams,
     type LedgerAccountType,
-} from './types';
+} from './types.js';
 
-// --- Clearnode response types (used by consuming apps' stores) ---
+// --- Nitronode response types (used by consuming apps' stores) ---
 export type {
     AccountInfo,
     LedgerChannel,
@@ -114,7 +118,7 @@ export type {
     LedgerEntry,
     AppSession,
     ClearNodeAsset,
-} from './types';
+} from './types.js';
 
 // --- Errors ---
 export {
@@ -125,13 +129,13 @@ export {
     NotInitializedError,
     OngoingStateTransitionError,
     getUserFacingMessage,
-} from './errors';
+} from './errors.js';
 
 // --- Events ---
-export { EventPoller, type EventPollerCallbacks } from './events';
+export { EventPoller, type EventPollerCallbacks } from './events.js';
 
 // --- Config ---
-export { buildClientOptions, blockchainRPCsFromEnv, type CompatClientConfig } from './config';
+export { buildClientOptions, blockchainRPCsFromEnv, type CompatClientConfig } from './config.js';
 
 // NOTE: SDK classes (Client, ChannelDefaultSigner, etc.) are intentionally NOT
 // re-exported here. Barrel re-exports from '@yellow-org/sdk' trigger eager

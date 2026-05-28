@@ -15,7 +15,7 @@ This example demonstrates the complete lifecycle of Nitrolite app sessions, incl
 
 - Node.js 18+ installed
 - Three wallets with private keys
-- Access to a Nitrolite node (default: `wss://clearnode-sandbox.yellow.org/v1/ws`)
+- Access to a Nitrolite node (default: `wss://nitronode-sandbox.yellow.org/v1/ws`)
 
 ## Setup
 

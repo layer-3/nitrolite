@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "github": {
+            "command": "gh",
+            "args": ["copilot", "mcp"]
+        },
+        "nitrolite": {
+            "command": "npm",
+            "args": ["--prefix", "sdk/mcp", "exec", "--", "tsx", "sdk/mcp/src/index.ts"]
+        }
+    }
+}

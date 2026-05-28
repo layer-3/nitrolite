@@ -56,9 +56,12 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// Scenario A: Channel doesn't exist - create it
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -89,7 +92,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 		}
 
 		// Sign state
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -103,6 +106,11 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 		newState.NodeSig = &nodeSig
 
 		return newState, nil
+	} else if state.HomeLedger.BlockchainID != blockchainID {
+		// Active home channel is bound to the chain it was created on.
+		// Silently advancing it onto a different chain would surface as a
+		// confusing on-chain failure later.
+		return nil, fmt.Errorf("active home channel for asset %q is on chain %d, cannot deposit on chain %d", asset, state.HomeLedger.BlockchainID, blockchainID)
 	}
 
 	// Scenario B: Channel exists - checkpoint deposit
@@ -116,7 +124,7 @@ func (c *Client) Deposit(ctx context.Context, blockchainID uint64, asset string,
 	}
 
 	// Sign and submit state to node
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nextState, err
 	}
@@ -164,9 +172,12 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// Channel doesn't exist - create it and withdraw
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -199,7 +210,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 		}
 
 		// Sign state
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -213,6 +224,11 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 		newState.NodeSig = &nodeSig
 
 		return newState, nil
+	} else if state.HomeLedger.BlockchainID != blockchainID {
+		// Active home channel is bound to the chain it was created on.
+		// Silently advancing it onto a different chain would surface as a
+		// confusing on-chain failure later.
+		return nil, fmt.Errorf("active home channel for asset %q is on chain %d, cannot withdraw on chain %d", asset, state.HomeLedger.BlockchainID, blockchainID)
 	}
 
 	// Create next state
@@ -225,7 +241,7 @@ func (c *Client) Withdraw(ctx context.Context, blockchainID uint64, asset string
 	}
 
 	// Sign and submit state to node
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +276,10 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 	// Get sender's latest state
 	senderWallet := c.GetUserAddress()
 	state, err := c.GetLatestState(ctx, senderWallet, asset, false)
-	if err != nil || state.HomeChannelID == nil {
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -314,7 +333,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 			return nil, fmt.Errorf("failed to apply transfer transition: %w", err)
 		}
 
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -340,7 +359,7 @@ func (c *Client) Transfer(ctx context.Context, recipientWallet string, asset str
 	}
 
 	// Sign and submit state
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +399,7 @@ func (c *Client) CloseHomeChannel(ctx context.Context, asset string) (*core.Stat
 		return nil, err
 	}
 
-	if state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		return nil, fmt.Errorf("no channel exists for asset %s", asset)
 	}
 
@@ -394,7 +413,7 @@ func (c *Client) CloseHomeChannel(ctx context.Context, asset string) (*core.Stat
 	}
 
 	// Sign and submit state
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -431,9 +450,12 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 
 	// Try to get latest state to determine if channel exists
 	state, err := c.GetLatestState(ctx, userWallet, asset, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest state: %w", err)
+	}
 
 	// No channel path - create channel with acknowledgement
-	if err != nil || state.HomeChannelID == nil {
+	if state == nil || state.HomeChannelID == nil || state.IsFinal() {
 		// Get supported sig validators bitmap from node config
 		bitmap, err := c.getSupportedSigValidatorsBitmap(ctx)
 		if err != nil {
@@ -483,7 +505,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 			return nil, fmt.Errorf("failed to apply acknowledgement transition: %w", err)
 		}
 
-		sig, err := c.SignState(newState)
+		sig, err := c.ValidateAndSignState(state, newState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign state: %w", err)
 		}
@@ -510,7 +532,7 @@ func (c *Client) Acknowledge(ctx context.Context, asset string) (*core.State, er
 		return nil, fmt.Errorf("failed to apply acknowledgement transition: %w", err)
 	}
 
-	_, err = c.signAndSubmitState(ctx, nextState)
+	_, err = c.signAndSubmitState(ctx, state, nextState)
 	if err != nil {
 		return nil, err
 	}
@@ -558,6 +580,10 @@ func (c *Client) Checkpoint(ctx context.Context, asset string) (string, error) {
 		return "", fmt.Errorf("failed to get latest signed state: %w", err)
 	}
 
+	if state == nil {
+		return "", fmt.Errorf("no signed state exists for asset %s", asset)
+	}
+
 	if state.HomeChannelID == nil {
 		// NOTE: this should never happen, because signed state MUST have a channel ID
 		return "", fmt.Errorf("no channel exists for asset %s", asset)
@@ -575,6 +601,11 @@ func (c *Client) Checkpoint(ctx context.Context, asset string) (string, error) {
 	channel, err := c.GetHomeChannel(ctx, userWallet, asset)
 	if err != nil {
 		return "", fmt.Errorf("failed to get home channel: %w", err)
+	}
+	if channel == nil {
+		// Signed state existed but home channel record is missing — node is in
+		// an inconsistent state.
+		return "", fmt.Errorf("home channel missing for asset %s despite signed state", asset)
 	}
 
 	switch state.Transition.Type {
@@ -717,18 +748,22 @@ func (c *Client) Challenge(ctx context.Context, state core.State) (string, error
 
 // GetHomeChannel retrieves home channel information for a user's asset.
 //
+// Returns (nil, nil) when no home channel exists for the wallet/asset pair —
+// absence is a successful response, not an error.
+//
 // Parameters:
 //   - wallet: The user's wallet address
 //   - asset: The asset symbol
 //
 // Returns:
-//   - Channel information for the home channel
+//   - Channel information for the home channel, or nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	channel, err := client.GetHomeChannel(ctx, "0x1234...", "usdc")
-//	fmt.Printf("Home Channel: %s (Version: %d)\n", channel.ChannelID, channel.StateVersion)
+//	if err != nil { return err }
+//	if channel == nil { /* no channel yet */ }
 func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*core.Channel, error) {
 	req := rpc.ChannelsV1GetHomeChannelRequest{
 		Wallet: wallet,
@@ -739,7 +774,11 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 		return nil, fmt.Errorf("failed to get home channel: %w", err)
 	}
 
-	channel, err := transformChannel(resp.Channel)
+	if resp.Channel == nil {
+		return nil, nil
+	}
+
+	channel, err := transformChannel(*resp.Channel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform channel: %w", err)
 	}
@@ -748,17 +787,26 @@ func (c *Client) GetHomeChannel(ctx context.Context, wallet, asset string) (*cor
 
 // GetEscrowChannel retrieves escrow channel information for a specific channel ID.
 //
+// Returns (nil, nil) when no escrow channel exists for the given ID — absence
+// is a successful response, not an error.
+//
 // Parameters:
 //   - escrowChannelID: The escrow channel ID to query
 //
 // Returns:
-//   - Channel information for the escrow channel
+//   - Channel information for the escrow channel, or nil if absent
 //   - Error if the request fails
+//
+// Note: when the escrow channel has been closed by the on-chain purge queue
+// (no signed FINALIZE_ESCROW_DEPOSIT was received before expiry), StateVersion
+// on the returned channel reflects the initiate version (N) and does not advance
+// to the finalize version (N+1).
 //
 // Example:
 //
 //	channel, err := client.GetEscrowChannel(ctx, "0x1234...")
-//	fmt.Printf("Escrow Channel: %s (Version: %d)\n", channel.ChannelID, channel.StateVersion)
+//	if err != nil { return err }
+//	if channel == nil { /* not found */ }
 func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (*core.Channel, error) {
 	req := rpc.ChannelsV1GetEscrowChannelRequest{
 		EscrowChannelID: escrowChannelID,
@@ -768,7 +816,11 @@ func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (
 		return nil, fmt.Errorf("failed to get escrow channel: %w", err)
 	}
 
-	channel, err := transformChannel(resp.Channel)
+	if resp.Channel == nil {
+		return nil, nil
+	}
+
+	channel, err := transformChannel(*resp.Channel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform channel: %w", err)
 	}
@@ -781,19 +833,23 @@ func (c *Client) GetEscrowChannel(ctx context.Context, escrowChannelID string) (
 
 // GetLatestState retrieves the latest state for a user's asset.
 //
+// Returns (nil, nil) when the node has no stored state for the wallet/asset
+// pair — absence is a successful response, not an error.
+//
 // Parameters:
 //   - wallet: The user's wallet address
 //   - asset: The asset symbol (e.g., "usdc")
 //   - onlySigned: If true, returns only the latest signed state
 //
 // Returns:
-//   - core.State containing all state information
+//   - core.State containing all state information, or nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	state, err := client.GetLatestState(ctx, "0x1234...", "usdc", false)
-//	fmt.Printf("State Version: %d, Balance: %s\n", state.Version, state.HomeLedger.UserBalance)
+//	if err != nil { return err }
+//	if state == nil { /* no state yet */ }
 func (c *Client) GetLatestState(ctx context.Context, wallet, asset string, onlySigned bool) (*core.State, error) {
 	req := rpc.ChannelsV1GetLatestStateRequest{
 		Wallet:     wallet,
@@ -804,7 +860,10 @@ func (c *Client) GetLatestState(ctx context.Context, wallet, asset string, onlyS
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest state: %w", err)
 	}
-	state, err := transformState(resp.State)
+	if resp.State == nil {
+		return nil, nil
+	}
+	state, err := transformState(*resp.State)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform state: %w", err)
 	}
@@ -848,10 +907,25 @@ func (c *Client) requestChannelCreation(ctx context.Context, state core.State, c
 type GetLastChannelKeyStatesOptions struct {
 	// SessionKey filters by a specific session key address
 	SessionKey *string
+	// IncludeInactive, when set to true, includes latest states whose expires_at is in
+	// the past (expired or revoked). Defaults to false (active-only) when nil or false.
+	IncludeInactive *bool
 }
 
-// SubmitChannelSessionKeyState submits a channel session key state for registration or update.
-// The state must be signed by the user's wallet to authorize the session key delegation.
+// SubmitChannelSessionKeyState submits a channel session key state for registration,
+// update, revocation, or re-activation. The state must carry both the wallet's UserSig
+// (authorizing the delegation) and the session-key holder's SessionKeySig (proving
+// possession of the key); submits without a valid SessionKeySig are rejected on every
+// path, including revocation — the session key must co-sign its own deactivation.
+// Wallet-only revocation (for a lost or compromised key) is not supported by this
+// method.
+//
+// Set state.ExpiresAt to a future time to register or update the key. Set it to a
+// value at or before time.Now() to revoke the key — the auth path filters by
+// expires_at, so the key is deactivated immediately while keeping the same monotonic
+// version sequence. A later submit with the next version and a future ExpiresAt
+// re-activates the same session key address. Negative unix timestamps are rejected
+// by the server.
 //
 // Parameters:
 //   - state: The channel session key state containing delegation information
@@ -867,8 +941,9 @@ type GetLastChannelKeyStatesOptions struct {
 //	    Version:     1,
 //	    Assets:      []string{"usdc", "weth"},
 //	    ExpiresAt:   time.Now().Add(24 * time.Hour),
-//	    UserSig:     "0x...",
 //	}
+//	state.UserSig, _ = client.SignChannelSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
 //	err := client.SubmitChannelSessionKeyState(ctx, state)
 func (c *Client) SubmitChannelSessionKeyState(ctx context.Context, state core.ChannelSessionKeyStateV1) error {
 	req := rpc.ChannelsV1SubmitSessionKeyStateRequest{
@@ -882,13 +957,15 @@ func (c *Client) SubmitChannelSessionKeyState(ctx context.Context, state core.Ch
 }
 
 // GetLastChannelKeyStates retrieves the latest channel session key states for a user.
+// By default only currently active (non-expired) states are returned; set
+// opts.IncludeInactive to true to include expired or revoked latest states.
 //
 // Parameters:
 //   - userAddress: The user's wallet address
-//   - opts: Optional filters (pass nil for no filters)
+//   - opts: Optional filters (pass nil for active-only with no session-key filter)
 //
 // Returns:
-//   - Slice of ChannelSessionKeyStateV1 with the latest non-expired session key states
+//   - Slice of ChannelSessionKeyStateV1 with the latest session key states matching the filter
 //   - Error if the request fails
 //
 // Example:
@@ -903,6 +980,7 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 	}
 	if opts != nil {
 		req.SessionKey = opts.SessionKey
+		req.IncludeInactive = opts.IncludeInactive
 	}
 
 	resp, err := c.rpcClient.ChannelsV1GetLastKeyStates(ctx, req)
@@ -918,12 +996,13 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 	return states, nil
 }
 
-// SignChannelSessionKeyState signs a channel session key state using the client's state signer.
-// This creates a properly formatted signature that can be set on the state's UserSig field
-// before submitting via SubmitChannelSessionKeyState.
+// SignChannelSessionKeyState produces the wallet UserSig over the channel session key
+// state using the client's state signer. Set the returned hex on state.UserSig before
+// submit. The matching session-key-holder SessionKeySig must also be populated (see
+// SignChannelSessionKeyOwnership) — submits with only one of the two are rejected.
 //
 // Parameters:
-//   - state: The channel session key state to sign (UserSig field is excluded from signing)
+//   - state: The channel session key state to sign (UserSig and SessionKeySig fields are excluded from signing)
 //
 // Returns:
 //   - The hex-encoded signature string
@@ -938,11 +1017,11 @@ func (c *Client) GetLastChannelKeyStates(ctx context.Context, userAddress string
 //	    Assets:      []string{"usdc"},
 //	    ExpiresAt:   time.Now().Add(24 * time.Hour),
 //	}
-//	sig, err := client.SignChannelSessionKeyState(state)
-//	state.UserSig = sig
+//	state.UserSig, _ = client.SignChannelSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
 //	err = client.SubmitChannelSessionKeyState(ctx, state)
 func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1) (string, error) {
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.Version, state.Assets, state.ExpiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return "", fmt.Errorf("failed to compute metadata hash: %w", err)
 	}
@@ -960,6 +1039,33 @@ func (c *Client) SignChannelSessionKeyState(state core.ChannelSessionKeyStateV1)
 	sig, err := ethMsgSigner.Sign(packed)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign channel session key state: %w", err)
+	}
+
+	return sig.String(), nil
+}
+
+// SignChannelSessionKeyOwnership produces the session-key holder's ownership signature for a
+// channel session key registration. The signer must hold the session key; the returned hex
+// string populates state.SessionKeySig before submit. The signed payload binds session_key
+// into the metadata hash so a signature minted for one key cannot be replayed for another.
+//
+// The parameter is narrowed to *sign.EthereumMsgSigner because the server recovers
+// SessionKeySig under sign.TypeEthereumMsg — a broader signer interface could produce a
+// signature without the EIP-191 prefix (or with extra wrapper bytes) that the server rejects.
+func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, sessionKeySigner *sign.EthereumMsgSigner) (string, error) {
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
+	if err != nil {
+		return "", fmt.Errorf("failed to compute metadata hash: %w", err)
+	}
+
+	packed, err := core.PackChannelKeyStateV1(state.SessionKey, metadataHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack channel session key state: %w", err)
+	}
+
+	sig, err := sessionKeySigner.Sign(packed)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign channel session key ownership: %w", err)
 	}
 
 	return sig.String(), nil

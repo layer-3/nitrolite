@@ -28,7 +28,7 @@ import (
 //	client := rpc.NewClient(dialer)
 //
 //	// Connect to the server
-//	err := client.Start(ctx, "wss://clearnode-sandbox.yellow.org/v1/ws", handleError)
+//	err := client.Start(ctx, "wss://nitronode-sandbox.yellow.org/v1/ws", handleError)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -91,15 +91,6 @@ func (c *Client) ChannelsV1GetChannels(ctx context.Context, req ChannelsV1GetCha
 func (c *Client) ChannelsV1GetLatestState(ctx context.Context, req ChannelsV1GetLatestStateRequest) (ChannelsV1GetLatestStateResponse, error) {
 	var resp ChannelsV1GetLatestStateResponse
 	if err := c.call(ctx, ChannelsV1GetLatestStateMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// ChannelsV1GetStates retrieves state history for a user with optional filtering.
-func (c *Client) ChannelsV1GetStates(ctx context.Context, req ChannelsV1GetStatesRequest) (ChannelsV1GetStatesResponse, error) {
-	var resp ChannelsV1GetStatesResponse
-	if err := c.call(ctx, ChannelsV1GetStatesMethod, req, &resp); err != nil {
 		return resp, err
 	}
 	return resp, nil

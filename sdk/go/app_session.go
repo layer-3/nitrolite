@@ -8,6 +8,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/rpc"
+	"github.com/layer-3/nitrolite/pkg/sign"
 	"github.com/shopspring/decimal"
 )
 
@@ -69,17 +70,22 @@ func (c *Client) GetAppSessions(ctx context.Context, opts *GetAppSessionsOptions
 
 // GetAppDefinition retrieves the definition for a specific app session.
 //
+// Returns (nil, nil) when no app session exists for the given ID — absence is
+// a successful response, not an error.
+//
 // Parameters:
 //   - appSessionID: The application session ID
 //
 // Returns:
-//   - app.AppDefinitionV1 with participants, quorum, and application info
+//   - app.AppDefinitionV1 with participants, quorum, and application info, or
+//     nil if absent
 //   - Error if the request fails
 //
 // Example:
 //
 //	def, err := client.GetAppDefinition(ctx, "session123")
-//	fmt.Printf("App: %s, Quorum: %d\n", def.Application, def.Quorum)
+//	if err != nil { return err }
+//	if def == nil { /* not found */ }
 func (c *Client) GetAppDefinition(ctx context.Context, appSessionID string) (*app.AppDefinitionV1, error) {
 	if appSessionID == "" {
 		return nil, fmt.Errorf("app session ID required")
@@ -92,7 +98,11 @@ func (c *Client) GetAppDefinition(ctx context.Context, appSessionID string) (*ap
 		return nil, fmt.Errorf("failed to get app definition: %w", err)
 	}
 
-	def, err := transformAppDefinition(resp.Definition)
+	if resp.Definition == nil {
+		return nil, nil
+	}
+
+	def, err := transformAppDefinition(*resp.Definition)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform app definition: %w", err)
 	}
@@ -175,6 +185,10 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to get latest state: %w", err)
 	}
 
+	if currentState == nil {
+		return "", fmt.Errorf("no channel state to advance for AppSession")
+	}
+
 	nextState := currentState.NextState()
 
 	_, err = nextState.ApplyCommitTransition(appUpdate.AppSessionID, depositAmount)
@@ -182,7 +196,7 @@ func (c *Client) SubmitAppSessionDeposit(ctx context.Context, appStateUpdate app
 		return "", fmt.Errorf("failed to apply commit transition: %w", err)
 	}
 
-	stateSig, err := c.SignState(nextState)
+	stateSig, err := c.ValidateAndSignState(currentState, nextState)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state: %w", err)
 	}
@@ -276,8 +290,20 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 // Session Key Methods
 // ============================================================================
 
-// SubmitAppSessionKeyState submits a session key state for registration or update.
-// The state must be signed by the user's wallet to authorize the session key delegation.
+// SubmitAppSessionKeyState submits a session key state for registration, update,
+// revocation, or re-activation. The state must carry both the wallet's UserSig
+// (authorizing the delegation) and the session-key holder's SessionKeySig (proving
+// possession of the key); submits without a valid SessionKeySig are rejected on every
+// path, including revocation — the session key must co-sign its own deactivation.
+// Wallet-only revocation (for a lost or compromised key) is not supported by this
+// method.
+//
+// Set state.ExpiresAt to a future time to register or update the key. Set it to a
+// value at or before time.Now() to revoke the key — the auth path filters by
+// expires_at, so the key is deactivated immediately while keeping the same monotonic
+// version sequence. A later submit with the next version and a future ExpiresAt
+// re-activates the same session key address. Negative unix timestamps are rejected
+// by the server.
 //
 // Parameters:
 //   - state: The session key state containing delegation information
@@ -294,8 +320,9 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 //	    ApplicationIDs: []string{"app1"},
 //	    AppSessionIDs:  []string{},
 //	    ExpiresAt:      time.Now().Add(24 * time.Hour),
-//	    UserSig:        "0x...",
 //	}
+//	state.UserSig, _ = client.SignSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
 //	err := client.SubmitAppSessionKeyState(ctx, state)
 func (c *Client) SubmitAppSessionKeyState(ctx context.Context, state app.AppSessionKeyStateV1) error {
 	req := rpc.AppSessionsV1SubmitSessionKeyStateRequest{
@@ -312,16 +339,21 @@ func (c *Client) SubmitAppSessionKeyState(ctx context.Context, state app.AppSess
 type GetLastKeyStatesOptions struct {
 	// SessionKey filters by a specific session key address
 	SessionKey *string
+	// IncludeInactive, when set to true, includes latest states whose expires_at is in
+	// the past (expired or revoked). Defaults to false (active-only) when nil or false.
+	IncludeInactive *bool
 }
 
-// GetLastAppKeyStates retrieves the latest session key states for a user.
+// GetLastAppKeyStates retrieves the latest app session key states for a user.
+// By default only currently active (non-expired) states are returned; set
+// opts.IncludeInactive to true to include expired or revoked latest states.
 //
 // Parameters:
 //   - userAddress: The user's wallet address
-//   - opts: Optional filters (pass nil for no filters)
+//   - opts: Optional filters (pass nil for active-only with no session-key filter)
 //
 // Returns:
-//   - Slice of AppSessionKeyStateV1 with the latest non-expired session key states
+//   - Slice of AppSessionKeyStateV1 with the latest session key states matching the filter
 //   - Error if the request fails
 //
 // Example:
@@ -336,6 +368,7 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 	}
 	if opts != nil {
 		req.SessionKey = opts.SessionKey
+		req.IncludeInactive = opts.IncludeInactive
 	}
 
 	resp, err := c.rpcClient.AppSessionsV1GetLastKeyStates(ctx, req)
@@ -351,12 +384,13 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 	return states, nil
 }
 
-// SignSessionKeyState signs a session key state using the client's state signer.
-// This creates a properly formatted signature that can be set on the state's UserSig field
-// before submitting via SubmitSessionKeyState.
+// SignSessionKeyState produces the wallet UserSig over the session key state using the
+// client's state signer. Set the returned hex on state.UserSig before submit. The matching
+// session-key-holder SessionKeySig must also be populated (see SignAppSessionKeyOwnership)
+// — submits with only one of the two are rejected.
 //
 // Parameters:
-//   - state: The session key state to sign (UserSig field is excluded from signing)
+//   - state: The session key state to sign (UserSig and SessionKeySig fields are excluded from signing)
 //
 // Returns:
 //   - The hex-encoded signature string
@@ -372,9 +406,9 @@ func (c *Client) GetLastAppKeyStates(ctx context.Context, userAddress string, op
 //	    AppSessionIDs:  []string{},
 //	    ExpiresAt:      time.Now().Add(24 * time.Hour),
 //	}
-//	sig, err := client.SignSessionKeyState(state)
-//	state.UserSig = sig
-//	err = client.SubmitSessionKeyState(ctx, state)
+//	state.UserSig, _ = client.SignSessionKeyState(state)
+//	state.SessionKeySig, _ = sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
+//	err = client.SubmitAppSessionKeyState(ctx, state)
 func (c *Client) SignSessionKeyState(state app.AppSessionKeyStateV1) (string, error) {
 	packed, err := app.PackAppSessionKeyStateV1(state)
 	if err != nil {
@@ -388,4 +422,27 @@ func (c *Client) SignSessionKeyState(state app.AppSessionKeyStateV1) (string, er
 
 	// Strip the channel signer type prefix byte; session key auth uses plain EIP-191 signatures
 	return hexutil.Encode(sig[1:]), nil
+}
+
+// SignAppSessionKeyOwnership produces the session-key holder's ownership signature over the
+// packed app-session key state. The signer must be the holder of the session key being
+// registered; the resulting hex-encoded signature is intended to populate state.SessionKeySig
+// before submitting via SubmitAppSessionKeyState. The packed state already binds user_address,
+// so replay across wallets is not possible.
+//
+// The parameter is narrowed to *sign.EthereumMsgSigner because the server recovers
+// SessionKeySig under sign.TypeEthereumMsg — a broader signer interface could produce a
+// signature without the EIP-191 prefix (or with extra wrapper bytes) that the server rejects.
+func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner *sign.EthereumMsgSigner) (string, error) {
+	packed, err := app.PackAppSessionKeyStateV1(state)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack session key state: %w", err)
+	}
+
+	sig, err := sessionKeySigner.Sign(packed)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign session key ownership: %w", err)
+	}
+
+	return hexutil.Encode(sig), nil
 }

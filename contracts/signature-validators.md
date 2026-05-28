@@ -8,11 +8,12 @@ This document describes the pluggable signature validation system in the Nitroli
 
 The protocol supports flexible signature validation through the `ISignatureValidator` interface. All validators implement:
 
-- `validateSignature(channelId, signingData, signature, participant)` - Validates a participant's signature
+- `validateSignature(channelId, signingData, signature, participant)` — Validates a state signature
+- `validateChallengeSignature(channelId, signingData, signature, participant)` — Validates a challenge signature
 
 Validators receive the core state data (`signingData`) and `channelId` separately, allowing them to construct the full message according to their signing scheme.
 
-For challenge signatures, ChannelHub appends `"challenge"` to the signing data before calling `validateSignature`.
+For challenge signatures, ChannelHub calls `validateChallengeSignature` rather than `validateSignature`. Each validator is responsible for constructing the challenge message and enforcing any validator-specific constraints (e.g., temporal bounds for session keys).
 
 ---
 
@@ -20,12 +21,12 @@ For challenge signatures, ChannelHub appends `"challenge"` to the signing data b
 
 ### Node Validator Registry
 
-The protocol uses a **per-node validator registry** system. Each node can register signature validators and assign them 1-byte identifiers (0x01-0xFF).
+The protocol uses a **validator registry** system. NODE can register signature validators and assign them 1-byte identifiers (0x01-0xFF).
 
 **Design rationale:** In the Nitrolite off-chain protocol, the node acts as the orchestrator and decides which signature validators are supported for **node signatures**. This ensures:
 
-- Nodes can enforce their security requirements for their own signatures
-- Nodes benefit from flexible validator implementations (SessionKey, multi-sig, etc.)
+- NODE can enforce its security requirements for its own signatures
+- NODE benefits from flexible validator implementations (SessionKey, multi-sig, etc.)
 - Cross-chain compatibility (validator addresses don't affect channelId or signature verification)
 
 ### Security Consideration: Preventing Signature Forgery
@@ -58,7 +59,7 @@ This approach provides security (users control the agreed validators), cross-cha
 
 ### Validator Registration
 
-Nodes register validators by providing a signature over the validator configuration. This allows node operators to use cold storage or hardware wallets without exposing private keys to send transactions.
+NODE registers validators by providing a signature over the validator configuration. This allows node operators to use cold storage or hardware wallets without exposing private keys to send transactions.
 
 **Registration message:**
 
@@ -80,7 +81,7 @@ The signature is verified using ECDSA recovery:
 - Node's private key only signs, never sends transactions
 - Validator ID 0x00 is reserved for the default validator
 - Registration is immutable (cannot change once set)
-- 255 validators per node (0x01-0xFF)
+- 255 validators (0x01-0xFF)
 
 ### Signature Format
 
@@ -154,6 +155,10 @@ Default validator supporting standard ECDSA signatures. Automatically tries both
 2. If fails, try raw ECDSA recovery
 3. Return `VALIDATION_SUCCESS` if recovered address matches participant, `VALIDATION_FAILURE` otherwise
 
+### Challenge Validation
+
+`validateChallengeSignature` delegates to `validateSignature` with the signing data extended by a `"challenge"` suffix. The signer must sign `pack(channelId, signingData || "challenge")`. No temporal or scope checks apply — ECDSA keys do not expire.
+
 ### Use Cases
 
 - Standard wallet signatures (MetaMask, WalletConnect, hardware wallets)
@@ -186,14 +191,21 @@ bytes sigBody = abi.encode(SessionKeyAuthorization, bytes sessionKeySignature)
 
 **Two checks:**
 
-1. Participant authorized the session key: `authData = abi.encode(sessionKey, metadataHash)`
+1. Participant authorized the session key: `authData = abi.encode(SESSION_KEY_AUTH_TYPEHASH, sessionKey, metadataHash)`
+   where `SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")`
 2. Session key signed the state
 
 Both use EIP-191 first, then raw ECDSA if that fails.
 
 ### Metadata
 
-Application-defined data encoding expiration, allowed channels, and permissions. **Validated off-chain by Clearnode, not on-chain.**
+Application-defined data encoding expiration, allowed channels, and permissions. **Validated off-chain by Nitronode, not on-chain.**
+
+### Challenge Signatures
+
+`validateChallengeSignature` is **not supported** and always reverts with `ChallengeWithSessionKeyNotSupported`.
+
+This is to prevent a vulnerability: since session key authorizations are permanently valid on-chain (expiration is opaque in metadataHash), allowing session keys to challenge would let any expired or revoked key put channels into `DISPUTED` state unilaterally, bypassing Nitronode's off-chain enforcement and causing a DoS on the channel.
 
 ---
 
@@ -207,9 +219,9 @@ Application-defined data encoding expiration, allowed channels, and permissions.
 
 It is safe for users because:
 
-- Clearnode validates metadata (expiration, scope, permissions)
+- Nitronode validates metadata (expiration, scope, permissions)
 - Node must countersign (provides protection)
-- Limited damage if compromised (Clearnode rejects invalid requests)
+- Limited damage if compromised (Nitronode rejects invalid requests)
 - Revocable (switch to main key anytime)
 
 ### Nodes: Unsafe ⚠️

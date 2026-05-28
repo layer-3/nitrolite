@@ -1,8 +1,10 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/layer-3/nitrolite/sdk/go.svg)](https://pkg.go.dev/github.com/layer-3/nitrolite/sdk/go)
 
-# Clearnode Go SDK
+# Nitronode Go SDK
 
-Go SDK for Clearnode payment channels providing both high-level and low-level operations in a unified client:
+> Renamed from "Clearnode" in v1.3.0. See [`MIGRATION-NITRONODE.md`](../../MIGRATION-NITRONODE.md) for image / env-var / DNS changes.
+
+Go SDK for Nitronode payment channels providing both high-level and low-level operations in a unified client:
 - **State Operations**: `Deposit`, `Withdraw`, `Transfer`, `CloseHomeChannel`, `Acknowledge` - build and co-sign states off-chain
 - **Blockchain Settlement**: `Checkpoint` - the single entry point for all on-chain transactions
 - **Low-Level Operations**: Direct RPC access for custom flows and advanced use cases
@@ -66,16 +68,18 @@ client.RebalanceAppSessions(ctx, signedUpdates)               // Atomic rebalanc
 
 ### Session Keys — App Sessions
 ```go
-client.SignSessionKeyState(state)                                   // Sign an app session key state
-client.SubmitAppSessionKeyState(ctx, state)                         // Register/update app session key
-client.GetLastAppKeyStates(ctx, userAddress, opts)                  // Get active app session key states
+client.SignSessionKeyState(state)                                   // Wallet UserSig over app session key state
+sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)             // Session-key holder's SessionKeySig
+client.SubmitAppSessionKeyState(ctx, state)                         // Register/update app session key (both sigs required)
+client.GetLastAppKeyStates(ctx, userAddress, opts)                  // Get app session key states (active-only by default; opts.IncludeInactive=true to include expired)
 ```
 
 ### Session Keys — Channels
 ```go
-client.SignChannelSessionKeyState(state)                            // Sign a channel session key state
-client.SubmitChannelSessionKeyState(ctx, state)                     // Register/update channel session key
-client.GetLastChannelKeyStates(ctx, userAddress, opts)              // Get active channel session key states
+client.SignChannelSessionKeyState(state)                            // Wallet UserSig over channel session key state
+sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)         // Session-key holder's SessionKeySig
+client.SubmitChannelSessionKeyState(ctx, state)                     // Register/update channel session key (both sigs required)
+client.GetLastChannelKeyStates(ctx, userAddress, opts)              // Get channel session key states (active-only by default; opts.IncludeInactive=true to include expired)
 ```
 
 ### Shared Utilities
@@ -110,7 +114,7 @@ func main() {
 
     // Create unified client
     client, _ := sdk.NewClient(
-        "wss://clearnode-sandbox.yellow.org/v1/ws",
+        "wss://nitronode-sandbox.yellow.org/v1/ws",
         stateSigner,
         txSigner,
         sdk.WithBlockchainRPC(80002, "https://polygon-amoy.alchemy.com/v2/KEY"),
@@ -416,8 +420,15 @@ sig, _ := appSessionSigner.Sign(packedRequest)
 
 ### Session Keys — App Sessions
 
+Registration requires two signatures: the wallet's `UserSig` (authorizing the delegation)
+and the session-key holder's `SessionKeySig` (proving possession of the key being
+registered). The node rejects submits that lack a valid `SessionKeySig`.
+
 ```go
-// Sign and submit an app session key state
+// sessionKeySigner must be a *sign.EthereumMsgSigner (raw EIP-191 signer)
+// whose address equals state.SessionKey — not a wrapped sign.Signer, because
+// the node recovers SessionKeySig as a raw 65-byte Ethereum message signature.
+sessionKeySigner, _ := sign.NewEthereumMsgSigner(sessionKeyPrivHex)
 state := app.AppSessionKeyStateV1{
     UserAddress:    client.GetUserAddress(),
     SessionKey:     "0xSessionKey...",
@@ -426,21 +437,31 @@ state := app.AppSessionKeyStateV1{
     AppSessionIDs:  []string{},
     ExpiresAt:      time.Now().Add(24 * time.Hour),
 }
-sig, err := client.SignSessionKeyState(state)
-state.UserSig = sig
-err = client.SubmitAppSessionKeyState(ctx, state)
+state.UserSig, _ = client.SignSessionKeyState(state)
+state.SessionKeySig, _ = sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
+err := client.SubmitAppSessionKeyState(ctx, state)
 
-// Query active app session key states
+// Query app session key states (active-only by default)
 states, err := client.GetLastAppKeyStates(ctx, userAddress, nil)
 states, err := client.GetLastAppKeyStates(ctx, userAddress, &sdk.GetLastKeyStatesOptions{
     SessionKey: &sessionKeyAddr,
+})
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+includeInactive := true
+states, err = client.GetLastAppKeyStates(ctx, userAddress, &sdk.GetLastKeyStatesOptions{
+    SessionKey:      &sessionKeyAddr,
+    IncludeInactive: &includeInactive,
 })
 ```
 
 ### Session Keys — Channels
 
 ```go
-// Sign and submit a channel session key state
+// sessionKeySigner must be a *sign.EthereumMsgSigner (raw EIP-191 signer)
+// whose address equals state.SessionKey — not a wrapped sign.Signer, because
+// the node recovers SessionKeySig as a raw 65-byte Ethereum message signature.
+sessionKeySigner, _ := sign.NewEthereumMsgSigner(sessionKeyPrivHex)
 state := core.ChannelSessionKeyStateV1{
     UserAddress: client.GetUserAddress(),
     SessionKey:  "0xSessionKey...",
@@ -448,14 +469,21 @@ state := core.ChannelSessionKeyStateV1{
     Assets:      []string{"usdc", "weth"},
     ExpiresAt:   time.Now().Add(24 * time.Hour),
 }
-sig, err := client.SignChannelSessionKeyState(state)
-state.UserSig = sig
-err = client.SubmitChannelSessionKeyState(ctx, state)
+state.UserSig, _ = client.SignChannelSessionKeyState(state)
+state.SessionKeySig, _ = sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
+err := client.SubmitChannelSessionKeyState(ctx, state)
 
-// Query active channel session key states
+// Query channel session key states (active-only by default)
 states, err := client.GetLastChannelKeyStates(ctx, userAddress, nil)
 states, err := client.GetLastChannelKeyStates(ctx, userAddress, &sdk.GetLastChannelKeyStatesOptions{
     SessionKey: &sessionKeyAddr,
+})
+
+// Include expired/revoked latest states (e.g. for rotation flows that need the prior version)
+includeInactive := true
+states, err = client.GetLastChannelKeyStates(ctx, userAddress, &sdk.GetLastChannelKeyStatesOptions{
+    SessionKey:      &sessionKeyAddr,
+    IncludeInactive: &includeInactive,
 })
 ```
 
@@ -713,7 +741,7 @@ For understanding how operations work under the hood:
 ## Requirements
 
 - Go 1.21+
-- Running Clearnode instance
+- Running Nitronode instance
 - Blockchain RPC endpoint (for Checkpoint settlement)
 
 ## License

@@ -27,7 +27,7 @@ func TestChannelSessionKeySignerV1(t *testing.T) {
 	expiresAt := time.Now().Add(1 * time.Hour).Unix()
 
 	// 4. Compute Metadata Hash
-	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt)
+	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(userAddress, version, assets, expiresAt)
 	require.NoError(t, err)
 
 	// 5. Pack Data for Authorization (User signs this)
@@ -69,58 +69,122 @@ func TestChannelSessionKeySignerV1(t *testing.T) {
 	assert.Equal(t, strings.ToLower(userAddress), strings.ToLower(recoveredWallet))
 }
 
-func TestValidateChannelSessionKeyAuthSigV1(t *testing.T) {
+func TestValidateChannelSessionKeyStateV1(t *testing.T) {
 	t.Parallel()
-	// 1. Setup User Wallet
 	userSigner, userAddress := createSigner(t)
+	sessionSigner, sessionKeyAddr := createSigner(t)
 
-	// 2. Setup Session Key
-	// We just need address for validation logic, not the signer itself unless we sign with it (which we don't for auth sig)
-	// But let's use createSigner for consistency
-	_, sessionKeyAddr := createSigner(t)
-
-	// 3. Define State
 	version := uint64(1)
 	assets := []string{"USDC"}
 	expiresAt := time.Now().Add(1 * time.Hour)
 
-	// 4. Create valid signature
-	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt.Unix())
+	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(userAddress, version, assets, expiresAt.Unix())
 	require.NoError(t, err)
 
 	packed, err := PackChannelKeyStateV1(sessionKeyAddr, metadataHash)
 	require.NoError(t, err)
 
-	authSig, err := userSigner.Sign(packed)
+	userSig, err := userSigner.Sign(packed)
+	require.NoError(t, err)
+
+	sessionKeySig, err := sessionSigner.Sign(packed)
 	require.NoError(t, err)
 
 	state := ChannelSessionKeyStateV1{
-		UserAddress: userAddress,
-		SessionKey:  sessionKeyAddr,
-		Version:     version,
-		Assets:      assets,
-		ExpiresAt:   expiresAt,
-		UserSig:     hexutil.Encode(authSig),
+		UserAddress:   userAddress,
+		SessionKey:    sessionKeyAddr,
+		Version:       version,
+		Assets:        assets,
+		ExpiresAt:     expiresAt,
+		UserSig:       hexutil.Encode(userSig),
+		SessionKeySig: hexutil.Encode(sessionKeySig),
 	}
 
-	// 5. Validate
-	err = ValidateChannelSessionKeyAuthSigV1(state)
-	require.NoError(t, err)
+	require.NoError(t, ValidateChannelSessionKeyStateV1(state))
 
-	// 6. Test Invalid Signature (wrong signer)
+	// Empty session_key_sig
+	stateNoKeySig := state
+	stateNoKeySig.SessionKeySig = ""
+	err = ValidateChannelSessionKeyStateV1(stateNoKeySig)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session_key_sig is required")
+
+	// user_sig signed by wrong wallet
 	wrongSigner, _ := createSigner(t)
-	wrongSig, err := wrongSigner.Sign(packed)
+	wrongUserSig, err := wrongSigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongUser := state
+	stateWrongUser.UserSig = hexutil.Encode(wrongUserSig)
+	err = ValidateChannelSessionKeyStateV1(stateWrongUser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match wallet")
+
+	// session_key_sig signed by wrong key
+	wrongKeySigner, _ := createSigner(t)
+	wrongKeySig, err := wrongKeySigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongKey := state
+	stateWrongKey.SessionKeySig = hexutil.Encode(wrongKeySig)
+	err = ValidateChannelSessionKeyStateV1(stateWrongKey)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session_key_sig does not match session_key")
+
+	// Tampered version (hash mismatch on recover)
+	stateTampered := state
+	stateTampered.Version = 2
+	assert.Error(t, ValidateChannelSessionKeyStateV1(stateTampered))
+}
+
+// TestValidateChannelSessionKeyStateV1_NoReplay verifies that signatures cannot be replayed
+// across (wallet, session_key) pairs. session_key binds the packed payload and user_address
+// binds the metadata hash, so substituting either dimension causes signature recovery to
+// yield an unrelated address.
+func TestValidateChannelSessionKeyStateV1_NoReplay(t *testing.T) {
+	t.Parallel()
+	userSignerA, userAddressA := createSigner(t)
+	_, userAddressB := createSigner(t)
+
+	sessionSignerA, sessionKeyAddrA := createSigner(t)
+	_, sessionKeyAddrB := createSigner(t)
+
+	version := uint64(1)
+	assets := []string{"USDC"}
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	metadataHashA, err := GetChannelSessionKeyAuthMetadataHashV1(userAddressA, version, assets, expiresAt.Unix())
+	require.NoError(t, err)
+	packedA, err := PackChannelKeyStateV1(sessionKeyAddrA, metadataHashA)
 	require.NoError(t, err)
 
-	state.UserSig = hexutil.Encode(wrongSig)
-	err1 := ValidateChannelSessionKeyAuthSigV1(state)
-	require.Error(t, err1)
-	assert.Contains(t, err1.Error(), "does not match wallet")
+	userSigA, err := userSignerA.Sign(packedA)
+	require.NoError(t, err)
+	sessionKeySigA, err := sessionSignerA.Sign(packedA)
+	require.NoError(t, err)
 
-	// 7. Test Invalid Signature (wrong data)
-	state.UserSig = hexutil.Encode(authSig)                    // Reset sig
-	state.Version = 2                                          // Change data
-	assert.Error(t, ValidateChannelSessionKeyAuthSigV1(state)) // Hash mismatch leads to recover address mismatch
+	stateA := ChannelSessionKeyStateV1{
+		UserAddress:   userAddressA,
+		SessionKey:    sessionKeyAddrA,
+		Version:       version,
+		Assets:        assets,
+		ExpiresAt:     expiresAt,
+		UserSig:       hexutil.Encode(userSigA),
+		SessionKeySig: hexutil.Encode(sessionKeySigA),
+	}
+	require.NoError(t, ValidateChannelSessionKeyStateV1(stateA))
+
+	// Cross-session_key replay: substitute sessionKeyAddrB. packed bytes diverge, both
+	// recoveries yield unrelated addresses.
+	stateCrossKey := stateA
+	stateCrossKey.SessionKey = sessionKeyAddrB
+	err = ValidateChannelSessionKeyStateV1(stateCrossKey)
+	require.Error(t, err)
+
+	// Cross-wallet replay: substitute userAddressB. metadataHash diverges, packed bytes
+	// diverge, both recoveries yield unrelated addresses.
+	stateCrossUser := stateA
+	stateCrossUser.UserAddress = userAddressB
+	err = ValidateChannelSessionKeyStateV1(stateCrossUser)
+	require.Error(t, err)
 }
 
 func TestGenerateSessionKeyStateIDV1(t *testing.T) {
@@ -142,6 +206,28 @@ func TestGenerateSessionKeyStateIDV1(t *testing.T) {
 	id3, err3 := GenerateSessionKeyStateIDV1(userAddr.String(), sessionKey.String(), version+1)
 	require.NoError(t, err3)
 	assert.NotEqual(t, id1, id3)
+}
+
+// TestPackChannelKeyStateV1_Typehash verifies the SessionKeyAuthTypehash matches the
+// Solidity constant SESSION_KEY_AUTH_TYPEHASH in SessionKeyValidator.sol so that
+// off-chain authorization payloads are accepted on-chain.
+func TestPackChannelKeyStateV1_Typehash(t *testing.T) {
+	t.Parallel()
+	expected := common.HexToHash("0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c")
+	assert.Equal(t, expected, SessionKeyAuthTypehash())
+}
+
+func TestPackChannelKeyStateV1(t *testing.T) {
+	t.Parallel()
+	sessionKey := "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+	metadataHash := common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+	packed, err := PackChannelKeyStateV1(sessionKey, metadataHash)
+	require.NoError(t, err)
+	assert.Len(t, packed, 96, "payload must be 96 bytes: typehash || padded address || metadataHash")
+
+	expected := common.FromHex("0x251773da8b8949935ef07284d20cc8605ad7d6f4cf6b5e040ce07dae857f0b6c000000000000000000000000deadbeefdeadbeefdeadbeefdeadbeefdeadbeefabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+	assert.Equal(t, expected, packed)
 }
 
 func TestEncodeDecodeChannelSessionKeySignature(t *testing.T) {

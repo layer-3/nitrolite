@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vite
+PLAN.md
+TASKS.md
+TODO.md
+layout-options.md

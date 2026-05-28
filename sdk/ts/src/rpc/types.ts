@@ -6,7 +6,7 @@
  */
 
 import { Address } from 'viem';
-import { TransitionType, TransactionType } from '../core/types';
+import { TransitionType, TransactionType } from '../core/types.js';
 
 // ============================================================================
 // Channel Types
@@ -145,6 +145,8 @@ export interface ChannelSessionKeyStateV1 {
   expires_at: string;
   /** User's signature over the session key metadata */
   user_sig: string;
+  /** Session-key holder's signature proving possession of the key being registered */
+  session_key_sig: string;
 }
 
 // ============================================================================
@@ -239,6 +241,8 @@ export interface BalanceEntryV1 {
   asset: string;
   /** Balance amount */
   amount: string;
+  /** On-chain enforced balance */
+  enforced: string;
 }
 
 /**

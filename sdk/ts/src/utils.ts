@@ -2,10 +2,10 @@
  * Utility functions for type transformations and helper methods
  */
 
-import * as core from './core/types';
-import * as API from './rpc/api';
-import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1, ActionAllowanceV1 } from './rpc/types';
-import Decimal from 'decimal.js';
+import * as core from './core/types.js';
+import * as API from './rpc/api.js';
+import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1, ActionAllowanceV1 } from './rpc/types.js';
+import { Decimal } from 'decimal.js';
 import { Address } from 'viem';
 
 /**
@@ -87,6 +87,7 @@ export function transformBalances(balances: BalanceEntryV1[]): core.BalanceEntry
   return balances.map((balance) => ({
     asset: balance.asset,
     balance: new Decimal(balance.amount),
+    enforced: new Decimal(balance.enforced),
   }));
 }
 
@@ -119,6 +120,8 @@ function parseChannelStatus(status: string): core.ChannelStatus {
       return core.ChannelStatus.Open;
     case 'challenged':
       return core.ChannelStatus.Challenged;
+    case 'closing':
+      return core.ChannelStatus.Closing;
     case 'closed':
       return core.ChannelStatus.Closed;
     default:
@@ -298,8 +301,7 @@ export function transformActionAllowance(a: ActionAllowanceV1): core.ActionAllow
 // App Session Transformations
 // ============================================================================
 
-import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppParticipantV1, AppAllocationV1, AppSessionInfoV1 } from './app/types';
-import * as RPCApp from './rpc/api';
+import { AppDefinitionV1, AppStateUpdateV1, SignedAppStateUpdateV1, AppSessionInfoV1 } from './app/types.js';
 
 /**
  * Transform SDK AppDefinitionV1 to RPC AppDefinitionV1 for requests
@@ -355,17 +357,41 @@ export function transformSignedAppStateUpdateToRPC(signed: SignedAppStateUpdateV
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid app session: expected object payload');
+  }
+
+  const allocations = raw.allocations;
+  if (!Array.isArray(allocations)) {
+    throw new Error('Invalid app session allocations: expected allocations to be an array');
+  }
+
   return {
     appSessionId: raw.app_session_id,
     appDefinition: transformAppDefinitionFromRPC(raw.app_definition),
     isClosed: raw.status === 'closed',
     sessionData: raw.session_data || '',
     version: BigInt(raw.version),
-    allocations: (raw.allocations || []).map((a: any) => ({
-      participant: a.participant as Address,
-      asset: a.asset,
-      amount: new Decimal(a.amount),
-    })),
+    allocations: allocations.map(transformAppAllocationFromRPC),
+  };
+}
+
+function transformAppAllocationFromRPC(raw: any, index: number) {
+  const context = `app session allocation[${index}]`;
+  if (!raw || typeof raw.participant !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field participant`);
+  }
+  if (typeof raw.asset !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field asset`);
+  }
+  if (typeof raw.amount !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field amount`);
+  }
+
+  return {
+    participant: raw.participant as Address,
+    asset: raw.asset,
+    amount: new Decimal(raw.amount),
   };
 }
 
@@ -374,16 +400,38 @@ export function transformAppSessionInfo(raw: any): AppSessionInfoV1 {
  * The server returns snake_case JSON that needs conversion to SDK types.
  */
 export function transformAppDefinitionFromRPC(raw: any): AppDefinitionV1 {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
+  }
   if (!raw.application_id || raw.nonce === undefined || raw.nonce === null) {
     throw new Error('Invalid app definition: missing required fields (application_id, nonce)');
   }
+  if (!Array.isArray(raw.participants)) {
+    throw new Error('Invalid app definition: expected participants to be an array');
+  }
+  if (raw.quorum === undefined || raw.quorum === null) {
+    throw new Error('Invalid app definition: missing required field quorum');
+  }
+
   return {
     applicationId: raw.application_id,
-    participants: (raw.participants || []).map((p: any) => ({
-      walletAddress: p.wallet_address as Address,
-      signatureWeight: p.signature_weight,
-    })),
+    participants: raw.participants.map(transformAppParticipantFromRPC),
     quorum: raw.quorum,
     nonce: BigInt(raw.nonce),
+  };
+}
+
+function transformAppParticipantFromRPC(raw: any, index: number) {
+  const context = `app definition participant[${index}]`;
+  if (!raw || typeof raw.wallet_address !== 'string') {
+    throw new Error(`Invalid ${context}: missing required string field wallet_address`);
+  }
+  if (typeof raw.signature_weight !== 'number') {
+    throw new Error(`Invalid ${context}: missing required numeric field signature_weight`);
+  }
+
+  return {
+    walletAddress: raw.wallet_address as Address,
+    signatureWeight: raw.signature_weight,
   };
 }

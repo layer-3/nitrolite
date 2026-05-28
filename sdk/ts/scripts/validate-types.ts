@@ -2,6 +2,10 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, '..');
 
 const execAsync = promisify(exec);
 
@@ -9,50 +13,6 @@ interface ValidationResult {
     success: boolean;
     message: string;
     details?: string;
-}
-
-/**
- * Validates that generated.ts exists and is valid
- */
-async function validateGeneratedFile(): Promise<ValidationResult> {
-    const generatedPath = join(__dirname, '../src/abis/generated.ts');
-
-    if (!existsSync(generatedPath)) {
-        return {
-            success: false,
-            message: 'Generated types file does not exist',
-            details: 'Run `npm run codegen` to generate types from smart contracts',
-        };
-    }
-
-    try {
-        const content = readFileSync(generatedPath, 'utf-8');
-
-        // Check if file contains expected exports (look for ABI exports)
-        const abiExportMatches = content.match(/export const \w+Abi/g);
-
-        if (!abiExportMatches || abiExportMatches.length === 0) {
-            return {
-                success: false,
-                message: 'Generated file does not contain valid ABI exports',
-                details: 'The generated.ts file exists but may be malformed or empty',
-            };
-        }
-
-        // Count total exports
-        const exportCount = abiExportMatches.length;
-
-        return {
-            success: true,
-            message: `Generated types are valid with ${exportCount} contract ABIs`,
-        };
-    } catch (error) {
-        return {
-            success: false,
-            message: 'Error reading generated types file',
-            details: error instanceof Error ? error.message : 'Unknown error',
-        };
-    }
 }
 
 /**
@@ -86,49 +46,34 @@ async function validateTypeScriptCompilation(): Promise<ValidationResult> {
 }
 
 /**
- * Validates that contract ABIs are in sync with source
+ * Validates that contract ABI files exist in the blockchain module
  */
 async function validateContractSync(): Promise<ValidationResult> {
     try {
-        // Check if contract build artifacts are newer than generated types
-        const generatedPath = join(__dirname, '../src/abis/generated.ts');
-        const contractOutPath = join(__dirname, '../../contract/out');
+        // ABIs are now inlined in the blockchain/evm directory
+        const abiFiles = [
+            join(__dirname, '../src/blockchain/evm/channel_hub_abi.ts'),
+            join(__dirname, '../src/blockchain/evm/erc20_abi.ts'),
+        ];
 
-        if (!existsSync(contractOutPath)) {
+        const missingFiles = abiFiles.filter((f) => !existsSync(f));
+
+        if (missingFiles.length > 0) {
             return {
                 success: false,
-                message: 'Contract artifacts not found',
-                details: 'Run `forge build` in the contract directory first',
-            };
-        }
-
-        if (!existsSync(generatedPath)) {
-            return {
-                success: false,
-                message: 'Generated types not found',
-                details: 'Run `npm run codegen` to generate types',
-            };
-        }
-
-        const contractStat = require('fs').statSync(contractOutPath);
-        const generatedStat = require('fs').statSync(generatedPath);
-
-        if (contractStat.mtime > generatedStat.mtime) {
-            return {
-                success: false,
-                message: 'Generated types are out of sync with contracts',
-                details: 'Contract artifacts are newer than generated types. Run `npm run codegen`',
+                message: 'Contract ABI files not found',
+                details: `Missing: ${missingFiles.join(', ')}`,
             };
         }
 
         return {
             success: true,
-            message: 'Contract types are in sync',
+            message: 'Contract ABI files are present',
         };
     } catch (error) {
         return {
             success: false,
-            message: 'Error checking contract sync',
+            message: 'Error checking contract ABI files',
             details: error instanceof Error ? error.message : 'Unknown sync error',
         };
     }
@@ -144,10 +89,12 @@ async function validateSDKStructure(): Promise<ValidationResult> {
 
         // Check for essential exports
         const essentialExports = [
-            "export * from './types'",
-            "export * from './utils'",
-            "export * from './client'",
-            "export * from './abis'",
+            "'./client'",
+            "'./signers'",
+            "'./utils'",
+            "'./core'",
+            "'./blockchain'",
+            "'./rpc'",
         ];
 
         const missingExports = essentialExports.filter((exp) => !content.includes(exp));
@@ -182,7 +129,7 @@ async function validatePackageConfig(): Promise<ValidationResult> {
         const packageContent = JSON.parse(readFileSync(packagePath, 'utf-8'));
 
         // Check essential scripts
-        const requiredScripts = ['build', 'codegen', 'typecheck'];
+        const requiredScripts = ['build', 'typecheck', 'test', 'codegen-abi'];
         const missingScripts = requiredScripts.filter((script) => !packageContent.scripts[script]);
 
         if (missingScripts.length > 0) {
@@ -226,8 +173,10 @@ async function validatePackageConfig(): Promise<ValidationResult> {
 async function main() {
     console.log('Running SDK validation checks...\n');
 
+    // Regenerate ABIs from latest contract artifacts before validating
+    await execAsync('npm run codegen-abi', { cwd: join(__dirname, '..') });
+
     const validations = [
-        { name: 'Generated Types', fn: validateGeneratedFile },
         { name: 'TypeScript Compilation', fn: validateTypeScriptCompilation },
         { name: 'Contract Sync', fn: validateContractSync },
         { name: 'SDK Structure', fn: validateSDKStructure },
@@ -274,6 +223,4 @@ async function main() {
     }
 }
 
-if (require.main === module) {
-    main();
-}
+main();

@@ -1,0 +1,66 @@
+config:
+  args: ["faucet-server"]
+  logLevel: info
+  # Faucet talks to the nitronode release in the same env, intra-cluster.
+  # Intra-cluster URL — bypasses nitronode ingress, so use the app's native /ws
+  # path (nitronode-internal listener). The /v1/ws prefix only exists on the
+  # public ingress, which rewrites it to /ws before forwarding.
+  nitronodeWsUrl: "ws://nitronode:7824/ws"
+  token:
+    symbol: yusd
+    tipAmount: 10
+  minTransferCount: 5
+  cooldownPeriod: 24h
+  # Per-IP flood protection comes from the ingress annotations below
+  # (limit-connections / limit-rps). The app keeps only the per-wallet
+  # cooldown so a single IP can still drip multiple wallets per day —
+  # accepted because each wallet is one-shot and MIN_TRANSFER_COUNT
+  # guards the faucet's runway separately.
+  ipRateLimitEnabled: false
+  trustedProxies: ""
+  envSecret: ""
+# ownerAddress: "0xccdaC3e7BB78572a5f67A3AA85188FAA8F35549C"
+
+service:
+  http:
+    enabled: true
+    port: 8080
+    # External path. NGINX rewrite (below) strips the prefix so the app sees
+    # the original request path (e.g. /requestTokens).
+    path: /v1/faucet-app(/|$)(.*)
+
+metrics:
+  enabled: false
+
+replicaCount: 1
+resources:
+  requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+  limits:   { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+
+autoscaling:
+  enabled: false
+
+networking:
+  # Same host as nitronode-sandbox; routed by path. cert-manager reuses the
+  # TLS secret already provisioned by the nitronode ingress on this host.
+  externalHostname: nitronode-sandbox.yellow.org
+  tlsClusterIssuer: zerossl-prod
+  gateway:
+    enabled: false
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+      # ── Per-IP flood protection (NGINX-level) ────────────────────────────
+      # Replaces the app-level per-IP bucket. Effective only when ingress-nginx
+      # sees real client IPs; sandbox-v1 has no Cloudflare in front, so source
+      # IP comes from the GCP LB — verify externalTrafficPolicy=Local on the
+      # ingress-nginx Service before relying on these. Lower than nitronode's
+      # numbers because faucet is rare-write.
+      nginx.ingress.kubernetes.io/limit-connections: "10"        # concurrent / IP
+      nginx.ingress.kubernetes.io/limit-rps: "5"                 # new conns/s / IP
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"

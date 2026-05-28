@@ -10,6 +10,10 @@ import {
 import {EcdsaSignatureUtils} from "./EcdsaSignatureUtils.sol";
 import {Utils} from "../Utils.sol";
 
+/// @dev Type hash for `SessionKeyAuthorization`, included in the authorization payload to prevent
+///      reuse of unrelated `abi.encode(address, bytes32)` signatures as session-key authorizations.
+bytes32 constant SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)");
+
 /**
  * @notice Authorization struct for delegating signing authority to a session key
  * @dev The participant signs this authorization to allow the session key to sign on their behalf
@@ -25,6 +29,7 @@ struct SessionKeyAuthorization {
 
 function toSigningData(SessionKeyAuthorization memory skAuth) pure returns (bytes memory) {
     return abi.encode(
+        SESSION_KEY_AUTH_TYPEHASH,
         skAuth.sessionKey,
         skAuth.metadataHash
         // omit authSignature
@@ -48,11 +53,13 @@ function toSigningData(SessionKeyAuthorization memory skAuth) pure returns (byte
  * Where signature is a standard 65-byte EIP-191 or raw ECDSA signature of the packed state.
  *
  * Security Model:
- * - Off-chain enforcement (Clearnode) should validate session key expiration and usage limits
+ * - Off-chain enforcement (the Node) should validate session key expiration and usage limits
  * - On-chain validation only checks cryptographic validity
  * - Participants are responsible for session key management
  */
 contract SessionKeyValidator is ISignatureValidator {
+    error ChallengeWithSessionKeyNotSupported();
+
     /**
      * @notice Validates a signature using a delegated session key
      * @dev Validates:
@@ -92,5 +99,16 @@ contract SessionKeyValidator is ISignatureValidator {
         } else {
             return VALIDATION_FAILURE;
         }
+    }
+
+    /**
+     * @notice Challenge signatures via session keys are not supported
+     */
+    function validateChallengeSignature(bytes32, bytes calldata, bytes calldata, address)
+        external
+        pure
+        returns (ValidationResult)
+    {
+        revert ChallengeWithSessionKeyNotSupported();
     }
 }

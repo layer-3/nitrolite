@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -194,6 +195,114 @@ func TestState_ApplyReleaseTransition(t *testing.T) {
 	assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
 }
 
+func TestNewChallengeRescueState(t *testing.T) {
+	t.Parallel()
+
+	closedChannelID := "0xClosedChannel"
+	makePrev := func() State {
+		channelID := closedChannelID
+		return State{
+			Asset:         "USDC",
+			UserWallet:    "0xUser",
+			Epoch:         3,
+			Version:       7,
+			HomeChannelID: &channelID,
+			HomeLedger: Ledger{
+				TokenAddress: "0xToken",
+				BlockchainID: 1,
+				UserBalance:  decimal.NewFromInt(50),
+				UserNetFlow:  decimal.NewFromInt(50),
+			},
+		}
+	}
+
+	t.Run("Success - in-channel prev wraps to fresh epoch at version 0", func(t *testing.T) {
+		prev := makePrev()
+		amount := decimal.NewFromInt(42)
+
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, amount)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+
+		assert.Equal(t, prev.Asset, rescue.Asset)
+		assert.Equal(t, prev.UserWallet, rescue.UserWallet)
+		assert.Equal(t, prev.Epoch+1, rescue.Epoch)
+		assert.Equal(t, uint64(0), rescue.Version)
+		assert.Nil(t, rescue.HomeChannelID)
+		assert.Empty(t, rescue.HomeLedger.TokenAddress)
+		assert.Equal(t, uint64(0), rescue.HomeLedger.BlockchainID)
+		assert.True(t, amount.Equal(rescue.HomeLedger.UserBalance))
+		assert.True(t, amount.Equal(rescue.HomeLedger.NodeNetFlow))
+		assert.True(t, rescue.HomeLedger.UserNetFlow.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeBalance.IsZero())
+
+		assert.Equal(t, TransitionTypeChallengeRescue, rescue.Transition.Type)
+		assert.Equal(t, closedChannelID, rescue.Transition.AccountID)
+		assert.True(t, amount.Equal(rescue.Transition.Amount))
+
+		expectedTxID, err := GetReceiverTransactionID(closedChannelID, rescue.ID)
+		require.NoError(t, err)
+		assert.Equal(t, expectedTxID, rescue.Transition.TxID)
+	})
+
+	t.Run("Success - detached prev appends at next version inheriting ledger", func(t *testing.T) {
+		// Simulates path-1 timeout after a signed Finalize: user's chain already advanced
+		// via NextState() to a fresh epoch with post-Finalize receiver credits at v=0..M.
+		prev := State{
+			Asset:         "USDC",
+			UserWallet:    "0xUser",
+			Epoch:         4,
+			Version:       2,
+			HomeChannelID: nil,
+			HomeLedger: Ledger{
+				UserBalance: decimal.NewFromInt(10),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.NewFromInt(10),
+			},
+		}
+		amount := decimal.NewFromInt(42)
+
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, amount)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+
+		assert.Equal(t, prev.Epoch, rescue.Epoch)
+		assert.Equal(t, prev.Version+1, rescue.Version)
+		assert.Nil(t, rescue.HomeChannelID)
+		assert.True(t, decimal.NewFromInt(52).Equal(rescue.HomeLedger.UserBalance), "got %s", rescue.HomeLedger.UserBalance.String())
+		assert.True(t, decimal.NewFromInt(52).Equal(rescue.HomeLedger.NodeNetFlow), "got %s", rescue.HomeLedger.NodeNetFlow.String())
+		assert.True(t, rescue.HomeLedger.UserNetFlow.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeBalance.IsZero())
+
+		assert.Equal(t, TransitionTypeChallengeRescue, rescue.Transition.Type)
+		assert.Equal(t, closedChannelID, rescue.Transition.AccountID)
+		assert.True(t, amount.Equal(rescue.Transition.Amount))
+	})
+
+	t.Run("Accepts zero amount", func(t *testing.T) {
+		prev := makePrev()
+		rescue, err := NewChallengeRescueState(prev, closedChannelID, decimal.Zero)
+		require.NoError(t, err)
+		require.NotNil(t, rescue)
+		assert.True(t, rescue.Transition.Amount.IsZero())
+		assert.True(t, rescue.HomeLedger.UserBalance.IsZero())
+		assert.True(t, rescue.HomeLedger.NodeNetFlow.IsZero())
+	})
+
+	t.Run("Rejects negative amount", func(t *testing.T) {
+		prev := makePrev()
+		_, err := NewChallengeRescueState(prev, closedChannelID, decimal.NewFromInt(-1))
+		require.Error(t, err)
+	})
+
+	t.Run("Rejects empty closed channel ID", func(t *testing.T) {
+		prev := makePrev()
+		_, err := NewChallengeRescueState(prev, "", decimal.NewFromInt(1))
+		require.Error(t, err)
+	})
+}
+
 func TestState_ApplyMutualLockTransition(t *testing.T) {
 	t.Parallel()
 	state := NewVoidState("USDC", "0xUser")
@@ -221,34 +330,99 @@ func TestState_ApplyMutualLockTransition(t *testing.T) {
 
 func TestState_ApplyEscrowDepositTransition(t *testing.T) {
 	t.Parallel()
-	state := NewVoidState("USDC", "0xUser")
-	state.ID = "0xStateID"
 
-	escrowID := "0xEscrow"
-	state.EscrowChannelID = &escrowID
-	state.EscrowLedger = &Ledger{UserBalance: decimal.NewFromInt(100)}
+	t.Run("user_balance_increases_escrow_balance_decreases", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		state.ID = "0xStateID"
 
-	amount := decimal.NewFromInt(10)
-	transition, err := state.ApplyEscrowDepositTransition(amount)
-	require.NoError(t, err)
-	assert.Equal(t, TransitionTypeEscrowDeposit, transition.Type)
-	assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
-	assert.Equal(t, "90", state.EscrowLedger.UserBalance.String())
+		escrowID := "0xEscrow"
+		state.EscrowChannelID = &escrowID
+		state.EscrowLedger = &Ledger{UserBalance: decimal.NewFromInt(100)}
+
+		amount := decimal.NewFromInt(10)
+		transition, err := state.ApplyEscrowDepositTransition(amount)
+		require.NoError(t, err)
+		assert.Equal(t, TransitionTypeEscrowDeposit, transition.Type)
+		assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
+		assert.Equal(t, "90", state.EscrowLedger.UserBalance.String())
+	})
+
+	t.Run("clears_node_balance_and_leaves_net_flows_unchanged", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		state.ID = "0xStateID"
+
+		escrowID := "0xEscrow"
+		state.EscrowChannelID = &escrowID
+
+		// Realistic precondition: state after ApplyMutualLockTransition where the
+		// node has locked funds on the home chain.
+		state.HomeLedger.NodeBalance = decimal.NewFromInt(10)
+		state.HomeLedger.NodeNetFlow = decimal.NewFromInt(10)
+		state.EscrowLedger = &Ledger{
+			UserBalance: decimal.NewFromInt(10),
+			UserNetFlow: decimal.NewFromInt(10),
+		}
+
+		prevNodeNetFlow := state.HomeLedger.NodeNetFlow
+		prevUserNetFlow := state.HomeLedger.UserNetFlow
+
+		amount := decimal.NewFromInt(10)
+		_, err := state.ApplyEscrowDepositTransition(amount)
+		require.NoError(t, err)
+
+		// User receives funds on the home chain.
+		assert.Equal(t, "10", state.HomeLedger.UserBalance.String())
+
+		// Node's locked allocation must be cleared (on-chain: nodeAllocation == 0).
+		assert.Equal(t, "0", state.HomeLedger.NodeBalance.String())
+
+		// Net flows must not change (on-chain: nodeNfDelta == 0, userNfDelta == 0).
+		assert.True(t, state.HomeLedger.NodeNetFlow.Equal(prevNodeNetFlow),
+			"NodeNetFlow must remain unchanged: got %s, want %s",
+			state.HomeLedger.NodeNetFlow.String(), prevNodeNetFlow.String())
+		assert.True(t, state.HomeLedger.UserNetFlow.Equal(prevUserNetFlow),
+			"UserNetFlow must remain unchanged: got %s, want %s",
+			state.HomeLedger.UserNetFlow.String(), prevUserNetFlow.String())
+	})
 }
 
 func TestState_ApplyEscrowLockTransition(t *testing.T) {
 	t.Parallel()
-	state := NewVoidState("USDC", "0xUser")
-	chanID := "0xChan"
-	state.HomeChannelID = &chanID
-	state.ID = "0xStateID"
 
-	amount := decimal.NewFromInt(10)
-	transition, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
-	require.NoError(t, err)
-	assert.Equal(t, TransitionTypeEscrowLock, transition.Type)
-	assert.NotNil(t, state.EscrowLedger)
-	assert.Equal(t, "10", state.EscrowLedger.NodeBalance.String())
+	t.Run("success_creates_escrow_ledger_and_clears_node_balance", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		chanID := "0xChan"
+		state.HomeChannelID = &chanID
+		state.ID = "0xStateID"
+		state.HomeLedger.UserBalance = decimal.NewFromInt(50)
+		state.HomeLedger.NodeBalance = decimal.NewFromInt(5)
+
+		amount := decimal.NewFromInt(10)
+		transition, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
+		require.NoError(t, err)
+		assert.Equal(t, TransitionTypeEscrowLock, transition.Type)
+		assert.NotNil(t, state.EscrowLedger)
+		assert.Equal(t, "10", state.EscrowLedger.NodeBalance.String())
+		assert.True(t, state.HomeLedger.NodeBalance.IsZero(),
+			"home NodeBalance must be cleared to zero, got %s", state.HomeLedger.NodeBalance.String())
+	})
+
+	t.Run("reject_insufficient_user_balance", func(t *testing.T) {
+		t.Parallel()
+		state := NewVoidState("USDC", "0xUser")
+		chanID := "0xChan"
+		state.HomeChannelID = &chanID
+		state.ID = "0xStateID"
+		state.HomeLedger.UserBalance = decimal.NewFromInt(5)
+
+		amount := decimal.NewFromInt(10)
+		_, err := state.ApplyEscrowLockTransition(2, "0xT", amount)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "insufficient user balance for escrow lock")
+	})
 }
 
 func TestState_ApplyEscrowWithdrawTransition(t *testing.T) {
@@ -305,26 +479,54 @@ func TestLedger_Equal_Validate(t *testing.T) {
 	}
 	l2 := l1
 	assert.NoError(t, l1.Equal(l2))
-	assert.NoError(t, l1.Validate())
+	assert.NoError(t, l1.Validate(6))
 
 	l2.TokenAddress = "0xOther"
 	assert.Error(t, l1.Equal(l2))
 
 	lInvalid := l1
 	lInvalid.TokenAddress = ""
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.BlockchainID = 0
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.UserBalance = decimal.NewFromInt(-1)
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
 
 	lInvalid = l1
 	lInvalid.UserNetFlow = decimal.NewFromInt(999) // Mismatch
-	assert.Error(t, lInvalid.Validate())
+	assert.Error(t, lInvalid.Validate(6))
+
+	// Each net-flow field fits int256, but their sum does not. Solidity computes
+	// `userNetFlow + nodeNetFlow` as int256, so an unchecked sum overflow would
+	// produce a state the contract panics on.
+	lSumOverflow := Ledger{
+		TokenAddress: "0xT",
+		BlockchainID: 1,
+		UserBalance:  decimal.NewFromBigInt(maxInt256, 0),
+		NodeBalance:  decimal.NewFromInt(1),
+		UserNetFlow:  decimal.NewFromBigInt(maxInt256, 0),
+		NodeNetFlow:  decimal.NewFromInt(1),
+	}
+	err := lSumOverflow.Validate(0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "net flow sum out of int256 range")
+
+	// Sum exactly at the int256 boundary must pass.
+	halfMax := new(big.Int).Rsh(maxInt256, 1) // (2^255-1)/2
+	otherHalf := new(big.Int).Sub(maxInt256, halfMax)
+	lBoundary := Ledger{
+		TokenAddress: "0xT",
+		BlockchainID: 1,
+		UserBalance:  decimal.NewFromBigInt(halfMax, 0),
+		NodeBalance:  decimal.NewFromBigInt(otherHalf, 0),
+		UserNetFlow:  decimal.NewFromBigInt(halfMax, 0),
+		NodeNetFlow:  decimal.NewFromBigInt(otherHalf, 0),
+	}
+	assert.NoError(t, lBoundary.Validate(0))
 }
 
 func TestTransactionType_String(t *testing.T) {

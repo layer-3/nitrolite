@@ -27,6 +27,7 @@ library ChannelEngine {
     error IncorrectChannelStatus();
     error IncorrectStateVersion();
     error ChallengeExpired();
+    error TokenMismatch();
 
     error IncorrectUserAllocation();
     error IncorrectNodeAllocation();
@@ -64,7 +65,6 @@ library ChannelEngine {
         // State updates
         ChannelStatus newStatus;
         uint64 newChallengeExpiry;
-        bool updateLastState;
         bool closeChannel;
     }
 
@@ -100,6 +100,11 @@ library ChannelEngine {
         // homeLedger always represents current chain
         require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
         require(candidate.version > ctx.prevState.version || Utils.isEmpty(ctx.prevState), IncorrectStateVersion());
+
+        // Token must remain constant throughout the channel's lifetime
+        if (!Utils.isEmpty(ctx.prevState)) {
+            require(candidate.homeLedger.token == ctx.prevState.homeLedger.token, TokenMismatch());
+        }
 
         // Validate token decimals for homeLedger
         Utils.validateTokenDecimals(candidate.homeLedger);
@@ -167,7 +172,6 @@ library ChannelEngine {
             revert IncorrectStateIntent();
         }
 
-        effects.updateLastState = true;
         return effects;
     }
 
@@ -251,13 +255,11 @@ library ChannelEngine {
             IncorrectChannelStatus()
         );
 
-        uint256 allocsSum = candidate.homeLedger.userAllocation + candidate.homeLedger.nodeAllocation;
-        require(allocsSum <= ctx.lockedFunds, AllocationExceedsLockedFunds());
+        require(candidate.homeLedger.userAllocation == 0, IncorrectUserAllocation());
+        require(candidate.homeLedger.nodeAllocation == 0, IncorrectNodeAllocation());
 
-        // Ensure final locked funds will be sufficient for special nodeAllocation handling
         int256 finalLockedFunds = ctx.lockedFunds.toInt256() + userNfDelta + nodeNfDelta;
         require(finalLockedFunds >= 0, InsufficientLockedFunds());
-        require(finalLockedFunds >= candidate.homeLedger.nodeAllocation.toInt256(), InsufficientLockedFunds());
 
         // Calculate effects
         // Push allocations to parties (negative = push out from channel)
@@ -495,14 +497,15 @@ library ChannelEngine {
 
         if (ctx.status == ChannelStatus.MIGRATING_IN) {
             // NEW HOME CHAIN (IN): Move MIGRATING_IN → OPERATING
-            // The home state represents the new home (current chain)
+            // The homeLedger represents the new home (current chain) in candidate and prevState
             require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
             require(ctx.prevState.intent == StateIntent.INITIATE_MIGRATION, IncorrectPreviousStateIntent());
             require(candidate.version == ctx.prevState.version + 1, IncorrectStateVersion());
 
-            uint256 userMigratedAlloc = ctx.prevState.homeLedger.userAllocation;
+            // nonHomeLedger = old home (holds the user's migrated allocation)
+            uint256 userMigratedAlloc = ctx.prevState.nonHomeLedger.userAllocation;
 
-            // Validate that this completes the migration
+            // Validate that this completes the migration: user receives their migrated allocation on new home
             require(candidate.homeLedger.userAllocation == userMigratedAlloc, IncorrectUserAllocation());
             require(candidate.homeLedger.nodeAllocation == 0, IncorrectNodeAllocation());
             require(candidate.nonHomeLedger.userAllocation == 0, IncorrectUserAllocation());
@@ -519,6 +522,12 @@ library ChannelEngine {
         } else if (ctx.status == ChannelStatus.OPERATING || ctx.status == ChannelStatus.DISPUTED) {
             // OLD HOME CHAIN (OUT): Release funds and move to MIGRATED_OUT
             // homeLedger represents old home (current chain)
+            require(candidate.homeLedger.chainId == block.chainid, IncorrectHomeChainId());
+            if (ctx.prevState.intent == StateIntent.INITIATE_MIGRATION) {
+                require(candidate.version == ctx.prevState.version + 1, IncorrectStateVersion());
+            } else {
+                require(candidate.version > ctx.prevState.version + 1, IncorrectStateVersion());
+            }
 
             // Validate homeLedger
             require(candidate.homeLedger.userAllocation == 0, IncorrectUserAllocation());

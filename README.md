@@ -13,10 +13,10 @@ Nitrolite is a lightweight, efficient state channel framework for Ethereum and o
 Nitrolite is a complete state channel infrastructure consisting of several main components:
 
 1.  **Smart Contracts**: On-chain infrastructure for state channel management (ChannelHub, ChannelEngine).
-2.  **Clearnode**: A broker providing ledger services and off-chain state management.
+2.  **Nitronode** (formerly Clearnode): A broker providing ledger services and off-chain state management.
 3.  **Go SDK**: Comprehensive Go library for building backend and CLI applications.
 4.  **TypeScript SDK**: Client-side library for building web and mobile applications.
-5.  **Cerebro (CLI)**: Interactive command-line interface for managing channels and assets.
+5.  **Cerebro**: REPL for managing channels and assets.
 
 ### Key Benefits
 
@@ -31,10 +31,10 @@ Nitrolite is a complete state channel infrastructure consisting of several main 
 This repository contains:
 
 - **[`/contracts`](/contracts)**: Solidity smart contracts for the state channel framework.
-- **[`/clearnode`](/clearnode)**: Implementation of the Clearnode service.
+- **[`/nitronode`](/nitronode)**: Implementation of the Nitronode service (formerly `/clearnode`).
 - **[`/sdk/go`](/sdk/go)**: Official Go SDK.
 - **[`/sdk/ts`](/sdk/ts)**: Official TypeScript SDK.
-- **[`/cerebro`](/cerebro)**: Clearnode CLI tool.
+- **[`/cerebro`](/cerebro)**: Cerebro REPL.
 - **[`/pkg`](/pkg)**: Shared Go packages (core state machine, signing, etc.).
 - **[`/docs`](/docs)**: Protocol specifications and architectural documentation.
 
@@ -66,9 +66,14 @@ For the most up-to-date contract addresses on all supported networks, see the [c
 
 See the [contract README](/contracts/README.md) for detailed contract documentation.
 
-## Clearnode
+## Nitronode
 
-Clearnode is a message broker and state manager that enables efficient off-chain payment channels.
+> **Renamed in v1.3.0** — `clearnode` was renamed to `nitronode`. Old Docker images
+> (`ghcr.io/layer-3/nitrolite/clearnode`), the `clearnode-sandbox.yellow.org`
+> domain, and `CLEARNODE_*` env vars are kept for v1.2.0 and earlier; new releases
+> ship as `nitronode`. See [`MIGRATION-NITRONODE.md`](/MIGRATION-NITRONODE.md).
+
+Nitronode is a message broker and state manager that enables efficient off-chain payment channels.
 
 ### Features
 
@@ -78,7 +83,7 @@ Clearnode is a message broker and state manager that enables efficient off-chain
 - **Flexible Storage**: Support for SQLite (embedded) and PostgreSQL.
 - **Quorum-Based Signatures**: Weight-based quorum requirements for state updates.
 
-See the [Clearnode Documentation](/clearnode/README.md) for more details.
+See the [Nitronode Documentation](/nitronode/README.md) for more details.
 
 ## SDKs
 
@@ -100,31 +105,16 @@ npm install @layer-3/nitrolite
 ```
 See [SDK TS README](/sdk/ts/README.md).
 
-## Cerebro (CLI)
+## Cerebro
 
-Interactive CLI for interacting with Clearnode.
+REPL for interacting with Nitronode.
 
 ```bash
 # From the root directory
-go build -o nitrolite-cli ./cerebro
-./nitrolite-cli wss://node.example.com/ws
+go build -o cerebro ./cerebro
+./cerebro wss://node.example.com/ws
 ```
 See [Cerebro README](/cerebro/README.md).
-
-## Quick Start with Docker Compose
-
-Get started quickly with the local development environment:
-
-```bash
-# Start the environment
-docker-compose up -d
-
-# This will:
-# 1. Start a local Anvil blockchain on port 8545
-# 2. Deploy core Nitrolite contracts
-# 3. Seed test tokens and configuration
-# 4. Start the Clearnode service.
-```
 
 ## Development
 

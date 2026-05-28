@@ -23,7 +23,7 @@ npm install @layer-3/nitrolite viem decimal.js
 
 ## Core Concepts
 
-The SDK connects to a **clearnode** (a state channel server) over WebSocket. All operations (deposits, withdrawals, transfers) happen off-chain as signed state updates. You can **checkpoint** at any time to sync state on-chain.
+The SDK connects to a **nitronode** (a state channel server) over WebSocket. All operations (deposits, withdrawals, transfers) happen off-chain as signed state updates. You can **checkpoint** at any time to sync state on-chain.
 
 The client needs two signers:
 
@@ -102,7 +102,7 @@ const txSigner = new WalletTransactionSigner(walletClient);
 
 // Connect
 const client = await Client.create(
-  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  'wss://nitronode-sandbox.yellow.org/v1/ws',
   stateSigner,
   txSigner,
   withBlockchainRPC(11155111n, 'https://ethereum-sepolia-rpc.publicnode.com'),
@@ -224,7 +224,7 @@ await client.close();
 
 ## Session Keys (Auto-Sign)
 
-Session keys let your app sign state updates automatically without wallet popups on every operation. A temporary key is generated in the browser, registered with the clearnode, and used for a limited time.
+Session keys let your app sign state updates automatically without wallet popups on every operation. A temporary key is generated in the browser, registered with the nitronode, and used for a limited time.
 
 ### Enable
 
@@ -232,6 +232,7 @@ Session keys let your app sign state updates automatically without wallet popups
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   ChannelSessionKeyStateSigner,
+  EthereumMsgSigner,
   getChannelSessionKeyAuthMetadataHashV1,
 } from '@layer-3/nitrolite';
 
@@ -253,14 +254,19 @@ const state = {
   assets: ['usdc', 'weth'],
   expires_at: expiresAt.toString(),
   user_sig: '',
+  session_key_sig: '',
 };
 
-// 4. Sign with the main wallet and submit
+// 4. Sign ownership with the session key, then user_sig with the main wallet, then submit.
+// Both signatures are required; the server rejects submits with either missing.
+const sessionKeySigner = new EthereumMsgSigner(privateKey);
+state.session_key_sig = await client.signChannelSessionKeyOwnership(state, sessionKeySigner);
 state.user_sig = await client.signChannelSessionKeyState(state);
 await client.submitChannelSessionKeyState(state);
 
 // 5. Compute the metadata hash
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
+  address,
   version,
   ['usdc', 'weth'],
   expiresAt,
@@ -276,7 +282,7 @@ const sessionSigner = new ChannelSessionKeyStateSigner(
 const txSigner = new WalletTransactionSigner(walletClient);
 
 const sessionClient = await Client.create(
-  'wss://clearnode-sandbox.yellow.org/v1/ws',
+  'wss://nitronode-sandbox.yellow.org/v1/ws',
   sessionSigner,
   txSigner,
   withBlockchainRPC(11155111n, 'https://ethereum-sepolia-rpc.publicnode.com'),
@@ -287,27 +293,39 @@ Now `sessionClient` signs off-chain state updates with the session key — no wa
 
 ### Revoke
 
-Submit a new version with empty assets to revoke a session key:
+Submit a new version with `expires_at` in the past to revoke a session key. The nitronode
+treats any submit whose `expires_at <= now` as a revocation: the slot is freed for the
+per-user cap, and the auth path stops accepting state signed by the key.
 
 ```ts
-import { packChannelKeyStateV1 } from '@layer-3/nitrolite';
+import { EthereumMsgSigner, packChannelKeyStateV1 } from '@layer-3/nitrolite';
 
 const existing = await client.getLastChannelKeyStates(address, sessionKeyAddress);
 const latest = existing[0];
+
+// expires_at one second before now is sufficient; the server compares against its own clock.
+const pastExpiresAt = (Math.floor(Date.now() / 1000) - 1).toString();
 
 const revokeState = {
   user_address: address,
   session_key: sessionKeyAddress,
   version: (BigInt(latest.version) + 1n).toString(),
-  assets: [],
-  expires_at: latest.expires_at,
+  assets: latest.assets,
+  expires_at: pastExpiresAt,
   user_sig: '',
+  session_key_sig: '',
 };
+
+// Revoke still requires the session-key holder's possession proof — sign with the session key
+// (the holder is consenting to retire it) before submit.
+const sessionKeySigner = new EthereumMsgSigner(sessionKeyPrivateKey);
+revokeState.session_key_sig = await client.signChannelSessionKeyOwnership(revokeState, sessionKeySigner);
 
 // Sign the revocation with the main wallet (EIP-191)
 const metadataHash = getChannelSessionKeyAuthMetadataHashV1(
+  address,
   BigInt(revokeState.version),
-  [],
+  revokeState.assets,
   BigInt(revokeState.expires_at),
 );
 revokeState.user_sig = await walletClient.signMessage({

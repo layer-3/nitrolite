@@ -12,10 +12,15 @@ export const ChannelHubAbi = [
       {
         name: '_defaultSigValidator',
         type: 'address',
-        internalType: 'contract ISignatureValidator',
+        internalType: 'contract ISignatureValidator'
       },
+      {
+        name: '_node',
+        type: 'address',
+        internalType: 'address'
+      }
     ],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -25,10 +30,10 @@ export const ChannelHubAbi = [
       {
         name: '',
         type: 'address',
-        internalType: 'contract ISignatureValidator',
-      },
+        internalType: 'contract ISignatureValidator'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -38,23 +43,36 @@ export const ChannelHubAbi = [
       {
         name: '',
         type: 'uint32',
-        internalType: 'uint32',
-      },
+        internalType: 'uint32'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
-    name: 'MAX_DEPOSIT_ESCROW_PURGE',
+    name: 'MAX_CHALLENGE_DURATION',
     inputs: [],
     outputs: [
       {
         name: '',
         type: 'uint32',
-        internalType: 'uint32',
-      },
+        internalType: 'uint32'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'MAX_DEPOSIT_ESCROW_STEPS',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'uint32',
+        internalType: 'uint32'
+      }
+    ],
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -64,10 +82,49 @@ export const ChannelHubAbi = [
       {
         name: '',
         type: 'uint32',
-        internalType: 'uint32',
-      },
+        internalType: 'uint32'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'NODE',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'address',
+        internalType: 'address'
+      }
+    ],
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'TRANSFER_GAS_LIMIT',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'uint256',
+        internalType: 'uint256'
+      }
+    ],
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'VALIDATOR_ACTIVATION_DELAY',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'uint64',
+        internalType: 'uint64'
+      }
+    ],
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -77,10 +134,10 @@ export const ChannelHubAbi = [
       {
         name: '',
         type: 'uint8',
-        internalType: 'uint8',
-      },
+        internalType: 'uint8'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -89,7 +146,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -99,17 +156,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -119,39 +176,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -161,65 +218,65 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
+            internalType: 'bytes'
+          }
+        ]
       },
       {
         name: 'challengerSig',
         type: 'bytes',
-        internalType: 'bytes',
+        internalType: 'bytes'
       },
       {
         name: 'challengerIdx',
         type: 'uint8',
-        internalType: 'enum ParticipantIndex',
-      },
+        internalType: 'enum ParticipantIndex'
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'payable'
   },
   {
     type: 'function',
@@ -228,21 +285,21 @@ export const ChannelHubAbi = [
       {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'challengerSig',
         type: 'bytes',
-        internalType: 'bytes',
+        internalType: 'bytes'
       },
       {
         name: 'challengerIdx',
         type: 'uint8',
-        internalType: 'enum ParticipantIndex',
-      },
+        internalType: 'enum ParticipantIndex'
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -251,21 +308,21 @@ export const ChannelHubAbi = [
       {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'challengerSig',
         type: 'bytes',
-        internalType: 'bytes',
+        internalType: 'bytes'
       },
       {
         name: 'challengerIdx',
         type: 'uint8',
-        internalType: 'enum ParticipantIndex',
-      },
+        internalType: 'enum ParticipantIndex'
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -274,7 +331,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -284,17 +341,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -304,39 +361,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -346,55 +403,73 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'nonpayable'
+  },
+  {
+    type: 'function',
+    name: 'claimFunds',
+    inputs: [
+      {
+        name: 'token',
+        type: 'address',
+        internalType: 'address'
+      },
+      {
+        name: 'destination',
+        type: 'address',
+        internalType: 'address'
+      }
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -403,7 +478,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -413,17 +488,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -433,39 +508,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -475,55 +550,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -537,34 +612,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'initState',
@@ -574,17 +649,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -594,39 +669,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -636,55 +711,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'payable'
   },
   {
     type: 'function',
@@ -693,7 +768,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -703,17 +778,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -723,39 +798,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -765,78 +840,73 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'payable'
   },
   {
     type: 'function',
-    name: 'depositToVault',
+    name: 'depositToNode',
     inputs: [
-      {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
       {
         name: 'token',
         type: 'address',
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'amount',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'payable'
   },
   {
     type: 'function',
@@ -846,19 +916,24 @@ export const ChannelHubAbi = [
       {
         name: '',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
     name: 'finalizeEscrowDeposit',
     inputs: [
       {
+        name: 'channelId',
+        type: 'bytes32',
+        internalType: 'bytes32'
+      },
+      {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -868,17 +943,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -888,39 +963,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -930,64 +1005,69 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
     name: 'finalizeEscrowWithdrawal',
     inputs: [
       {
+        name: 'channelId',
+        type: 'bytes32',
+        internalType: 'bytes32'
+      },
+      {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -997,17 +1077,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1017,39 +1097,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1059,55 +1139,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -1116,7 +1196,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -1126,17 +1206,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1146,39 +1226,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1188,79 +1268,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    name: 'getAccountBalance',
-    inputs: [
-      {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
-      {
-        name: 'token',
-        type: 'address',
-        internalType: 'address',
-      },
-    ],
-    outputs: [
-      {
-        name: '',
-        type: 'uint256',
-        internalType: 'uint256',
-      },
-    ],
-    stateMutability: 'view',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -1269,14 +1325,14 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
-      },
+        internalType: 'bytes32'
+      }
     ],
     outputs: [
       {
         name: 'status',
         type: 'uint8',
-        internalType: 'enum ChannelStatus',
+        internalType: 'enum ChannelStatus'
       },
       {
         name: 'definition',
@@ -1286,34 +1342,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'lastState',
@@ -1323,17 +1379,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1343,39 +1399,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1385,64 +1441,64 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
+            internalType: 'bytes'
+          }
+        ]
       },
       {
         name: 'challengeExpiry',
         type: 'uint256',
-        internalType: 'uint256',
+        internalType: 'uint256'
       },
       {
         name: 'lockedFunds',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1451,17 +1507,17 @@ export const ChannelHubAbi = [
       {
         name: 'user',
         type: 'address',
-        internalType: 'address',
-      },
+        internalType: 'address'
+      }
     ],
     outputs: [
       {
         name: '',
         type: 'bytes32[]',
-        internalType: 'bytes32[]',
-      },
+        internalType: 'bytes32[]'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1470,34 +1526,34 @@ export const ChannelHubAbi = [
       {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
-      },
+        internalType: 'bytes32'
+      }
     ],
     outputs: [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'status',
         type: 'uint8',
-        internalType: 'enum EscrowStatus',
+        internalType: 'enum EscrowStatus'
       },
       {
         name: 'unlockAt',
         type: 'uint64',
-        internalType: 'uint64',
+        internalType: 'uint64'
       },
       {
         name: 'challengeExpiry',
         type: 'uint64',
-        internalType: 'uint64',
+        internalType: 'uint64'
       },
       {
         name: 'lockedAmount',
         type: 'uint256',
-        internalType: 'uint256',
+        internalType: 'uint256'
       },
       {
         name: 'initState',
@@ -1507,17 +1563,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1527,39 +1583,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1569,54 +1625,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1625,22 +1681,22 @@ export const ChannelHubAbi = [
       {
         name: 'page',
         type: 'uint256',
-        internalType: 'uint256',
+        internalType: 'uint256'
       },
       {
         name: 'pageSize',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
     outputs: [
       {
         name: 'ids',
         type: 'bytes32[]',
-        internalType: 'bytes32[]',
-      },
+        internalType: 'bytes32[]'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1649,29 +1705,29 @@ export const ChannelHubAbi = [
       {
         name: 'escrowId',
         type: 'bytes32',
-        internalType: 'bytes32',
-      },
+        internalType: 'bytes32'
+      }
     ],
     outputs: [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'status',
         type: 'uint8',
-        internalType: 'enum EscrowStatus',
+        internalType: 'enum EscrowStatus'
       },
       {
         name: 'challengeExpiry',
         type: 'uint64',
-        internalType: 'uint64',
+        internalType: 'uint64'
       },
       {
         name: 'lockedAmount',
         type: 'uint256',
-        internalType: 'uint256',
+        internalType: 'uint256'
       },
       {
         name: 'initState',
@@ -1681,17 +1737,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1701,39 +1757,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1743,78 +1799,97 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'getNodeBalance',
+    inputs: [
+      {
+        name: 'token',
+        type: 'address',
+        internalType: 'address'
+      }
+    ],
+    outputs: [
+      {
+        name: '',
+        type: 'uint256',
+        internalType: 'uint256'
+      }
+    ],
+    stateMutability: 'view'
   },
   {
     type: 'function',
     name: 'getNodeValidator',
     inputs: [
       {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
-      {
         name: 'validatorId',
         type: 'uint8',
-        internalType: 'uint8',
-      },
+        internalType: 'uint8'
+      }
     ],
     outputs: [
       {
-        name: '',
+        name: 'validator',
         type: 'address',
-        internalType: 'contract ISignatureValidator',
+        internalType: 'contract ISignatureValidator'
       },
+      {
+        name: 'registeredAt',
+        type: 'uint64',
+        internalType: 'uint64'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1823,43 +1898,59 @@ export const ChannelHubAbi = [
       {
         name: 'user',
         type: 'address',
-        internalType: 'address',
+        internalType: 'address'
+      }
+    ],
+    outputs: [
+      {
+        name: 'openChannels',
+        type: 'bytes32[]',
+        internalType: 'bytes32[]'
+      }
+    ],
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'getReclaimBalance',
+    inputs: [
+      {
+        name: 'account',
+        type: 'address',
+        internalType: 'address'
       },
+      {
+        name: 'token',
+        type: 'address',
+        internalType: 'address'
+      }
     ],
     outputs: [
       {
         name: '',
-        type: 'bytes32[]',
-        internalType: 'bytes32[]',
-      },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'getUnlockableEscrowDepositAmount',
-    inputs: [],
-    outputs: [
-      {
-        name: 'totalUnlockable',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
-    name: 'getUnlockableEscrowDepositCount',
+    name: 'getUnlockableEscrowDepositStats',
     inputs: [],
     outputs: [
       {
         name: 'count',
         type: 'uint256',
-        internalType: 'uint256',
+        internalType: 'uint256'
       },
+      {
+        name: 'totalAmount',
+        type: 'uint256',
+        internalType: 'uint256'
+      }
     ],
-    stateMutability: 'view',
+    stateMutability: 'view'
   },
   {
     type: 'function',
@@ -1873,34 +1964,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'candidate',
@@ -1910,17 +2001,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -1930,39 +2021,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -1972,55 +2063,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'payable'
   },
   {
     type: 'function',
@@ -2034,34 +2125,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'candidate',
@@ -2071,17 +2162,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2091,39 +2182,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2133,55 +2224,55 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -2195,34 +2286,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'candidate',
@@ -2232,17 +2323,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2252,39 +2343,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2294,96 +2385,91 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
     name: 'purgeEscrowDeposits',
     inputs: [
       {
-        name: 'maxToPurge',
+        name: 'maxSteps',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
     name: 'registerNodeValidator',
     inputs: [
       {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
-      {
         name: 'validatorId',
         type: 'uint8',
-        internalType: 'uint8',
+        internalType: 'uint8'
       },
       {
         name: 'validator',
         type: 'address',
-        internalType: 'contract ISignatureValidator',
+        internalType: 'contract ISignatureValidator'
       },
       {
         name: 'signature',
         type: 'bytes',
-        internalType: 'bytes',
-      },
+        internalType: 'bytes'
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
@@ -2392,7 +2478,7 @@ export const ChannelHubAbi = [
       {
         name: 'channelId',
         type: 'bytes32',
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -2402,17 +2488,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2422,39 +2508,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2464,78 +2550,78 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'function',
-    name: 'withdrawFromVault',
+    name: 'withdrawFromNode',
     inputs: [
       {
         name: 'to',
         type: 'address',
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'token',
         type: 'address',
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'amount',
         type: 'uint256',
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: 'nonpayable'
   },
   {
     type: 'event',
@@ -2545,7 +2631,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -2556,17 +2642,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2576,39 +2662,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2618,60 +2704,60 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
+            internalType: 'bytes'
+          }
+        ]
       },
       {
         name: 'challengeExpireAt',
         type: 'uint64',
         indexed: false,
-        internalType: 'uint64',
-      },
+        internalType: 'uint64'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -2681,7 +2767,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -2692,17 +2778,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2712,39 +2798,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2754,54 +2840,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -2811,7 +2897,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'finalState',
@@ -2822,17 +2908,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -2842,39 +2928,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -2884,54 +2970,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -2941,19 +3027,13 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'user',
         type: 'address',
         indexed: true,
-        internalType: 'address',
-      },
-      {
-        name: 'node',
-        type: 'address',
-        indexed: true,
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'definition',
@@ -2964,34 +3044,34 @@ export const ChannelHubAbi = [
           {
             name: 'challengeDuration',
             type: 'uint32',
-            internalType: 'uint32',
+            internalType: 'uint32'
           },
           {
             name: 'user',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'node',
             type: 'address',
-            internalType: 'address',
+            internalType: 'address'
           },
           {
             name: 'nonce',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'approvedSignatureValidators',
             type: 'uint256',
-            internalType: 'uint256',
+            internalType: 'uint256'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
-          },
-        ],
+            internalType: 'bytes32'
+          }
+        ]
       },
       {
         name: 'initialState',
@@ -3002,17 +3082,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3022,39 +3102,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3064,54 +3144,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3121,7 +3201,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -3132,17 +3212,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3152,39 +3232,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3194,54 +3274,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3251,7 +3331,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'candidate',
@@ -3262,17 +3342,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3282,39 +3362,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3324,79 +3404,73 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
     name: 'Deposited',
     inputs: [
       {
-        name: 'wallet',
-        type: 'address',
-        indexed: true,
-        internalType: 'address',
-      },
-      {
         name: 'token',
         type: 'address',
         indexed: true,
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'amount',
         type: 'uint256',
         indexed: false,
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3406,7 +3480,7 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -3417,17 +3491,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3437,39 +3511,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3479,60 +3553,60 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
+            internalType: 'bytes'
+          }
+        ]
       },
       {
         name: 'challengeExpireAt',
         type: 'uint64',
         indexed: false,
-        internalType: 'uint64',
-      },
+        internalType: 'uint64'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3542,13 +3616,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -3559,17 +3633,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3579,39 +3653,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3621,54 +3695,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3678,13 +3752,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -3695,17 +3769,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3715,39 +3789,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3757,54 +3831,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3814,13 +3888,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -3831,17 +3905,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3851,39 +3925,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -3893,54 +3967,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -3950,13 +4024,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -3967,17 +4041,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -3987,39 +4061,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4029,67 +4103,73 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
     name: 'EscrowDepositsPurged',
     inputs: [
       {
+        name: 'escrowIds',
+        type: 'bytes32[]',
+        indexed: false,
+        internalType: 'bytes32[]'
+      },
+      {
         name: 'purgedCount',
         type: 'uint256',
         indexed: false,
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4099,7 +4179,7 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4110,17 +4190,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4130,39 +4210,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4172,60 +4252,60 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
+            internalType: 'bytes'
+          }
+        ]
       },
       {
         name: 'challengeExpireAt',
         type: 'uint64',
         indexed: false,
-        internalType: 'uint64',
-      },
+        internalType: 'uint64'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4235,13 +4315,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4252,17 +4332,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4272,39 +4352,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4314,54 +4394,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4371,13 +4451,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4388,17 +4468,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4408,39 +4488,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4450,54 +4530,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4507,13 +4587,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4524,17 +4604,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4544,39 +4624,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4586,54 +4666,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4643,13 +4723,13 @@ export const ChannelHubAbi = [
         name: 'escrowId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4660,17 +4740,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4680,39 +4760,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4722,54 +4802,85 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
+  },
+  {
+    type: 'event',
+    name: 'FundsClaimed',
+    inputs: [
+      {
+        name: 'account',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'token',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'destination',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256'
+      }
+    ],
+    anonymous: false
   },
   {
     type: 'event',
@@ -4779,7 +4890,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4790,17 +4901,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4810,39 +4921,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4852,54 +4963,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -4909,7 +5020,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -4920,17 +5031,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -4940,39 +5051,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -4982,54 +5093,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -5039,7 +5150,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -5050,17 +5161,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -5070,39 +5181,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -5112,54 +5223,54 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
@@ -5169,7 +5280,7 @@ export const ChannelHubAbi = [
         name: 'channelId',
         type: 'bytes32',
         indexed: true,
-        internalType: 'bytes32',
+        internalType: 'bytes32'
       },
       {
         name: 'state',
@@ -5180,17 +5291,17 @@ export const ChannelHubAbi = [
           {
             name: 'version',
             type: 'uint64',
-            internalType: 'uint64',
+            internalType: 'uint64'
           },
           {
             name: 'intent',
             type: 'uint8',
-            internalType: 'enum StateIntent',
+            internalType: 'enum StateIntent'
           },
           {
             name: 'metadata',
             type: 'bytes32',
-            internalType: 'bytes32',
+            internalType: 'bytes32'
           },
           {
             name: 'homeLedger',
@@ -5200,39 +5311,39 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'nonHomeLedger',
@@ -5242,104 +5353,136 @@ export const ChannelHubAbi = [
               {
                 name: 'chainId',
                 type: 'uint64',
-                internalType: 'uint64',
+                internalType: 'uint64'
               },
               {
                 name: 'token',
                 type: 'address',
-                internalType: 'address',
+                internalType: 'address'
               },
               {
                 name: 'decimals',
                 type: 'uint8',
-                internalType: 'uint8',
+                internalType: 'uint8'
               },
               {
                 name: 'userAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'userNetFlow',
                 type: 'int256',
-                internalType: 'int256',
+                internalType: 'int256'
               },
               {
                 name: 'nodeAllocation',
                 type: 'uint256',
-                internalType: 'uint256',
+                internalType: 'uint256'
               },
               {
                 name: 'nodeNetFlow',
                 type: 'int256',
-                internalType: 'int256',
-              },
-            ],
+                internalType: 'int256'
+              }
+            ]
           },
           {
             name: 'userSig',
             type: 'bytes',
-            internalType: 'bytes',
+            internalType: 'bytes'
           },
           {
             name: 'nodeSig',
             type: 'bytes',
-            internalType: 'bytes',
-          },
-        ],
-      },
+            internalType: 'bytes'
+          }
+        ]
+      }
     ],
-    anonymous: false,
+    anonymous: false
+  },
+  {
+    type: 'event',
+    name: 'NodeBalanceUpdated',
+    inputs: [
+      {
+        name: 'token',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256'
+      }
+    ],
+    anonymous: false
+  },
+  {
+    type: 'event',
+    name: 'TransferFailed',
+    inputs: [
+      {
+        name: 'recipient',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'token',
+        type: 'address',
+        indexed: true,
+        internalType: 'address'
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256'
+      }
+    ],
+    anonymous: false
   },
   {
     type: 'event',
     name: 'ValidatorRegistered',
     inputs: [
       {
-        name: 'node',
-        type: 'address',
-        indexed: true,
-        internalType: 'address',
-      },
-      {
         name: 'validatorId',
         type: 'uint8',
         indexed: true,
-        internalType: 'uint8',
+        internalType: 'uint8'
       },
       {
         name: 'validator',
         type: 'address',
         indexed: true,
-        internalType: 'contract ISignatureValidator',
-      },
+        internalType: 'contract ISignatureValidator'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'event',
     name: 'Withdrawn',
     inputs: [
       {
-        name: 'wallet',
-        type: 'address',
-        indexed: true,
-        internalType: 'address',
-      },
-      {
         name: 'token',
         type: 'address',
         indexed: true,
-        internalType: 'address',
+        internalType: 'address'
       },
       {
         name: 'amount',
         type: 'uint256',
         indexed: false,
-        internalType: 'uint256',
-      },
+        internalType: 'uint256'
+      }
     ],
-    anonymous: false,
+    anonymous: false
   },
   {
     type: 'error',
@@ -5348,25 +5491,19 @@ export const ChannelHubAbi = [
       {
         name: 'collision',
         type: 'address',
-        internalType: 'address',
-      },
-    ],
+        internalType: 'address'
+      }
+    ]
   },
   {
     type: 'error',
-    name: 'ChannelDoesNotExist',
-    inputs: [
-      {
-        name: 'channelId',
-        type: 'bytes32',
-        internalType: 'bytes32',
-      },
-    ],
+    name: 'ChallengerVersionTooLow',
+    inputs: []
   },
   {
     type: 'error',
     name: 'ECDSAInvalidSignature',
-    inputs: [],
+    inputs: []
   },
   {
     type: 'error',
@@ -5375,9 +5512,9 @@ export const ChannelHubAbi = [
       {
         name: 'length',
         type: 'uint256',
-        internalType: 'uint256',
-      },
-    ],
+        internalType: 'uint256'
+      }
+    ]
   },
   {
     type: 'error',
@@ -5386,44 +5523,100 @@ export const ChannelHubAbi = [
       {
         name: 's',
         type: 'bytes32',
-        internalType: 'bytes32',
-      },
-    ],
+        internalType: 'bytes32'
+      }
+    ]
+  },
+  {
+    type: 'error',
+    name: 'EmptySignature',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectAmount',
+    inputs: []
   },
   {
     type: 'error',
     name: 'IncorrectChallengeDuration',
-    inputs: [],
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectChannelId',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectChannelStatus',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectMsgSender',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectNode',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectSignature',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectStateIntent',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'IncorrectValue',
+    inputs: []
+  },
+  {
+    type: 'error',
+    name: 'InsufficientBalance',
+    inputs: []
   },
   {
     type: 'error',
     name: 'InvalidAddress',
-    inputs: [],
-  },
-  {
-    type: 'error',
-    name: 'InvalidAmount',
-    inputs: [],
-  },
-  {
-    type: 'error',
-    name: 'InvalidSignature',
-    inputs: [],
+    inputs: []
   },
   {
     type: 'error',
     name: 'InvalidValidatorId',
-    inputs: [],
+    inputs: []
   },
   {
     type: 'error',
-    name: 'InvalidValue',
-    inputs: [],
+    name: 'NativeTransferFailed',
+    inputs: [
+      {
+        name: 'to',
+        type: 'address',
+        internalType: 'address'
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        internalType: 'uint256'
+      }
+    ]
+  },
+  {
+    type: 'error',
+    name: 'NoChannelIdFoundForEscrow',
+    inputs: []
   },
   {
     type: 'error',
     name: 'ReentrancyGuardReentrantCall',
-    inputs: [],
+    inputs: []
   },
   {
     type: 'error',
@@ -5432,9 +5625,9 @@ export const ChannelHubAbi = [
       {
         name: 'value',
         type: 'int256',
-        internalType: 'int256',
-      },
-    ],
+        internalType: 'int256'
+      }
+    ]
   },
   {
     type: 'error',
@@ -5443,40 +5636,51 @@ export const ChannelHubAbi = [
       {
         name: 'token',
         type: 'address',
-        internalType: 'address',
-      },
-    ],
+        internalType: 'address'
+      }
+    ]
   },
   {
     type: 'error',
     name: 'ValidatorAlreadyRegistered',
     inputs: [
       {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
+        name: 'validatorId',
+        type: 'uint8',
+        internalType: 'uint8'
+      }
+    ]
+  },
+  {
+    type: 'error',
+    name: 'ValidatorNotActive',
+    inputs: [
       {
         name: 'validatorId',
         type: 'uint8',
-        internalType: 'uint8',
+        internalType: 'uint8'
       },
-    ],
+      {
+        name: 'activatesAt',
+        type: 'uint64',
+        internalType: 'uint64'
+      }
+    ]
+  },
+  {
+    type: 'error',
+    name: 'ValidatorNotApproved',
+    inputs: []
   },
   {
     type: 'error',
     name: 'ValidatorNotRegistered',
     inputs: [
       {
-        name: 'node',
-        type: 'address',
-        internalType: 'address',
-      },
-      {
         name: 'validatorId',
         type: 'uint8',
-        internalType: 'uint8',
-      },
-    ],
-  },
+        internalType: 'uint8'
+      }
+    ]
+  }
 ] as const satisfies Abi;

@@ -37,6 +37,7 @@ export enum RPCChannelStatus {
     Closed = 'closed',
     Resizing = 'resizing',
     Challenged = 'challenged',
+    Closing = 'closing',
 }
 
 export enum RPCProtocolVersion {
@@ -48,6 +49,7 @@ export enum RPCAppStateIntent {
     Operate = 'operate',
     Deposit = 'deposit',
     Withdraw = 'withdraw',
+    Close = 'close',
 }
 
 export enum RPCTxType {
@@ -170,6 +172,7 @@ export interface ResizeChannelRequestParams {
 
 export interface TransferAllocation {
     asset: string;
+    /** Raw asset units using the asset's canonical decimals (for example 5 USDC = "5000000" when USDC has 6 asset decimals). */
     amount: string;
 }
 
@@ -189,6 +192,7 @@ export interface RPCAppDefinition {
 
 export interface RPCAppSessionAllocation {
     asset: string;
+    /** Human-readable decimal string, matching the legacy app-session APIs (for example "0.01"). */
     amount: string;
     participant: Address;
 }
@@ -283,7 +287,7 @@ export interface AppLogic<T = bigint> {
 }
 
 // =============================================================================
-// Clearnode response types (previously in appstore/src/store/types.ts)
+// Nitronode response types (previously in appstore/src/store/types.ts)
 // =============================================================================
 
 export interface AccountInfo {
@@ -336,10 +340,14 @@ export interface LedgerEntry {
     created_at: string;
 }
 
+/** @deprecated Legacy name from the Clearnode era. Kept for backwards
+ *  compatibility with v0.5.3 callers; new code should use the v1 SDK's
+ *  `core.Asset` instead. */
 export interface ClearNodeAsset {
     token: Address;
     chainId: number;
     symbol: string;
+    /** Token decimals for this specific chain/token entry. */
     decimals: number;
 }
 

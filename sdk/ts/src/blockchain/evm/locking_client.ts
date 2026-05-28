@@ -4,11 +4,11 @@
  */
 
 import { Address } from 'viem';
-import Decimal from 'decimal.js';
-import { decimalToBigInt } from '../../core/utils';
-import { EVMClient, WalletSigner } from './interface';
-import { AppRegistryAbi } from './app_registry_abi';
-import { Erc20Abi } from './erc20_abi';
+import { Decimal } from 'decimal.js';
+import { decimalToBigInt } from '../../core/utils.js';
+import { EVMClient, WalletSigner } from './interface.js';
+import { AppRegistryAbi } from './app_registry_abi.js';
+import { Erc20Abi } from './erc20_abi.js';
 
 /**
  * LockingClient provides methods to interact with the Locking (NonSlashableAppRegistry) contract.

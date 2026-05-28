@@ -1,17 +1,18 @@
 {
     "compilerOptions": {
         "target": "es2020",
-        "module": "ESNext",
+        "module": "Node16",
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
         "outDir": "./dist",
+        "rootDir": "./src",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-        "moduleResolution": "bundler",
+        "moduleResolution": "Node16",
         "isolatedModules": true,
         "types": ["node"]
     },

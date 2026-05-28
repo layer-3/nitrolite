@@ -1,0 +1,14 @@
+{
+  "deployer": "0x3c0563d7a197037d1bc599ae6ab8892438f16353",
+  "deployedTo": "0x5dba8515af063db0c243c15ece7b99f91459c7c3",
+  "transactionHash": "0xaa23e4554906462d2056520d2e518a5605e1651dbd2c1aa7914adc9a140090b7",
+  "commit": "b88d511c",
+  "timestamp": 1779647967,
+  "chainId": 1449000,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0xb1cDEA413a080b3c6Eb3D37e1C24D8CD10cE5844",
+    "0x6F375dAD1FF0aD968BDdE939F76a2B3D6B9D3eC5"
+  ],
+  "comment": "sandbox v1.3.0"
+}

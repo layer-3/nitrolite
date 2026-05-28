@@ -1,0 +1,116 @@
+package metrics
+
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+
+	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
+	"github.com/layer-3/nitrolite/pkg/rpc"
+)
+
+// defaultApplicationIDLabelValue is the value used for the application_id
+// metric label when a request arrives without an app_id query parameter, so
+// dashboards have a readable bucket for unattributed traffic.
+const defaultApplicationIDLabelValue = "_DEFAULT"
+
+// getApplicationIDLabelValue returns applicationID unchanged if non-empty,
+// otherwise defaultApplicationIDLabelValue.
+func getApplicationIDLabelValue(applicationID string) string {
+	if applicationID == "" {
+		return defaultApplicationIDLabelValue
+	}
+	return applicationID
+}
+
+// RuntimeMetricExporter defines the interface for recording runtime metrics across various components of the system.
+type RuntimeMetricExporter interface {
+	// Shared
+	IncUserState(asset string, homeBlockchainID uint64, transition core.TransitionType, applicationID string)
+	RecordTransaction(asset string, txType core.TransactionType, amount decimal.Decimal, applicationID string)
+	IncChannelStateSigValidation(sigType core.ChannelSignerType, success bool)
+	IncChannelSessionKeys()
+	IncAppSessionKeys()
+
+	// api/rpc_router
+	IncRPCMessage(msgType rpc.MsgType, method string)
+	IncRPCRequest(method, path string, success bool)
+	ObserveRPCDuration(method, path string, success bool, duration time.Duration)
+	SetRPCConnections(applicationID string, count uint32)
+	IncRPCInflight(method string)
+	DecRPCInflight(method string)
+
+	// api/app_session_v1
+	IncAppStateUpdate(applicationID string)
+	IncAppSessionUpdateSigValidation(applicationID string, sigType app.AppSessionSignerTypeV1, success bool)
+
+	// Blockchain Worker
+	IncBlockchainAction(asset string, blockchainID uint64, actionType string, success bool)
+
+	// Event Listener
+	IncBlockchainEvent(blockchainID uint64, handledSuccessfully bool)
+
+	// store/database (instrumented via gorm callbacks; see metrics.RegisterDBCallbacks)
+	ObserveDBQueryDuration(queryKind string, duration time.Duration)
+
+	// Seeders publish 0-valued series for label tuples whose full domain is known at
+	// startup, so PromQL queries (and absent()-style alerts) return defined values
+	// during the cold-start window before any traffic or chain event has arrived.
+	SeedRPCMethodMetrics(methods []string, methodPaths map[string][]string)
+	SeedBlockchainEventMetrics(blockchainIDs []uint64)
+}
+
+// noopRuntimeMetricExporter is a no-op implementation for use in tests.
+type noopRuntimeMetricExporter struct{}
+
+func NewNoopRuntimeMetricExporter() RuntimeMetricExporter                                  { return noopRuntimeMetricExporter{} }
+func (noopRuntimeMetricExporter) IncUserState(string, uint64, core.TransitionType, string) {}
+func (noopRuntimeMetricExporter) RecordTransaction(string, core.TransactionType, decimal.Decimal, string) {
+}
+func (noopRuntimeMetricExporter) IncChannelStateSigValidation(core.ChannelSignerType, bool) {}
+func (noopRuntimeMetricExporter) IncChannelSessionKeys()                                    {}
+func (noopRuntimeMetricExporter) IncAppSessionKeys()                                        {}
+func (noopRuntimeMetricExporter) IncRPCMessage(rpc.MsgType, string)                         {}
+func (noopRuntimeMetricExporter) IncRPCRequest(string, string, bool)                        {}
+func (noopRuntimeMetricExporter) ObserveRPCDuration(string, string, bool, time.Duration)    {}
+func (noopRuntimeMetricExporter) SetRPCConnections(string, uint32)                          {}
+func (noopRuntimeMetricExporter) IncAppStateUpdate(string)                                  {}
+func (noopRuntimeMetricExporter) IncAppSessionUpdateSigValidation(string, app.AppSessionSignerTypeV1, bool) {
+}
+func (noopRuntimeMetricExporter) IncBlockchainAction(string, uint64, string, bool) {
+}
+func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool)            {}
+func (noopRuntimeMetricExporter) IncRPCInflight(string)                      {}
+func (noopRuntimeMetricExporter) DecRPCInflight(string)                      {}
+func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration) {}
+func (noopRuntimeMetricExporter) SeedRPCMethodMetrics([]string, map[string][]string) {}
+func (noopRuntimeMetricExporter) SeedBlockchainEventMetrics([]uint64)          {}
+
+// StoreMetricExporter defines the interface for setting metrics that are stored and updated by a separate metric worker.
+//
+// The Reset* methods drop every series in their respective gauges so the next batch of
+// Set* calls re-publishes a complete picture. Without this, label tuples that disappear
+// from the store (e.g., the last open channel for an asset closes) would keep their
+// previous non-zero value indefinitely because the underlying GROUP BY queries omit
+// zero-count buckets. Callers should only reset after a successful query — resetting
+// on error would blank a healthy gauge during a transient DB outage.
+type StoreMetricExporter interface {
+	SetAppSessions(applicationID string, status app.AppSessionStatus, count uint64)
+	SetChannels(asset string, status core.ChannelStatus, count uint64)
+	SetActiveUsers(asset, timeSpanLabel string, count uint64)
+	SetActiveAppSessions(applicationID, timeSpanLabel string, count uint64)
+	SetTotalValueLocked(domain, asset string, value float64)
+	SetNodeBalance(blockchainID, asset string, value float64)
+	SetUserBalanceTotal(blockchainID, asset string, value float64)
+	SetUserBalanceUnderfunded(blockchainID, asset string, value float64)
+	SetUserBalanceReleasable(blockchainID, asset string, value float64)
+
+	ResetAppSessions()
+	ResetChannels()
+	ResetTotalValueLocked()
+	ResetNodeBalance()
+	ResetUserBalances()
+	ResetActiveUsers(timeSpanLabel string)
+	ResetActiveAppSessions(timeSpanLabel string)
+}

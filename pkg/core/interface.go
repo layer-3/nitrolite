@@ -11,9 +11,6 @@ import (
 // Client defines the interface for interacting with the ChannelsHub smart contract
 // TODO: add context to all methods
 type BlockchainClient interface {
-	// Getters - IVault
-	GetAccountsBalances(accounts []string, tokens []string) ([][]decimal.Decimal, error)
-
 	// Getters - Token Balance & Approval
 	GetTokenBalance(asset string, walletAddress string) (decimal.Decimal, error)
 	Approve(asset string, amount decimal.Decimal) (string, error)
@@ -25,9 +22,9 @@ type BlockchainClient interface {
 	GetEscrowDepositData(escrowChannelID string) (EscrowDepositDataResponse, error)
 	GetEscrowWithdrawalData(escrowChannelID string) (EscrowWithdrawalDataResponse, error)
 
-	// IVault functions
-	Deposit(node, token string, amount decimal.Decimal) (string, error)
-	Withdraw(node, token string, amount decimal.Decimal) (string, error)
+	// Node vault functions
+	Deposit(token string, amount decimal.Decimal) (string, error)
+	Withdraw(to, token string, amount decimal.Decimal) (string, error)
 
 	// Node lifecycle
 	EnsureSigValidatorRegistered(validatorID uint8, validatorAddress string, checkOnly bool) error
@@ -89,19 +86,110 @@ type AssetStore interface {
 
 // Channel lifecycle event handlers
 type ChannelHubEventHandler interface {
-	HandleHomeChannelCreated(context.Context, *HomeChannelCreatedEvent) error
-	HandleHomeChannelMigrated(context.Context, *HomeChannelMigratedEvent) error
-	HandleHomeChannelCheckpointed(context.Context, *HomeChannelCheckpointedEvent) error
-	HandleHomeChannelChallenged(context.Context, *HomeChannelChallengedEvent) error
-	HandleHomeChannelClosed(context.Context, *HomeChannelClosedEvent) error
-	HandleEscrowDepositInitiated(context.Context, *EscrowDepositInitiatedEvent) error
-	HandleEscrowDepositChallenged(context.Context, *EscrowDepositChallengedEvent) error
-	HandleEscrowDepositFinalized(context.Context, *EscrowDepositFinalizedEvent) error
-	HandleEscrowWithdrawalInitiated(context.Context, *EscrowWithdrawalInitiatedEvent) error
-	HandleEscrowWithdrawalChallenged(context.Context, *EscrowWithdrawalChallengedEvent) error
-	HandleEscrowWithdrawalFinalized(context.Context, *EscrowWithdrawalFinalizedEvent) error
+	HandleNodeBalanceUpdated(context.Context, ChannelHubEventHandlerStore, *NodeBalanceUpdatedEvent) error
+	HandleHomeChannelCreated(context.Context, ChannelHubEventHandlerStore, *HomeChannelCreatedEvent) error
+	HandleHomeChannelMigrated(context.Context, ChannelHubEventHandlerStore, *HomeChannelMigratedEvent) error
+	HandleHomeChannelCheckpointed(context.Context, ChannelHubEventHandlerStore, *HomeChannelCheckpointedEvent) error
+	HandleHomeChannelChallenged(context.Context, ChannelHubEventHandlerStore, *HomeChannelChallengedEvent) error
+	HandleHomeChannelClosed(context.Context, ChannelHubEventHandlerStore, *HomeChannelClosedEvent) error
+	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
+	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
+	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error
+	HandleEscrowDepositsPurged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositsPurgedEvent) error
+	HandleEscrowWithdrawalInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalInitiatedEvent) error
+	HandleEscrowWithdrawalChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalChallengedEvent) error
+	HandleEscrowWithdrawalFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowWithdrawalFinalizedEvent) error
+}
+
+type ChannelHubEventHandlerStore interface {
+	// GetLastStateByChannelID retrieves the most recent state for a given channel.
+	// If signed is true, only returns states with both user and node signatures.
+	// Returns nil if no matching state exists.
+	GetLastStateByChannelID(channelID string, signed bool) (*State, error)
+
+	// GetLastUserState retrieves the most recent state for a user's asset across all
+	// channels and detached chain entries (HomeChannelID nil). Returns nil if no
+	// matching state exists. If signed is true, only fully co-signed states are returned.
+	GetLastUserState(wallet, asset string, signed bool) (*State, error)
+
+	// GetStateByChannelIDAndVersion retrieves a specific state version for a channel.
+	// Returns nil if the state with the specified version does not exist.
+	GetStateByChannelIDAndVersion(channelID string, version uint64) (*State, error)
+
+	// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+	// The channel must already exist in the database.
+	UpdateChannel(channel Channel) error
+
+	// GetChannelByID retrieves a channel by its unique identifier.
+	// Returns nil if the channel does not exist.
+	GetChannelByID(channelID string) (*Channel, error)
+
+	// ScheduleCheckpoint schedules a checkpoint operation for a home channel state.
+	// This queues the state to be submitted on-chain to update the channel's on-chain state.
+	ScheduleCheckpoint(stateID string, chainID uint64) error
+
+	// ScheduleChallenge schedules a challengeChannel(...) submission on the channel's home
+	// blockchain using the provided state and a node-produced challenger signature.
+	ScheduleChallenge(stateID string, chainID uint64) error
+
+	// ScheduleInitiateEscrowDeposit schedules an initiate for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleInitiateEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowDeposit schedules a finalize for an escrow deposit operation.
+	// This queues the state to be submitted on-chain to finalize an escrow deposit.
+	ScheduleFinalizeEscrowDeposit(stateID string, chainID uint64) error
+
+	// ScheduleFinalizeEscrowWithdrawal schedules a checkpoint for an escrow withdrawal operation.
+	// This queues the state to be submitted on-chain to finalize an escrow withdrawal.
+	ScheduleFinalizeEscrowWithdrawal(stateID string, chainID uint64) error
+
+	// SetNodeBalance upserts the on-chain liquidity for a given blockchain and asset.
+	SetNodeBalance(blockchainID uint64, asset string, value decimal.Decimal) error
+
+	// RefreshUserEnforcedBalance recomputes the locked balance from the user's open home channel on-chain state.
+	RefreshUserEnforcedBalance(wallet, asset string) error
+
+	// LockUserState acquires SELECT ... FOR UPDATE on the user's balance row so the
+	// caller's transaction serializes against concurrent RPC paths that already lock
+	// the same row before issuing receiver states. Postgres-only; SQLite is a no-op
+	// in tests.
+	LockUserState(wallet, asset string) (decimal.Decimal, error)
+
+	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state
+	// when the corresponding column is currently NULL. Used to repair the local record after
+	// an on-chain event proves the state was enforced. Either signature may be empty to skip
+	// that side; existing values are never overwritten and the call is idempotent on event replay.
+	UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error
+
+	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
+	// home channel. Used to detect the post-Finalize lifecycle when the channel status
+	// has been temporarily overwritten by an on-chain challenge.
+	HasSignedFinalize(channelID string) (bool, error)
+
+
+	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
+	// home-channel balance of transitions stored against channelID strictly above
+	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
+	// sender debits (TransferSend, Commit) contribute negatively. Other transition
+	// kinds are excluded. Used to compute the ChallengeRescue amount when a
+	// challenged channel is closed.
+	SumNetTransitionAmountAfterVersion(channelID string, minVersion uint64) (decimal.Decimal, error)
+
+	// StoreUserState persists a user state row. Used by the event handler to record a
+	// ChallengeRescue squash state derived from a closed challenged channel.
+	StoreUserState(state State, applicationID string) error
+
+	// RecordTransaction creates a transaction row linking state transitions. Used by the
+	// event handler to record the ChallengeRescue transaction associated with the squash.
+	RecordTransaction(tx Transaction, applicationID string) error
 }
 
 type LockingContractEventHandler interface {
-	HandleUserLockedBalanceUpdated(context.Context, *UserLockedBalanceUpdatedEvent) error
+	HandleUserLockedBalanceUpdated(context.Context, LockingContractEventHandlerStore, *UserLockedBalanceUpdatedEvent) error
+}
+
+type LockingContractEventHandlerStore interface {
+	// UpdateUserStaked updates the total staked amount for a user on a specific blockchain.
+	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
 }

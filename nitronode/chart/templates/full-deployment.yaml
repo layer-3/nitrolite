@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nitronode.common.fullname" . }}
+  labels:
+    {{- include "nitronode.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  {{- include "nitronode.component.replicaCount" . | nindent 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "nitronode.common.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      annotations:
+        {{- include "nitronode.component.metricsAnnotations" .Values.metrics | nindent 8 }}
+        {{- if .Values.config.secretEnvs }}
+        checksum/secret: {{ include (print $.Template.BasePath "/env-secret.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "nitronode.common.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "nitronode.common.fullname" . }}
+      {{- end }}
+      containers:
+        - name: api
+          args: {{ .Values.config.args | toYaml | nindent 10 }}
+          image: {{ include "nitronode.component.image" .Values.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            {{- include "nitronode.common.env" . | nindent 12 }}
+          {{- if or .Values.config.secretEnvs .Values.config.envSecret }}
+          envFrom:
+            {{- if .Values.config.envSecret }}
+            - secretRef:
+                name: {{ .Values.config.envSecret }}
+            {{- end }}
+            {{- if .Values.config.secretEnvs }}
+            - secretRef:
+                name: {{ include "nitronode.common.fullname" . }}-secret-env
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+            {{- if .Values.config.gcpSaSecret }}
+            - name: gcp-sa
+              mountPath: /etc/gcp
+              readOnly: true
+            {{- end }}
+          {{- include "nitronode.component.ports" .Values.service | nindent 10 }}
+          {{- include "nitronode.component.resources" .Values.resources | nindent 10 }}
+          {{- include "nitronode.component.probes" . | nindent 10 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "nitronode.common.fullname" . }}-config
+        {{- if .Values.config.gcpSaSecret }}
+        - name: gcp-sa
+          secret:
+            secretName: {{ .Values.config.gcpSaSecret }}
+        {{- end }}
+      {{- include "nitronode.common.imagePullSecrets" . | nindent 6 }}
+      {{- include "nitronode.common.nodeSelectorLabels" . | nindent 6 }}
+      {{- include "nitronode.common.affinity" . | nindent 6 }}
+      {{- include "nitronode.common.tolerations" . | nindent 6 }}

@@ -5,6 +5,30 @@ import (
 	"sync"
 )
 
+// ApplicationIDQueryParam is the URL query parameter clients use to declare
+// their application identity during the WebSocket upgrade (e.g.
+// ws://host/?app_id=my-app). The same key is used to store the value in
+// per-connection SafeStorage.
+const ApplicationIDQueryParam = "app_id"
+
+// GetApplicationID returns the application identifier associated with the current
+// connection (supplied by the client as the ApplicationIDQueryParam query parameter
+// during the WebSocket upgrade). Returns an empty string if no app_id was provided.
+//
+// The value is an advisory origin tag — it is self-declared by the client and
+// must not be used for authentication or access control.
+func GetApplicationID(c *Context) string {
+	if c == nil || c.Storage == nil {
+		return ""
+	}
+	v, ok := c.Storage.Get(ApplicationIDQueryParam)
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+
 // Handler defines the function signature for RPC request processors.
 // Handlers receive a Context containing the request and all necessary
 // information to process it. They can call c.Next() to delegate to

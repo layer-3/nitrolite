@@ -1,0 +1,14 @@
+{
+  "deployer": "0xe6521da9b54740e5fe9e002eb7bbf86d5698e581",
+  "deployedTo": "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1",
+  "transactionHash": "0xbb12f834318e4a6b72687803a767c8e59f2b775440ffec98bf83dce637b8ac43",
+  "commit": "e07ad9c2",
+  "timestamp": 1779451180,
+  "chainId": 137,
+  "contractPath": "src/ChannelHub.sol:ChannelHub",
+  "constructorArgs": [
+    "0x98de11a97fDc08D057FC9Ab310864655C49Bbf8E",
+    "0xBffaA37E34FB9Aa11B23eb6cC939abBB45D6CCB6"
+  ],
+  "comment": "prod v1.3.0"
+}

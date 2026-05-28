@@ -1,13 +1,13 @@
 /**
  * Auth functions -- real implementations matching v0.5.3 SDK behavior.
  *
- * These create properly formatted RPC messages for the clearnode's
+ * These create properly formatted RPC messages for the nitronode's
  * auth_request / auth_verify flow over WebSocket.
  */
 
-import { NitroliteRPC } from './rpc';
-import { RPCMethod, EIP712AuthTypes } from './types';
-import type { MessageSigner, MessageSignerPayload } from './types';
+import { NitroliteRPC } from './rpc.js';
+import { RPCMethod, EIP712AuthTypes } from './types.js';
+import type { MessageSigner, MessageSignerPayload } from './types.js';
 
 export interface AuthRequestParams {
     address: string;

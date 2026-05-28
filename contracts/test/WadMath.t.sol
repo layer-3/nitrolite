@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {WadMath} from "../src/WadMath.sol";
 
+// forge-lint: disable-next-item(mixed-case-function)
 contract TestWadMath {
     using WadMath for uint256;
     using WadMath for int256;

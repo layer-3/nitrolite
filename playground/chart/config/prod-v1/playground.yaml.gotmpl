@@ -1,0 +1,43 @@
+config:
+  nitronodeWsUrl: "wss://nitronode.yellow.org/v1/ws"
+  # faucet-app release is not installed in prod (see helmfile.yaml.gotmpl);
+  # hide the UI tab so the drip button can't 404.
+  faucetEnabled: false
+
+service:
+  http:
+    enabled: true
+    port: 8080
+    path: /v1/playground
+
+metrics:
+  enabled: false
+
+# `replicaCount` is ignored while autoscaling.enabled is true — see hpa.yaml.
+resources:
+  requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
+  limits:   { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  # Lower target than sandbox so prod has more headroom before scale-up lag.
+  targetCPUUtilizationPercentage: 60
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networking:
+  externalHostname: nitronode.yellow.org
+  tlsClusterIssuer: zerossl-prod
+  gateway:
+    enabled: false
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+  ingressRootRedirect:
+    enabled: true

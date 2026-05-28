@@ -35,7 +35,7 @@ func readSecure() string {
 
 func (o *Operator) showHelp() {
 	fmt.Println(`
-Clearnode CLI - SDK Development Tool
+Cerebro - Nitrolite SDK Development Tool
 =====================================
 
 CONFIGURATION
@@ -46,7 +46,7 @@ CONFIGURATION
   config wallet export <path>                                  Export private key to file
   config rpc import <chain_id> <url>                           Configure blockchain RPC endpoint
   config node                                                  Show node info
-  config node set-ws-url <url>                                 Set clearnode WebSocket URL
+  config node set-ws-url <url>                                 Set nitronode WebSocket URL
   config node set-home-blockchain <asset> <chain_id>           Set home blockchain for channels
   config session-key                                           Show current session key info
   config session-key generate                                  Generate new session key
@@ -636,6 +636,10 @@ func (o *Operator) getHomeChannel(ctx context.Context, wallet, asset string) {
 		fmt.Printf("ERROR: Failed to get home channel: %v\n", err)
 		return
 	}
+	if channel == nil {
+		fmt.Printf("No home channel found for %s (%s)\n", wallet, asset)
+		return
+	}
 
 	typeStr := "unknown"
 	switch channel.Type {
@@ -673,6 +677,10 @@ func (o *Operator) getEscrowChannel(ctx context.Context, escrowChannelID string)
 	channel, err := o.client.GetEscrowChannel(ctx, escrowChannelID)
 	if err != nil {
 		fmt.Printf("ERROR: Failed to get escrow channel: %v\n", err)
+		return
+	}
+	if channel == nil {
+		fmt.Printf("No escrow channel found with ID %s\n", escrowChannelID)
 		return
 	}
 
@@ -834,6 +842,10 @@ func (o *Operator) getLatestState(ctx context.Context, wallet, asset string) {
 		fmt.Printf("ERROR: Failed to get state: %v\n", err)
 		return
 	}
+	if state == nil {
+		fmt.Printf("No state found for %s (%s)\n", wallet, asset)
+		return
+	}
 
 	fmt.Printf("Latest State for %s (%s)\n", wallet, asset)
 	fmt.Println("====================================")
@@ -934,7 +946,7 @@ func (o *Operator) storeSessionKey(privateKeyHex string) {
 	fmt.Println("SUCCESS: Session key stored locally")
 	fmt.Printf("  Address: %s\n", address)
 	fmt.Println()
-	fmt.Println("Next step: Register it on the clearnode with:")
+	fmt.Println("Next step: Register it on the nitronode with:")
 	fmt.Printf("  config session-key register-channel-key %s <expires_hours> <assets>\n", address)
 }
 
@@ -956,7 +968,7 @@ func (o *Operator) showSessionKey() {
 		fmt.Println("Session Key Configuration")
 		fmt.Println("=========================")
 		fmt.Printf("Address: %s\n", signer.PublicKey().Address().String())
-		fmt.Println("Status:  Stored locally (not yet registered on clearnode)")
+		fmt.Println("Status:  Stored locally (not yet registered on nitronode)")
 		fmt.Println()
 		fmt.Println("Next step: Register it with:")
 		fmt.Printf("  config session-key register-channel-key %s <expires_hours> <assets>\n", signer.PublicKey().Address().String())
@@ -1010,13 +1022,45 @@ func (o *Operator) createChannelSessionKey(ctx context.Context, sessionKeyAddr, 
 		return
 	}
 
-	// Determine version by fetching existing keys
+	// Determine version by fetching existing keys. include_inactive=true so an expired
+	// prior version still surfaces — otherwise rotation would restart from version 1 and
+	// collide with the monotonic pointer enforced server-side.
+	includeInactive := true
 	var version uint64 = 1
 	existingStates, err := o.client.GetLastChannelKeyStates(ctx, wallet, &sdk.GetLastChannelKeyStatesOptions{
-		SessionKey: &sessionKeyAddr,
+		SessionKey:      &sessionKeyAddr,
+		IncludeInactive: &includeInactive,
 	})
 	if err == nil && len(existingStates) > 0 {
-		version = existingStates[0].Version + 1
+		for _, s := range existingStates {
+			if s.Version >= version {
+				version = s.Version + 1
+			}
+		}
+	}
+
+	// SessionKeySig requires the session-key private key. Fetch it up-front and bail if the
+	// stored key doesn't match the address being registered — without the private key, the
+	// nitronode rejects the submit.
+	storedPK, pkErr := o.store.GetSessionKeyPrivateKey()
+	if pkErr != nil {
+		fmt.Printf("ERROR: Cannot register session key without the matching private key: %v\n", pkErr)
+		return
+	}
+	storedRawSigner, sigErr := sign.NewEthereumRawSigner(storedPK)
+	if sigErr != nil {
+		fmt.Printf("ERROR: Failed to load stored session key: %v\n", sigErr)
+		return
+	}
+	if !strings.EqualFold(storedRawSigner.PublicKey().Address().String(), sessionKeyAddr) {
+		fmt.Printf("ERROR: Stored session key %s does not match the address being registered (%s)\n",
+			storedRawSigner.PublicKey().Address().String(), sessionKeyAddr)
+		return
+	}
+	sessionKeySigner, sigErr := sign.NewEthereumMsgSignerFromRaw(storedRawSigner)
+	if sigErr != nil {
+		fmt.Printf("ERROR: Failed to construct session-key message signer: %v\n", sigErr)
+		return
 	}
 
 	expiresAt := time.Now().Add(time.Duration(expiresHours) * time.Hour)
@@ -1037,6 +1081,13 @@ func (o *Operator) createChannelSessionKey(ctx context.Context, sessionKeyAddr, 
 	}
 	state.UserSig = sig
 
+	keySig, err := sdk.SignChannelSessionKeyOwnership(state, sessionKeySigner)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to sign session key ownership: %v\n", err)
+		return
+	}
+	state.SessionKeySig = keySig
+
 	fmt.Println("Submitting channel session key state...")
 	if err := o.client.SubmitChannelSessionKeyState(ctx, state); err != nil {
 		fmt.Printf("ERROR: Failed to submit session key state: %v\n", err)
@@ -1049,21 +1100,7 @@ func (o *Operator) createChannelSessionKey(ctx context.Context, sessionKeyAddr, 
 	fmt.Printf("  Assets:      %s\n", strings.Join(assets, ", "))
 	fmt.Printf("  Expires At:  %s\n", expiresAt.Format("2006-01-02 15:04:05"))
 
-	// If we have a stored session key matching this address, activate it as the state signer
-	storedPK, pkErr := o.store.GetSessionKeyPrivateKey()
-	if pkErr != nil {
-		return
-	}
-	storedSigner, sigErr := sign.NewEthereumRawSigner(storedPK)
-	if sigErr != nil {
-		return
-	}
-	if !strings.EqualFold(storedSigner.PublicKey().Address().String(), sessionKeyAddr) {
-		return
-	}
-
-	// Compute metadata hash and store full session key data
-	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(version, assets, expiresAt.Unix())
+	metadataHash, err := core.GetChannelSessionKeyAuthMetadataHashV1(wallet, version, assets, expiresAt.Unix())
 	if err != nil {
 		fmt.Printf("WARNING: Failed to compute metadata hash: %v\n", err)
 		return
@@ -1135,10 +1172,14 @@ func (o *Operator) createAppSessionKey(ctx context.Context, sessionKeyAddr, expi
 		return
 	}
 
-	// Determine version by fetching existing keys
+	// Determine version by fetching existing keys. include_inactive=true so an expired
+	// prior version still surfaces — otherwise rotation would restart from version 1 and
+	// collide with the monotonic pointer enforced server-side.
+	includeInactive := true
 	var version uint64 = 1
 	existingStates, err := o.client.GetLastAppKeyStates(ctx, wallet, &sdk.GetLastKeyStatesOptions{
-		SessionKey: &sessionKeyAddr,
+		SessionKey:      &sessionKeyAddr,
+		IncludeInactive: &includeInactive,
 	})
 	if err == nil && len(existingStates) > 0 {
 		for _, s := range existingStates {
@@ -1146,6 +1187,28 @@ func (o *Operator) createAppSessionKey(ctx context.Context, sessionKeyAddr, expi
 				version = s.Version + 1
 			}
 		}
+	}
+
+	// SessionKeySig requires the session-key private key.
+	storedPK, pkErr := o.store.GetSessionKeyPrivateKey()
+	if pkErr != nil {
+		fmt.Printf("ERROR: Cannot register session key without the matching private key: %v\n", pkErr)
+		return
+	}
+	storedRawSigner, sigErr := sign.NewEthereumRawSigner(storedPK)
+	if sigErr != nil {
+		fmt.Printf("ERROR: Failed to load stored session key: %v\n", sigErr)
+		return
+	}
+	if !strings.EqualFold(storedRawSigner.PublicKey().Address().String(), sessionKeyAddr) {
+		fmt.Printf("ERROR: Stored session key %s does not match the address being registered (%s)\n",
+			storedRawSigner.PublicKey().Address().String(), sessionKeyAddr)
+		return
+	}
+	sessionKeySigner, sigErr := sign.NewEthereumMsgSignerFromRaw(storedRawSigner)
+	if sigErr != nil {
+		fmt.Printf("ERROR: Failed to construct session-key message signer: %v\n", sigErr)
+		return
 	}
 
 	state := app.AppSessionKeyStateV1{
@@ -1164,6 +1227,13 @@ func (o *Operator) createAppSessionKey(ctx context.Context, sessionKeyAddr, expi
 		return
 	}
 	state.UserSig = sig
+
+	keySig, err := sdk.SignAppSessionKeyOwnership(state, sessionKeySigner)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to sign session key ownership: %v\n", err)
+		return
+	}
+	state.SessionKeySig = keySig
 
 	fmt.Println("Submitting app session key state...")
 	if err := o.client.SubmitAppSessionKeyState(ctx, state); err != nil {

@@ -22,9 +22,11 @@ type ChannelsV1GetHomeChannelRequest struct {
 }
 
 // ChannelsV1GetHomeChannelResponse returns the on-chain channel information.
+// Channel is nil when no home channel exists for the given wallet/asset pair;
+// this is a successful response, not an error.
 type ChannelsV1GetHomeChannelResponse struct {
-	// Channel is the on-chain channel information
-	Channel ChannelV1 `json:"channel"`
+	// Channel is the on-chain channel information, or nil if absent.
+	Channel *ChannelV1 `json:"channel,omitempty"`
 }
 
 // ChannelsV1GetEscrowChannelRequest retrieves current on-chain escrow channel information.
@@ -34,9 +36,11 @@ type ChannelsV1GetEscrowChannelRequest struct {
 }
 
 // ChannelsV1GetEscrowChannelResponse returns the on-chain channel information.
+// Channel is nil when no escrow channel exists for the given ID; this is a
+// successful response, not an error.
 type ChannelsV1GetEscrowChannelResponse struct {
-	// Channel is the on-chain channel information
-	Channel ChannelV1 `json:"channel"`
+	// Channel is the on-chain channel information, or nil if absent.
+	Channel *ChannelV1 `json:"channel,omitempty"`
 }
 
 // ChannelsV1GetChannelsRequest retrieves all channels for a user with optional filtering.
@@ -72,33 +76,11 @@ type ChannelsV1GetLatestStateRequest struct {
 }
 
 // ChannelsV1GetLatestStateResponse returns the current state of the user.
+// State is nil when no state has been stored for the given wallet/asset pair;
+// this is a successful response, not an error.
 type ChannelsV1GetLatestStateResponse struct {
-	// State is the current state of the user
-	State StateV1 `json:"state"`
-}
-
-// ChannelsV1GetStatesRequest retrieves state history for a user with optional filtering.
-type ChannelsV1GetStatesRequest struct {
-	// Wallet is the user's wallet address
-	Wallet string `json:"wallet"`
-	// Asset filters by asset symbol
-	Asset string `json:"asset"`
-	// Epoch filters by user epoch index
-	Epoch *string `json:"epoch,omitempty"`
-	// ChannelID filters by Home/Escrow Channel ID
-	ChannelID *string `json:"channel_id,omitempty"`
-	// OnlySigned returns only signed states
-	OnlySigned bool `json:"only_signed"`
-	// Pagination contains pagination parameters (offset, limit, sort)
-	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
-}
-
-// ChannelsV1GetStatesResponse returns the list of states.
-type ChannelsV1GetStatesResponse struct {
-	// States is the list of states
-	States []StateV1 `json:"states"`
-	// Metadata contains pagination information
-	Metadata PaginationMetadataV1 `json:"metadata"`
+	// State is the current state of the user, or nil if absent.
+	State *StateV1 `json:"state,omitempty"`
 }
 
 // ChannelsV1RequestCreationRequest requests the creation of a channel from Node.
@@ -135,7 +117,10 @@ type ChannelsV1HomeChannelCreatedEvent struct {
 	InitialState StateV1 `json:"initial_state"`
 }
 
-// ChannelsV1SubmitSessionKeyStateRequest submits the session key state for registration and updates.
+// ChannelsV1SubmitSessionKeyStateRequest submits a channel session key state for registration,
+// rotation/update, or revocation. A submit whose ExpiresAt is in the past (<= server's now)
+// is treated as a revocation: the auth path stops accepting state signed by the key and the
+// slot is freed against the per-user cap.
 type ChannelsV1SubmitSessionKeyStateRequest struct {
 	// State contains the session key metadata and delegation information
 	State ChannelSessionKeyStateV1 `json:"state"`
@@ -150,12 +135,19 @@ type ChannelsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// IncludeInactive, when true, includes latest states whose expires_at is in the past
+	// (expired or revoked). Defaults to false: only currently active states are returned.
+	IncludeInactive *bool `json:"include_inactive,omitempty"`
+	// Pagination contains pagination parameters (offset, limit, sort)
+	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
-// ChannelsV1GetSessionKeysResponse returns the list of active session keys.
+// ChannelsV1GetLastKeyStatesResponse returns the latest session key states for the user.
 type ChannelsV1GetLastKeyStatesResponse struct {
-	// States is the list of active session key states for the user
+	// States is the list of latest session key states for the user, filtered by IncludeInactive.
 	States []ChannelSessionKeyStateV1 `json:"states"`
+	// Metadata contains pagination information
+	Metadata PaginationMetadataV1 `json:"metadata"`
 }
 
 // ============================================================================
@@ -168,7 +160,7 @@ type AppSessionsV1SubmitDepositStateRequest struct {
 	AppStateUpdate AppStateUpdateV1 `json:"app_state_update"`
 	// QuorumSigs is the list of participant signatures for the app state update
 	QuorumSigs []string `json:"quorum_sigs"`
-	// SigQuorum is the signature quorum for the application session
+	// UserState is the signed channel state from the user, used to fund the application session deposit
 	UserState StateV1 `json:"user_state"`
 }
 
@@ -216,9 +208,11 @@ type AppSessionsV1GetAppDefinitionRequest struct {
 }
 
 // AppSessionsV1GetAppDefinitionResponse returns the application definition.
+// Definition is nil when no app session exists for the given ID; this is a
+// successful response, not an error.
 type AppSessionsV1GetAppDefinitionResponse struct {
-	// Definition is the application definition
-	Definition AppDefinitionV1 `json:"definition"`
+	// Definition is the application definition, or nil if absent.
+	Definition *AppDefinitionV1 `json:"definition,omitempty"`
 }
 
 // AppSessionsV1GetAppSessionsRequest lists all application sessions for a participant with optional filtering.
@@ -263,7 +257,10 @@ type AppSessionsV1CreateAppSessionResponse struct {
 	Status string `json:"status"`
 }
 
-// AppSessionsV1SubmitSessionKeyStateRequest submits the session key state for registration and updates.
+// AppSessionsV1SubmitSessionKeyStateRequest submits an app session key state for registration,
+// rotation/update, or revocation. A submit whose ExpiresAt is in the past (<= server's now)
+// is treated as a revocation: the auth path stops accepting state signed by the key and the
+// slot is freed against the per-user cap.
 type AppSessionsV1SubmitSessionKeyStateRequest struct {
 	// State contains the session key metadata and delegation information
 	State AppSessionKeyStateV1 `json:"state"`
@@ -278,12 +275,19 @@ type AppSessionsV1GetLastKeyStatesRequest struct {
 	// UserAddress is the user's wallet address
 	UserAddress string  `json:"user_address"`
 	SessionKey  *string `json:"session_key,omitempty"` // Optionally filter by SessionKey
+	// IncludeInactive, when true, includes latest states whose expires_at is in the past
+	// (expired or revoked). Defaults to false: only currently active states are returned.
+	IncludeInactive *bool `json:"include_inactive,omitempty"`
+	// Pagination contains pagination parameters (offset, limit, sort)
+	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
 }
 
-// SessionKeysV1GetSessionKeysResponse returns the list of active session keys.
+// AppSessionsV1GetLastKeyStatesResponse returns the latest session key states for the user.
 type AppSessionsV1GetLastKeyStatesResponse struct {
-	// States is the list of active session key states for the user
+	// States is the list of latest session key states for the user, filtered by IncludeInactive.
 	States []AppSessionKeyStateV1 `json:"states"`
+	// Metadata contains pagination information
+	Metadata PaginationMetadataV1 `json:"metadata"`
 }
 
 // ============================================================================

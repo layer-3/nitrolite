@@ -2,4 +2,4 @@
  * Blockchain implementations
  */
 
-export * as evm from './evm';
+export * as evm from './evm/index.js';

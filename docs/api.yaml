@@ -29,7 +29,7 @@ types:
           description: Nonce for the channel
         - name: status
           type: string
-          description: Current status of the channel (void, open, challenged, closed)
+          description: Current status of the channel (void, open, challenged, closing, closed)
         - name: state_version
           type: string
           description: On-chain state version of the channel
@@ -49,6 +49,7 @@ types:
         - escrow_withdraw
         - migrate
         - finalize
+        - challenge_rescue
 
   - transition:
       description: Represents a state transition
@@ -279,6 +280,9 @@ types:
         - name: amount
           type: string
           description: Balance amount
+        - name: enforced
+          type: string
+          description: On-chain enforced balance
 
   - transaction_type:
       description: Type of transaction
@@ -295,6 +299,7 @@ types:
         - migrate
         - rebalance
         - finalize
+        - challenge_rescue
 
   - transaction:
       description: Transaction record
@@ -376,7 +381,17 @@ types:
           description: Unix timestamp in seconds indicating when the session key expires
         - name: user_sig
           type: string
-          description: User's signature over the session key metadata to authorize the registration/update of the session key
+          description: >
+            User's EIP-191 signature over abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash),
+            where SESSION_KEY_AUTH_TYPEHASH = keccak256("Nitrolite.SessionKey(address sessionKey,bytes32 metadataHash)")
+            and metadata_hash = keccak256(abi.encode(user_address, version, assets[], expires_at)).
+            Authorizes the delegation of signing authority to the session key.
+        - name: session_key_sig
+          type: string
+          description: >
+            Session-key holder's EIP-191 signature over the same payload as user_sig —
+            abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash) — proving possession of the key
+            being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -406,6 +421,9 @@ types:
         - name: user_sig
           type: string
           description: User's signature over the session key metadata to authorize the registration/update of the session key
+        - name: session_key_sig
+          type: string
+          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
 
   - app:
       description: Application definition
@@ -507,7 +525,7 @@ api:
         - version: v1
           methods:
             - name: get_home_channel
-              description: Retrieve current on-chain home channel information
+              description: Retrieve current on-chain home channel information. Returns a successful response with `channel` omitted when no home channel exists for the wallet/asset pair.
               request:
                 - field_name: wallet
                   type: string
@@ -518,12 +536,18 @@ api:
               response:
                 - field_name: channel
                   type: channel
-                  description: The on-chain channel information
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
+                  description: The on-chain channel information; omitted when no home channel exists for the wallet/asset pair
+                  optional: true
+              errors: []
             - name: get_escrow_channel
-              description: Retrieve current on-chain escrow channel information
+              description: |
+                Retrieve current on-chain escrow channel information. Returns a successful response with `channel` omitted when no escrow channel exists for the given ID.
+
+                Note: when the escrow channel has been closed by the on-chain
+                purge queue (no signed FINALIZE_ESCROW_DEPOSIT was received
+                before expiry), `state_version` on the returned channel reflects
+                the initiate version (N) and does not advance to the finalize
+                version (N+1).
               request:
                 - field_name: escrow_channel_id
                   type: string
@@ -531,10 +555,9 @@ api:
               response:
                 - field_name: channel
                   type: channel
-                  description: The on-chain channel information
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
+                  description: The on-chain channel information; omitted when no escrow channel exists for the given ID
+                  optional: true
+              errors: []
             - name: get_channels
               description: Retrieve all channels for a user with optional filtering
               request:
@@ -567,7 +590,7 @@ api:
                 - message: invalid_parameters
                   description: The request parameters are invalid
             - name: get_latest_state
-              description: Retrieve the current state of the user stored on the Node
+              description: Retrieve the current state of the user stored on the Node. Returns a successful response with `state` omitted when no state is stored for the wallet/asset pair.
               request:
                 - field_name: wallet
                   type: string
@@ -582,47 +605,9 @@ api:
               response:
                 - field_name: state
                   type: state
-                  description: The current state of the user
-              errors:
-                - message: channel_not_found
-                  description: The specified channel was not found
-            - name: get_states
-              description: Retrieve state history for a user with optional filtering
-              request:
-                - field_name: wallet
-                  type: string
-                  description: The user's wallet address
-                - field_name: asset
-                  type: string
-                  description: Filter by asset symbol
-                - field_name: epoch
-                  type: string
-                  description: Filter by user epoch index
+                  description: The current state of the user; omitted when no state is stored for the wallet/asset pair
                   optional: true
-                - field_name: channel_id
-                  type: string
-                  description: Filter by Home/Escrow Channel ID
-                  optional: true
-                - field_name: only_signed
-                  type: boolean
-                  description: Return only signed states
-                - field_name: pagination
-                  type: pagination_params
-                  description: Pagination parameters (offset, limit, sort)
-                  optional: true
-              response:
-                - field_name: states
-                  type: array
-                  items:
-                    type: state
-                  description: List of states
-                - field_name: metadata
-                  type: pagination_metadata
-                  description: Pagination information
-                  optional: true
-              errors:
-                - message: invalid_parameters
-                  description: The request parameters are invalid
+              errors: []
             - name: request_creation
               description: Request the creation of a channel from Node
               request:
@@ -663,17 +648,34 @@ api:
                 - message: denied_until_checkpoint
                   description: State submissions are denied until the next checkpoint
             - name: submit_session_key_state
-              description: Submit the session key state for registration and updates
+              description: |
+                Submit the channel session key state for registration, update, revocation, or re-activation.
+
+                The `expires_at` timestamp on `state` governs activation:
+                  * A value in the future activates the session key until that time.
+                  * A value at or before "now" revokes the key immediately. The same monotonic
+                    `version` sequence is preserved, so a subsequent submit with `version+1` and
+                    a future `expires_at` re-activates the same session key address. Re-activating
+                    a previously-revoked key counts against the per-user cap, the same as
+                    registering a brand-new one.
+                The metadata hash binds `expires_at`, so each revoke or re-activation requires a
+                fresh user signature over the new payload. Negative unix timestamps are rejected.
+
+                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
+                on every submit, including the revocation path — the session key must co-sign its
+                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
+                supported by this method; that flow requires a separate code path and is tracked
+                as a follow-up.
               request:
                 - field_name: state
                   type: channel_session_key_state
-                  description: Session key metadata and delegation information
+                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
               response: []
               errors:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
                 - field_name: user_address
                   type: string
@@ -682,12 +684,23 @@ api:
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
+                  optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
-                    type: app_session_key_state
-                  description: List of active session key states for the user
+                    type: channel_session_key_state
+                  description: Latest session key states for the user, filtered by `include_inactive`.
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found
@@ -767,7 +780,7 @@ api:
 
               errors: []
             - name: get_app_definition
-              description: Retrieve the application definition for a specific app session
+              description: Retrieve the application definition for a specific app session. Returns a successful response with `definition` omitted when no app session exists for the given ID.
               request:
                 - field_name: app_session_id
                   type: string
@@ -775,10 +788,9 @@ api:
               response:
                 - field_name: definition
                   type: app_definition
-                  description: The application definition
-              errors:
-                - message: app_session_not_found
-                  description: The specified app session was not found
+                  description: The application definition; omitted when no app session exists for the given ID
+                  optional: true
+              errors: []
             - name: get_app_sessions
               description: List all application sessions for a participant with optional filtering
               request:
@@ -851,31 +863,59 @@ api:
                 - message: insufficient_balance
                   description: Participant has insufficient balance for allocations
             - name: submit_session_key_state
-              description: Submit the session key state for registration and updates
+              description: |
+                Submit the app session key state for registration, update, revocation, or re-activation.
+
+                The `expires_at` timestamp on `state` governs activation:
+                  * A value in the future activates the session key until that time.
+                  * A value at or before "now" revokes the key immediately. The same monotonic
+                    `version` sequence is preserved, so a subsequent submit with `version+1` and
+                    a future `expires_at` re-activates the same session key address. Re-activating
+                    a previously-revoked key counts against the per-user cap, the same as
+                    registering a brand-new one.
+                The metadata hash binds `expires_at`, so each revoke or re-activation requires a
+                fresh user signature over the new payload. Negative unix timestamps are rejected.
+
+                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
+                on every submit, including the revocation path — the session key must co-sign its
+                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
+                supported by this method; that flow requires a separate code path and is tracked
+                as a follow-up.
               request:
                 - field_name: state
                   type: app_session_key_state
-                  description: Session key metadata and delegation information
+                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
               response: []
               errors:
                 - message: invalid_session_key_state
                   description: The session key state is invalid
             - name: get_last_key_states
-              description: Retrieve the latest session key states for a user with optional filtering by session key
+              description: Retrieve the latest session key states for a user with optional filtering by session key. By default only currently active (non-expired) latest states are returned; set `include_inactive` to include expired latest states. Mandatory pagination caps response size (max page size 10).
               request:
-                - field_name: wallet
+                - field_name: user_address
                   type: string
                   description: User's wallet address
                 - field_name: session_key
                   type: string
                   description: Optionally filter by session key
                   optional: true
+                - field_name: include_inactive
+                  type: boolean
+                  description: If true, include latest states whose `expires_at` is in the past (expired or revoked). Defaults to false (active-only).
+                  optional: true
+                - field_name: pagination
+                  type: pagination_params
+                  description: Pagination parameters (offset, limit). Default limit 10, max 10. The `sort` field is not supported by this endpoint and must be omitted.
+                  optional: true
               response:
                 - field_name: states
                   type: array
                   items:
                     type: app_session_key_state
-                  description: List of active session key states for the user
+                  description: Latest session key states for the user, filtered by `include_inactive`.
+                - field_name: metadata
+                  type: pagination_metadata
+                  description: Pagination information
               errors:
                 - message: account_not_found
                   description: The specified account was not found

@@ -23,6 +23,7 @@ library EscrowDepositEngine {
     error IncorrectEscrowStatus();
     error EscrowAlreadyExists();
     error EscrowAlreadyFinalized();
+    error ChallengeExpired();
 
     error IncorrectUserAllocation();
     error UserAllocationAndNetFlowMismatch();
@@ -42,6 +43,7 @@ library EscrowDepositEngine {
     error FundConservationOnInitiate();
     error FundConservationOnFinalize();
     error NodeFundsDeltaAndLockedAmountMismatch();
+    error EscrowTokenMismatch();
 
     // ========== Constants ==========
 
@@ -56,7 +58,6 @@ library EscrowDepositEngine {
         uint256 lockedAmount;
         uint64 unlockAt;
         uint64 challengeExpiry;
-        uint256 nodeAvailableFunds;
     }
 
     struct TransitionEffects {
@@ -128,6 +129,11 @@ library EscrowDepositEngine {
 
         require(netFlowsSum >= 0, NegativeNetFlowSum());
         require(allocsSum == netFlowsSum.toUint256(), InvalidAllocationSum());
+
+        // If channel is DISPUTED, check that challenge hasn't expired
+        if (ctx.status == EscrowStatus.DISPUTED) {
+            require(block.timestamp <= ctx.challengeExpiry, ChallengeExpired());
+        }
     }
 
     // ========== Internal: Phase 2 - Intent-Specific Calculation ==========
@@ -188,6 +194,7 @@ library EscrowDepositEngine {
 
         // Must be immediate successor
         require(candidate.version == ctx.initState.version + 1, IncorrectStateVersion());
+        require(candidate.nonHomeLedger.token == ctx.initState.nonHomeLedger.token, EscrowTokenMismatch());
         require(ctx.initState.intent == StateIntent.INITIATE_ESCROW_DEPOSIT, IncorrectStateIntent());
 
         uint256 depositAmount = ctx.initState.nonHomeLedger.userAllocation;

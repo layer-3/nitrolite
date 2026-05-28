@@ -107,7 +107,7 @@ func TestIntegration_RawSignAndRecover(t *testing.T) {
 
 // TestIntegration_MsgSignAndRecover wraps the KMS signer in EthereumMsgSigner
 // (EIP-191) and verifies the signature recovers correctly using the matching
-// EthereumMsgAddressRecoverer. This is the same path clearnode uses for state signing.
+// EthereumMsgAddressRecoverer. This is the same path nitronode uses for state signing.
 func TestIntegration_MsgSignAndRecover(t *testing.T) {
 	keyName := skipIfNoKMS(t)
 
@@ -118,7 +118,7 @@ func TestIntegration_MsgSignAndRecover(t *testing.T) {
 	require.NoError(t, err)
 	defer kmsSigner.Close()
 
-	// Wrap in EthereumMsgSigner — same as clearnode does for StateSigner
+	// Wrap in EthereumMsgSigner — same as nitronode does for StateSigner
 	msgSigner, err := sign.NewEthereumMsgSignerFromRaw(kmsSigner)
 	require.NoError(t, err)
 
@@ -240,7 +240,7 @@ func TestIntegration_KMSvsLocalSigner(t *testing.T) {
 	})
 
 	t.Run("msg signer comparison (EIP-191)", func(t *testing.T) {
-		// Wrap both in EthereumMsgSigner — the clearnode StateSigner path
+		// Wrap both in EthereumMsgSigner — the nitronode StateSigner path
 		kmsMsgSigner, err := sign.NewEthereumMsgSignerFromRaw(kmsSigner)
 		require.NoError(t, err)
 

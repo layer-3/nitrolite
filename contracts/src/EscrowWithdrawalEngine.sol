@@ -22,6 +22,7 @@ library EscrowWithdrawalEngine {
     error IncorrectEscrowStatus();
     error EscrowAlreadyExists();
     error EscrowAlreadyFinalized();
+    error ChallengeExpired();
 
     error IncorrectHomeChain();
     error IncorrectNonHomeChain();
@@ -42,6 +43,8 @@ library EscrowWithdrawalEngine {
     error FundConservationOnInitiate();
     error FundConservationOnFinalize();
     error UserFundsDeltaAndLockedAmountMismatch();
+    error EscrowTokenMismatch();
+    error InsufficientNodeBalance();
 
     // ========== Constants ==========
 
@@ -54,7 +57,7 @@ library EscrowWithdrawalEngine {
         State initState;
         uint256 lockedAmount;
         uint64 challengeExpiry;
-        address nodeAddress;
+        uint256 nodeAvailableFunds;
     }
 
     struct TransitionEffects {
@@ -124,6 +127,11 @@ library EscrowWithdrawalEngine {
 
         require(netFlowsSum >= 0, NegativeNetFlowSum());
         require(allocsSum == netFlowsSum.toUint256(), InvalidAllocationSum());
+
+        // If channel is DISPUTED, check that challenge hasn't expired
+        if (ctx.status == EscrowStatus.DISPUTED) {
+            require(block.timestamp <= ctx.challengeExpiry, ChallengeExpired());
+        }
     }
 
     // ========== Internal: Phase 2 - Intent-Specific Calculation ==========
@@ -184,6 +192,7 @@ library EscrowWithdrawalEngine {
 
         // Must be immediate successor
         require(candidate.version == ctx.initState.version + 1, IncorrectStateVersion());
+        require(candidate.nonHomeLedger.token == ctx.initState.nonHomeLedger.token, EscrowTokenMismatch());
         require(ctx.initState.intent == StateIntent.INITIATE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
 
         uint256 withdrawalAmount = ctx.initState.nonHomeLedger.nodeAllocation;
@@ -233,6 +242,7 @@ library EscrowWithdrawalEngine {
         if (candidate.intent == StateIntent.INITIATE_ESCROW_WITHDRAWAL) {
             // On initiate: node funds locked (positive delta)
             require(totalDelta == effects.nodeFundsDelta, FundConservationOnInitiate());
+            require(ctx.nodeAvailableFunds >= effects.nodeFundsDelta.toUint256(), InsufficientNodeBalance());
         } else if (candidate.intent == StateIntent.FINALIZE_ESCROW_WITHDRAWAL) {
             // On finalize: user funds released (negative delta)
             require(totalDelta == effects.userFundsDelta, FundConservationOnFinalize());

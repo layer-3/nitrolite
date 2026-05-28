@@ -8,7 +8,8 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 )
 
-// clientAssetStore implements core.AssetStore by fetching data from the Clearnode API.
+// TODO: refactor by not using client as a dependency as this creates a circular usage.
+// clientAssetStore implements core.AssetStore by fetching data from the Nitronode API.
 type clientAssetStore struct {
 	client *Client
 	cache  map[string]core.Asset // lowercase asset symbol -> Asset
@@ -28,12 +29,18 @@ func (s *clientAssetStore) populateCache() error {
 		return fmt.Errorf("failed to fetch assets: %w", err)
 	}
 	for _, a := range assets {
+		for _, token := range a.Tokens {
+			if a.Decimals > token.Decimals {
+				return fmt.Errorf("asset %s decimals (%d) must not exceed token %s decimals (%d) on blockchain %d",
+					a.Symbol, a.Decimals, token.Symbol, token.Decimals, token.BlockchainID)
+			}
+		}
 		s.cache[strings.ToLower(a.Symbol)] = a
 	}
 	return nil
 }
 
-// GetAssetDecimals returns the decimals for an asset as stored in Clearnode.
+// GetAssetDecimals returns the decimals for an asset as stored in Nitronode.
 func (s *clientAssetStore) GetAssetDecimals(asset string) (uint8, error) {
 	key := strings.ToLower(asset)
 
@@ -75,6 +82,29 @@ func (s *clientAssetStore) GetTokenDecimals(blockchainID uint64, tokenAddress st
 	}
 
 	return 0, fmt.Errorf("token %s on blockchain %d not found", tokenAddress, blockchainID)
+}
+
+// GetTokenAsset returns the asset for a specific token on a blockchain.
+func (s *clientAssetStore) GetTokenAsset(blockchainID uint64, tokenAddress string) (string, error) {
+	// Fetch all assets if cache is empty
+	if len(s.cache) == 0 {
+		if err := s.populateCache(); err != nil {
+			return "", err
+		}
+	}
+
+	// Search through all assets for matching token
+	tokenAddressLower := strings.ToLower(tokenAddress)
+	for _, asset := range s.cache {
+		for _, token := range asset.Tokens {
+			if token.BlockchainID == blockchainID &&
+				strings.EqualFold(token.Address, tokenAddressLower) {
+				return asset.Symbol, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("token %s on blockchain %d not found", tokenAddress, blockchainID)
 }
 
 // GetTokenAddress returns the token address for a given asset on a specific blockchain.

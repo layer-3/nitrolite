@@ -3,10 +3,10 @@
  * This file implements the V1 API client with versioned request/response types
  */
 
-import { Dialer } from './dialer';
-import { Message, newRequest, newPayload, messageError, translatePayload } from './message';
-import * as Methods from './methods';
-import * as API from './api';
+import { Dialer } from './dialer.js';
+import { Message, newRequest, newPayload, messageError, translatePayload } from './message.js';
+import * as Methods from './methods.js';
+import * as API from './api.js';
 
 /**
  * RPCClient provides a high-level interface for interacting with the Nitrolite Node V1 RPC API.
@@ -88,13 +88,6 @@ export class RPCClient {
     return this.call(Methods.ChannelsV1GetLatestStateMethod, req, signal);
   }
 
-  async channelsV1GetStates(
-    req: API.ChannelsV1GetStatesRequest,
-    signal?: AbortSignal
-  ): Promise<API.ChannelsV1GetStatesResponse> {
-    return this.call(Methods.ChannelsV1GetStatesMethod, req, signal);
-  }
-
   async channelsV1RequestCreation(
     req: API.ChannelsV1RequestCreationRequest,
     signal?: AbortSignal
@@ -171,13 +164,6 @@ export class RPCClient {
     signal?: AbortSignal
   ): Promise<API.AppSessionsV1CreateAppSessionResponse> {
     return this.call(Methods.AppSessionsV1CreateAppSessionMethod, req, signal);
-  }
-
-  async appSessionsV1CloseAppSession(
-    req: API.AppSessionsV1CloseAppSessionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1CloseAppSessionResponse> {
-    return this.call(Methods.AppSessionsV1CloseAppSessionMethod, req, signal);
   }
 
   // ============================================================================

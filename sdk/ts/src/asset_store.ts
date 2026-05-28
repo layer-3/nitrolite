@@ -3,7 +3,7 @@
  */
 
 import { Address } from 'viem';
-import * as core from './core/types';
+import * as core from './core/types.js';
 
 /**
  * ClientAssetStore implements asset caching by fetching data from the Nitrolite API.

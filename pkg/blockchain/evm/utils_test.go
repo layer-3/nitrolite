@@ -3,15 +3,49 @@ package evm
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/layer-3/nitrolite/pkg/core"
 )
+
+// ========= backOffDuration Tests =========
+
+func TestBackOffDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		count    int
+		expected time.Duration
+	}{
+		{"zero returns no delay", 0, 0},
+		{"1 returns 1s", 1, 1 * time.Second},
+		{"2 returns 3s", 2, 3 * time.Second},
+		{"3 returns 7s", 3, 7 * time.Second},
+		{"4 returns 15s", 4, 15 * time.Second},
+		{"5 returns 31s", 5, 31 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, backOffDuration(tt.count))
+		})
+	}
+}
+
+func TestBackOffDuration_ExceedsMax(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, time.Duration(-1), backOffDuration(maxBackOffCount+1))
+	assert.Equal(t, time.Duration(-1), backOffDuration(100))
+}
 
 // ========= hexToBytes32 Tests =========
 
@@ -133,6 +167,45 @@ func TestCoreLedgerToContractLedger_Success(t *testing.T) {
 	require.Equal(t, expectedUserNetFlow, result.UserNetFlow)
 	require.Equal(t, expectedNodeAllocation, result.NodeAllocation)
 	require.Equal(t, expectedNodeNetFlow, result.NodeNetFlow)
+}
+
+func TestCoreLedgerToContractLedger_RejectsOutOfRangeValues(t *testing.T) {
+	t.Parallel()
+
+	tokenAddr := "0x1234567890123456789012345678901234567890"
+	overflow256 := new(big.Int).Lsh(big.NewInt(1), 256) // 2^256
+	overflow255 := new(big.Int).Lsh(big.NewInt(1), 255) // 2^255
+
+	newBaseLedger := func() core.Ledger {
+		return core.Ledger{
+			BlockchainID: 1,
+			TokenAddress: tokenAddr,
+			UserBalance:  decimal.Zero,
+			UserNetFlow:  decimal.Zero,
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		}
+	}
+
+	t.Run("user_balance_overflows_uint256", func(t *testing.T) {
+		t.Parallel()
+		ledger := newBaseLedger()
+		ledger.UserBalance = decimal.NewFromBigInt(overflow256, 0)
+
+		_, err := coreLedgerToContractLedger(ledger, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "uint256")
+	})
+
+	t.Run("user_net_flow_overflows_int256", func(t *testing.T) {
+		t.Parallel()
+		ledger := newBaseLedger()
+		ledger.UserNetFlow = decimal.NewFromBigInt(overflow255, 0)
+
+		_, err := coreLedgerToContractLedger(ledger, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "int256")
+	})
 }
 
 // ========= contractLedgerToCoreLedger Tests =========

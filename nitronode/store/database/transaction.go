@@ -118,7 +118,10 @@ func (s *DBStore) GetUserTransactions(accountID string, asset *string, txType *c
 		transactions[i] = *toCoreTransaction(&dbTx)
 	}
 
-	metadata := calculatePaginationMetadata(totalCount, offset, limit)
+	metadata, err := calculatePaginationMetadata(totalCount, offset, limit)
+	if err != nil {
+		return nil, core.PaginationMetadata{}, fmt.Errorf("failed to calculate pagination: %w", err)
+	}
 
 	return transactions, metadata, nil
 }

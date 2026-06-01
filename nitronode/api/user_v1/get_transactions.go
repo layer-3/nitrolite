@@ -22,6 +22,10 @@ func (h *Handler) GetTransactions(c *rpc.Context) {
 
 	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
+		if req.Pagination.Limit != nil && *req.Pagination.Limit == 0 {
+			c.Fail(rpc.Errorf("invalid pagination: limit must be greater than 0"), "")
+			return
+		}
 		paginationParams.Offset = req.Pagination.Offset
 		paginationParams.Limit = req.Pagination.Limit
 		paginationParams.Sort = req.Pagination.Sort

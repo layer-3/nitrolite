@@ -215,8 +215,13 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 // backfillOffChainHeadNodeSig loads the off-chain head state for channelID (the highest
 // stored version, regardless of signature status) and node-signs it when the row is
 // present and the node signature is missing. The user signature is intentionally left
-// untouched: when the head was created during a challenge it carries no user signature,
-// and the user must countersign and acknowledge it via the regular RPC flow.
+// untouched: the user must countersign and acknowledge it via the regular RPC flow.
+//
+// Called from two contexts:
+//   - challenge clearance (HandleHomeChannelCheckpointed): the head is an unsigned
+//     receiver credit accumulated during the dispute window.
+//   - channel open (HandleHomeChannelCreated): the head is an unsigned receiver credit
+//     stored by a concurrent RPC while the channel was still Void.
 func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string) error {
 	head, err := tx.GetLastStateByChannelID(channelID, false)
 	if err != nil {
@@ -225,14 +230,12 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 	if head == nil || head.NodeSig != nil {
 		return nil
 	}
-	// Per the challenge-clearance spec the only states accumulated during the dispute
-	// window are receiver credits (transfer_receive, release) — user-initiated ops are
-	// rejected upstream while the channel is Challenged. If the head is some other
-	// transition kind, the invariant has broken upstream and we must not silently
-	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
+	// Only receiver credits (transfer_receive, release) should appear as unsigned heads
+	// in either call context. Any other transition kind means an invariant broke upstream;
+	// do not silently node-sign it — log and bail so the caller surfaces the inconsistency.
 	if head.Transition.Type != core.TransitionTypeTransferReceive &&
 		head.Transition.Type != core.TransitionTypeRelease {
-		log.FromContext(ctx).Warn("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+		log.FromContext(ctx).Warn("off-chain head is not a receiver state, skipping node-sig backfill",
 			"channelId", channelID,
 			"transitionType", head.Transition.Type,
 			"version", head.Version,

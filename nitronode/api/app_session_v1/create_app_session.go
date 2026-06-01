@@ -75,7 +75,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	// derivation, and stored participant list all see the canonical (lowercase, 0x-prefixed)
 	// representation regardless of how the caller cased the address or whether they
 	// included the 0x prefix.
-	var totalWeights uint8
+	var totalWeights uint16
 	participantWeights := make(map[string]uint8)
 	for i, participant := range reqPayload.Definition.Participants {
 		participantWallet, err := core.NormalizeHexAddress(participant.WalletAddress)
@@ -89,12 +89,12 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 			c.Fail(rpc.Errorf("duplicate participant address: %s", participant.WalletAddress), "")
 			return
 		}
-		totalWeights += participant.SignatureWeight
+		totalWeights += uint16(participant.SignatureWeight)
 		participantWeights[participantWallet] = participant.SignatureWeight
 		appDef.Participants[i].WalletAddress = participantWallet
 	}
 
-	if reqPayload.Definition.Quorum > totalWeights {
+	if uint16(reqPayload.Definition.Quorum) > totalWeights {
 		c.Fail(rpc.Errorf("target quorum (%d) cannot be greater than total sum of weights (%d)",
 			reqPayload.Definition.Quorum, totalWeights), "")
 		return

@@ -445,7 +445,8 @@ func TestGetAppSessions_NilLimit(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// TestGetAppSessions_ZeroLimit verifies that pagination.limit == 0 is rejected without panicking.
+// TestGetAppSessions_ZeroLimit verifies that pagination.limit == 0 is treated as absent
+// (coerced to the default limit) and succeeds without error.
 func TestGetAppSessions_ZeroLimit(t *testing.T) {
 	mockStore := new(MockStore)
 
@@ -456,6 +457,11 @@ func TestGetAppSessions_ZeroLimit(t *testing.T) {
 
 	participant := "0x1234567890123456789012345678901234567890"
 	zero := uint32(0)
+
+	// limit=0 passes through to the store; GetOffsetAndLimit coerces it to DefaultLimit.
+	mockStore.On("GetAppSessions", (*string)(nil), &participant, app.AppSessionStatusVoid, &core.PaginationParams{Limit: &zero}).
+		Return([]app.AppSessionV1{}, core.PaginationMetadata{Page: 1, PerPage: 10, PageCount: 0, TotalCount: 0}, nil)
+
 	reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{
 		Participant: &participant,
 		Pagination: &rpc.PaginationParamsV1{
@@ -472,9 +478,8 @@ func TestGetAppSessions_ZeroLimit(t *testing.T) {
 
 	handler.GetAppSessions(ctx)
 
-	require.NotNil(t, ctx.Response.Error())
-	assert.Contains(t, ctx.Response.Error().Error(), "limit must be greater than 0")
-	mockStore.AssertExpectations(t) // store must not be called
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
 }
 
 // TestGetAppSessions_NormalizesParticipant verifies the participant filter is normalized

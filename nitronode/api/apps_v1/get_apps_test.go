@@ -172,13 +172,21 @@ func TestGetApps_NilLimit(t *testing.T) {
 	require.NoError(t, ctx.Response.Error())
 }
 
-// TestGetApps_ZeroLimit verifies that pagination.limit == 0 is rejected without panicking.
+// TestGetApps_ZeroLimit verifies that pagination.limit == 0 is treated as absent
+// (coerced to the default limit) and succeeds without error.
 func TestGetApps_ZeroLimit(t *testing.T) {
-	mockStore := &MockStore{}
+	zero := uint32(0)
+	mockStore := &MockStore{
+		getAppsFn: func(_ *string, _ *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
+			require.NotNil(t, pagination)
+			require.NotNil(t, pagination.Limit)
+			assert.Equal(t, uint32(0), *pagination.Limit)
+			return []app.AppInfoV1{}, core.PaginationMetadata{Page: 1, PerPage: 10, PageCount: 0, TotalCount: 0}, nil
+		},
+	}
 
 	handler := NewHandler(mockStore, nil, nil, 4096)
 
-	zero := uint32(0)
 	reqPayload := rpc.AppsV1GetAppsRequest{
 		Pagination: &rpc.PaginationParamsV1{
 			Limit: &zero,
@@ -194,8 +202,8 @@ func TestGetApps_ZeroLimit(t *testing.T) {
 
 	handler.GetApps(ctx)
 
-	require.NotNil(t, ctx.Response.Error())
-	assert.Contains(t, ctx.Response.Error().Error(), "limit must be greater than 0")
+	require.NotNil(t, ctx.Response)
+	require.NoError(t, ctx.Response.Error())
 }
 
 // TestGetApps_NormalizesOwnerWallet verifies that an owner_wallet filter submitted in

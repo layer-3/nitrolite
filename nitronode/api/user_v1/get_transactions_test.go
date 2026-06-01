@@ -159,7 +159,8 @@ func TestGetTransactions_NilLimit(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// TestGetTransactions_ZeroLimit verifies that pagination.limit == 0 is rejected without panicking.
+// TestGetTransactions_ZeroLimit verifies that pagination.limit == 0 is treated as absent
+// (coerced to the default limit) and succeeds without error.
 func TestGetTransactions_ZeroLimit(t *testing.T) {
 	mockStore := new(MockStore)
 
@@ -167,9 +168,22 @@ func TestGetTransactions_ZeroLimit(t *testing.T) {
 		store: mockStore,
 	}
 
+	wallet := "0x1234567890123456789012345678901234567890"
 	zero := uint32(0)
+
+	// limit=0 passes through to the store; GetOffsetAndLimit coerces it to DefaultLimit.
+	mockStore.On(
+		"GetUserTransactions",
+		wallet,
+		(*string)(nil),
+		(*core.TransactionType)(nil),
+		(*uint64)(nil),
+		(*uint64)(nil),
+		&core.PaginationParams{Limit: &zero},
+	).Return([]core.Transaction{}, core.PaginationMetadata{Page: 1, PerPage: 10, PageCount: 0, TotalCount: 0}, nil)
+
 	reqPayload := rpc.UserV1GetTransactionsRequest{
-		Wallet: "0x1234567890123456789012345678901234567890",
+		Wallet: wallet,
 		Pagination: &rpc.PaginationParamsV1{
 			Limit: &zero,
 		},
@@ -184,9 +198,8 @@ func TestGetTransactions_ZeroLimit(t *testing.T) {
 
 	handler.GetTransactions(ctx)
 
-	require.NotNil(t, ctx.Response.Error())
-	assert.Contains(t, ctx.Response.Error().Error(), "limit must be greater than 0")
-	mockStore.AssertExpectations(t) // store must not be called
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
 }
 
 // TestGetTransactions_NormalizesWallet verifies the wallet is normalized before the store call.

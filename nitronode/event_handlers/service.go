@@ -69,6 +69,19 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 		logger.Warn("channel type mismatch during HomeChannelCreated event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
 		return nil
 	}
+
+	// Acquire the user's balance-row lock before mutating channel status or
+	// backfilling the off-chain head. Receiver/release issuance paths lock
+	// the same row up front and then re-check Status via CheckActiveChannel;
+	// without this lock an in-flight RPC can read Status=Void, decide to store
+	// an unsigned receiver row, and commit before we flip to Open — leaving
+	// the latest head unsigned on a technically opened channel. See
+	// HandleHomeChannelCheckpointed and HandleHomeChannelClosed for the same
+	// pattern.
+	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+
 	if channel.Status >= core.ChannelStatusOpen {
 		logger.Warn("ignoring replayed HomeChannelCreated event on already-initialized channel",
 			"channelId", chanID, "currentStatus", channel.Status, "currentStateVersion", channel.StateVersion, "eventStateVersion", event.StateVersion)
@@ -87,6 +100,17 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 	}
 
 	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
+		return err
+	}
+
+	// Backfill the node signature on any unsigned receiver-credit state that
+	// landed while the channel was still Void. An unsigned head is possible when
+	// an incoming transfer or release was stored by a concurrent RPC before this
+	// Created event arrived and flipped the channel to Open. The guard inside
+	// backfillOffChainHeadNodeSig ensures only transfer_receive / release heads
+	// are signed, so this is a no-op for the normal case where the head is the
+	// CREATE state itself (already node-signed via the RPC path).
+	if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
 		return err
 	}
 

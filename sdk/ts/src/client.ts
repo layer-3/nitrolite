@@ -1762,10 +1762,11 @@ export class Client {
    *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
    *     for the per-user cap and the auth path stops accepting state signed by it
    *
-   * The state must carry both the wallet's user_sig (proving the user authorized the
-   * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
-   * are rejected.
+   * Activation, rotation, and re-activation (expires_at > now) require both the wallet's
+   * user_sig (proving the user authorized the delegation) and the session-key holder's
+   * session_key_sig (proving possession). Revocation (expires_at <= now) requires only
+   * user_sig — use revokeChannelSessionKey for the wallet-only revocation of a lost,
+   * unavailable, or compromised key.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1774,6 +1775,32 @@ export class Client {
       state,
     };
     await this.rpcClient.channelsV1SubmitSessionKeyState(req);
+  }
+
+  /**
+   * Revoke a channel session key using only the wallet's signature. Use it when the
+   * session-key holder cannot or will not co-sign — a lost, unavailable, or compromised
+   * delegate. The supplied state must carry the next monotonic version (latest + 1) and an
+   * expires_at at or before now; this method signs it with the wallet (user_sig) and submits
+   * with an empty session_key_sig. The server accepts user-only signatures only on the
+   * revocation path (expires_at <= now). For registration, rotation, or extension use
+   * submitChannelSessionKeyState with both signatures.
+   *
+   * @param state - The channel session key state to revoke (version = latest + 1, expires_at <= now)
+   */
+  async revokeChannelSessionKey(state: ChannelSessionKeyStateV1): Promise<void> {
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (BigInt(state.expires_at) > nowSec) {
+      throw new Error(
+        `revocation requires expires_at at or before now, got ${state.expires_at}`
+      );
+    }
+    const userSig = await this.signChannelSessionKeyState(state);
+    await this.submitChannelSessionKeyState({
+      ...state,
+      user_sig: userSig,
+      session_key_sig: '',
+    });
   }
 
   /**
@@ -1856,10 +1883,11 @@ export class Client {
    *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
    *     for the per-user cap and the auth path stops accepting state signed by it
    *
-   * The state must carry both the wallet's user_sig (proving the user authorized the
-   * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
-   * are rejected.
+   * Activation, rotation, and re-activation (expires_at > now) require both the wallet's
+   * user_sig (proving the user authorized the delegation) and the session-key holder's
+   * session_key_sig (proving possession). Revocation (expires_at <= now) requires only
+   * user_sig — use revokeSessionKey for the wallet-only revocation of a lost, unavailable,
+   * or compromised key.
    *
    * @param state - The session key state containing delegation information
    */
@@ -1868,6 +1896,32 @@ export class Client {
       state,
     };
     await this.rpcClient.appSessionsV1SubmitSessionKeyState(req);
+  }
+
+  /**
+   * Revoke an app session key using only the wallet's signature. Use it when the
+   * session-key holder cannot or will not co-sign — a lost, unavailable, or compromised
+   * delegate. The supplied state must carry the next monotonic version (latest + 1) and an
+   * expires_at at or before now; this method signs it with the wallet (user_sig) and submits
+   * with an empty session_key_sig. The server accepts user-only signatures only on the
+   * revocation path (expires_at <= now). For registration, rotation, or extension use
+   * submitSessionKeyState with both signatures.
+   *
+   * @param state - The app session key state to revoke (version = latest + 1, expires_at <= now)
+   */
+  async revokeSessionKey(state: app.AppSessionKeyStateV1): Promise<void> {
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (BigInt(state.expires_at) > nowSec) {
+      throw new Error(
+        `revocation requires expires_at at or before now, got ${state.expires_at}`
+      );
+    }
+    const userSig = await this.signSessionKeyState(state);
+    await this.submitSessionKeyState({
+      ...state,
+      user_sig: userSig,
+      session_key_sig: '',
+    });
   }
 
   /**

@@ -1072,6 +1072,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "ping: (): Promise<void>",
       "rebalanceAppSessions: (signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string>",
       "registerApp: (appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void>",
+      "revokeChannelSessionKey: (state: ChannelSessionKeyStateV1): Promise<void>",
+      "revokeSessionKey: (state: app.AppSessionKeyStateV1): Promise<void>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
       "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",

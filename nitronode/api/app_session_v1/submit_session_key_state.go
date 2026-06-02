@@ -92,19 +92,34 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
-	if coreState.SessionKeySig == "" {
-		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
-		return
-	}
 
-	// Validate both signatures: wallet's UserSig and session-key holder's SessionKeySig.
-	if err := app.ValidateAppSessionKeyStateV1(coreState); err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
-		return
-	}
-
-	// Validate version and store the session key state
+	// A submit with expires_at after now activates, extends, or rotates the key and requires
+	// both signatures. A submit with expires_at <= now is a revocation: it only deactivates an
+	// existing delegation, so the wallet's user_sig alone authorizes it. Requiring session_key_sig
+	// on the revocation path would let a lost, unavailable, or malicious session key veto its own
+	// revocation, stranding the user until the prior expires_at naturally passes. now is captured
+	// here and reused for the cap/version logic inside the transaction so the active/inactive
+	// decision is consistent across both.
 	now := time.Now()
+	if coreState.ExpiresAt.After(now) {
+		if coreState.SessionKeySig == "" {
+			c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+			return
+		}
+		// Validate both signatures: wallet's UserSig and session-key holder's SessionKeySig.
+		if err := app.ValidateAppSessionKeyStateV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+	} else {
+		// Revocation: validate only the wallet's UserSig. Any session_key_sig present is ignored.
+		if err := app.ValidateAppSessionKeyStateUserSigV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+	}
+
+	// Validate version and store the session key state.
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, app_session) pointer row for the duration of the tx so
 		// that concurrent submits for the same (user, session_key) serialize cleanly and report

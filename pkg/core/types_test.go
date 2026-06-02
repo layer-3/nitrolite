@@ -550,23 +550,46 @@ func TestNewTransactionFromTransition(t *testing.T) {
 	senderState.EscrowChannelID = new(string)
 	*senderState.EscrowChannelID = "EC"
 
-	// HomeDeposit
-	transition := Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10)}
+	// HomeDeposit: transaction ID must equal the transition's TxID,
+	// computed over the HomeChannelID (AccountID), not the UserWallet.
+	homeDepositTxID, err := GetSenderTransactionID(*senderState.HomeChannelID, senderState.ID)
+	require.NoError(t, err)
+	transition := Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.HomeChannelID, TxID: homeDepositTxID}
 	tx, err := NewTransactionFromTransition(senderState, nil, transition)
 	require.NoError(t, err)
 	assert.Equal(t, TransactionTypeHomeDeposit, tx.TxType)
+	assert.Equal(t, homeDepositTxID, tx.ID)
 
-	// TransferSend
-	transition = Transition{Type: TransitionTypeTransferSend, Amount: decimal.NewFromInt(10), AccountID: "REC"}
+	// EscrowDeposit: same divergence — ID over EscrowChannelID, not UserWallet.
+	escrowDepositTxID, err := GetSenderTransactionID(*senderState.EscrowChannelID, senderState.ID)
+	require.NoError(t, err)
+	transition = Transition{Type: TransitionTypeEscrowDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.EscrowChannelID, TxID: escrowDepositTxID}
+	tx, err = NewTransactionFromTransition(senderState, nil, transition)
+	require.NoError(t, err)
+	assert.Equal(t, TransactionTypeEscrowDeposit, tx.TxType)
+	assert.Equal(t, escrowDepositTxID, tx.ID)
+
+	// TransferSend: sender and receiver transitions share this TxID, computed
+	// over the recipient (AccountID) and the sender's state ID.
+	transferTxID, err := GetSenderTransactionID("REC", senderState.ID)
+	require.NoError(t, err)
+	transition = Transition{Type: TransitionTypeTransferSend, Amount: decimal.NewFromInt(10), AccountID: "REC", TxID: transferTxID}
 	receiverState := NewVoidState("A", "REC")
 	tx, err = NewTransactionFromTransition(senderState, receiverState, transition)
 	require.NoError(t, err)
 	assert.Equal(t, TransactionTypeTransfer, tx.TxType)
+	assert.Equal(t, transferTxID, tx.ID)
 
 	// TransferSend error: nil receiverState
 	_, err = NewTransactionFromTransition(senderState, nil, transition)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "receiver state must not be nil")
+
+	// Empty TxID is rejected.
+	transition = Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.HomeChannelID}
+	_, err = NewTransactionFromTransition(senderState, nil, transition)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty txID")
 
 	// Invalid
 	transition = Transition{Type: 255}

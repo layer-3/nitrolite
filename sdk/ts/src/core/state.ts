@@ -59,14 +59,18 @@ export function nextState(state: State): State {
   const voidTransition: Transition = { type: TransitionType.Void, txId: '', amount: new Decimal(0) };
 
   if (isFinal(state)) {
-    // After finalization, increment epoch and reset version
+    // After finalization, open a fresh epoch starting at version 1. Version 0 is
+    // reserved as a sentinel for "channel created but no on-chain state has
+    // materialised yet" (NewChannel/Void). Starting at 1 prevents the
+    // EnsureNoOngoingStateTransitions gate from accidentally treating a Void
+    // channel's first signed HomeDeposit as already settled on-chain (MF3-C01).
     newState = {
       id: '',
       transition: voidTransition,
       asset: state.asset,
       userWallet: state.userWallet,
       epoch: state.epoch + 1n,
-      version: 0n,
+      version: 1n,
       homeChannelId: undefined,
       escrowChannelId: undefined,
       homeLedger: {

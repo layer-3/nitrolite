@@ -225,14 +225,17 @@ func (s *DBStore) GetChannelsCountByLabels() ([]ChannelCount, error) {
 	return results, nil
 }
 
-// UpdateChannel persists changes to a channel's metadata (status, version, etc).
+// UpdateChannel persists changes to a channel's mutable lifecycle fields
+// (status, state_version, challenge_expires_at). Immutable configuration fields
+// are not touched here — see CreateChannel.
 func (s *DBStore) UpdateChannel(channel core.Channel) error {
+	// Only mutable lifecycle fields are persisted here. Immutable identity and
+	// configuration fields (blockchain_id, token, nonce, ...) are set once in
+	// CreateChannel and intentionally excluded so a partial or stale core.Channel
+	// passed by a caller cannot corrupt a channel's metadata.
 	updates := map[string]interface{}{
 		"status":               channel.Status,
 		"state_version":        channel.StateVersion,
-		"blockchain_id":        channel.BlockchainID,
-		"token":                strings.ToLower(channel.TokenAddress),
-		"nonce":                channel.Nonce,
 		"challenge_expires_at": channel.ChallengeExpiresAt,
 		"updated_at":           time.Now(),
 	}

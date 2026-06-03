@@ -108,6 +108,9 @@ type ValidationLimits struct {
 	MaxAppMetadataLen     int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
 	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
 	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	// MaxSessionKeysPerUser is a soft per-user cap on active session keys, a DoS/storage
+	// bound enforced when a submit activates a key (new registration or reactivation).
+	// A value <= 0 disables the cap entirely (unlimited). Default 100.
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 

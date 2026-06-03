@@ -568,6 +568,12 @@ func TestNewTransactionFromTransition(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "receiver state must not be nil")
 
+	// Release error: nil receiverState must return an error, not panic
+	transition = Transition{Type: TransitionTypeRelease, Amount: decimal.NewFromInt(10), AccountID: "REC"}
+	_, err = NewTransactionFromTransition(senderState, nil, transition)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "receiver state must not be nil for 'release' transition")
+
 	// Invalid
 	transition = Transition{Type: 255}
 	_, err = NewTransactionFromTransition(senderState, nil, transition)

@@ -879,12 +879,12 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 		toAccount = transition.AccountID
 
 	case TransitionTypeRelease:
-		txType = TransactionTypeRelease
-		fromAccount = transition.AccountID
-		toAccount = receiverState.UserWallet
 		if receiverState == nil {
 			return nil, fmt.Errorf("receiver state must not be nil for 'release' transition")
 		}
+		txType = TransactionTypeRelease
+		fromAccount = transition.AccountID
+		toAccount = receiverState.UserWallet
 
 	case TransitionTypeMutualLock:
 		if senderState.EscrowChannelID == nil || senderState.HomeChannelID == nil {

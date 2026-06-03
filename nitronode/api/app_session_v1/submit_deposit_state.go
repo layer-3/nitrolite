@@ -185,6 +185,13 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 
 		incomingAllocations := make(map[string]map[string]decimal.Decimal)
 		for _, alloc := range appStateUpd.Allocations {
+			// Validate participant before any amount-diff logic so non-participant
+			// allocations are rejected even when the amount is zero (which would
+			// otherwise bypass the check below).
+			if _, ok := participantWeights[alloc.Participant]; !ok {
+				return rpc.Errorf("allocation to non-participant %s", alloc.Participant)
+			}
+
 			if alloc.Amount.IsNegative() {
 				return rpc.Errorf("negative allocation: %s for asset %s", alloc.Amount, alloc.Asset)
 			}
@@ -216,11 +223,6 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			}
 
 			if alloc.Amount.GreaterThan(currentAmount) {
-				// Validate participant
-				if _, ok := participantWeights[alloc.Participant]; !ok {
-					return rpc.Errorf("allocation to non-participant %s", alloc.Participant)
-				}
-
 				// Validate that allocation asset matches user state asset
 				if alloc.Asset != userState.Asset {
 					return rpc.Errorf("app session deposit allocation for asset '%s' does not match user channel state asset '%s'", alloc.Asset, userState.Asset)
@@ -249,19 +251,27 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 				if currentAmount.IsZero() {
 					continue
 				}
-				if asset == userState.Asset {
-					// Skip asset being deposited to avoid double-checking
-					continue
-				}
 
-				// Check if this participant+asset is included in the incoming request
+				// Every existing nonzero allocation must be present in the signed
+				// update so the resulting allocation set is a complete snapshot.
 				incomingAmount, found := incomingAllocations[participant][asset]
 				if !found {
 					return rpc.Errorf("deposit intent missing allocation for participant %s, asset %s with current amount %s",
 						participant, asset, currentAmount.String())
 				}
 
-				// Verify amounts match exactly
+				if asset == userState.Asset {
+					// Deposited asset: allocations may only grow (the deposit
+					// itself, already validated and recorded in the loop above),
+					// never shrink.
+					if incomingAmount.LessThan(currentAmount) {
+						return rpc.Errorf("deposit intent cannot decrease allocation for participant %s, asset %s: current %s, provided %s",
+							participant, asset, currentAmount.String(), incomingAmount.String())
+					}
+					continue
+				}
+
+				// Non-deposited assets must match current state exactly.
 				if !incomingAmount.Equal(currentAmount) {
 					return rpc.Errorf("deposit intent requires non-deposited asset allocations to match current state: participant %s, asset %s, current %s, provided %s",
 						participant, asset, currentAmount.String(), incomingAmount.String())

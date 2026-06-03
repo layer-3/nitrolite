@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -95,6 +96,13 @@ func LoadAssets(configDirPath string) (AssetsConfig, error) {
 // Note: This method modifies token fields during validation but changes are not persisted
 // back to the original slice due to Go's value semantics in range loops.
 func verifyAssetsConfig(cfg *AssetsConfig) error {
+	// seenSymbols maps a canonical (lowercased) symbol to the index of the first
+	// enabled asset that declared it. Downstream logic matches asset symbols
+	// case-sensitively in some places (the in-memory supported-asset registry)
+	// and case-insensitively in others (the persistence layer), so allowing both
+	// "usdt" and "USDT" would make asset handling ambiguous. Fail closed instead.
+	seenSymbols := make(map[string]int)
+
 	for i, asset := range cfg.Assets {
 		if asset.Disabled {
 			continue
@@ -103,6 +111,12 @@ func verifyAssetsConfig(cfg *AssetsConfig) error {
 		if asset.Symbol == "" {
 			return fmt.Errorf("missing asset symbol for asset[%d]", i)
 		}
+		canonicalSymbol := strings.ToLower(asset.Symbol)
+		if prev, dup := seenSymbols[canonicalSymbol]; dup {
+			return fmt.Errorf("duplicate asset symbol '%s' (asset[%d]) conflicts with '%s' (asset[%d]) on a case-insensitive basis",
+				asset.Symbol, i, cfg.Assets[prev].Symbol, prev)
+		}
+		seenSymbols[canonicalSymbol] = i
 		if asset.Name == "" {
 			cfg.Assets[i].Name = asset.Symbol
 		}

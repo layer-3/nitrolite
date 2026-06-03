@@ -42,7 +42,7 @@ func TestGetEscrowChannel_Success(t *testing.T) {
 
 	// Test data
 	userWallet := "0x1234567890123456789012345678901234567890"
-	escrowChannelID := "0xEscrowChannel456"
+	escrowChannelID := "0x1111111111111111111111111111111111111111111111111111111111111111"
 
 	escrowChannel := core.Channel{
 		ChannelID:         escrowChannelID,
@@ -120,7 +120,7 @@ func TestGetEscrowChannel_NotFound(t *testing.T) {
 		actionGateway:    &MockActionGateway{},
 	}
 
-	escrowChannelID := "0xMissingEscrowChannel"
+	escrowChannelID := "0x2222222222222222222222222222222222222222222222222222222222222222"
 	mockTxStore.On("GetChannelByID", escrowChannelID).Return(nil, nil)
 
 	reqPayload := rpc.ChannelsV1GetEscrowChannelRequest{EscrowChannelID: escrowChannelID}
@@ -144,4 +144,44 @@ func TestGetEscrowChannel_NotFound(t *testing.T) {
 	assert.Nil(t, response.Channel)
 
 	mockTxStore.AssertExpectations(t)
+}
+
+func TestGetEscrowChannel_InvalidID(t *testing.T) {
+	mockTxStore := new(MockStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   new(MockStatePacker),
+		useStoreInTx: func(h StoreTxHandler) error {
+			return h(mockTxStore)
+		},
+		nodeSigner:       nodeSigner,
+		nodeAddress:      mockSigner.PublicKey().Address().String(),
+		minChallenge:     3600,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+		actionGateway:    &MockActionGateway{},
+	}
+
+	for _, id := range []string{"", "0xabc", "not-a-hash"} {
+		reqPayload := rpc.ChannelsV1GetEscrowChannelRequest{EscrowChannelID: id}
+		payload, err := rpc.NewPayload(reqPayload)
+		require.NoError(t, err)
+
+		ctx := &rpc.Context{
+			Context: context.Background(),
+			Request: rpc.Message{Method: "channels.v1.get_escrow_channel", Payload: payload},
+		}
+
+		handler.GetEscrowChannel(ctx)
+
+		require.NotNil(t, ctx.Response.Error(), "id %q should be rejected", id)
+		assert.Contains(t, ctx.Response.Error().Error(), "invalid escrow_channel_id")
+	}
+
+	// A malformed id must never reach the store.
+	mockTxStore.AssertNotCalled(t, "GetChannelByID")
 }

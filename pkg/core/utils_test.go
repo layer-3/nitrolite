@@ -830,3 +830,25 @@ func TestDecimalToInt256(t *testing.T) {
 		assert.Contains(t, err.Error(), "below int256 min")
 	})
 }
+
+func TestIsValidHash(t *testing.T) {
+	valid := []string{
+		"0x1111111111111111111111111111111111111111111111111111111111111111",
+		"0xabcdefABCDEF0000000000000000000000000000000000000000000000000000",
+	}
+	for _, s := range valid {
+		assert.True(t, IsValidHash(s), "expected %q to be valid", s)
+	}
+
+	invalid := []string{
+		"",
+		"0xabc",
+		"1111111111111111111111111111111111111111111111111111111111111111", // missing 0x
+		"0x111111111111111111111111111111111111111111111111111111111111111",  // 63 hex
+		"0x11111111111111111111111111111111111111111111111111111111111111111", // 65 hex
+		"0xzz11111111111111111111111111111111111111111111111111111111111111", // non-hex
+	}
+	for _, s := range invalid {
+		assert.False(t, IsValidHash(s), "expected %q to be invalid", s)
+	}
+}

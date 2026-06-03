@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -11,6 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
 )
+
+// HashRegex matches a 32-byte hash rendered as a 0x-prefixed hex string, the
+// canonical form of channel IDs and app session IDs (both Keccak256 hashes).
+// Case-insensitive, since callers may submit checksummed or lowercased hex.
+var HashRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
+
+// IsValidHash reports whether s is a well-formed 32-byte hash (see HashRegex).
+func IsValidHash(s string) bool {
+	return HashRegex.MatchString(s)
+}
 
 // maxInt256 = 2^255 - 1, the largest value representable as Solidity int256.
 var maxInt256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(1))

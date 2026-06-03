@@ -26,9 +26,10 @@ func TestBlockchainConfig_verifyVariables(t *testing.T) {
 						ChannelHubSigValidators: map[uint8]string{1: "0x3333333333333333333333333333333333333333"},
 					},
 					{
-						ID:                     11155111,
-						Name:                   "ethereum_sepolia",
-						LockingContractAddress: "0x2222222222222222222222222222222222222222",
+						ID:                      11155111,
+						Name:                    "ethereum_sepolia",
+						ChannelHubAddress:       "0x2222222222222222222222222222222222222222",
+						ChannelHubSigValidators: map[uint8]string{1: "0x3333333333333333333333333333333333333333"},
 					},
 				},
 			},
@@ -46,7 +47,7 @@ func TestBlockchainConfig_verifyVariables(t *testing.T) {
 				sepoliaCfg := blockchains[1]
 				assert.Equal(t, "ethereum_sepolia", sepoliaCfg.Name)
 				assert.Equal(t, uint64(11155111), sepoliaCfg.ID)
-				assert.Equal(t, "0x2222222222222222222222222222222222222222", sepoliaCfg.LockingContractAddress)
+				assert.Equal(t, "0x2222222222222222222222222222222222222222", sepoliaCfg.ChannelHubAddress)
 				assert.False(t, sepoliaCfg.Disabled)
 				assert.Equal(t, defaultBlockStep, sepoliaCfg.BlockStep)
 			},

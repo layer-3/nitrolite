@@ -37,7 +37,6 @@ func TestGetEscrowChannel_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data
@@ -117,7 +116,6 @@ func TestGetEscrowChannel_NotFound(t *testing.T) {
 		minChallenge:     3600,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	escrowChannelID := "0xMissingEscrowChannel"

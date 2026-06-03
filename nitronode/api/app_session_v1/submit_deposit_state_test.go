@@ -2,7 +2,6 @@ package app_session_v1
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -71,20 +70,18 @@ func TestSubmitDepositState_Success(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: true,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	// Test data - create one key for both app session and channel state signing
@@ -197,9 +194,6 @@ func TestSubmitDepositState_Success(t *testing.T) {
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 
 	// Mock allocations check - empty initially
@@ -285,20 +279,18 @@ func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: true,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	// Test data
@@ -383,9 +375,6 @@ func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 		Status:  app.AppSessionStatusOpen,
 		Version: 1,
 	}
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Maybe()
 
@@ -430,20 +419,18 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: true,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	// Test data - create one key for both app session and channel state signing
@@ -547,9 +534,6 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
 	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
 	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 
 	// Create RPC request
@@ -583,161 +567,6 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// TestSubmitDepositState_AppRegistryDisabled verifies that when appRegistryEnabled=false,
-// app lookup and AllowAction are skipped but deposit still succeeds.
-func TestSubmitDepositState_AppRegistryDisabled(t *testing.T) {
-	mockStore := new(MockStore)
-	mockSigner := NewMockChannelSigner()
-	nodeAddress := mockSigner.PublicKey().Address().String()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := &Handler{
-		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{Err: errors.New("should not be called")},
-		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
-		statePacker:   mockStatePacker,
-		useStoreInTx: func(handler StoreTxHandler) error {
-			return handler(mockStore)
-		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: false, // disabled
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
-	}
-
-	userRawSigner := NewMockSigner()
-	channelWalletSigner, _ := core.NewChannelDefaultSigner(userRawSigner)
-	appWalletSigner, _ := app.NewAppSessionWalletSignerV1(userRawSigner)
-	participant1 := strings.ToLower(userRawSigner.PublicKey().Address().String())
-	participant2 := "0x2222222222222222222222222222222222222222"
-	asset := "USDC"
-	homeChannelID := "0xHomeChannel123"
-	depositAmount := decimal.NewFromInt(100)
-	appSessionID := "0xAppSession123"
-
-	existingAppSession := &app.AppSessionV1{
-		SessionID:     appSessionID,
-		ApplicationID: "test-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 1},
-			{WalletAddress: participant2, SignatureWeight: 1},
-		},
-		Quorum:    1,
-		Nonce:     12345,
-		Status:    app.AppSessionStatusOpen,
-		Version:   1,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	currentUserState := core.State{
-		ID: core.GetStateID(participant1, asset, 1, 1),
-		Transition: core.Transition{
-			Type: core.TransitionTypeVoid,
-		},
-		Asset:         asset,
-		UserWallet:    participant1,
-		Epoch:         1,
-		Version:       1,
-		HomeChannelID: &homeChannelID,
-		HomeLedger: core.Ledger{
-			TokenAddress: "0xTokenAddress",
-			BlockchainID: 1,
-			UserBalance:  decimal.NewFromInt(500),
-			UserNetFlow:  decimal.NewFromInt(500),
-			NodeBalance:  decimal.NewFromInt(0),
-			NodeNetFlow:  decimal.NewFromInt(0),
-		},
-	}
-
-	incomingUserState := currentUserState.NextState()
-	_, err := incomingUserState.ApplyCommitTransition(appSessionID, depositAmount)
-	require.NoError(t, err)
-
-	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
-	packedUserState, _ := mockStatePacker.PackState(*incomingUserState)
-	userSig, _ := channelWalletSigner.Sign(packedUserState)
-	userSigStr := userSig.String()
-	incomingUserState.UserSig = &userSigStr
-
-	appStateUpdateCore := app.AppStateUpdateV1{
-		AppSessionID: appSessionID,
-		Intent:       app.AppStateUpdateIntentDeposit,
-		Version:      2,
-		Allocations: []app.AppAllocationV1{
-			{Participant: participant1, Asset: asset, Amount: depositAmount},
-		},
-		SessionData: `{"updated": "data"}`,
-	}
-	packedAppUpdate, _ := app.PackAppStateUpdateV1(appStateUpdateCore)
-	appSigBytes, _ := appWalletSigner.Sign(packedAppUpdate)
-	appSigHex := hexutil.Encode(appSigBytes)
-
-	appStateUpdate := rpc.AppStateUpdateV1{
-		AppSessionID: appSessionID,
-		Intent:       app.AppStateUpdateIntentDeposit,
-		Version:      "2",
-		Allocations: []rpc.AppAllocationV1{
-			{Participant: participant1, Asset: asset, Amount: depositAmount.String()},
-		},
-		SessionData: `{"updated": "data"}`,
-	}
-
-	// NO GetApp mock — it should not be called
-	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
-	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
-	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
-	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
-	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
-	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
-	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
-	mockStore.On("GetParticipantAllocations", appSessionID).Return(
-		map[string]map[string]decimal.Decimal{}, nil,
-	).Once()
-	mockStore.On("RecordLedgerEntry", participant1, appSessionID, asset, depositAmount).Return(nil).Once()
-	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
-		return session.SessionID == appSessionID && session.Version == 2
-	})).Return(nil).Once()
-	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
-		return state.UserWallet == participant1 && state.NodeSig != nil
-	}), mock.Anything).Return(nil).Once()
-	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
-		return tx.TxType == core.TransactionTypeCommit && tx.Amount.Equal(depositAmount)
-	}), mock.Anything).Return(nil).Once()
-
-	rpcState := toRPCState(*incomingUserState)
-	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{
-		AppStateUpdate: appStateUpdate,
-		QuorumSigs:     []string{appSigHex},
-		UserState:      rpcState,
-	}
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitDepositStateMethod), payload),
-	}
-
-	handler.SubmitDepositState(ctx)
-
-	assert.NotNil(t, ctx.Response)
-	if respErr := ctx.Response.Error(); respErr != nil {
-		t.Fatalf("Unexpected error response: %v", respErr)
-	}
-	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
-
-	// Strict: GetApp must NOT have been called
-	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
-	mockStore.AssertExpectations(t)
-}
-
 func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 	mockStore := new(MockStore)
 	mockSigner := NewMockChannelSigner()
@@ -747,20 +576,18 @@ func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: true,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -831,9 +658,6 @@ func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 		},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
 	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
@@ -881,20 +705,18 @@ func TestSubmitDepositState_InvalidDecimalPrecision_Rejected(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: true,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -965,9 +787,6 @@ func TestSubmitDepositState_InvalidDecimalPrecision_Rejected(t *testing.T) {
 		},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
 	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
 	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()

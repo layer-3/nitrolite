@@ -185,25 +185,16 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 			// User queries
 			{Text: "balances", Description: "Get user balances"},
 			{Text: "transactions", Description: "Get transaction history"},
-			{Text: "action-allowances", Description: "Get action allowances"},
 
 			// State management
 			{Text: "state", Description: "Get latest state"},
 			{Text: "home-channel", Description: "Get home channel"},
 			{Text: "escrow-channel", Description: "Get escrow channel"},
 
-			// App registry
-			{Text: "app-info", Description: "Show application details"},
-			{Text: "my-apps", Description: "List your registered applications"},
-			{Text: "register-app", Description: "Register a new application"},
-
 			// App sessions (Base Client - Low-level)
 			{Text: "app-sessions", Description: "List app sessions"},
 
-			// Security token operations
-			{Text: "security-token", Description: "Security token operations"},
-
-{Text: "exit", Description: "Exit the CLI"},
+			{Text: "exit", Description: "Exit the CLI"},
 		}
 	}
 
@@ -221,15 +212,6 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 			return o.getAssetSuggestions()
 		case "token-balance", "approve", "deposit", "withdraw":
 			return o.getChainSuggestions()
-		case "security-token":
-			return []prompt.Suggest{
-				{Text: "approve", Description: "Approve security token spending"},
-				{Text: "balance", Description: "Check escrowed security token balance"},
-				{Text: "escrow", Description: "Escrow security tokens"},
-				{Text: "initiate-withdrawal", Description: "Start unlock period"},
-				{Text: "cancel-withdrawal", Description: "Cancel unlock and re-lock"},
-				{Text: "withdraw", Description: "Withdraw unlocked security tokens"},
-			}
 		case "state", "home-channel":
 			// state [wallet] <asset>, home-channel [wallet] <asset>
 			// Suggest asset first (common case), wallet can be typed manually
@@ -237,7 +219,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 		case "transfer":
 			// transfer <recipient> <asset> <amount>
 			return o.getWalletSuggestion()
-		case "balances", "transactions", "action-allowances":
+		case "balances", "transactions":
 			return o.getWalletSuggestion()
 		case "assets":
 			return o.getChainSuggestions()
@@ -287,9 +269,6 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 		case "state", "home-channel":
 			// state [wallet] <asset> — if wallet was explicitly provided, suggest asset
 			return o.getAssetSuggestions()
-		case "security-token":
-			// security-token <subcommand> <chain_id> ...
-			return o.getChainSuggestions()
 		case "escrow-channel":
 			// Escrow channel ID (no suggestion)
 			return nil
@@ -601,117 +580,10 @@ func (o *Operator) Execute(s string) {
 		}
 		o.getEscrowChannel(ctx, args[1])
 
-	// App registry
-	case "app-info":
-		if len(args) < 2 {
-			fmt.Println("ERROR: Usage: app-info <app_id>")
-			return
-		}
-		o.getApps(ctx, &args[1], nil)
-
-	case "my-apps":
-		wallet := o.getImportedWalletAddress()
-		if wallet == "" {
-			fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first.")
-			return
-		}
-		o.getApps(ctx, nil, &wallet)
-
-	case "register-app":
-		if len(args) < 2 {
-			fmt.Println("ERROR: Usage: register-app <app_id> [no-approval]")
-			fmt.Println("INFO: Pass 'no-approval' as second arg to allow session creation without owner approval")
-			return
-		}
-		noApproval := len(args) >= 3 && args[2] == "no-approval"
-		o.registerApp(ctx, args[1], "", noApproval)
-
-	// User action allowances
-	case "action-allowances":
-		wallet := ""
-		if len(args) >= 2 {
-			wallet = args[1]
-		} else {
-			wallet = o.getImportedWalletAddress()
-			if wallet == "" {
-				fmt.Println("ERROR: Usage: action-allowances <wallet_address>")
-				fmt.Println("INFO: No wallet configured. Use 'config wallet import' first or specify a wallet address.")
-				return
-			}
-			fmt.Printf("INFO: Using configured wallet: %s\n", wallet)
-		}
-		o.getActionAllowances(ctx, wallet)
-
 	// App sessions
 	case "app-sessions":
 		wallet := o.getImportedWalletAddress()
 		o.listAppSessions(ctx, wallet)
-
-
-	// Security token operations
-	case "security-token":
-		if len(args) < 2 {
-			fmt.Println("ERROR: Usage: security-token <command> ...")
-			fmt.Println("Commands: approve, balance, escrow, initiate-withdrawal, cancel-withdrawal, withdraw")
-			return
-		}
-		switch args[1] {
-		case "approve":
-			if len(args) < 4 {
-				fmt.Println("ERROR: Usage: security-token approve <chain_id> <amount>")
-				return
-			}
-			o.approveSecurityToken(ctx, args[2], args[3])
-		case "escrow":
-			if len(args) < 4 {
-				fmt.Println("ERROR: Usage: security-token escrow <chain_id> [target_address] <amount>")
-				fmt.Println("INFO: If target_address is omitted, your own wallet is used.")
-				return
-			}
-			if len(args) >= 5 {
-				o.escrowSecurityTokens(ctx, args[2], args[3], args[4])
-			} else {
-				o.escrowSecurityTokens(ctx, args[2], "", args[3])
-			}
-		case "initiate-withdrawal":
-			if len(args) < 3 {
-				fmt.Println("ERROR: Usage: security-token initiate-withdrawal <chain_id>")
-				return
-			}
-			o.initiateSecurityWithdrawal(ctx, args[2])
-		case "cancel-withdrawal":
-			if len(args) < 3 {
-				fmt.Println("ERROR: Usage: security-token cancel-withdrawal <chain_id>")
-				return
-			}
-			o.cancelSecurityWithdrawal(ctx, args[2])
-		case "withdraw":
-			if len(args) < 4 {
-				fmt.Println("ERROR: Usage: security-token withdraw <chain_id> <destination_address>")
-				return
-			}
-			o.withdrawSecurityTokens(ctx, args[2], args[3])
-		case "balance":
-			if len(args) < 3 {
-				fmt.Println("ERROR: Usage: security-token balance <chain_id> [wallet_address]")
-				return
-			}
-			wallet := ""
-			if len(args) >= 4 {
-				wallet = args[3]
-			} else {
-				wallet = o.getImportedWalletAddress()
-				if wallet == "" {
-					fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first or specify a wallet address.")
-					return
-				}
-				fmt.Printf("INFO: Using configured wallet: %s\n", wallet)
-			}
-			o.securityBalance(ctx, args[2], wallet)
-		default:
-			fmt.Printf("ERROR: Unknown security-token command: %s\n", args[1])
-			fmt.Println("Commands: approve, balance, escrow, initiate-withdrawal, cancel-withdrawal, withdraw")
-		}
 
 	case "exit":
 		// Actual exit is driven by go-prompt's ExitChecker on "exit" input

@@ -21,8 +21,8 @@ func mapTransactionV1(tx core.Transaction) rpc.TransactionV1 {
 
 func mapBalanceEntryV1(entry core.BalanceEntry) rpc.BalanceEntryV1 {
 	return rpc.BalanceEntryV1{
-		Asset:  entry.Asset,
-		Amount: entry.Balance.String(),
+		Asset:    entry.Asset,
+		Amount:   entry.Balance.String(),
 		Enforced: entry.Enforced.String(),
 	}
 }

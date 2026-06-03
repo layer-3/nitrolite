@@ -29,7 +29,6 @@ func transformNodeConfig(resp rpc.NodeV1GetConfigResponse) (*core.NodeConfig, er
 			Name:                   info.Name,
 			ID:                     blockchainID,
 			ChannelHubAddress:      info.ChannelHubAddress,
-			LockingContractAddress: info.LockingContractAddress,
 			BlockStep:              0, // Not provided in RPC response
 		})
 	}

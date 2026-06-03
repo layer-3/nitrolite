@@ -37,7 +37,6 @@ func TestGetHomeChannel_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data
@@ -126,7 +125,6 @@ func TestGetHomeChannel_NotFound(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data

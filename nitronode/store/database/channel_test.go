@@ -441,7 +441,6 @@ func TestDBStore_GetNotClosedHomeChannel(t *testing.T) {
 	})
 }
 
-
 func TestDBStore_CheckActiveChannel(t *testing.T) {
 	t.Run("Success - Has open channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)

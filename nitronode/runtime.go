@@ -15,7 +15,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/metrics"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/nitronode/store/memory"
@@ -36,7 +35,6 @@ type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
 	ChannelMaxChallengeDuration uint32
-	AppRegistryEnabled          bool
 	BlockchainRPCs              map[uint64]string
 	BlockchainGasLimit          uint64
 	ValidationLimits            ValidationLimits
@@ -45,7 +43,6 @@ type Backbone struct {
 
 	DbStore        database.DatabaseStore
 	MemoryStore    memory.MemoryStore
-	ActionGateway  action_gateway.ActionAllower
 	RpcNode        rpc.Node
 	StateSigner    sign.Signer
 	TxSigner       sign.Signer
@@ -70,8 +67,6 @@ type FullConfig struct {
 	Database                    database.DatabaseConfig
 	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
 	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
-	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"NITRONODE_ACTION_LIMITS_ENABLED"`
-	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"NITRONODE_APP_REGISTRY_ENABLED"`
 	Signer                      SignerConfig     `yaml:"signer"`
 	SignerType                  string           `yaml:"signer_type" env:"NITRONODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
 	SignerKey                   string           `yaml:"signer_key" env:"NITRONODE_SIGNER_KEY"`                     // required when signer_type=key
@@ -105,7 +100,6 @@ type SignerConfig struct {
 type ValidationLimits struct {
 	MaxParticipants       int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
 	MaxSessionDataLen     int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
-	MaxAppMetadataLen     int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
 	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
 	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
@@ -217,21 +211,6 @@ func InitBackbone() *Backbone {
 	}
 
 	// ------------------------------------------------
-	// Action Gateway
-	// ------------------------------------------------
-
-	var actionGateway action_gateway.ActionAllower
-	if conf.ActionLimitsEnabled {
-		actionGateway, err = action_gateway.NewActionGatewayFromYaml(configDirPath)
-		if err != nil {
-			logger.Fatal("failed to initialize action gateway", "error", err)
-		}
-	} else {
-		actionGateway = action_gateway.NewPermissiveActionAllower()
-		logger.Info("action limits disabled, using permissive action allower")
-	}
-
-	// ------------------------------------------------
 	// Signer
 	// ------------------------------------------------
 
@@ -340,7 +319,6 @@ func InitBackbone() *Backbone {
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
 		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
-		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
 		BlockchainGasLimit:          conf.BlockchainGasLimit,
 		ValidationLimits:            conf.ValidationLimits,
@@ -349,7 +327,6 @@ func InitBackbone() *Backbone {
 
 		DbStore:        dbStore,
 		MemoryStore:    memoryStore,
-		ActionGateway:  actionGateway,
 		RpcNode:        rpcNode,
 		StateSigner:    stateSigner,
 		TxSigner:       txSigner,

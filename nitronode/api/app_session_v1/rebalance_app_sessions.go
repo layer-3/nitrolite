@@ -114,20 +114,6 @@ func (h *Handler) RebalanceAppSessions(c *rpc.Context) {
 			} else if appSession.ApplicationID != applicationID {
 				return rpc.Errorf("cannot rebalance app sessions from different applications: '%s' vs '%s'", applicationID, appSession.ApplicationID)
 			}
-			if h.appRegistryEnabled {
-				registeredApp, err := tx.GetApp(appSession.ApplicationID)
-				if err != nil {
-					return rpc.Errorf("failed to look up application: %v", err)
-				}
-				if registeredApp == nil {
-					return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
-				}
-
-				err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, update.AppStateUpdate.Intent.GatedAction())
-				if err != nil {
-					return rpc.NewError(err)
-				}
-			}
 			if len(update.QuorumSigs) > len(appSession.Participants) {
 				return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(update.QuorumSigs), len(appSession.Participants))
 			}

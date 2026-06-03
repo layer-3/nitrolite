@@ -78,7 +78,6 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive senderWallet from a user signer key
@@ -257,7 +256,6 @@ func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *tes
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -386,7 +384,6 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive senderWallet from a user signer key
@@ -529,7 +526,6 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Derive senderWallet from a real key — Address().String() returns checksummed (mixed case)
@@ -642,7 +638,6 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -801,7 +796,6 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -958,7 +952,6 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1093,7 +1086,6 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1230,7 +1222,6 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1389,7 +1380,6 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1548,7 +1538,6 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1699,7 +1688,6 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1820,7 +1808,6 @@ func TestSubmitState_MutualLock_VoidHomeChannel_Rejected(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -1911,7 +1898,6 @@ func TestSubmitState_EscrowLock_VoidHomeChannel_Rejected(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -2004,7 +1990,6 @@ func TestSubmitState_ClosingChannel_Rejected(t *testing.T) {
 		minChallenge:     3600,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()

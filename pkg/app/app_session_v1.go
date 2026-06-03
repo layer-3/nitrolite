@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/shopspring/decimal"
 )
 
@@ -48,19 +47,6 @@ func (intent AppStateUpdateIntent) String() string {
 		return "rebalance"
 	default:
 		return "unknown"
-	}
-}
-
-func (intent AppStateUpdateIntent) GatedAction() core.GatedAction {
-	switch intent {
-	case AppStateUpdateIntentOperate:
-		return core.GatedActionAppSessionOperation
-	case AppStateUpdateIntentDeposit:
-		return core.GatedActionAppSessionDeposit
-	case AppStateUpdateIntentWithdraw:
-		return core.GatedActionAppSessionWithdrawal
-	default:
-		return ""
 	}
 }
 

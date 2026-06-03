@@ -90,7 +90,6 @@ type ChannelHubReactorStore interface {
 	// home channel.
 	HasSignedFinalize(channelID string) (bool, error)
 
-
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;

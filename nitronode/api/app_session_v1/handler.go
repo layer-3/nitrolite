@@ -27,12 +27,10 @@ import (
 type Handler struct {
 	useStoreInTx          StoreTxProvider
 	assetStore            AssetStore
-	actionGateway         ActionGateway
 	signer                *core.ChannelDefaultSigner
 	stateAdvancer         core.StateAdvancer
 	statePacker           core.StatePacker
 	nodeAddress           string // Node's wallet address
-	appRegistryEnabled    bool
 	metrics               metrics.RuntimeMetricExporter
 	maxParticipants       int
 	maxSessionData        int
@@ -45,12 +43,10 @@ type Handler struct {
 func NewHandler(
 	useStoreInTx StoreTxProvider,
 	assetStore AssetStore,
-	actionGateway ActionGateway,
 	signer *core.ChannelDefaultSigner,
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,
-	appRegistryEnabled bool,
 	m metrics.RuntimeMetricExporter,
 	maxParticipants, maxSessionData, maxSessionKeyIDs, maxSignedUpdates int,
 	maxSessionKeysPerUser int,
@@ -58,12 +54,10 @@ func NewHandler(
 	return &Handler{
 		useStoreInTx:          useStoreInTx,
 		assetStore:            assetStore,
-		actionGateway:         actionGateway,
 		signer:                signer,
 		stateAdvancer:         stateAdvancer,
 		statePacker:           statePacker,
 		nodeAddress:           nodeAddress,
-		appRegistryEnabled:    appRegistryEnabled,
 		metrics:               m,
 		maxParticipants:       maxParticipants,
 		maxSessionData:        maxSessionData,

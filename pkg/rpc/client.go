@@ -209,28 +209,6 @@ func (c *Client) AppSessionsV1GetLastKeyStates(ctx context.Context, req AppSessi
 }
 
 // ============================================================================
-// Apps Group - V1 API Methods
-// ============================================================================
-
-// AppsV1GetApps retrieves registered applications with optional filtering.
-func (c *Client) AppsV1GetApps(ctx context.Context, req AppsV1GetAppsRequest) (AppsV1GetAppsResponse, error) {
-	var resp AppsV1GetAppsResponse
-	if err := c.call(ctx, AppsV1GetAppsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// AppsV1SubmitAppVersion submits a new application version (currently only creation is supported).
-func (c *Client) AppsV1SubmitAppVersion(ctx context.Context, req AppsV1SubmitAppVersionRequest) (AppsV1SubmitAppVersionResponse, error) {
-	var resp AppsV1SubmitAppVersionResponse
-	if err := c.call(ctx, AppsV1SubmitAppVersionMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// ============================================================================
 // User Group - V1 API Methods
 // ============================================================================
 
@@ -247,15 +225,6 @@ func (c *Client) UserV1GetBalances(ctx context.Context, req UserV1GetBalancesReq
 func (c *Client) UserV1GetTransactions(ctx context.Context, req UserV1GetTransactionsRequest) (UserV1GetTransactionsResponse, error) {
 	var resp UserV1GetTransactionsResponse
 	if err := c.call(ctx, UserV1GetTransactionsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// UserV1GetActionAllowances retrieves the user's current action allowances for channels and app sessions.
-func (c *Client) UserV1GetActionAllowances(ctx context.Context, req UserV1GetActionAllowancesRequest) (UserV1GetActionAllowancesResponse, error) {
-	var resp UserV1GetActionAllowancesResponse
-	if err := c.call(ctx, UserV1GetActionAllowancesMethod, req, &resp); err != nil {
 		return resp, err
 	}
 	return resp, nil

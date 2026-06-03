@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -1226,6 +1227,12 @@ func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (off
 			limit = min(*p.Limit, maxLimit)
 		}
 	}
+
+	// Callers convert offset to int before handing it to GORM's Offset(). On a
+	// 32-bit target int(offset) wraps to a negative value for large uint32s,
+	// which GORM treats as "no offset" and silently returns the first page.
+	// Clamp to MaxInt32 so the conversion is always a non-negative int.
+	offset = min(offset, math.MaxInt32)
 
 	return offset, limit
 }

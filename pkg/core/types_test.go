@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -597,4 +598,11 @@ func TestPaginationParams_GetOffsetAndLimit(t *testing.T) {
 	lim = 200
 	o, l = p.GetOffsetAndLimit(10, 100)
 	assert.Equal(t, uint32(100), l) // Capped at max
+
+	// Offset is clamped to MaxInt32 so int(offset) never wraps negative on 32-bit.
+	bigOff := uint32(math.MaxUint32)
+	p = &PaginationParams{Offset: &bigOff}
+	o, _ = p.GetOffsetAndLimit(10, 100)
+	assert.Equal(t, uint32(math.MaxInt32), o)
+	assert.GreaterOrEqual(t, int(o), 0)
 }

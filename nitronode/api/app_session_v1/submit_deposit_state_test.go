@@ -275,6 +275,110 @@ func TestSubmitDepositState_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestSubmitDepositState_MissingLastUserState_Rejected(t *testing.T) {
+	// An active home channel always has a persisted latest state; if GetLastUserState
+	// returns nil despite CheckActiveChannel succeeding, the handler must reject with a
+	// clean "last user state not found" rather than synthesizing a void state.
+	mockStore := new(MockStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		statePacker: mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		appRegistryEnabled: false,
+		metrics:            metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:    32,
+		maxSessionData:     1024,
+	}
+
+	userRawSigner := NewMockSigner()
+	participant1 := strings.ToLower(userRawSigner.PublicKey().Address().String())
+	participant2 := "0x2222222222222222222222222222222222222222"
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	depositAmount := decimal.NewFromInt(100)
+	appSessionID := "0xAppSession123"
+
+	existingAppSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 1},
+			{WalletAddress: participant2, SignatureWeight: 1},
+		},
+		Quorum:    1,
+		Nonce:     12345,
+		Status:    app.AppSessionStatusOpen,
+		Version:   1,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Build an incoming commit state referencing the app session.
+	baseState := core.State{
+		ID:            core.GetStateID(participant1, asset, 1, 1),
+		Transition:    core.Transition{Type: core.TransitionTypeVoid},
+		Asset:         asset,
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+		},
+	}
+	incomingUserState := baseState.NextState()
+	_, err := incomingUserState.ApplyCommitTransition(appSessionID, depositAmount)
+	require.NoError(t, err)
+	// Signature is never verified: the handler rejects before signature validation.
+	dummySig := "0x01"
+	incomingUserState.UserSig = &dummySig
+
+	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
+	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
+	mockStore.On("GetLastUserState", participant1, asset, false).Return(nil, nil).Once()
+
+	appStateUpdate := rpc.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentDeposit,
+		Version:      "2",
+		Allocations: []rpc.AppAllocationV1{
+			{Participant: participant1, Asset: asset, Amount: depositAmount.String()},
+		},
+	}
+
+	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{
+		AppStateUpdate: appStateUpdate,
+		QuorumSigs:     []string{"0xdeadbeef"},
+		UserState:      toRPCState(*incomingUserState),
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitDepositStateMethod), payload),
+	}
+
+	handler.SubmitDepositState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "last user state not found")
+
+	// Must reject without advancing past the missing-state check.
+	mockStore.AssertNotCalled(t, "EnsureNoOngoingStateTransitions", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+	mockStore.AssertExpectations(t)
+}
+
 func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 	// Setup
 	mockStore := new(MockStore)

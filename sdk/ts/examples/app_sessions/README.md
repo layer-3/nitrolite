@@ -7,9 +7,8 @@ This example demonstrates the complete lifecycle of Nitrolite app sessions, incl
 3. **Create second app session** for wallet 2 with wallet 3 as a participant
 4. **Deposit WETH** into second app session by wallet 2
 5. **Redistribute app state** within app session so that participant with wallet 3 also has some allocation
-6. **Rebalance 2 app sessions atomically**
-7. **Wallet 3 withdraws** from his app session
-8. **Close both app sessions**
+6. **Wallet 3 withdraws** from his app session
+7. **Close both app sessions**
 
 ## Prerequisites
 
@@ -66,17 +65,11 @@ This script performs a complete app session lifecycle test:
 - Wallet 3 gets 0.005 WETH
 - This is an "operate" intent state update
 
-### Step 6: Atomic Rebalance Across Sessions
-- Performs an atomic rebalance across both app sessions
-- Session 1: Wallet 1 gets 0.005 WETH and 0.00005 USDC
-- Session 2: Wallet 2 gets 0.00005 USDC and 0.005 WETH, Wallet 3 gets 0.005 WETH
-- All updates happen atomically or none at all
-
-### Step 7: Wallet 3 Withdraws from Session 2
+### Step 6: Wallet 3 Withdraws from Session 2
 - Wallet 3 withdraws 0.004 WETH back to their channel
 - Final allocations: Wallet 2 (0.00005 USDC, 0.005 WETH), Wallet 3 (0.001 WETH)
 
-### Step 8: Close Both App Sessions
+### Step 7: Close Both App Sessions
 - Closes session 1 with wallet 1's signature
 - Closes session 2 with both wallet 2 and wallet 3's signatures
 - Finalizes all app session state
@@ -90,7 +83,7 @@ This script performs a complete app session lifecycle test:
 - Unique nonce for session creation
 
 ### App State Updates
-- Different intents: Deposit, Operate, Withdraw, Close, Rebalance
+- Different intents: Deposit, Operate, Withdraw, Close
 - Version tracking
 - Allocations per participant per asset
 - Session data (JSON string)
@@ -114,7 +107,6 @@ This script performs a complete app session lifecycle test:
 - `createAppSession()` - Create new app sessions
 - `submitAppSessionDeposit()` - Submit deposits to app sessions
 - `submitAppState()` - Submit state updates (operate, withdraw, close)
-- `rebalanceAppSessions()` - Atomic rebalancing across sessions
 - `getAppSessions()` - Query app session information
 
 ## Comparison with Go SDK

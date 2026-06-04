@@ -739,9 +739,8 @@ const (
 
 	TransactionTypeTransfer TransactionType = 30
 
-	TransactionTypeCommit    TransactionType = 40
-	TransactionTypeRelease   TransactionType = 41
-	TransactionTypeRebalance TransactionType = 42
+	TransactionTypeCommit  TransactionType = 40
+	TransactionTypeRelease TransactionType = 41
 
 	TransactionTypeMigrate    TransactionType = 100
 	TransactionTypeEscrowLock TransactionType = 110
@@ -777,8 +776,6 @@ func (t TransactionType) String() string {
 		return "escrow_withdraw"
 	case TransactionTypeMigrate:
 		return "migrate"
-	case TransactionTypeRebalance:
-		return "rebalance"
 	case TransactionTypeFinalize:
 		return "finalize"
 	case TransactionTypeChallengeRescue:

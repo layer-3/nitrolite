@@ -49,10 +49,12 @@ func TestState_NextState(t *testing.T) {
 	assert.Equal(t, uint64(1), next.Epoch)
 	assert.Nil(t, next.EscrowLedger)
 
-	// Final state next state (new epoch)
+	// Final state next state (new epoch). Version starts at 1 (not 0) so the gate
+	// can distinguish a freshly created (Void) channel from one with a confirmed
+	// on-chain state.
 	state.Transition.Type = TransitionTypeFinalize
 	nextFinal := state.NextState()
-	assert.Equal(t, uint64(0), nextFinal.Version)
+	assert.Equal(t, uint64(1), nextFinal.Version)
 	assert.Equal(t, uint64(2), nextFinal.Epoch)
 
 	// With Escrow Ledger
@@ -216,7 +218,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		}
 	}
 
-	t.Run("Success - in-channel prev wraps to fresh epoch at version 0", func(t *testing.T) {
+	t.Run("Success - in-channel prev wraps to fresh epoch at version 1", func(t *testing.T) {
 		prev := makePrev()
 		amount := decimal.NewFromInt(42)
 
@@ -227,7 +229,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		assert.Equal(t, prev.Asset, rescue.Asset)
 		assert.Equal(t, prev.UserWallet, rescue.UserWallet)
 		assert.Equal(t, prev.Epoch+1, rescue.Epoch)
-		assert.Equal(t, uint64(0), rescue.Version)
+		assert.Equal(t, uint64(1), rescue.Version)
 		assert.Nil(t, rescue.HomeChannelID)
 		assert.Empty(t, rescue.HomeLedger.TokenAddress)
 		assert.Equal(t, uint64(0), rescue.HomeLedger.BlockchainID)

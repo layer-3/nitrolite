@@ -135,7 +135,7 @@ func NewChannel(channelID, userWallet, asset string, ChType ChannelType, blockch
 		ChallengeDuration:     challenge,
 		ApprovedSigValidators: approvedSigValidators,
 		Status:                ChannelStatusVoid,
-		StateVersion:          0,
+		StateVersion:          0, // 0 means "channel created but no on-chain state has materialised yet"
 	}
 }
 
@@ -179,9 +179,11 @@ func NewVoidState(asset, userWallet string) *State {
 // user against closedChannelID. Placement depends on prev:
 //
 //   - prev is in-channel (HomeChannelID != nil): the rescue opens a fresh epoch at
-//     (prev.Epoch+1, version=0) with a clean ledger seeded by amount. Used when no
+//     (prev.Epoch+1, version=1) with a clean ledger seeded by amount. Used when no
 //     node-signed Finalize exists locally for the closed channel — the user's chain
-//     has not been advanced past prev yet.
+//     has not been advanced past prev yet. Version=1 (not 0) mirrors NextState()'s
+//     post-Finalize convention so version=0 stays reserved as the "no on-chain state
+//     materialised yet" sentinel.
 //
 //   - prev is detached (HomeChannelID == nil): the rescue appends at (prev.Epoch,
 //     prev.Version+1), inheriting prev's ledger and adding amount on top. Used after
@@ -218,11 +220,13 @@ func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.
 		}
 	} else {
 		// In-channel prev: wrap to a fresh epoch with a clean ledger seeded by amount.
+		// Version=1 (not 0) keeps the post-Finalize convention so version=0 stays
+		// reserved as the "no on-chain state materialised yet" sentinel.
 		rescue = &State{
 			Asset:      prev.Asset,
 			UserWallet: prev.UserWallet,
 			Epoch:      prev.Epoch + 1,
-			Version:    0,
+			Version:    1,
 			HomeLedger: Ledger{
 				UserBalance: amount,
 				UserNetFlow: decimal.Zero,
@@ -244,11 +248,17 @@ func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.
 func (state State) NextState() *State {
 	var nextState *State
 	if state.IsFinal() {
+		// Post-Finalize epochs start at Version: 1 — Version: 0 is reserved as a
+		// sentinel for "channel created but no on-chain state has materialised yet"
+		// (see NewChannel: StateVersion=0). Starting the fresh epoch at 1 prevents
+		// the EnsureNoOngoingStateTransitions gate from accidentally treating a
+		// Void channel's first signed HomeDeposit (state.version == channel.state_version == 0)
+		// as already settled on-chain.
 		nextState = &State{
 			Asset:           state.Asset,
 			UserWallet:      state.UserWallet,
 			Epoch:           state.Epoch + 1,
-			Version:         0,
+			Version:         1,
 			HomeChannelID:   nil,
 			EscrowChannelID: nil,
 			HomeLedger: Ledger{
@@ -1201,8 +1211,8 @@ type EscrowWithdrawalDataResponse struct {
 
 // BalanceEntry represents a balance entry for an asset
 type BalanceEntry struct {
-	Asset   string          `json:"asset"`   // Asset symbol
-	Balance decimal.Decimal `json:"balance"` // Balance amount
+	Asset    string          `json:"asset"`    // Asset symbol
+	Balance  decimal.Decimal `json:"balance"`  // Balance amount
 	Enforced decimal.Decimal `json:"enforced"` // On-chain enforced balance
 }
 

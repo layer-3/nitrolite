@@ -1633,7 +1633,9 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 	require.True(t, rescueAmount.Equal(capturedState.Transition.Amount))
 	require.Nil(t, capturedState.HomeChannelID, "rescue state must be off-channel")
 	require.Equal(t, prevState.Epoch+1, capturedState.Epoch)
-	require.Equal(t, uint64(0), capturedState.Version)
+	// Fresh-epoch in-channel rescue lands at version=1: version=0 is
+	// reserved as the Void/no-on-chain-state sentinel.
+	require.Equal(t, uint64(1), capturedState.Version)
 	require.Nil(t, capturedState.NodeSig, "rescue state is stored unsigned, like a credit to a user with no open home channel")
 	require.True(t, rescueAmount.Equal(capturedState.HomeLedger.UserBalance))
 	require.Empty(t, capturedState.HomeLedger.TokenAddress)
@@ -1730,7 +1732,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	require.True(t, capturedState.HomeLedger.UserBalance.IsZero())
 	require.Nil(t, capturedState.HomeChannelID)
 	require.Equal(t, prevState.Epoch+1, capturedState.Epoch)
-	require.Equal(t, uint64(0), capturedState.Version)
+	// In-channel rescue opens the fresh epoch at version=1.
+	require.Equal(t, uint64(1), capturedState.Version)
 
 	mockStore.AssertExpectations(t)
 }
@@ -1808,7 +1811,8 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NegativeNet_ClampsToZero(t *tes
 	require.True(t, capturedState.HomeLedger.UserBalance.IsZero())
 	require.Nil(t, capturedState.HomeChannelID)
 	require.Equal(t, prevState.Epoch+1, capturedState.Epoch)
-	require.Equal(t, uint64(0), capturedState.Version)
+	// In-channel rescue opens the fresh epoch at version=1.
+	require.Equal(t, uint64(1), capturedState.Version)
 
 	mockStore.AssertExpectations(t)
 }

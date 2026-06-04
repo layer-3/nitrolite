@@ -580,6 +580,14 @@ func TestNewTransactionFromTransition(t *testing.T) {
 	assert.Equal(t, TransactionTypeTransfer, tx.TxType)
 	assert.Equal(t, transferTxID, tx.ID)
 
+	// The receiver's TransferReceive transition must carry the same TxID as the
+	// sender's TransferSend, so both states reference the single transfer
+	// transaction recorded above.
+	receiveTransition, err := receiverState.ApplyTransferReceiveTransition(senderState.UserWallet, decimal.NewFromInt(10), transferTxID)
+	require.NoError(t, err)
+	assert.Equal(t, transferTxID, receiveTransition.TxID)
+	assert.Equal(t, transition.TxID, receiveTransition.TxID)
+
 	// TransferSend error: nil receiverState
 	_, err = NewTransactionFromTransition(senderState, nil, transition)
 	assert.Error(t, err)

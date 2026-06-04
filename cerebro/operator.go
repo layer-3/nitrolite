@@ -53,7 +53,10 @@ func (o *Operator) buildStateSigner(walletPrivateKey string) (core.ChannelSigner
 		if err != nil {
 			return nil, fmt.Errorf("failed to create session key channel signer: %w", err)
 		}
-		sessionRawSigner, _ := sign.NewEthereumRawSigner(skPrivateKey)
+		sessionRawSigner, err := sign.NewEthereumRawSigner(skPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create session key raw signer: %w", err)
+		}
 		fmt.Printf("INFO: Using session key for state signing: %s\n", sessionRawSigner.PublicKey().Address().String())
 		return signer, nil
 	}

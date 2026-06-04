@@ -159,7 +159,7 @@ types:
       fields:
         - name: application_id
           type: string
-          description: Application identifier from an app registry
+          description: Client-chosen application identifier (must match the application ID format). Not validated against any registry.
         - name: participants
           type: array
           items:
@@ -764,7 +764,7 @@ api:
                 - message: invalid_parameters
                   description: The request parameters are invalid
             - name: create_app_session
-              description: Create a new application session between participants. The application must be registered in the app registry. If the application requires creation approval (creation_approval_not_required is false), an owner signature is required.
+              description: Create a new application session between participants. The application_id is a client-chosen identifier and is not validated against any registry; no owner approval is required.
               request:
                 - field_name: definition
                   type: app_definition
@@ -777,10 +777,6 @@ api:
                   description: Participant signatures for the app session creation
                   items:
                     type: string
-                - field_name: owner_sig
-                  type: string
-                  description: Owner signature for app session creation, required when the application's creation_approval_not_required is false
-                  optional: true
               response:
                 - field_name: app_session_id
                   type: string
@@ -794,12 +790,6 @@ api:
               errors:
                 - message: invalid_definition
                   description: The application definition is invalid
-                - message: application_not_registered
-                  description: The application is not registered in the app registry
-                - message: owner_sig_required
-                  description: Owner signature is required for this application (creation_approval_not_required is false)
-                - message: invalid_owner_signature
-                  description: The owner signature is invalid or does not match the registered app owner
                 - message: insufficient_balance
                   description: Participant has insufficient balance for allocations
             - name: submit_session_key_state

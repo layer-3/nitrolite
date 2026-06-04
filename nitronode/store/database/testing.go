@@ -99,7 +99,7 @@ func setupTestPostgres(ctx context.Context, t testing.TB) (*gorm.DB, testcontain
 		t.Fatalf("Failed to open PostgreSQL database: %v", err)
 	}
 
-	err = database.AutoMigrate(&AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &ContractEvent{}, &State{}, &Transaction{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &CurrentSessionKeyStateV1{}, &UserBalance{}, &LifespanMetric{})
+	err = database.AutoMigrate(&AppLedgerEntryV1{}, &Channel{}, &AppSessionV1{}, &AppParticipantV1{}, &ContractEvent{}, &State{}, &Transaction{}, &BlockchainAction{}, &AppSessionKeyStateV1{}, &AppSessionKeyApplicationV1{}, &AppSessionKeyAppSessionIDV1{}, &ChannelSessionKeyStateV1{}, &ChannelSessionKeyAssetV1{}, &CurrentSessionKeyStateV1{}, &UserBalance{}, &LifespanMetric{})
 	if err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}

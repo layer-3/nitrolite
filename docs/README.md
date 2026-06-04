@@ -36,7 +36,7 @@ nitronode/
         app_session_v1/     # App session endpoints (create, deposit, operate, withdraw, close)
         channel_v1/         # Channel endpoints (create, submit_state, get_state, transfer)
         node_v1/            # Node info endpoints
-        user_v1/            # User endpoints (balances)
+        user_v1/            # User endpoints (balances, transactions)
     config/
         migrations/
             postgres/       # Goose SQL migrations (embedded at compile time)

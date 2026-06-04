@@ -169,85 +169,98 @@ func TestHandleHomeChannelCreated_AcquiresUserLockBeforeMutation(t *testing.T) {
 // Void — because CheckActiveChannel returned Void at the time of issuance. Once the
 // HomeChannelCreated event opens the channel, the handler must backfill the node signature
 // on the unsigned head so future flows treat the credit as fully co-signed.
+// Both allowed backfill transition types are covered.
 func TestHandleHomeChannelCreated_BackfillsUnsignedReceiverStateOnOpen(t *testing.T) {
-	mockStore := new(MockStore)
-	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
-
-	service, nodeAddress := newTestEventHandlerService(t)
-
-	channelID := "0xHomeChannel123"
-	userWallet := "0x1234567890123456789012345678901234567890"
-	asset := "USDC"
-	homeChannelIDPtr := channelID
-	createVersion := uint64(0)
-	headVersion := uint64(1)
-
-	channel := &core.Channel{
-		ChannelID:    channelID,
-		UserWallet:   userWallet,
-		Asset:        asset,
-		Type:         core.ChannelTypeHome,
-		Status:       core.ChannelStatusVoid,
-		StateVersion: createVersion,
+	cases := []struct {
+		name           string
+		transitionType core.TransitionType
+	}{
+		{"transfer_receive", core.TransitionTypeTransferReceive},
+		{"release", core.TransitionTypeRelease},
 	}
 
-	// Unsigned transfer_receive credit stored before the channel opened.
-	headState := &core.State{
-		ID:            core.GetStateID(userWallet, asset, 0, headVersion),
-		Asset:         asset,
-		UserWallet:    userWallet,
-		Epoch:         0,
-		Version:       headVersion,
-		HomeChannelID: &homeChannelIDPtr,
-		Transition:    core.Transition{Type: core.TransitionTypeTransferReceive},
-		HomeLedger: core.Ledger{
-			TokenAddress: "0xtoken",
-			BlockchainID: 1,
-			UserBalance:  decimal.NewFromInt(100),
-			UserNetFlow:  decimal.Zero,
-			NodeBalance:  decimal.Zero,
-			NodeNetFlow:  decimal.Zero,
-		},
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+			service, nodeAddress := newTestEventHandlerService(t)
+
+			channelID := "0xHomeChannel123"
+			userWallet := "0x1234567890123456789012345678901234567890"
+			asset := "USDC"
+			homeChannelIDPtr := channelID
+			createVersion := uint64(0)
+			headVersion := uint64(1)
+
+			channel := &core.Channel{
+				ChannelID:    channelID,
+				UserWallet:   userWallet,
+				Asset:        asset,
+				Type:         core.ChannelTypeHome,
+				Status:       core.ChannelStatusVoid,
+				StateVersion: createVersion,
+			}
+
+			// Unsigned receiver credit stored before the channel opened.
+			headState := &core.State{
+				ID:            core.GetStateID(userWallet, asset, 0, headVersion),
+				Asset:         asset,
+				UserWallet:    userWallet,
+				Epoch:         0,
+				Version:       headVersion,
+				HomeChannelID: &homeChannelIDPtr,
+				Transition:    core.Transition{Type: tc.transitionType},
+				HomeLedger: core.Ledger{
+					TokenAddress: "0xtoken",
+					BlockchainID: 1,
+					UserBalance:  decimal.NewFromInt(100),
+					UserNetFlow:  decimal.Zero,
+					NodeBalance:  decimal.Zero,
+					NodeNetFlow:  decimal.Zero,
+				},
+			}
+
+			event := &core.HomeChannelCreatedEvent{
+				ChannelID:    channelID,
+				StateVersion: createVersion,
+			}
+
+			mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+			mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+			mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+				return ch.ChannelID == channelID &&
+					ch.Status == core.ChannelStatusOpen &&
+					ch.StateVersion == createVersion
+			})).Return(nil)
+			mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
+			// Sig backfill for the create state (event.UserSig is empty).
+			mockStore.On("UpdateStateSigsIfMissing", channelID, createVersion, "", "").Return(nil)
+			// backfillOffChainHeadNodeSig finds the unsigned receiver credit above the create state.
+			mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
+
+			var capturedNodeSig string
+			mockStore.On("UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string")).
+				Run(func(args mock.Arguments) {
+					capturedNodeSig = args.String(3)
+				}).Return(nil)
+
+			err := service.HandleHomeChannelCreated(ctx, mockStore, event)
+			require.NoError(t, err)
+			require.NotEmpty(t, capturedNodeSig, "node signature must be populated on backfill")
+
+			// Verify the produced signature is from the configured node key.
+			packer := core.NewStatePackerV1(mockEventHandlerAssetStore{})
+			packed, err := packer.PackState(*headState)
+			require.NoError(t, err)
+			sigBytes, err := hexutil.Decode(capturedNodeSig)
+			require.NoError(t, err)
+			validator := core.NewChannelSigValidator(nil)
+			require.NoError(t, validator.Verify(nodeAddress, packed, sigBytes))
+
+			mockStore.AssertExpectations(t)
+		})
 	}
-
-	event := &core.HomeChannelCreatedEvent{
-		ChannelID:    channelID,
-		StateVersion: createVersion,
-	}
-
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
-	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
-		return ch.ChannelID == channelID &&
-			ch.Status == core.ChannelStatusOpen &&
-			ch.StateVersion == createVersion
-	})).Return(nil)
-	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
-	// Sig backfill for the create state (event.UserSig is empty).
-	mockStore.On("UpdateStateSigsIfMissing", channelID, createVersion, "", "").Return(nil)
-	// backfillOffChainHeadNodeSig finds the unsigned receiver credit above the create state.
-	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
-
-	var capturedNodeSig string
-	mockStore.On("UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string")).
-		Run(func(args mock.Arguments) {
-			capturedNodeSig = args.String(3)
-		}).Return(nil)
-
-	err := service.HandleHomeChannelCreated(ctx, mockStore, event)
-	require.NoError(t, err)
-	require.NotEmpty(t, capturedNodeSig, "node signature must be populated on backfill")
-
-	// Verify the produced signature is from the configured node key.
-	packer := core.NewStatePackerV1(mockEventHandlerAssetStore{})
-	packed, err := packer.PackState(*headState)
-	require.NoError(t, err)
-	sigBytes, err := hexutil.Decode(capturedNodeSig)
-	require.NoError(t, err)
-	validator := core.NewChannelSigValidator(nil)
-	require.NoError(t, validator.Verify(nodeAddress, packed, sigBytes))
-
-	mockStore.AssertExpectations(t)
 }
 
 // TestHandleHomeChannelCreated_HeadAlreadySigned_NoBackfill verifies that when the off-chain

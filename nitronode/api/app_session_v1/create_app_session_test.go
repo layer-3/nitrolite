@@ -1391,10 +1391,10 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-// TestCreateAppSession_QuorumExceedsRealTotalOver255_Rejected verifies that when total
-// weights exceed 255, a quorum genuinely larger than the real total is still rejected.
-// (The fix must not disable the quorum>total guard for the >255 range.)
-func TestCreateAppSession_QuorumExceedsRealTotalOver255_Rejected(t *testing.T) {
+// TestCreateAppSession_QuorumExceedsTotalWeights_Rejected verifies that a quorum genuinely
+// larger than the real total weight is rejected. Uses small weights (100+100=200) because
+// Quorum is uint8 and cannot exceed 255, so this guard cannot be exercised with total > 255.
+func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
 	mockStore := new(MockStore)
 	storeTxProvider := func(fn StoreTxHandler) error {
 		return fn(mockStore)

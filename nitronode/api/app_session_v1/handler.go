@@ -76,7 +76,7 @@ func NewHandler(
 func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, participantWeights map[string]uint8, requiredQuorum uint8, data []byte, signatures []string) error {
 	// Verify signatures and calculate quorum
 	signedWeights := make(map[string]bool)
-	var achievedQuorum uint8
+	var achievedQuorum uint16
 
 	appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
 		func(sessionKeyAddr string) (string, error) {
@@ -112,12 +112,12 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 		// Add weight if not already counted
 		if !signedWeights[userWallet] {
 			signedWeights[userWallet] = true
-			achievedQuorum += weight
+			achievedQuorum += uint16(weight)
 		}
 	}
 
 	// Check if quorum is met
-	if achievedQuorum < requiredQuorum {
+	if achievedQuorum < uint16(requiredQuorum) {
 		return rpc.Errorf("quorum not met: achieved %d, required %d", achievedQuorum, requiredQuorum)
 	}
 

@@ -112,11 +112,22 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 			return
 		}
 	} else {
-		// Revocation: validate only the wallet's UserSig. Any session_key_sig present is ignored.
+		// Revocation only deactivates an existing delegation. Version 1 means there is no prior
+		// delegation, so reject it before LockSessionKeyState can seed a permanent ownership
+		// claim for a session_key the caller never proved possession of: a legitimate revoke is
+		// always version >= 2, since registration at version 1 is future-dated and requires both
+		// signatures.
+		if coreState.Version == 1 {
+			c.Fail(rpc.Errorf("invalid_session_key_state: cannot revoke a session key with no prior delegation"), "")
+			return
+		}
+		// Validate only the wallet's UserSig. Any session_key_sig present is ignored, so clear
+		// it before persisting to keep stored revocation rows canonical.
 		if err := app.ValidateAppSessionKeyStateUserSigV1(coreState); err != nil {
 			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
 			return
 		}
+		coreState.SessionKeySig = ""
 	}
 
 	// Validate version and store the session key state.

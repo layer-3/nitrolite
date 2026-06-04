@@ -1786,20 +1786,22 @@ export class Client {
    * revocation path (expires_at <= now). For registration, rotation, or extension use
    * submitChannelSessionKeyState with both signatures.
    *
-   * @param state - The channel session key state to revoke (version = latest + 1, expires_at <= now)
+   * @param state - The channel session key state to revoke (version = latest + 1, expires_at <= now). Signature fields are supplied by this method, so callers omit them.
    */
-  async revokeChannelSessionKey(state: ChannelSessionKeyStateV1): Promise<void> {
+  async revokeChannelSessionKey(
+    state: Omit<ChannelSessionKeyStateV1, 'user_sig' | 'session_key_sig'>
+  ): Promise<void> {
     const nowSec = BigInt(Math.floor(Date.now() / 1000));
     if (BigInt(state.expires_at) > nowSec) {
       throw new Error(
         `revocation requires expires_at at or before now, got ${state.expires_at}`
       );
     }
-    const userSig = await this.signChannelSessionKeyState(state);
+    const fullState: ChannelSessionKeyStateV1 = { ...state, user_sig: '', session_key_sig: '' };
+    const userSig = await this.signChannelSessionKeyState(fullState);
     await this.submitChannelSessionKeyState({
-      ...state,
+      ...fullState,
       user_sig: userSig,
-      session_key_sig: '',
     });
   }
 
@@ -1907,20 +1909,22 @@ export class Client {
    * revocation path (expires_at <= now). For registration, rotation, or extension use
    * submitSessionKeyState with both signatures.
    *
-   * @param state - The app session key state to revoke (version = latest + 1, expires_at <= now)
+   * @param state - The app session key state to revoke (version = latest + 1, expires_at <= now). Signature fields are supplied by this method, so callers omit them.
    */
-  async revokeSessionKey(state: app.AppSessionKeyStateV1): Promise<void> {
+  async revokeSessionKey(
+    state: Omit<app.AppSessionKeyStateV1, 'user_sig' | 'session_key_sig'>
+  ): Promise<void> {
     const nowSec = BigInt(Math.floor(Date.now() / 1000));
     if (BigInt(state.expires_at) > nowSec) {
       throw new Error(
         `revocation requires expires_at at or before now, got ${state.expires_at}`
       );
     }
-    const userSig = await this.signSessionKeyState(state);
+    const fullState: app.AppSessionKeyStateV1 = { ...state, user_sig: '', session_key_sig: '' };
+    const userSig = await this.signSessionKeyState(fullState);
     await this.submitSessionKeyState({
-      ...state,
+      ...fullState,
       user_sig: userSig,
-      session_key_sig: '',
     });
   }
 

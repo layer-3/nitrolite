@@ -475,7 +475,10 @@ func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner
 //	}
 //	err := client.RevokeAppSessionKey(ctx, state)
 func (c *Client) RevokeAppSessionKey(ctx context.Context, state app.AppSessionKeyStateV1) error {
-	if state.ExpiresAt.After(time.Now()) {
+	// Compare Unix seconds, matching the precision PackAppSessionKeyStateV1 signs at
+	// (ExpiresAt.Unix()), so a value inside the current Unix second is not rejected locally
+	// even though the server treats it as expires_at <= now.
+	if state.ExpiresAt.Unix() > time.Now().Unix() {
 		return fmt.Errorf("revocation requires expires_at at or before now, got %s", state.ExpiresAt)
 	}
 

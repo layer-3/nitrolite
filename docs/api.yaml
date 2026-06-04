@@ -673,7 +673,7 @@ api:
               request:
                 - field_name: state
                   type: channel_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke (user_sig only); future to (re-)activate (both signatures).
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state
@@ -889,7 +889,7 @@ api:
               request:
                 - field_name: state
                   type: app_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke (user_sig only); future to (re-)activate (both signatures).
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state

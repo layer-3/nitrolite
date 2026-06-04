@@ -1098,7 +1098,10 @@ func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, session
 //	}
 //	err := client.RevokeChannelSessionKey(ctx, state)
 func (c *Client) RevokeChannelSessionKey(ctx context.Context, state core.ChannelSessionKeyStateV1) error {
-	if state.ExpiresAt.After(time.Now()) {
+	// Compare Unix seconds, matching the precision SignChannelSessionKeyState signs at
+	// (ExpiresAt.Unix()), so a value inside the current Unix second is not rejected locally
+	// even though the server treats it as expires_at <= now.
+	if state.ExpiresAt.Unix() > time.Now().Unix() {
 		return fmt.Errorf("revocation requires expires_at at or before now, got %s", state.ExpiresAt)
 	}
 

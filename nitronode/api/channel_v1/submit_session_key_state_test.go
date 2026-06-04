@@ -212,7 +212,10 @@ func TestChannelSubmitSessionKeyState_InvalidUserAddress(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "invalid user_address")
 }
 
-func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
+// A version-1 revoke has no prior delegation to deactivate; allowing it would let a wallet
+// seed a permanent (session_key, kind) ownership claim for a key it never proved possession
+// of. It must be rejected before LockSessionKeyState runs, so no seed row is ever written.
+func TestChannelSubmitSessionKeyState_RevokeFirstSubmit_Rejected(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
 	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
@@ -227,15 +230,10 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 		maxSessionKeyIDs: 10,
 	}
 
-	// expires_at in the past expresses a revoke: the same monotonic version sequence
-	// is preserved, the auth path filters expires_at > now so the key is deactivated.
 	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 	assets := []string{"USDC"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
-
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
-	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -248,8 +246,11 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 	handler.SubmitSessionKeyState(ctx)
 
 	require.NotNil(t, ctx.Response)
-	assert.Nil(t, ctx.Response.Error())
-	mockStore.AssertExpectations(t)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "no prior delegation")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "StoreChannelSessionKeyState", mock.Anything)
 }
 
 // Covers the typical revocation path: an active key (latestVersion > 0, prev expires_at in
@@ -788,7 +789,11 @@ func TestChannelSubmitSessionKeyState_RevokeIgnoresMismatchedSessionKeySig(t *te
 
 	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(1, prevActiveExpiresAt, nil)
-	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
+	// The ignored session_key_sig must be cleared before persisting so stored revocation
+	// rows never retain unverified client input.
+	mockStore.On("StoreChannelSessionKeyState", mock.MatchedBy(func(s core.ChannelSessionKeyStateV1) bool {
+		return s.SessionKeySig == ""
+	})).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)

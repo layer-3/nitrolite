@@ -53,8 +53,6 @@ func main() {
 		MaxRebalanceSignedUpdates: vl.MaxSignedUpdates,
 		MaxSessionKeyIDs:          vl.MaxSessionKeyIDs,
 		MaxSessionKeysPerUser:     vl.MaxSessionKeysPerUser,
-		RateLimitPerSec:           bb.RateLimitPerSec,
-		RateLimitBurst:            bb.RateLimitBurst,
 	}
 	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.ActionGateway, bb.RuntimeMetrics, bb.Logger)
 

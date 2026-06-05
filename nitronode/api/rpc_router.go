@@ -22,9 +22,6 @@ type RPCRouter struct {
 	Node           rpc.Node
 	lg             log.Logger
 	runtimeMetrics metrics.RuntimeMetricExporter
-
-	rateLimitPerSec float64
-	rateLimitBurst  float64
 }
 
 type RPCRouterConfig struct {
@@ -39,9 +36,6 @@ type RPCRouterConfig struct {
 	MaxRebalanceSignedUpdates int
 	MaxSessionKeyIDs          int
 	MaxSessionKeysPerUser     int
-
-	RateLimitPerSec float64
-	RateLimitBurst  float64
 }
 
 func NewRPCRouter(
@@ -55,15 +49,12 @@ func NewRPCRouter(
 	logger log.Logger,
 ) *RPCRouter {
 	r := &RPCRouter{
-		Node:            node,
-		lg:              logger.WithName("rpc-router"),
-		runtimeMetrics:  runtimeMetrics,
-		rateLimitPerSec: cfg.RateLimitPerSec,
-		rateLimitBurst:  cfg.RateLimitBurst,
+		Node:           node,
+		lg:             logger.WithName("rpc-router"),
+		runtimeMetrics: runtimeMetrics,
 	}
 
 	r.Node.Use(r.ObservabilityMiddleware)
-	r.Node.Use(r.RateLimitMiddleware)
 
 	// Transaction wrapper helpers for each store type.
 	// wrapWithMetrics executes fn inside a DB transaction with a metricStore wrapper,

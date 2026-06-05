@@ -40,8 +40,6 @@ type Backbone struct {
 	BlockchainRPCs              map[uint64]string
 	BlockchainGasLimit          uint64
 	ValidationLimits            ValidationLimits
-	RateLimitPerSec             float64
-	RateLimitBurst              float64
 
 	DbStore        database.DatabaseStore
 	MemoryStore    memory.MemoryStore
@@ -307,6 +305,21 @@ func InitBackbone() *Backbone {
 			)
 		}
 	}
+
+	// Per-connection request-count budget. Enforced at the frame layer alongside
+	// the byte budget so a flood of tiny frames — malformed or unknown-method
+	// frames included, which never reach the handler chain — is throttled before
+	// it can be parsed. Set <=0 to disable.
+	reqPerSec := conf.RateLimitPerSec
+	reqBurst := conf.RateLimitBurst
+	if reqPerSec > 0 && reqBurst < 1 {
+		logger.Fatal(
+			"NITRONODE_RATE_LIMIT_BURST must be >= 1 when NITRONODE_RATE_LIMIT_PER_SEC is enabled",
+			"rate_limit_burst", reqBurst,
+			"rate_limit_per_sec", reqPerSec,
+		)
+	}
+
 	rpcNode, err := rpc.NewWebsocketNode(rpc.WebsocketNodeConfig{
 		Logger:                  logger,
 		ObserveConnections:      runtimeMetrics.SetRPCConnections,
@@ -314,10 +327,21 @@ func InitBackbone() *Backbone {
 		WsConnWriteBufferSize:   conf.WsWriteBufferSize,
 		WsConnMaxMessageSize:    conf.WsMaxMessageSize,
 		NewFrameRateLimiter: func() rpc.FrameRateLimiter {
-			if bytesPerSec <= 0 {
-				return rpc.NoopFrameRateLimiter{}
+			var limiters rpc.CompositeFrameRateLimiter
+			if bytesPerSec > 0 {
+				limiters = append(limiters, rpc.NewByteTokenBucket(bytesPerSec, bytesBurst))
 			}
-			return rpc.NewByteTokenBucket(bytesPerSec, bytesBurst)
+			if reqPerSec > 0 {
+				limiters = append(limiters, rpc.NewRequestTokenBucket(reqPerSec, reqBurst))
+			}
+			switch len(limiters) {
+			case 0:
+				return rpc.NoopFrameRateLimiter{}
+			case 1:
+				return limiters[0]
+			default:
+				return limiters
+			}
 		},
 	})
 	if err != nil {
@@ -347,8 +371,6 @@ func InitBackbone() *Backbone {
 		BlockchainRPCs:              blockchainRPCs,
 		BlockchainGasLimit:          conf.BlockchainGasLimit,
 		ValidationLimits:            conf.ValidationLimits,
-		RateLimitPerSec:             conf.RateLimitPerSec,
-		RateLimitBurst:              conf.RateLimitBurst,
 
 		DbStore:        dbStore,
 		MemoryStore:    memoryStore,

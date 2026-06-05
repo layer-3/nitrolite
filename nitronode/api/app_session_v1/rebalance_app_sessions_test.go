@@ -1193,12 +1193,10 @@ func TestRebalanceAppSessions_VerifyQuorumWeightOver255(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		nil,
-		&MockActionGateway{},
 		nil,
 		nil,
 		nil,
 		"0xNode",
-		false,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16, 100,
 	)

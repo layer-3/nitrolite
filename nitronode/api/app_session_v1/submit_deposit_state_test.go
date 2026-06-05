@@ -832,20 +832,18 @@ func TestSubmitDepositState_VerifyQuorumWeightOver255(t *testing.T) {
 
 	handler := &Handler{
 		assetStore:    mockAssetStore,
-		actionGateway: &MockActionGateway{},
 		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
 		statePacker:   mockStatePacker,
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
-		signer:             mockSigner,
-		nodeAddress:        nodeAddress,
-		appRegistryEnabled: false,
-		metrics:            metrics.NewNoopRuntimeMetricExporter(),
-		maxParticipants:    32,
-		maxSessionData:     1024,
-		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
+		signer:           mockSigner,
+		nodeAddress:      nodeAddress,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:  32,
+		maxSessionData:   1024,
+		maxSessionKeyIDs: 256,
+		maxSignedUpdates: 16,
 	}
 
 	// Participant1 signs both channel state and app state update (weight 200).

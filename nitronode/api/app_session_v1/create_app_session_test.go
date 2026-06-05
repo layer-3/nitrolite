@@ -859,12 +859,10 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16, 100,
 	)
@@ -898,9 +896,6 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -933,12 +928,10 @@ func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		new(MockAssetStore),
-		&MockActionGateway{},
 		NewMockChannelSigner(),
 		core.NewStateAdvancerV1(new(MockAssetStore)),
 		new(MockStatePacker),
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16, 100,
 	)

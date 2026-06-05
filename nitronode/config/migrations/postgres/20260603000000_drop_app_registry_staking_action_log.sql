@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS user_staked_v1;
 -- +goose Down
 
 -- Application registry
+DROP TABLE IF EXISTS apps_v1;
 CREATE TABLE apps_v1 (
     id VARCHAR(66) PRIMARY KEY,
     owner_wallet CHAR(42) NOT NULL,
@@ -23,6 +24,7 @@ CREATE TABLE apps_v1 (
 CREATE INDEX idx_apps_v1_owner_wallet ON apps_v1(owner_wallet);
 
 -- User staked table: Stores staked amounts per user per blockchain
+DROP TABLE IF EXISTS user_staked_v1;
 CREATE TABLE user_staked_v1 (
     user_wallet CHAR(42) NOT NULL,
     blockchain_id NUMERIC(20,0) NOT NULL,
@@ -35,6 +37,7 @@ CREATE TABLE user_staked_v1 (
 CREATE INDEX idx_user_staked_v1_user_wallet ON user_staked_v1(user_wallet);
 
 -- Action log table: Records user actions for rate limiting and auditing
+DROP TABLE IF EXISTS action_log_v1;
 CREATE TABLE action_log_v1 (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_wallet CHAR(42) NOT NULL,

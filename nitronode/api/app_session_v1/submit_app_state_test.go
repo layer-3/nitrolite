@@ -1953,12 +1953,10 @@ func TestSubmitAppState_VerifyQuorumWeightOver255(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16, 100,
 	)
@@ -2021,9 +2019,6 @@ func TestSubmitAppState_VerifyQuorumWeightOver255(t *testing.T) {
 		QuorumSigs: []string{sig1, sig2},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -2065,12 +2060,10 @@ func TestSubmitAppState_VerifyQuorumWrapToZero(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 16, 100,
 	)
@@ -2132,9 +2125,6 @@ func TestSubmitAppState_VerifyQuorumWrapToZero(t *testing.T) {
 		QuorumSigs: []string{sig1, sig2},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)

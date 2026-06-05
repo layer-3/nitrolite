@@ -1279,6 +1279,145 @@ func TestSubmitDepositState_MissingDepositedAssetAllocation_Rejected(t *testing.
 	mockStore.AssertNotCalled(t, "UpdateAppSession", mock.Anything)
 }
 
+// TestSubmitDepositState_SpuriousZeroAllocation_Rejected verifies that a valid
+// participant cannot include a zero allocation for a (participant, asset) pair
+// with no existing balance. Such an allocation moves no funds but would pollute
+// the signed allocation set, keeping it from being a canonical snapshot.
+func TestSubmitDepositState_SpuriousZeroAllocation_Rejected(t *testing.T) {
+	mockStore := new(MockStore)
+	mockSigner := NewMockChannelSigner()
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		assetStore:    mockAssetStore,
+		actionGateway: &MockActionGateway{},
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		signer:             mockSigner,
+		nodeAddress:        nodeAddress,
+		appRegistryEnabled: true,
+		metrics:            metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:    32,
+		maxSessionData:     1024,
+		maxSessionKeyIDs:   256,
+		maxSignedUpdates:   16,
+	}
+
+	userRawSigner := NewMockSigner()
+	channelWalletSigner, _ := core.NewChannelDefaultSigner(userRawSigner)
+	appWalletSigner, _ := app.NewAppSessionWalletSignerV1(userRawSigner)
+	participant1 := strings.ToLower(userRawSigner.PublicKey().Address().String())
+	participant2 := "0x2222222222222222222222222222222222222222"
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	appSessionID := "0xAppSession123"
+
+	existingAppSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 1},
+			{WalletAddress: participant2, SignatureWeight: 1},
+		},
+		Quorum:  1,
+		Nonce:   12345,
+		Status:  app.AppSessionStatusOpen,
+		Version: 1,
+	}
+
+	currentUserState := core.State{
+		ID:         core.GetStateID(participant1, asset, 1, 1),
+		Transition: core.Transition{Type: core.TransitionTypeVoid},
+		Asset:      asset, UserWallet: participant1, Epoch: 1, Version: 1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress", BlockchainID: 1,
+			UserBalance: decimal.NewFromInt(500), UserNetFlow: decimal.NewFromInt(500),
+		},
+	}
+
+	depositAmount := decimal.NewFromInt(100)
+	incomingUserState := currentUserState.NextState()
+	_, err := incomingUserState.ApplyCommitTransition(appSessionID, depositAmount)
+	require.NoError(t, err)
+
+	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
+	packedUserState, _ := mockStatePacker.PackState(*incomingUserState)
+	userSig, _ := channelWalletSigner.Sign(packedUserState)
+	userSigStr := userSig.String()
+	incomingUserState.UserSig = &userSigStr
+
+	// participant2 is a valid participant but has no existing balance for the
+	// asset; its zero allocation is listed first so rejection happens before any
+	// ledger entry is recorded for the legitimate deposit.
+	appStateUpdateCore := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentDeposit,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant2, Asset: asset, Amount: decimal.Zero},
+			{Participant: participant1, Asset: asset, Amount: depositAmount},
+		},
+	}
+	packedAppUpdate, _ := app.PackAppStateUpdateV1(appStateUpdateCore)
+	appSigBytes, _ := appWalletSigner.Sign(packedAppUpdate)
+	appSigHex := hexutil.Encode(appSigBytes)
+
+	appStateUpdate := rpc.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentDeposit,
+		Version:      "2",
+		Allocations: []rpc.AppAllocationV1{
+			{Participant: participant2, Asset: asset, Amount: "0"},
+			{Participant: participant1, Asset: asset, Amount: depositAmount.String()},
+		},
+	}
+
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
+	}, nil).Maybe()
+	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
+	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
+	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
+	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(
+		map[string]map[string]decimal.Decimal{}, nil,
+	).Once()
+	// No ledger entry should be recorded — rejection happens before it.
+	mockStore.On("RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	rpcState := toRPCState(*incomingUserState)
+	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{
+		AppStateUpdate: appStateUpdate,
+		QuorumSigs:     []string{appSigHex},
+		UserState:      rpcState,
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitDepositStateMethod), payload),
+	}
+
+	handler.SubmitDepositState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr, "expected error for spurious zero allocation")
+	assert.Contains(t, respErr.Error(), "zero allocation")
+	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
 // TestSubmitDepositState_VerifyQuorumWeightOver255 ensures verifyQuorum handles combined
 // participant weights exceeding 255 correctly through the SubmitDepositState path.
 func TestSubmitDepositState_VerifyQuorumWeightOver255(t *testing.T) {

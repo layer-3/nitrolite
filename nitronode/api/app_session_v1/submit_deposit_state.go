@@ -218,6 +218,13 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			}
 			currentAmount := participantAllocs[alloc.Asset]
 
+			// Reject spurious zero allocations for (participant, asset) pairs with
+			// no existing balance: they move no funds but pollute the signed
+			// allocation set, keeping it from being a canonical snapshot.
+			if alloc.Amount.IsZero() && currentAmount.IsZero() {
+				return rpc.Errorf("zero allocation for participant %s, asset %s with no existing balance", alloc.Participant, alloc.Asset)
+			}
+
 			if alloc.Amount.LessThan(currentAmount) {
 				return rpc.Errorf("decreased allocation for %s for participant %s", alloc.Asset, alloc.Participant)
 			}

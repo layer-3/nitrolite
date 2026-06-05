@@ -194,6 +194,54 @@ func TestDBStore_GetChannelByID(t *testing.T) {
 	})
 }
 
+func TestDBStore_LockUserStateForHomeChannel(t *testing.T) {
+	t.Run("Success - returns channel and ensures balance row", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		channel := core.Channel{
+			ChannelID:         "0xhomechannel123",
+			UserWallet:        "0xuser123",
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      7,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+
+		result, err := store.LockUserStateForHomeChannel("0xhomechannel123")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "0xhomechannel123", result.ChannelID)
+		assert.Equal(t, "0xuser123", result.UserWallet)
+		assert.Equal(t, core.ChannelStatusOpen, result.Status)
+		assert.Equal(t, uint64(7), result.StateVersion)
+
+		// The balance row keyed by the channel's (wallet, asset) is ensured by the lock.
+		balances, err := store.GetUserBalances("0xuser123")
+		require.NoError(t, err)
+		require.Len(t, balances, 1)
+		assert.Equal(t, "usdc", balances[0].Asset)
+	})
+
+	t.Run("Channel not found returns nil", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		result, err := store.LockUserStateForHomeChannel("0xnonexistent")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+}
+
 func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 	t.Run("Success - Get active home channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)

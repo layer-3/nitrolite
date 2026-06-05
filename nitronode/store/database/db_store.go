@@ -145,6 +145,63 @@ func (s *DBStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
 	return balance.Balance, nil
 }
 
+// LockUserStateForHomeChannel locks the balance row of the user owning channelID and returns
+// the channel read under that lock. The (wallet, asset) lock key is derived from the channel
+// inside SQL, so there is no pre-lock Go-side snapshot: a concurrent transaction (e.g.
+// submit_state co-signing a Finalize and flipping the channel to Closing) cannot slip a stale
+// status into the returned channel. Callers that previously did GetChannelByID followed by
+// LockUserState must use this instead — the separate read is read-before-lock and races.
+//
+// Returns (nil, nil) if the channel does not exist. Channel-type checks remain the caller's
+// responsibility.
+func (s *DBStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	channelID = strings.ToLower(channelID)
+	if !strings.HasPrefix(channelID, "0x") {
+		channelID = "0x" + channelID
+	}
+
+	// Non-postgres (sqlite in tests) cannot SELECT ... FOR UPDATE and has no real concurrency
+	// in those paths; resolve, ensure the balance row via LockUserState, and read directly.
+	if s.db.Dialector.Name() != "postgres" {
+		channel, err := s.GetChannelByID(channelID)
+		if err != nil || channel == nil {
+			return channel, err
+		}
+		if _, err := s.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+			return nil, err
+		}
+		return channel, nil
+	}
+
+	now := time.Now()
+	// Ensure the balance row exists, deriving (wallet, asset) from the channel so FOR UPDATE
+	// has a row to lock. No-op when the channel is absent or the row already exists.
+	if err := s.db.Exec(`
+		INSERT INTO user_balances (user_wallet, asset, balance, enforced, home_blockchain_id, created_at, updated_at)
+		SELECT user_wallet, asset, 0, 0, 0, ?, ? FROM channels WHERE channel_id = ?
+		ON CONFLICT (user_wallet, asset) DO NOTHING
+	`, now, now, channelID).Error; err != nil {
+		return nil, fmt.Errorf("failed to ensure user balance row for channel %s: %w", channelID, err)
+	}
+
+	// Lock only the balance row (FOR UPDATE OF b) and read the channel in the same statement.
+	var dbChannel Channel
+	result := s.db.Raw(`
+		SELECT c.* FROM channels c
+		JOIN user_balances b ON b.user_wallet = c.user_wallet AND b.asset = c.asset
+		WHERE c.channel_id = ?
+		FOR UPDATE OF b
+	`, channelID).Scan(&dbChannel)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to lock user state for channel %s: %w", channelID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	return databaseChannelToCore(&dbChannel), nil
+}
+
 // EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 // This method prevents race conditions by ensuring blockchain state versions
 // match the user's last signed state version before accepting new transitions.

@@ -113,6 +113,14 @@ func (m *mockChannelHubStore) LockUserState(wallet, asset string) (decimal.Decim
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+func (m *mockChannelHubStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	args := m.Called(channelID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
 func (m *mockChannelHubStore) HasSignedFinalize(channelID string) (bool, error) {
 	args := m.Called(channelID)
 	return args.Bool(0), args.Error(1)

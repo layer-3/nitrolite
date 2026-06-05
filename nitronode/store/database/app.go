@@ -88,7 +88,10 @@ func (s *DBStore) GetApps(appID *string, ownerWallet *string, pagination *core.P
 		apps[i] = databaseAppToCore(&dbApp)
 	}
 
-	metadata := calculatePaginationMetadata(totalCount, offset, limit)
+	metadata, err := calculatePaginationMetadata(totalCount, offset, limit)
+	if err != nil {
+		return nil, core.PaginationMetadata{}, fmt.Errorf("failed to calculate pagination: %w", err)
+	}
 
 	return apps, metadata, nil
 }

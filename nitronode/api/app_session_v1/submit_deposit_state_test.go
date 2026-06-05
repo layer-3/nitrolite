@@ -1278,3 +1278,155 @@ func TestSubmitDepositState_MissingDepositedAssetAllocation_Rejected(t *testing.
 	assert.Contains(t, respErr.Error(), "missing allocation")
 	mockStore.AssertNotCalled(t, "UpdateAppSession", mock.Anything)
 }
+
+// TestSubmitDepositState_VerifyQuorumWeightOver255 ensures verifyQuorum handles combined
+// participant weights exceeding 255 correctly through the SubmitDepositState path.
+func TestSubmitDepositState_VerifyQuorumWeightOver255(t *testing.T) {
+	mockStore := new(MockStore)
+	mockSigner := NewMockChannelSigner()
+	nodeAddress := mockSigner.PublicKey().Address().String()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		assetStore:    mockAssetStore,
+		actionGateway: &MockActionGateway{},
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		signer:             mockSigner,
+		nodeAddress:        nodeAddress,
+		appRegistryEnabled: false,
+		metrics:            metrics.NewNoopRuntimeMetricExporter(),
+		maxParticipants:    32,
+		maxSessionData:     1024,
+		maxSessionKeyIDs:   256,
+		maxSignedUpdates:   16,
+	}
+
+	// Participant1 signs both channel state and app state update (weight 200).
+	// Participant2 also signs the app state update (weight 200).
+	// Combined weight 400 > 255; quorum 200. Old uint8 code would wrap to 144, reject.
+	userRawSigner1 := NewMockSigner()
+	userRawSigner2 := NewMockSigner()
+	channelWalletSigner1, _ := core.NewChannelDefaultSigner(userRawSigner1)
+	appWalletSigner1, _ := app.NewAppSessionWalletSignerV1(userRawSigner1)
+	appWalletSigner2, _ := app.NewAppSessionWalletSignerV1(userRawSigner2)
+	participant1 := strings.ToLower(userRawSigner1.PublicKey().Address().String())
+	participant2 := strings.ToLower(userRawSigner2.PublicKey().Address().String())
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+	depositAmount := decimal.NewFromInt(100)
+	appSessionID := "0xAppSession456"
+
+	existingAppSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 200},
+			{WalletAddress: participant2, SignatureWeight: 200},
+		},
+		Quorum:  200,
+		Nonce:   12345,
+		Status:  app.AppSessionStatusOpen,
+		Version: 1,
+	}
+
+	currentUserState := core.State{
+		ID: core.GetStateID(participant1, asset, 1, 1),
+		Transition: core.Transition{
+			Type: core.TransitionTypeVoid,
+		},
+		Asset:         asset,
+		UserWallet:    participant1,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+
+	incomingUserState := currentUserState.NextState()
+	_, err := incomingUserState.ApplyCommitTransition(appSessionID, depositAmount)
+	require.NoError(t, err)
+
+	mockStatePacker.On("PackState", mock.Anything).Return([]byte("packed"), nil)
+	packedUserState, _ := mockStatePacker.PackState(*incomingUserState)
+	userSig, _ := channelWalletSigner1.Sign(packedUserState)
+	userSigStr := userSig.String()
+	incomingUserState.UserSig = &userSigStr
+
+	appStateUpdateCore := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentDeposit,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: asset, Amount: depositAmount},
+		},
+	}
+	packedAppUpdate, _ := app.PackAppStateUpdateV1(appStateUpdateCore)
+	appSigBytes1, _ := appWalletSigner1.Sign(packedAppUpdate)
+	appSigHex1 := hexutil.Encode(appSigBytes1)
+	appSigBytes2, _ := appWalletSigner2.Sign(packedAppUpdate)
+	appSigHex2 := hexutil.Encode(appSigBytes2)
+
+	appStateUpdate := rpc.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentDeposit,
+		Version:      "2",
+		Allocations:  []rpc.AppAllocationV1{{Participant: participant1, Asset: asset, Amount: depositAmount.String()}},
+	}
+
+	mockStore.On("LockUserState", participant1, asset).Return(decimal.Zero, nil).Once()
+	mockStore.On("CheckActiveChannel", participant1, asset).Return("0x03", core.ChannelStatusOpen, nil).Once()
+	mockStore.On("GetLastUserState", participant1, asset, false).Return(currentUserState, nil).Once()
+	mockStore.On("EnsureNoOngoingStateTransitions", participant1, asset).Return(nil).Once()
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
+	mockAssetStore.On("GetTokenDecimals", uint64(1), "0xTokenAddress").Return(uint8(6), nil).Maybe()
+	mockStore.On("GetAppSession", appSessionID).Return(existingAppSession, nil).Once()
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(
+		map[string]map[string]decimal.Decimal{}, nil,
+	).Once()
+	mockStore.On("RecordLedgerEntry", participant1, appSessionID, asset, depositAmount).Return(nil).Once()
+	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
+		return session.SessionID == appSessionID && session.Version == 2
+	})).Return(nil).Once()
+	mockStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
+		return state.UserWallet == participant1 && state.NodeSig != nil
+	}), mock.Anything).Return(nil).Once()
+	mockStore.On("RecordTransaction", mock.MatchedBy(func(tx core.Transaction) bool {
+		return tx.TxType == core.TransactionTypeCommit && tx.Amount.Equal(depositAmount)
+	}), mock.Anything).Return(nil).Once()
+
+	rpcState := toRPCState(*incomingUserState)
+	reqPayload := rpc.AppSessionsV1SubmitDepositStateRequest{
+		AppStateUpdate: appStateUpdate,
+		QuorumSigs:     []string{appSigHex1, appSigHex2}, // combined weight 400
+		UserState:      rpcState,
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitDepositStateMethod), payload),
+	}
+
+	handler.SubmitDepositState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("combined weight 400 with quorum 200 must pass verifyQuorum in SubmitDepositState, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}

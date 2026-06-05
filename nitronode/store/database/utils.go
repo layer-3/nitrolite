@@ -172,18 +172,20 @@ func toCoreTransaction(dbTx *Transaction) *core.Transaction {
 	}
 }
 
-// calculatePaginationMetadata computes pagination metadata from total count, offset, and limit
-func calculatePaginationMetadata(totalCount int64, offset, limit uint32) core.PaginationMetadata {
-	pageCount := uint32((totalCount + int64(limit) - 1) / int64(limit))
-	currentPage := uint32(1)
-	if limit > 0 {
-		currentPage = offset/limit + 1
+// calculatePaginationMetadata computes pagination metadata from total count, offset, and limit.
+// Returns an error if limit is 0, since a zero-sized page has no valid metadata representation.
+func calculatePaginationMetadata(totalCount int64, offset, limit uint32) (core.PaginationMetadata, error) {
+	if limit == 0 {
+		return core.PaginationMetadata{}, fmt.Errorf("pagination limit must be greater than 0")
 	}
+
+	pageCount := uint32((totalCount + int64(limit) - 1) / int64(limit))
+	currentPage := offset/limit + 1
 
 	return core.PaginationMetadata{
 		Page:       currentPage,
 		PerPage:    limit,
 		TotalCount: uint32(totalCount),
 		PageCount:  pageCount,
-	}
+	}, nil
 }

@@ -16,6 +16,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// storeLocked mirrors the production invariant: callers lock the user balance row (creating
+// it if absent) before storing a state. StoreUserState requires the balance row to exist.
+func storeLocked(t *testing.T, store database.DatabaseStore, state core.State, applicationID string) error {
+	t.Helper()
+	if _, err := store.LockUserState(state.UserWallet, state.Asset); err != nil {
+		return err
+	}
+	return store.StoreUserState(state, applicationID)
+}
+
 // PostgreSQL connection string should be provided via environment variable
 // Example: POSTGRES_DSN="host=localhost user=postgres password=postgres dbname=nitrolite_test port=5432 sslmode=disable"
 func getPostgresDB(t *testing.T) *gorm.DB {
@@ -113,7 +123,7 @@ func TestPostgres_StateOperations(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, asset, false)
@@ -169,9 +179,9 @@ func TestPostgres_StateOperations(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
-		require.NoError(t, store.StoreUserState(state3, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
+		require.NoError(t, storeLocked(t, store, state3, ""))
 
 		retrieved, err := store.GetLastUserState(wallet2, asset, false)
 		require.NoError(t, err)
@@ -446,8 +456,8 @@ func TestPostgres_UserBalances(t *testing.T) {
 		_, err = store.LockUserState(wallet, "ETH")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		balances, err := store.GetUserBalances(wallet)
 		require.NoError(t, err)
@@ -496,7 +506,7 @@ func TestPostgres_DecimalPrecision(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, "USDC", false)
@@ -524,7 +534,7 @@ func TestPostgres_DecimalPrecision(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		retrieved, err := store.GetLastUserState(wallet, "ETH", false)

@@ -39,7 +39,7 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -97,8 +97,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err = store.LockUserState("0xuser123", "ETH")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -167,8 +167,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -223,8 +223,8 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
 		require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -362,7 +362,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
@@ -442,7 +442,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -521,7 +521,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
@@ -586,7 +586,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -639,7 +639,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		_, err := store.LockUserState("0xuser123", "USDC")
 		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		// Should not error because there's no signed state
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
@@ -719,7 +719,7 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		t.Helper()
 		_, err := store.LockUserState(wallet, asset)
 		require.NoError(t, err)
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 	}
 
 	t.Run("HomeDeposit - home channel missing from DB - block", func(t *testing.T) {
@@ -906,7 +906,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			UserSig: &bilateralUserSig,
 			NodeSig: &bilateralNodeSig,
 		}
-		require.NoError(t, store.StoreUserState(bilateral, ""))
+		require.NoError(t, storeLocked(t, store, bilateral, ""))
 
 		nodeOnly := core.State{
 			ID:            "state2",
@@ -926,7 +926,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			},
 			NodeSig: &nodeSig,
 		}
-		require.NoError(t, store.StoreUserState(nodeOnly, ""))
+		require.NoError(t, storeLocked(t, store, nodeOnly, ""))
 
 		// Pre-backfill: gate sees bilateral row at version 1, channel.state_version is 2 → mismatch.
 		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
@@ -993,7 +993,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			UserSig: &userSig,
 			NodeSig: &nodeSig,
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		// Replayed event would carry a different (or any) sig; existing one must not be overwritten.
 		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 1, "0xshould-not-overwrite", "0xshould-not-overwrite-node"))
@@ -1064,7 +1064,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			},
 			UserSig: &userSig,
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		require.NoError(t, store.UpdateStateSigsIfMissing(homeChannelID, 1, "0xshould-not-overwrite-user", "0xrecoverednode"))
 
@@ -1130,7 +1130,7 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 		}
 		_, err := store.LockUserState(wallet, asset)
 		require.NoError(t, err)
-		require.NoError(t, store.StoreUserState(s, ""))
+		require.NoError(t, storeLocked(t, store, s, ""))
 	}
 
 	t.Run("Scenario 3 - dust during challenge (unsigned receive only)", func(t *testing.T) {
@@ -1318,7 +1318,7 @@ func TestDBStore_HasSignedFinalize(t *testing.T) {
 		}
 		_, err := store.LockUserState(wallet, asset)
 		require.NoError(t, err)
-		require.NoError(t, store.StoreUserState(s, ""))
+		require.NoError(t, storeLocked(t, store, s, ""))
 	}
 
 	t.Run("True when node-signed Finalize exists", func(t *testing.T) {
@@ -1437,7 +1437,7 @@ func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 		t.Helper()
 		_, err := store.LockUserState(wallet, asset)
 		require.NoError(t, err)
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 	}
 
 	t.Run("No previous state - allow", func(t *testing.T) {

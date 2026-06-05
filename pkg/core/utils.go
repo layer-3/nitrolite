@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"regexp"
 	"strings"
@@ -21,6 +22,16 @@ var HashRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 // IsValidHash reports whether s is a well-formed 32-byte hash (see HashRegex).
 func IsValidHash(s string) bool {
 	return HashRegex.MatchString(s)
+}
+
+// SafeOffset converts a uint32 pagination offset to a non-negative int suitable
+// for GORM's Offset(). A raw int(offset) wraps to a negative value on a 32-bit
+// target for large uint32s, which GORM treats as "no offset" and silently
+// returns the first page. Clamping to MaxInt32 keeps the conversion safe even
+// when a caller reaches the store without routing through
+// PaginationParams.GetOffsetAndLimit.
+func SafeOffset(offset uint32) int {
+	return int(min(offset, math.MaxInt32))
 }
 
 // maxInt256 = 2^255 - 1, the largest value representable as Solidity int256.

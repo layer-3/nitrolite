@@ -116,7 +116,7 @@ func (s *DBStore) GetAppSessions(appSessionID *string, participant *string, stat
 
 	offset, limit := pagination.GetOffsetAndLimit(DefaultLimit, MaxLimit)
 
-	query = query.Preload("Participants").Order("created_at DESC").Offset(int(offset)).Limit(int(limit))
+	query = query.Preload("Participants").Order("created_at DESC").Offset(core.SafeOffset(offset)).Limit(int(limit))
 
 	var dbSessions []AppSessionV1
 	if err := query.Find(&dbSessions).Error; err != nil {

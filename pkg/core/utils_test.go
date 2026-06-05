@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -652,6 +653,29 @@ func TestGenerateChannelMetadata(t *testing.T) {
 	})
 }
 
+func TestSafeOffset(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		offset uint32
+		want   int
+	}{
+		{"zero", 0, 0},
+		{"small", 42, 42},
+		{"max_int32", math.MaxInt32, math.MaxInt32},
+		{"above_max_int32_clamped", math.MaxInt32 + 1, math.MaxInt32},
+		{"max_uint32_clamped", math.MaxUint32, math.MaxInt32},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := SafeOffset(tt.offset)
+			assert.Equal(t, tt.want, got)
+			assert.GreaterOrEqual(t, got, 0, "offset must never be negative")
+		})
+	}
+}
+
 func TestTransitionToIntent_OperateIntents(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -843,10 +867,10 @@ func TestIsValidHash(t *testing.T) {
 	invalid := []string{
 		"",
 		"0xabc",
-		"1111111111111111111111111111111111111111111111111111111111111111", // missing 0x
-		"0x111111111111111111111111111111111111111111111111111111111111111",  // 63 hex
+		"1111111111111111111111111111111111111111111111111111111111111111",    // missing 0x
+		"0x111111111111111111111111111111111111111111111111111111111111111",   // 63 hex
 		"0x11111111111111111111111111111111111111111111111111111111111111111", // 65 hex
-		"0xzz11111111111111111111111111111111111111111111111111111111111111", // non-hex
+		"0xzz11111111111111111111111111111111111111111111111111111111111111",  // non-hex
 	}
 	for _, s := range invalid {
 		assert.False(t, IsValidHash(s), "expected %q to be invalid", s)

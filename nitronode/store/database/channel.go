@@ -189,7 +189,7 @@ func (s *DBStore) GetUserChannels(wallet string, status *core.ChannelStatus, ass
 	}
 
 	var dbChannels []Channel
-	if err := query.Order("created_at DESC").Limit(int(limit)).Offset(int(offset)).Find(&dbChannels).Error; err != nil {
+	if err := query.Order("created_at DESC").Limit(int(limit)).Offset(core.SafeOffset(offset)).Find(&dbChannels).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to get user channels: %w", err)
 	}
 

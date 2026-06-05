@@ -1202,8 +1202,8 @@ type EscrowWithdrawalDataResponse struct {
 
 // BalanceEntry represents a balance entry for an asset
 type BalanceEntry struct {
-	Asset   string          `json:"asset"`   // Asset symbol
-	Balance decimal.Decimal `json:"balance"` // Balance amount
+	Asset    string          `json:"asset"`    // Asset symbol
+	Balance  decimal.Decimal `json:"balance"`  // Balance amount
 	Enforced decimal.Decimal `json:"enforced"` // On-chain enforced balance
 }
 

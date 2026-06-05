@@ -120,7 +120,7 @@ func (s *DBStore) GetLastChannelSessionKeyStates(wallet string, sessionKey *stri
 		Preload("Assets").
 		Order("channel_session_key_states_v1.created_at DESC, channel_session_key_states_v1.id ASC").
 		Limit(int(limit)).
-		Offset(int(offset))
+		Offset(core.SafeOffset(offset))
 	if sessionKey != nil && *sessionKey != "" {
 		query = query.Where("c.session_key = ?", strings.ToLower(*sessionKey))
 	}

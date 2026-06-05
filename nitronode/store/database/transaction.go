@@ -108,7 +108,7 @@ func (s *DBStore) GetUserTransactions(accountID string, asset *string, txType *c
 
 	offset, limit := paginate.GetOffsetAndLimit(DefaultLimit, MaxLimit)
 
-	query = query.Order("created_at DESC").Offset(int(offset)).Limit(int(limit))
+	query = query.Order("created_at DESC").Offset(core.SafeOffset(offset)).Limit(int(limit))
 
 	var dbTransactions []Transaction
 	if err := query.Find(&dbTransactions).Error; err != nil {

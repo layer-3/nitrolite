@@ -162,6 +162,7 @@ func transformChannel(channel rpc.ChannelV1) (core.Channel, error) {
 		BlockchainID:          blockchainID,
 		TokenAddress:          channel.TokenAddress,
 		ChallengeDuration:     channel.ChallengeDuration,
+		ChallengeExpiresAt:    channel.ChallengeExpiresAt,
 		Nonce:                 nonce,
 		ApprovedSigValidators: channel.ApprovedSigValidators,
 		Status:                channelStatus,

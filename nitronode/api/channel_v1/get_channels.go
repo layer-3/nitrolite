@@ -78,20 +78,19 @@ func (h *Handler) GetChannels(c *rpc.Context) {
 	const defaultLimit uint32 = 100
 	const maxLimit uint32 = 1000
 
-	var limit, offset uint32
+	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
-		if req.Pagination.Limit != nil {
-			limit = *req.Pagination.Limit
-		}
-		if req.Pagination.Offset != nil {
-			offset = *req.Pagination.Offset
-		}
+		paginationParams.Offset = req.Pagination.Offset
+		paginationParams.Limit = req.Pagination.Limit
+		paginationParams.Sort = req.Pagination.Sort
 	}
+	// GetOffsetAndLimit caps the limit at maxLimit and clamps the offset so the
+	// later int(offset) conversion in the store never wraps negative. An explicit
+	// limit of 0 still falls back to the default so the page-count math below
+	// never divides by zero.
+	offset, limit := paginationParams.GetOffsetAndLimit(defaultLimit, maxLimit)
 	if limit == 0 {
 		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
 	}
 
 	var channels []core.Channel

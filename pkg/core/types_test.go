@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -595,6 +596,12 @@ func TestNewTransactionFromTransition(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "receiver state must not be nil")
 
+	// Release error: nil receiverState must return an error, not panic
+	transition = Transition{Type: TransitionTypeRelease, Amount: decimal.NewFromInt(10), AccountID: "REC"}
+	_, err = NewTransactionFromTransition(senderState, nil, transition)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "receiver state must not be nil for 'release' transition")
+
 	// Empty TxID is rejected.
 	transition = Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.HomeChannelID}
 	_, err = NewTransactionFromTransition(senderState, nil, transition)
@@ -629,4 +636,11 @@ func TestPaginationParams_GetOffsetAndLimit(t *testing.T) {
 	o, l = p.GetOffsetAndLimit(10, 100)
 	assert.Equal(t, uint32(10), l) // Zero treated as absent — falls back to defaultLimit
 	assert.Equal(t, uint32(5), o)
+
+	// Offset is clamped to MaxInt32 so int(offset) never wraps negative on 32-bit.
+	bigOff := uint32(math.MaxUint32)
+	p = &PaginationParams{Offset: &bigOff}
+	o, _ = p.GetOffsetAndLimit(10, 100)
+	assert.Equal(t, uint32(math.MaxInt32), o)
+	assert.GreaterOrEqual(t, int(o), 0)
 }

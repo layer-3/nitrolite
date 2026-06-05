@@ -2157,7 +2157,7 @@ func TestSubmitAppState_VerifyQuorumWeightOver255(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2269,7 +2269,7 @@ func TestSubmitAppState_VerifyQuorumWrapToZero(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"

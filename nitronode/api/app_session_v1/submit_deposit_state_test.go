@@ -1020,7 +1020,6 @@ func TestSubmitDepositState_VerifyQuorumWeightOver255(t *testing.T) {
 		maxParticipants:    32,
 		maxSessionData:     1024,
 		maxSessionKeyIDs:   256,
-		maxSignedUpdates:   16,
 	}
 
 	// Participant1 signs both channel state and app state update (weight 200).

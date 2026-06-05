@@ -34,7 +34,7 @@ The History tab is a **full-width view** that replaces the two-column (ActionPan
 | Withdraw | Red |
 | Transfer | Blue |
 | Finalize | Purple |
-| Commit / Release / Rebalance | Muted gray |
+| Commit / Release | Muted gray |
 
 ### Sort order
 
@@ -153,7 +153,6 @@ enum TransactionType {
   Transfer       = 30,
   Commit         = 40,
   Release        = 41,
-  Rebalance      = 42,
   Migrate        = 100,
   EscrowLock     = 110,
   MutualLock     = 120,

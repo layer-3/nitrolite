@@ -36,7 +36,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real test wallet for participant1
@@ -141,7 +141,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create real test wallets for participant1 and participant2
@@ -248,7 +248,7 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 				"0xnode",
 				true,
 				metrics.NewNoopRuntimeMetricExporter(),
-				32, 1024, 256, 16, 100,
+				32, 1024, 256, 100,
 			)
 
 			participant1 := "0x1111111111111111111111111111111111111111"
@@ -311,7 +311,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -382,7 +382,7 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -447,7 +447,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a wallet that is NOT a participant
@@ -529,7 +529,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real wallet for participant1
@@ -625,7 +625,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real wallet for participant1
@@ -718,7 +718,7 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -787,7 +787,7 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -856,7 +856,7 @@ func TestCreateAppSession_AppNotRegistered(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -926,7 +926,7 @@ func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -1003,7 +1003,7 @@ func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create participant and owner wallets
@@ -1104,7 +1104,7 @@ func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
 		"0xnode",
 		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	wallet1 := NewTestAppSessionWallet(t)
@@ -1195,7 +1195,7 @@ func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Two participants each with weight 200; real total = 400, wraps to 144 in uint8.
@@ -1277,7 +1277,7 @@ func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	lower := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -1336,7 +1336,7 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// 128+128=256 wraps to 0 in uint8 — any quorum > 0 would appear unreachable.
@@ -1410,7 +1410,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
 		"0xnode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Real total = 200+200 = 400; quorum = 255 (max uint8 but still < 400, so valid).

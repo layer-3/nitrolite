@@ -369,10 +369,6 @@ async function main() {
     throw err;
   }
 
-  // NOTE: Rebalance step is disabled.
-  // // --- 7. Rebalance Both App Sessions Atomically ---
-  // ... (rebalance code omitted) ...
-
   // --- 7. Wallet 3 Withdraws from Session 2 ---
   console.log('=== Step 7: Wallet 3 Withdrawing from Session 2 ===');
 

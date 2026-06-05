@@ -154,18 +154,6 @@ func unmapAppStateUpdateV1(upd *rpc.AppStateUpdateV1) (app.AppStateUpdateV1, err
 	}, nil
 }
 
-func unmapSignedAppStateUpdateV1(signedUpd *rpc.SignedAppStateUpdateV1) (app.SignedAppStateUpdateV1, error) {
-	appStateUpd, err := unmapAppStateUpdateV1(&signedUpd.AppStateUpdate)
-	if err != nil {
-		return app.SignedAppStateUpdateV1{}, err
-	}
-
-	return app.SignedAppStateUpdateV1{
-		AppStateUpdate: appStateUpd,
-		QuorumSigs:     signedUpd.QuorumSigs,
-	}, nil
-}
-
 // getParticipantWeights creates a map of participant wallet addresses to their weights.
 func getParticipantWeights(participants []app.AppParticipantV1) map[string]uint8 {
 	weights := make(map[string]uint8, len(participants))

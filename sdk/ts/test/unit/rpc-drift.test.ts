@@ -78,7 +78,6 @@ describe('TS RPC drift guards', () => {
         ['channels.v1.get_last_key_states', 'getLastChannelKeyStates'],
         ['app_sessions.v1.submit_deposit_state', 'submitAppSessionDeposit'],
         ['app_sessions.v1.submit_app_state', 'submitAppState'],
-        ['app_sessions.v1.rebalance_app_sessions', 'rebalanceAppSessions'],
         ['app_sessions.v1.get_app_definition', 'getAppDefinition'],
         ['app_sessions.v1.get_app_sessions', 'getAppSessions'],
         ['app_sessions.v1.create_app_session', 'createAppSession'],

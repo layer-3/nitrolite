@@ -189,18 +189,6 @@ type SignedAppStateUpdateV1 struct {
 	QuorumSigs []string `json:"quorum_sigs"`
 }
 
-// AppSessionsV1RebalanceAppSessionsRequest rebalances multiple application sessions atomically.
-type AppSessionsV1RebalanceAppSessionsRequest struct {
-	// SignedUpdates is the list of signed application session state updates
-	SignedUpdates []SignedAppStateUpdateV1 `json:"signed_updates"`
-}
-
-// AppSessionsV1RebalanceAppSessionsResponse returns the batch ID for the rebalancing operation.
-type AppSessionsV1RebalanceAppSessionsResponse struct {
-	// BatchID is the unique identifier for this rebalancing operation
-	BatchID string `json:"batch_id"`
-}
-
 // AppSessionsV1GetAppDefinitionRequest retrieves the application definition for a specific app session.
 type AppSessionsV1GetAppDefinitionRequest struct {
 	// AppSessionID is the application session ID

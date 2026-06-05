@@ -43,16 +43,15 @@ func main() {
 
 	vl := bb.ValidationLimits
 	rpcRouterCfg := api.RPCRouterConfig{
-		NodeVersion:               bb.NodeVersion,
-		MinChallenge:              bb.ChannelMinChallengeDuration,
-		MaxChallenge:              bb.ChannelMaxChallengeDuration,
-		AppRegistryEnabled:        bb.AppRegistryEnabled,
-		MaxParticipants:           vl.MaxParticipants,
-		MaxSessionDataLen:         vl.MaxSessionDataLen,
-		MaxAppMetadataLen:         vl.MaxAppMetadataLen,
-		MaxRebalanceSignedUpdates: vl.MaxSignedUpdates,
-		MaxSessionKeyIDs:          vl.MaxSessionKeyIDs,
-		MaxSessionKeysPerUser:     vl.MaxSessionKeysPerUser,
+		NodeVersion:           bb.NodeVersion,
+		MinChallenge:          bb.ChannelMinChallengeDuration,
+		MaxChallenge:          bb.ChannelMaxChallengeDuration,
+		AppRegistryEnabled:    bb.AppRegistryEnabled,
+		MaxParticipants:       vl.MaxParticipants,
+		MaxSessionDataLen:     vl.MaxSessionDataLen,
+		MaxAppMetadataLen:     vl.MaxAppMetadataLen,
+		MaxSessionKeyIDs:      vl.MaxSessionKeyIDs,
+		MaxSessionKeysPerUser: vl.MaxSessionKeysPerUser,
 	}
 	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.ActionGateway, bb.RuntimeMetrics, bb.Logger)
 

@@ -441,7 +441,6 @@ func TestDBStore_GetNotClosedHomeChannel(t *testing.T) {
 	})
 }
 
-
 func TestDBStore_CheckActiveChannel(t *testing.T) {
 	t.Run("Success - Has open channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)
@@ -712,7 +711,7 @@ func TestDBStore_UpdateChannel(t *testing.T) {
 		assert.NotNil(t, result.ChallengeExpiresAt)
 	})
 
-	t.Run("Success - Update blockchain and token", func(t *testing.T) {
+	t.Run("Immutable config fields are not modified", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)
 		defer cleanup()
 
@@ -732,20 +731,26 @@ func TestDBStore_UpdateChannel(t *testing.T) {
 		}
 		require.NoError(t, store.CreateChannel(channel))
 
-		// Update blockchain and token
+		// A caller mutating immutable identity/config fields must not corrupt the
+		// stored channel — UpdateChannel persists only mutable lifecycle fields.
 		channel.BlockchainID = 137
 		channel.TokenAddress = "0xnewtoken456"
+		channel.Nonce = 999
+		channel.StateVersion = 5
 
 		err := store.UpdateChannel(channel)
 		require.NoError(t, err)
 
-		// Verify update
 		result, err := store.GetChannelByID("0xhomechannel123")
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		assert.Equal(t, uint64(137), result.BlockchainID)
-		assert.Equal(t, "0xnewtoken456", result.TokenAddress)
+		// Immutable fields keep their CreateChannel values.
+		assert.Equal(t, uint64(1), result.BlockchainID)
+		assert.Equal(t, "0xtoken123", result.TokenAddress)
+		assert.Equal(t, uint64(1), result.Nonce)
+		// Mutable lifecycle field is updated.
+		assert.Equal(t, uint64(5), result.StateVersion)
 	})
 
 	t.Run("Error - Update non-existent channel", func(t *testing.T) {

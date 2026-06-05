@@ -121,7 +121,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 		// Validate user's signature
 		if incomingState.UserSig == nil {
-			return rpc.Errorf("missing incoming state user signature: %v", err)
+			return rpc.Errorf("missing incoming state user signature")
 		}
 		userSigBytes, err := hexutil.Decode(*incomingState.UserSig)
 		if err != nil {

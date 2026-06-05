@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"gorm.io/gorm"
 )
 
@@ -139,7 +140,7 @@ func (s *DBStore) GetLastAppSessionKeyStates(wallet string, sessionKey *string, 
 		Preload("AppSessionIDs").
 		Order("app_session_key_states_v1.created_at DESC, app_session_key_states_v1.id ASC").
 		Limit(int(limit)).
-		Offset(int(offset))
+		Offset(core.SafeOffset(offset))
 	if sessionKey != nil && *sessionKey != "" {
 		query = query.Where("c.session_key = ?", strings.ToLower(*sessionKey))
 	}

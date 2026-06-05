@@ -2,6 +2,7 @@ package app_session_v1
 
 import (
 	"github.com/layer-3/nitrolite/pkg/app"
+	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
 	"github.com/layer-3/nitrolite/pkg/rpc"
 )
@@ -23,7 +24,7 @@ func (h *Handler) GetLastKeyStates(c *rpc.Context) {
 		return
 	}
 
-	var limit, offset uint32
+	var paginationParams core.PaginationParams
 	if req.Pagination != nil {
 		// The endpoint orders rows by (created_at DESC, id ASC) for stable pagination;
 		// callers cannot override this, so any sort value is rejected rather than silently
@@ -33,14 +34,14 @@ func (h *Handler) GetLastKeyStates(c *rpc.Context) {
 			c.Fail(rpc.Errorf("invalid_pagination: sort is not supported by get_last_key_states"), "")
 			return
 		}
-		if req.Pagination.Limit != nil {
-			limit = *req.Pagination.Limit
-		}
-		if req.Pagination.Offset != nil {
-			offset = *req.Pagination.Offset
-		}
+		paginationParams.Offset = req.Pagination.Offset
+		paginationParams.Limit = req.Pagination.Limit
 	}
-	if limit == 0 || limit > rpc.GetLastKeyStatesPageLimit {
+	// GetOffsetAndLimit caps the limit and clamps the offset so the later
+	// int(offset) conversion in the store never wraps negative. An explicit
+	// limit of 0 still falls back to the page limit.
+	offset, limit := paginationParams.GetOffsetAndLimit(rpc.GetLastKeyStatesPageLimit, rpc.GetLastKeyStatesPageLimit)
+	if limit == 0 {
 		limit = rpc.GetLastKeyStatesPageLimit
 	}
 

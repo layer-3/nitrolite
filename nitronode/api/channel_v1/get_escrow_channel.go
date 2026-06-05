@@ -18,6 +18,11 @@ func (h *Handler) GetEscrowChannel(c *rpc.Context) {
 		return
 	}
 
+	if !core.IsValidHash(req.EscrowChannelID) {
+		c.Fail(rpc.Errorf("invalid escrow_channel_id"), "")
+		return
+	}
+
 	var channel *core.Channel
 	err := h.useStoreInTx(func(tx Store) error {
 		var err error

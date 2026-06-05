@@ -153,6 +153,21 @@ func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
 	return nil
 }
 
+// maxParticipantsUint16Safe is the largest MaxParticipants value that cannot overflow the
+// uint16 quorum-weight accumulators: 257 × 255 = 65535 = math.MaxUint16.
+const maxParticipantsUint16Safe = 257
+
+func validateValidationLimits(vl ValidationLimits) error {
+	if vl.MaxParticipants > maxParticipantsUint16Safe {
+		return fmt.Errorf(
+			"NITRONODE_MAX_PARTICIPANTS must be ≤ %d to prevent quorum-weight overflow (uint16 ceiling), got %d",
+			maxParticipantsUint16Safe,
+			vl.MaxParticipants,
+		)
+	}
+	return nil
+}
+
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
 	closers := []func() error{} // collect closer functions for resources that need cleanup
@@ -178,6 +193,9 @@ func InitBackbone() *Backbone {
 	}
 	if err := validateBlockchainGasLimit(conf.BlockchainGasLimit); err != nil {
 		logger.Fatal("invalid blockchain gas limit config", "error", err)
+	}
+	if err := validateValidationLimits(conf.ValidationLimits); err != nil {
+		logger.Fatal("invalid validation limits config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)

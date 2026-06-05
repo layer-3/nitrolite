@@ -1170,6 +1170,88 @@ func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+// TestCreateAppSession_TotalWeightsOver255 verifies that session creation succeeds when the
+// real sum of participant weights exceeds 255 but the quorum is still achievable. With a
+// uint8 accumulator the sum wraps modulo 256, which can make a valid quorum look unreachable
+// at creation time (e.g. weights 200+200=400 wraps to 144, and quorum=200 falsely appears
+// to exceed total). The accumulator must be at least uint16 to avoid this.
+func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xnode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16, 100,
+	)
+
+	// Two participants each with weight 200; real total = 400, wraps to 144 in uint8.
+	// Quorum = 200 is achievable (wallet1 alone covers it) but 200 > 144 would have
+	// triggered a false rejection before the fix.
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	appDef := app.AppDefinitionV1{
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 200},
+			{WalletAddress: participant2, SignatureWeight: 200},
+		},
+		Quorum: 200,
+		Nonce:  12345,
+	}
+	sig1 := wallet1.SignCreateRequest(t, appDef, "")
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 200},
+				{WalletAddress: participant2, SignatureWeight: 200},
+			},
+			Quorum: 200,
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
+	}, nil).Once()
+	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("Unexpected error: total weights 400 with quorum 200 must be accepted, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}
+
 // TestCreateAppSession_DuplicateParticipantAcrossCases verifies that two participant
 // addresses that differ only in letter case are detected as duplicates. Without address
 // normalization the duplicate-check map would key on the raw representation and accept
@@ -1230,4 +1312,140 @@ func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "duplicate participant address")
 	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertNotCalled(t, "CreateAppSession", mock.Anything)
+}
+
+// TestCreateAppSession_TotalWeightsWrapToZero tests the 128+128=256 case where uint8 wraps
+// to exactly 0 — the most damaging overflow (any quorum > 0 appears unreachable).
+func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		&MockActionGateway{},
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xnode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16, 100,
+	)
+
+	// 128+128=256 wraps to 0 in uint8 — any quorum > 0 would appear unreachable.
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	appDef := app.AppDefinitionV1{
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 128},
+			{WalletAddress: participant2, SignatureWeight: 128},
+		},
+		Quorum: 128,
+		Nonce:  12345,
+	}
+	sig1 := wallet1.SignCreateRequest(t, appDef, "")
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 128},
+				{WalletAddress: participant2, SignatureWeight: 128},
+			},
+			Quorum: 128,
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
+		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
+	}, nil).Once()
+	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("total weights 256 (128+128) with quorum 128 must be accepted, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}
+
+// TestCreateAppSession_QuorumExceedsTotalWeights_Rejected verifies that a quorum genuinely
+// larger than the real total weight is rejected. Uses small weights (100+100=200) because
+// Quorum is uint8 and cannot exceed 255, so this guard cannot be exercised with total > 255.
+func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(
+		storeTxProvider,
+		new(MockAssetStore),
+		&MockActionGateway{},
+		NewMockChannelSigner(),
+		core.NewStateAdvancerV1(new(MockAssetStore)),
+		new(MockStatePacker),
+		"0xnode",
+		true,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16, 100,
+	)
+
+	// Real total = 200+200 = 400; quorum = 255 (max uint8 but still < 400, so valid).
+	// quorum cannot exceed 255 because the wire type is uint8 — so we can't test quorum=401.
+	// Instead test that quorum=255 (which is < 400) is accepted.
+	// To test actual rejection: use quorum=255 with total weights=100+100=200 (uint8-range).
+	participant1 := "0x1111111111111111111111111111111111111111"
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 100},
+				{WalletAddress: participant2, SignatureWeight: 100},
+			},
+			Quorum: 255, // quorum (255) > real total (200) → must be rejected
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{"0xdeadbeef"},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.Error(t, respErr)
+	assert.Contains(t, respErr.Error(), "quorum")
+	mockStore.AssertExpectations(t)
 }

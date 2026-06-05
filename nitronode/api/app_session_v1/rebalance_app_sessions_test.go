@@ -1356,3 +1356,117 @@ func TestRebalanceAppSessions_Error_DifferentApplications(t *testing.T) {
 	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
+
+// TestRebalanceAppSessions_VerifyQuorumWeightOver255 ensures verifyQuorum handles combined
+// participant weights exceeding 255 correctly through the RebalanceAppSessions path.
+// RebalanceAppSessions requires ≥2 sessions; both sessions use the >255 weight configuration.
+func TestRebalanceAppSessions_VerifyQuorumWeightOver255(t *testing.T) {
+	mockStore := new(MockStore)
+
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	handler := NewHandler(
+		storeTxProvider,
+		nil,
+		&MockActionGateway{},
+		nil,
+		nil,
+		nil,
+		"0xNode",
+		false,
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 16, 100,
+	)
+
+	wallet1 := NewTestAppSessionWallet(t)
+	wallet2 := NewTestAppSessionWallet(t)
+
+	// Two sessions, each with two participants weight 200+200=400 and quorum=200.
+	// Old uint8 code wraps achievedQuorum to 144, rejects the valid coalition for each session.
+	sessionID1 := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	sessionID2 := "0x2222222222222222222222222222222222222222222222222222222222222222"
+
+	mkSession := func(id string) *app.AppSessionV1 {
+		return &app.AppSessionV1{
+			SessionID:     id,
+			ApplicationID: "test-app",
+			Participants: []app.AppParticipantV1{
+				{WalletAddress: wallet1.Address, SignatureWeight: 200},
+				{WalletAddress: wallet2.Address, SignatureWeight: 200},
+			},
+			Quorum:  200,
+			Status:  app.AppSessionStatusOpen,
+			Version: 1,
+		}
+	}
+
+	allocs := map[string]map[string]decimal.Decimal{
+		wallet1.Address: {"USDC": decimal.NewFromInt(100)},
+		wallet2.Address: {"USDC": decimal.NewFromInt(50)},
+	}
+
+	mkUpdate := func(id string) (rpc.SignedAppStateUpdateV1, string, string) {
+		core := app.AppStateUpdateV1{
+			AppSessionID: id,
+			Intent:       app.AppStateUpdateIntentRebalance,
+			Version:      2,
+			Allocations: []app.AppAllocationV1{
+				{Participant: wallet1.Address, Asset: "USDC", Amount: decimal.NewFromInt(80)},
+				{Participant: wallet2.Address, Asset: "USDC", Amount: decimal.NewFromInt(70)},
+			},
+		}
+		s1 := wallet1.SignAppStateUpdate(t, core)
+		s2 := wallet2.SignAppStateUpdate(t, core)
+		return rpc.SignedAppStateUpdateV1{
+			AppStateUpdate: rpc.AppStateUpdateV1{
+				AppSessionID: id,
+				Intent:       app.AppStateUpdateIntentRebalance,
+				Version:      "2",
+				Allocations: []rpc.AppAllocationV1{
+					{Participant: wallet1.Address, Asset: "USDC", Amount: "80"},
+					{Participant: wallet2.Address, Asset: "USDC", Amount: "70"},
+				},
+			},
+			QuorumSigs: []string{s1, s2},
+		}, wallet1.Address, wallet2.Address
+	}
+
+	update1, w1addr, w2addr := mkUpdate(sessionID1)
+	update2, _, _ := mkUpdate(sessionID2)
+
+	reqPayload := rpc.AppSessionsV1RebalanceAppSessionsRequest{
+		SignedUpdates: []rpc.SignedAppStateUpdateV1{update1, update2},
+	}
+
+	for _, id := range []string{sessionID1, sessionID2} {
+		mockStore.On("GetAppSession", id).Return(mkSession(id), nil)
+		mockStore.On("GetParticipantAllocations", id).Return(allocs, nil)
+		mockStore.On("UpdateAppSession", mock.MatchedBy(func(s app.AppSessionV1) bool {
+			return s.SessionID == id && s.Version == 2
+		})).Return(nil).Once()
+	}
+	// Each session: wallet1 net -20, wallet2 net +20 → per-session net = 0, no RecordTransaction.
+	mockStore.On("RecordLedgerEntry", w1addr, sessionID1, "USDC", decimal.NewFromInt(-20)).Return(nil)
+	mockStore.On("RecordLedgerEntry", w2addr, sessionID1, "USDC", decimal.NewFromInt(20)).Return(nil)
+	mockStore.On("RecordLedgerEntry", w1addr, sessionID2, "USDC", decimal.NewFromInt(-20)).Return(nil)
+	mockStore.On("RecordLedgerEntry", w2addr, sessionID2, "USDC", decimal.NewFromInt(20)).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, "app_sessions.v1.rebalance_app_sessions", payload),
+	}
+
+	handler.RebalanceAppSessions(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("combined weight 400 with quorum 200 must pass verifyQuorum in RebalanceAppSessions, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}

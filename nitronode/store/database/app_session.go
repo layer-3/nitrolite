@@ -128,7 +128,10 @@ func (s *DBStore) GetAppSessions(appSessionID *string, participant *string, stat
 		sessions[i] = *databaseAppSessionToCore(&dbSession)
 	}
 
-	metadata := calculatePaginationMetadata(totalCount, offset, limit)
+	metadata, err := calculatePaginationMetadata(totalCount, offset, limit)
+	if err != nil {
+		return nil, core.PaginationMetadata{}, fmt.Errorf("failed to calculate pagination: %w", err)
+	}
 
 	return sessions, metadata, nil
 }

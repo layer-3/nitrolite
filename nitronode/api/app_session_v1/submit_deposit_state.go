@@ -122,16 +122,19 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			return rpc.Errorf("missing user signature on user state")
 		}
 
+		// An active home channel (confirmed by CheckActiveChannel above) always has a
+		// persisted latest state; deposit is not an initialization path. A nil result here
+		// means the local state materialization is inconsistent, so reject instead of
+		// synthesizing a void state and validating against history that was never persisted.
 		currentState, err := tx.GetLastUserState(userState.UserWallet, userState.Asset, false)
 		if err != nil {
 			return rpc.Errorf("failed to get last user state: %v", err)
 		}
 		if currentState == nil {
-			currentState = core.NewVoidState(userState.Asset, userState.UserWallet)
-		} else {
-			if err := tx.EnsureNoOngoingStateTransitions(userState.UserWallet, userState.Asset); err != nil {
-				return rpc.Errorf("ongoing state transitions check failed: %v", err)
-			}
+			return rpc.Errorf("last user state not found")
+		}
+		if err := tx.EnsureNoOngoingStateTransitions(userState.UserWallet, userState.Asset); err != nil {
+			return rpc.Errorf("ongoing state transitions check failed: %v", err)
 		}
 
 		if err := h.stateAdvancer.ValidateAdvancement(*currentState, userState); err != nil {

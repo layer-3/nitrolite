@@ -99,10 +99,12 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 			// 	extraTransitions = nil // no extra transitions to reapply
 			// }
 		default:
-			// User has no previous state
+			// An active home channel always has its initial state stored atomically by
+			// request_creation. A nil state here means the channel row exists without its
+			// state — an invariant violation, not a first-submit. Fail closed rather than
+			// bootstrapping a synthetic Void state through the wrong endpoint.
 			if currentState == nil {
-				logger.Debug("no previous state found, issuing a void state")
-				currentState = core.NewVoidState(incomingState.Asset, incomingState.UserWallet)
+				return rpc.Errorf("active channel has no stored state")
 			}
 		}
 

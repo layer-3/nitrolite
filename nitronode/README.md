@@ -64,6 +64,8 @@ blockchains:
 
 Define supported assets and their multi-chain token deployments in `config/assets.yaml`:
 
+> **Warning:** all tokens grouped under one `symbol` are treated as fully fungible 1:1 representations of the same asset — off-chain credit denominated in that asset can be redeemed from any of these token inventories. Group only economically equivalent (1:1 redeemable) tokens under one symbol; mixing non-equivalent tokens (e.g. a test token and production USDC) lets credit sourced from the cheap inventory be redeemed against the valuable one. Equivalence cannot be verified programmatically and is an operator responsibility. See [Asset-symbol equivalence](../docs/protocol/security-and-limitations.md).
+
 ```yaml
 assets:
   - symbol: "USDC"

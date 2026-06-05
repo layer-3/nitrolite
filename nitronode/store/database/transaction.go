@@ -14,10 +14,12 @@ var (
 	ErrRecordTransaction            = "failed to record transaction"
 )
 
-// Transaction represents an immutable transaction in the system
-// ID is deterministic based on transaction initiation:
-// 1) Initiated by User: Hash(ToAccount, SenderNewStateID)
-// 2) Initiated by Node: Hash(FromAccount, ReceiverNewStateID)
+// Transaction represents an immutable transaction in the system.
+// ID equals the TxID of the transition that references this transaction
+// (the single source of truth, canonicalised and validated in the state
+// advancer). The TxID is deterministic: Hash(transition.AccountID, newStateID).
+// For transfers, the sender's TransferSend and the receiver's TransferReceive
+// share one TxID and therefore reference this single transaction.
 type Transaction struct {
 	// ID is a 64-character deterministic hash
 	ID                 string               `gorm:"column:id;primaryKey;size:64"`

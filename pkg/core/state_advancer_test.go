@@ -369,3 +369,32 @@ func TestValidateAdvancement_RejectsOverflowEscrowLedger(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid escrow ledger")
 	assert.Contains(t, err.Error(), "uint256")
 }
+
+// TestValidateAdvancement_RejectsForgedTxID pins the validation boundary that
+// NewTransactionFromTransition now relies on: the advancer recomputes the
+// canonical TxID from the proposed state and rejects any transition carrying a
+// forged TxID, even when the type, account, and amount are otherwise valid.
+func TestValidateAdvancement_RejectsForgedTxID(t *testing.T) {
+	t.Parallel()
+
+	advancer := NewStateAdvancerV1(newMockAssetStore())
+	sig := "0xSig"
+	chanID := "0xChannel"
+
+	current := NewVoidState("USDC", "0xUser")
+	current.HomeChannelID = &chanID
+	current.ID = GetStateID("0xUser", "USDC", 0, 0)
+
+	proposed := current.NextState()
+	_, err := proposed.ApplyHomeDepositTransition(decimal.NewFromInt(10))
+	require.NoError(t, err)
+	proposed.UserSig = &sig
+
+	// Forge the TxID while leaving the type, account, and amount intact, so the
+	// only divergence from the recomputed transition is the transaction ID.
+	proposed.Transition.TxID = "0xforgedtxid"
+
+	err = advancer.ValidateAdvancement(*current, *proposed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "transaction ID mismatch")
+}

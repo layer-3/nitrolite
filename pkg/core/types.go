@@ -938,16 +938,18 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	}
 
 	var receiverStateID *string
-	var txID string
-	var err error
 	if receiverState != nil {
 		receiverStateID = &receiverState.ID
-		txID, err = GetReceiverTransactionID(fromAccount, receiverState.ID)
-	} else {
-		txID, err = GetSenderTransactionID(toAccount, senderState.ID)
 	}
-	if err != nil {
-		return nil, err
+
+	// The transaction ID must equal the transition's TxID so that the transition
+	// row references this transaction. For transfers, the sender's TransferSend and
+	// the receiver's TransferReceive share the same TxID, so both must point at this
+	// single transaction. The TxID is canonicalised and validated in the state
+	// advancer, making it the single source of truth.
+	txID := transition.TxID
+	if txID == "" {
+		return nil, fmt.Errorf("transition has empty txID")
 	}
 
 	return NewTransaction(

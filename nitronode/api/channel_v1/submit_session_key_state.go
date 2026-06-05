@@ -71,6 +71,10 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: assets array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
+	if err := h.validateSessionKeyAssets(coreState.Assets); err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+		return
+	}
 	if coreState.UserSig == "" {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
@@ -173,4 +177,29 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		"userAddress", coreState.UserAddress,
 		"sessionKey", coreState.SessionKey,
 		"version", coreState.Version)
+}
+
+// validateSessionKeyAssets rejects an assets list that contains a non-canonical asset, a
+// duplicate, or an asset the node does not support. Assets must already be lowercased because
+// they are persisted lowercased (StoreChannelSessionKeyState) and looked up lowercased
+// (ValidateChannelSessionKeyForAsset); rejecting a non-canonical asset keeps the user-signed
+// payload identical to what is stored. Empty assets lists are allowed; the per-asset checks
+// only run on entries.
+func (h *Handler) validateSessionKeyAssets(assets []string) error {
+	seen := make(map[string]struct{}, len(assets))
+	for _, asset := range assets {
+		normalized := strings.ToLower(asset)
+		if asset != normalized {
+			return rpc.Errorf("non-canonical asset '%s', expected '%s'", asset, normalized)
+		}
+		if _, ok := seen[normalized]; ok {
+			return rpc.Errorf("duplicate asset '%s'", asset)
+		}
+		seen[normalized] = struct{}{}
+
+		if _, err := h.memoryStore.GetAssetDecimals(normalized); err != nil {
+			return rpc.Errorf("unsupported asset '%s'", asset)
+		}
+	}
+	return nil
 }

@@ -59,6 +59,14 @@ func buildSignedChannelSessionKeyStateReq(t *testing.T, userAddress, sessionKey 
 	return rpc.ChannelsV1SubmitSessionKeyStateRequest{State: state}
 }
 
+// allAssetsMemoryStore returns a MockMemoryStore that treats every asset as supported, so
+// validateSessionKeyAssets passes for arbitrary symbols in these tests.
+func allAssetsMemoryStore() *MockMemoryStore {
+	m := new(MockMemoryStore)
+	m.On("GetAssetDecimals", mock.AnythingOfType("string")).Return(uint8(6), nil)
+	return m
+}
+
 func TestChannelSubmitSessionKeyState_Success(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
@@ -70,12 +78,13 @@ func TestChannelSubmitSessionKeyState_Success(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	assets := []string{"USDC"}
+	assets := []string{"usdc"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -104,6 +113,7 @@ func TestChannelSubmitSessionKeyState_AssetsExceedsMax(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 2,
 	}
@@ -114,7 +124,7 @@ func TestChannelSubmitSessionKeyState_AssetsExceedsMax(t *testing.T) {
 			UserAddress: "0x1111111111111111111111111111111111111111",
 			SessionKey:  "0x3333333333333333333333333333333333333333",
 			Version:     "1",
-			Assets:      []string{"USDC", "ETH", "BTC"},
+			Assets:      []string{"usdc", "eth", "btc"},
 			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
 			UserSig:     "0xdeadbeef",
 		},
@@ -136,6 +146,125 @@ func TestChannelSubmitSessionKeyState_AssetsExceedsMax(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "assets array exceeds maximum length of 2")
 }
 
+func TestChannelSubmitSessionKeyState_RejectsDuplicateAssets(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		memoryStore:      allAssetsMemoryStore(),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	// Two identical assets must be rejected as a duplicate.
+	reqPayload := rpc.ChannelsV1SubmitSessionKeyStateRequest{
+		State: rpc.ChannelSessionKeyStateV1{
+			UserAddress: "0x1111111111111111111111111111111111111111",
+			SessionKey:  "0x3333333333333333333333333333333333333333",
+			Version:     "1",
+			Assets:      []string{"usdc", "usdc"},
+			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:     "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "duplicate asset")
+}
+
+func TestChannelSubmitSessionKeyState_RejectsNonCanonicalAsset(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		memoryStore:      allAssetsMemoryStore(),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	// Assets must be submitted lowercased; a non-canonical casing is rejected.
+	reqPayload := rpc.ChannelsV1SubmitSessionKeyStateRequest{
+		State: rpc.ChannelSessionKeyStateV1{
+			UserAddress: "0x1111111111111111111111111111111111111111",
+			SessionKey:  "0x3333333333333333333333333333333333333333",
+			Version:     "1",
+			Assets:      []string{"USDC"},
+			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:     "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "non-canonical asset")
+}
+
+func TestChannelSubmitSessionKeyState_RejectsUnsupportedAsset(t *testing.T) {
+	mockStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockMemoryStore.On("GetAssetDecimals", "foo").Return(uint8(0), fmt.Errorf("asset 'foo' is not supported"))
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		memoryStore:      mockMemoryStore,
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	reqPayload := rpc.ChannelsV1SubmitSessionKeyStateRequest{
+		State: rpc.ChannelSessionKeyStateV1{
+			UserAddress: "0x1111111111111111111111111111111111111111",
+			SessionKey:  "0x3333333333333333333333333333333333333333",
+			Version:     "1",
+			Assets:      []string{"foo"},
+			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:     "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "unsupported asset")
+	mockMemoryStore.AssertExpectations(t)
+}
+
 func TestChannelSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
@@ -147,13 +276,14 @@ func TestChannelSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 2,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	// Exactly at max (2) should pass validation
-	assets := []string{"USDC", "ETH"}
+	assets := []string{"usdc", "eth"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -181,6 +311,7 @@ func TestChannelSubmitSessionKeyState_InvalidUserAddress(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -223,6 +354,7 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -230,7 +362,7 @@ func TestChannelSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 	// expires_at in the past expresses a revoke: the same monotonic version sequence
 	// is preserved, the auth path filters expires_at > now so the key is deactivated.
 	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
-	assets := []string{"USDC"}
+	assets := []string{"usdc"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -267,13 +399,14 @@ func TestChannelSubmitSessionKeyState_RevokeExistingActiveKey(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:           allAssetsMemoryStore(),
 		metrics:               metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs:      10,
 		maxSessionKeysPerUser: 5,
 	}
 
 	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
-	assets := []string{"USDC"}
+	assets := []string{"usdc"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -313,13 +446,14 @@ func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke_BelowCapAllowed(t *t
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:           allAssetsMemoryStore(),
 		metrics:               metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs:      10,
 		maxSessionKeysPerUser: 5,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	assets := []string{"USDC"}
+	assets := []string{"usdc"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -357,13 +491,14 @@ func TestChannelSubmitSessionKeyState_ReactivateAfterRevoke_AtCapRejected(t *tes
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:           allAssetsMemoryStore(),
 		metrics:               metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs:      10,
 		maxSessionKeysPerUser: 3,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	assets := []string{"USDC"}
+	assets := []string{"usdc"}
 
 	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, assets, expiresAt, userSigner, sessionKeySigner)
 
@@ -395,6 +530,7 @@ func TestChannelSubmitSessionKeyState_RejectsNegativeExpiresAt(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -433,6 +569,7 @@ func TestChannelSubmitSessionKeyState_MissingUserSig(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -475,6 +612,7 @@ func TestChannelSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -514,13 +652,14 @@ func TestChannelSubmitSessionKeyState_RejectsWhenAtUserCap(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:           allAssetsMemoryStore(),
 		metrics:               metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs:      10,
 		maxSessionKeysPerUser: 3,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"usdc"}, expiresAt, userSigner, sessionKeySigner)
 
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 	mockStore.On("CountSessionKeysForUser", userAddress).Return(3, nil)
@@ -554,6 +693,7 @@ func TestChannelSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:           allAssetsMemoryStore(),
 		metrics:               metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs:      10,
 		maxSessionKeysPerUser: 3,
@@ -561,7 +701,7 @@ func TestChannelSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	// Existing key at version 4: submit version 5. Cap must NOT block updates.
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 5, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 5, []string{"usdc"}, expiresAt, userSigner, sessionKeySigner)
 
 	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(4, prevActiveExpiresAt, nil)
@@ -595,6 +735,7 @@ func TestChannelSubmitSessionKeyState_SignatureMismatch(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
@@ -629,12 +770,13 @@ func TestChannelSubmitSessionKeyState_RejectsUserAddressEqualsSessionKey(t *test
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, userAddress, 1, []string{"USDC"}, expiresAt, userSigner, userSigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, userAddress, 1, []string{"usdc"}, expiresAt, userSigner, userSigner)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -663,13 +805,14 @@ func TestChannelSubmitSessionKeyState_RejectsMissingSessionKeySig(t *testing.T) 
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	// keySigner=nil → SessionKeySig field stays empty.
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, nil)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"usdc"}, expiresAt, userSigner, nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -699,13 +842,14 @@ func TestChannelSubmitSessionKeyState_RejectsMismatchedSessionKeySig(t *testing.
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	// SessionKeySig from a key that does not match the declared session_key.
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, otherSigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"usdc"}, expiresAt, userSigner, otherSigner)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -734,12 +878,13 @@ func TestChannelSubmitSessionKeyState_RejectsForeignOwner(t *testing.T) {
 		useStoreInTx: func(handler StoreTxHandler) error {
 			return handler(mockStore)
 		},
+		memoryStore:      allAssetsMemoryStore(),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 10,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"USDC"}, expiresAt, userSigner, sessionKeySigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"usdc"}, expiresAt, userSigner, sessionKeySigner)
 
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).
 		Return(0, time.Time{}, database.ErrSessionKeyNotAllowed)

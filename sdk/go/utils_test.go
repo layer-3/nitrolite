@@ -137,6 +137,7 @@ func TestTransformPaginationParams(t *testing.T) {
 }
 
 func TestTransformChannel(t *testing.T) {
+	challengeExpiresAt := time.Unix(1710000000, 0).UTC()
 	rpcChan := rpc.ChannelV1{
 		ChannelID:             "0xChannelID",
 		UserWallet:            "0xUserWallet",
@@ -144,6 +145,7 @@ func TestTransformChannel(t *testing.T) {
 		BlockchainID:          "137",
 		TokenAddress:          "0xToken",
 		ChallengeDuration:     100,
+		ChallengeExpiresAt:    &challengeExpiresAt,
 		Nonce:                 "1",
 		ApprovedSigValidators: "0x01",
 		Status:                "open",
@@ -156,6 +158,8 @@ func TestTransformChannel(t *testing.T) {
 	assert.Equal(t, core.ChannelStatusOpen, ch.Status)
 	assert.Equal(t, uint64(137), ch.BlockchainID)
 	assert.Equal(t, uint64(5), ch.StateVersion)
+	require.NotNil(t, ch.ChallengeExpiresAt)
+	assert.True(t, ch.ChallengeExpiresAt.Equal(challengeExpiresAt))
 
 	// Test error cases
 	rpcChan.BlockchainID = "invalid"

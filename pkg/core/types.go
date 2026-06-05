@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -886,12 +887,12 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 		toAccount = transition.AccountID
 
 	case TransitionTypeRelease:
-		txType = TransactionTypeRelease
-		fromAccount = transition.AccountID
-		toAccount = receiverState.UserWallet
 		if receiverState == nil {
 			return nil, fmt.Errorf("receiver state must not be nil for 'release' transition")
 		}
+		txType = TransactionTypeRelease
+		fromAccount = transition.AccountID
+		toAccount = receiverState.UserWallet
 
 	case TransitionTypeMutualLock:
 		if senderState.EscrowChannelID == nil || senderState.HomeChannelID == nil {
@@ -935,16 +936,18 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	}
 
 	var receiverStateID *string
-	var txID string
-	var err error
 	if receiverState != nil {
 		receiverStateID = &receiverState.ID
-		txID, err = GetReceiverTransactionID(fromAccount, receiverState.ID)
-	} else {
-		txID, err = GetSenderTransactionID(toAccount, senderState.ID)
 	}
-	if err != nil {
-		return nil, err
+
+	// The transaction ID must equal the transition's TxID so that the transition
+	// row references this transaction. For transfers, the sender's TransferSend and
+	// the receiver's TransferReceive share the same TxID, so both must point at this
+	// single transaction. The TxID is canonicalised and validated in the state
+	// advancer, making it the single source of truth.
+	txID := transition.TxID
+	if txID == "" {
+		return nil, fmt.Errorf("transition has empty txID")
 	}
 
 	return NewTransaction(
@@ -1221,6 +1224,7 @@ type PaginationParams struct {
 }
 
 // GetOffsetAndLimit extracts offset and limit from pagination params with defaults and max limit enforcement.
+// A limit of 0 is treated the same as an absent limit: the defaultLimit is used.
 func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (offset, limit uint32) {
 	offset = 0
 	limit = defaultLimit
@@ -1229,10 +1233,16 @@ func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (off
 		if p.Offset != nil {
 			offset = *p.Offset
 		}
-		if p.Limit != nil {
+		if p.Limit != nil && *p.Limit > 0 {
 			limit = min(*p.Limit, maxLimit)
 		}
 	}
+
+	// Callers convert offset to int before handing it to GORM's Offset(). On a
+	// 32-bit target int(offset) wraps to a negative value for large uint32s,
+	// which GORM treats as "no offset" and silently returns the first page.
+	// Clamp to MaxInt32 so the conversion is always a non-negative int.
+	offset = min(offset, math.MaxInt32)
 
 	return offset, limit
 }

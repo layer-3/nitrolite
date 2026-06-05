@@ -105,6 +105,9 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 
 	// Validate version and store the session key state
 	now := time.Now()
+	// revoked is true only when this submit transitions an active key to inactive,
+	// so the revocation log is not emitted for inactive-to-inactive updates.
+	var revoked bool
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, app_session) pointer row for the duration of the tx so
 		// that concurrent submits for the same (user, session_key) serialize cleanly and report
@@ -142,6 +145,7 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
 		prevActive := latestVersion > 0 && latestExpiresAt.After(now)
 		submittedActive := coreState.ExpiresAt.After(now)
+		revoked = prevActive && !submittedActive
 		if !prevActive && submittedActive && h.maxSessionKeysPerUser > 0 {
 			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
 			if err != nil {
@@ -174,7 +178,7 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	c.Succeed(c.Request.Method, payload)
-	if !coreState.ExpiresAt.After(now) {
+	if revoked {
 		logger.Info("session key revoked",
 			"userAddress", coreState.UserAddress,
 			"sessionKey", coreState.SessionKey,

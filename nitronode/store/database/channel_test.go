@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func TestChannel_TableName(t *testing.T) {
@@ -239,6 +242,84 @@ func TestDBStore_LockUserStateForHomeChannel(t *testing.T) {
 		result, err := store.LockUserStateForHomeChannel("0xnonexistent")
 		require.NoError(t, err)
 		assert.Nil(t, result)
+	})
+
+	// Regression for MF3-H02: a status flip that commits while LockUserStateForHomeChannel is
+	// blocked on the balance lock must be reflected in the returned channel. Requires real
+	// FOR UPDATE concurrency, so it only runs against Postgres.
+	t.Run("Postgres - returns status committed while waiting on the lock", func(t *testing.T) {
+		if os.Getenv("TEST_DB_DRIVER") != "postgres" {
+			t.Skip("requires postgres for FOR UPDATE concurrency semantics")
+		}
+
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		channel := core.Channel{
+			ChannelID:    "0xhomechannel123",
+			UserWallet:   "0xuser123",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeHome,
+			BlockchainID: 1,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 7,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+		// Ensure the balance row exists so the competing transaction has a row to lock.
+		_, err := store.LockUserStateForHomeChannel(channel.ChannelID)
+		require.NoError(t, err)
+
+		locked := make(chan struct{})
+		proceed := make(chan struct{})
+		txDone := make(chan error, 1)
+
+		// Competing transaction: hold the balance lock, flip status to Closing, commit only
+		// once the main call is blocking on the lock.
+		go func() {
+			txDone <- db.Transaction(func(tx *gorm.DB) error {
+				var b UserBalance
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("user_wallet = ? AND asset = ?", channel.UserWallet, channel.Asset).
+					First(&b).Error; err != nil {
+					return err
+				}
+				if err := tx.Model(&Channel{}).
+					Where("channel_id = ?", channel.ChannelID).
+					Update("status", core.ChannelStatusClosing).Error; err != nil {
+					return err
+				}
+				close(locked)
+				<-proceed
+				return nil
+			})
+		}()
+
+		<-locked
+
+		type lockResult struct {
+			channel *core.Channel
+			err     error
+		}
+		got := make(chan lockResult, 1)
+		go func() {
+			ch, err := store.LockUserStateForHomeChannel(channel.ChannelID)
+			got <- lockResult{channel: ch, err: err}
+		}()
+
+		// Give the call time to start and block on the balance lock, then let the competing
+		// transaction commit the Closing status.
+		time.Sleep(200 * time.Millisecond)
+		close(proceed)
+
+		require.NoError(t, <-txDone)
+
+		res := <-got
+		require.NoError(t, res.err)
+		require.NotNil(t, res.channel)
+		assert.Equal(t, core.ChannelStatusClosing, res.channel.Status,
+			"channel status must reflect the transition committed while waiting on the lock")
 	})
 }
 

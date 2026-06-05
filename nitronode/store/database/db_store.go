@@ -145,11 +145,11 @@ func (s *DBStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
 	return balance.Balance, nil
 }
 
-// LockUserStateForHomeChannel locks the balance row of the user owning channelID and returns
-// the channel read under that lock. The (wallet, asset) lock key is derived from the channel
-// inside SQL, so there is no pre-lock Go-side snapshot: a concurrent transaction (e.g.
-// submit_state co-signing a Finalize and flipping the channel to Closing) cannot slip a stale
-// status into the returned channel. Callers that previously did GetChannelByID followed by
+// LockUserStateForHomeChannel acquires the balance-row lock of the user owning channelID and
+// returns the channel read *after* the lock is held. The order matters: the lock is taken first,
+// then the channel is read in a separate statement, so a concurrent transaction (e.g. submit_state
+// co-signing a Finalize and flipping the channel to Closing) that commits while we wait on the lock
+// is reflected in the returned status. Callers that previously did GetChannelByID followed by
 // LockUserState must use this instead — the separate read is read-before-lock and races.
 //
 // Returns (nil, nil) if the channel does not exist. Channel-type checks remain the caller's
@@ -173,33 +173,32 @@ func (s *DBStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, 
 		return channel, nil
 	}
 
-	now := time.Now()
-	// Ensure the balance row exists, deriving (wallet, asset) from the channel so FOR UPDATE
-	// has a row to lock. No-op when the channel is absent or the row already exists.
-	if err := s.db.Exec(`
-		INSERT INTO user_balances (user_wallet, asset, balance, enforced, home_blockchain_id, created_at, updated_at)
-		SELECT user_wallet, asset, 0, 0, 0, ?, ? FROM channels WHERE channel_id = ?
-		ON CONFLICT (user_wallet, asset) DO NOTHING
-	`, now, now, channelID).Error; err != nil {
-		return nil, fmt.Errorf("failed to ensure user balance row for channel %s: %w", channelID, err)
+	// Resolve the channel's (wallet, asset) lock key. These columns are immutable for a given
+	// channel, so reading them at this statement's snapshot is safe even though status is not.
+	var key struct {
+		UserWallet string
+		Asset      string
 	}
-
-	// Lock only the balance row (FOR UPDATE OF b) and read the channel in the same statement.
-	var dbChannel Channel
-	result := s.db.Raw(`
-		SELECT c.* FROM channels c
-		JOIN user_balances b ON b.user_wallet = c.user_wallet AND b.asset = c.asset
-		WHERE c.channel_id = ?
-		FOR UPDATE OF b
-	`, channelID).Scan(&dbChannel)
+	result := s.db.Raw(`SELECT user_wallet, asset FROM channels WHERE channel_id = ?`, channelID).Scan(&key)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to lock user state for channel %s: %w", channelID, result.Error)
+		return nil, fmt.Errorf("failed to resolve lock key for channel %s: %w", channelID, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return nil, nil
 	}
 
-	return databaseChannelToCore(&dbChannel), nil
+	// Acquire the (wallet, asset) balance-row lock first (ensures the row, then SELECT ... FOR
+	// UPDATE). This blocks until any concurrent transaction holding the row commits.
+	if _, err := s.LockUserState(key.UserWallet, key.Asset); err != nil {
+		return nil, err
+	}
+
+	// Read the channel only after the lock is held. A single SELECT ... FOR UPDATE OF b that
+	// joins channels would return c.* from the statement-start snapshot — a Finalize that flips
+	// status to Closing while we wait on the balance lock would not be reflected. This separate
+	// statement takes a fresh snapshot once the lock is acquired, so the returned status reflects
+	// any such committed transition.
+	return s.GetChannelByID(channelID)
 }
 
 // EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.

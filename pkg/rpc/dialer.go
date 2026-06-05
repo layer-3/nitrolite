@@ -284,6 +284,13 @@ func (d *WebsocketDialer) Call(ctx context.Context, req *Message) (*Message, err
 		return nil, ErrNilRequest
 	}
 
+	// Marshal the request before registering a response sink so a marshal
+	// failure cannot leak entries in responseSinks.
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrMarshalingRequest, err)
+	}
+
 	// Check connection and register response channel atomically
 	d.mu.Lock()
 	if d.dialCtx == nil || d.dialCtx.ctx.Err() != nil {
@@ -295,12 +302,6 @@ func (d *WebsocketDialer) Call(ctx context.Context, req *Message) (*Message, err
 	responseSink := make(chan *Message, 1) // Buffered to prevent blocking in readMessages
 	d.responseSinks[req.RequestID] = responseSink
 	d.mu.Unlock()
-
-	// Marshal the request
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrMarshalingRequest, err)
-	}
 
 	// Send the request (WebSocket writes must be serialized)
 	d.writeMu.Lock()

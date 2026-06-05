@@ -8,6 +8,7 @@ import {
   applyMutualLockTransition,
   applyEscrowDepositTransition,
   applyHomeDepositTransition,
+  applyFinalizeTransition,
 } from '../../../src/core/state';
 import { getStateId } from '../../../src/core/utils';
 
@@ -100,6 +101,25 @@ describe('ValidateAdvancement_EscrowDeposit', () => {
     await expect(advancer.validateAdvancement(homeDepositState, proposed)).rejects.toThrow(
       'escrow deposit transition must follow a mutual lock transition'
     );
+  });
+});
+
+describe('nextState - post-Finalize epoch', () => {
+  test('starts at version 1 and increments epoch (MF3-C01)', () => {
+    // Version 0 is reserved as the "no on-chain state materialised yet" sentinel
+    // (NewChannel/Void), so the fresh epoch after a Finalize must begin at version 1.
+    const state = newVoidState('USDC', USER_WALLET);
+    state.homeChannelId = HOME_CHANNEL_ID;
+    state.epoch = 3n;
+    state.version = 5n;
+    state.id = getStateId(USER_WALLET, 'USDC', state.epoch, state.version);
+    applyFinalizeTransition(state);
+
+    const next = nextState(state);
+
+    expect(next.version).toBe(1n);
+    expect(next.epoch).toBe(4n);
+    expect(next.homeChannelId).toBeUndefined();
   });
 });
 

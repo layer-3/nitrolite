@@ -23,6 +23,14 @@ func (h *Handler) GetAppSessions(c *rpc.Context) {
 		return
 	}
 
+	// A provided app_session_id must be a well-formed hash. Rejecting it here
+	// stops an empty or malformed id from silently falling through to an
+	// unfiltered list (the store skips the id filter when it is empty).
+	if req.AppSessionID != nil && !core.IsValidHash(*req.AppSessionID) {
+		c.Fail(rpc.Errorf("invalid app_session_id"), "")
+		return
+	}
+
 	if req.Participant != nil {
 		normalizedParticipant, err := core.NormalizeHexAddress(*req.Participant)
 		if err != nil {

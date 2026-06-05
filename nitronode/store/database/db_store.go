@@ -47,8 +47,8 @@ func (s *DBStore) GetUserBalances(wallet string) ([]core.BalanceEntry, error) {
 	result := make([]core.BalanceEntry, 0, len(balances))
 	for _, balance := range balances {
 		result = append(result, core.BalanceEntry{
-			Asset:   balance.Asset,
-			Balance: balance.Balance,
+			Asset:    balance.Asset,
+			Balance:  balance.Balance,
 			Enforced: balance.Enforced,
 		})
 	}
@@ -164,6 +164,7 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 		TransitionType       core.TransitionType
 		StateVersion         uint64
 		HomeChannelVersion   *uint64
+		HomeChannelStatus    *core.ChannelStatus
 		EscrowChannelVersion *uint64
 	}
 
@@ -173,6 +174,7 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 			s.transition_type as transition_type,
 			s.version as state_version,
 			hc.state_version as home_channel_version,
+			hc.status as home_channel_status,
 			ec.state_version as escrow_channel_version
 		FROM channel_states s
 		LEFT JOIN channels hc ON hc.channel_id = s.home_channel_id
@@ -198,14 +200,24 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 	// Validation logic by transition type
 	switch result.TransitionType {
 	case core.TransitionTypeHomeDeposit:
-		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
+		// Verify last_state.version == home_channel.state_version AND channel is Open.
+		// Defence-in-depth: without the status check, a Void channel
+		// (status=Void, state_version=0) trivially matches a state_version=0 signed
+		// HomeDeposit and the gate would treat the deposit as settled on-chain before
+		// any confirmation event lands.
+		if result.HomeChannelVersion == nil ||
+			result.HomeChannelStatus == nil ||
+			result.StateVersion != *result.HomeChannelVersion ||
+			*result.HomeChannelStatus != core.ChannelStatusOpen {
 			return fmt.Errorf("home deposit is still ongoing")
 		}
 
 	case core.TransitionTypeHomeWithdrawal:
-		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
+		// Verify last_state.version == home_channel.state_version AND channel is Open.
+		if result.HomeChannelVersion == nil ||
+			result.HomeChannelStatus == nil ||
+			result.StateVersion != *result.HomeChannelVersion ||
+			*result.HomeChannelStatus != core.ChannelStatusOpen {
 			return fmt.Errorf("home withdrawal is still ongoing")
 		}
 

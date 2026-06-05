@@ -715,7 +715,7 @@ ORDER BY created_at DESC;
 - `app_session_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
 - Version must be sequential (latest_version + 1)
 - Signature must recover to `user_address`
-- The per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100) is enforced whenever the submit transitions the slot from inactive to active: a brand-new key (no prior state) or a reactivation (previous latest state's `expires_at` was already in the past). Rotation/update against a still-active key, and revocation submits, are not subject to the cap.
+- The per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100) is enforced whenever the submit transitions the slot from inactive to active: a brand-new key (no prior state) or a reactivation (previous latest state's `expires_at` was already in the past). Rotation/update against a still-active key, and revocation submits, are not subject to the cap. A value `<= 0` disables the cap entirely (unlimited session keys per user).
 
 **Concurrency**: A `SELECT ... FOR UPDATE` is taken on a per-(user, session_key, kind) pointer row in `current_session_key_states_v1` so concurrent submits for the same key serialize and report a clean "expected version" error instead of racing on the history table's UNIQUE constraint.
 

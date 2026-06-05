@@ -809,6 +809,46 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "home chain migration is still ongoing")
 	})
+
+	t.Run("HomeDeposit - Void channel version=0 must block", func(t *testing.T) {
+		// Pre-fix bug: a Void channel (status=Void, state_version=0) trivially
+		// matched a node-signed HomeDeposit at version=0, so the gate let the user
+		// spend funds that were never deposited on-chain. The fix requires
+		// channel.status == Open in addition to the version match.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		voidChannel := newHomeChannel(0)
+		voidChannel.Status = core.ChannelStatusVoid
+		require.NoError(t, store.CreateChannel(voidChannel))
+
+		storeState(t, store, newSignedState(0, core.TransitionTypeHomeDeposit, false))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "home deposit is still ongoing")
+	})
+
+	t.Run("HomeWithdrawal - Void channel version=0 must block", func(t *testing.T) {
+		// Mirror of the HomeDeposit Void/v=0 regression: the version-match-only gate
+		// would have let a HomeWithdrawal at version=0 settle against a Void channel.
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		voidChannel := newHomeChannel(0)
+		voidChannel.Status = core.ChannelStatusVoid
+		require.NoError(t, store.CreateChannel(voidChannel))
+
+		storeState(t, store, newSignedState(0, core.TransitionTypeHomeWithdrawal, false))
+
+		err := store.EnsureNoOngoingStateTransitions(wallet, asset)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "home withdrawal is still ongoing")
+	})
 }
 
 func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {

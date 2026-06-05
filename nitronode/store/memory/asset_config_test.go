@@ -122,6 +122,64 @@ func TestAssetsConfig_verifyVariables(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	// Test case-insensitive duplicate asset symbol (should fail)
+	t.Run("case-insensitive duplicate asset symbol", func(t *testing.T) {
+		cfg := AssetsConfig{
+			Assets: []AssetConfig{
+				{
+					Name:                  "Tether USD",
+					Symbol:                "usdt",
+					SuggestedBlockchainID: 1,
+				},
+				{
+					Name:                  "Tether USD",
+					Symbol:                "USDT",
+					SuggestedBlockchainID: 137,
+				},
+			},
+		}
+		err := verifyAssetsConfig(&cfg)
+		require.Error(t, err)
+		assert.Equal(t, "duplicate asset symbol 'USDT' (asset[1]) conflicts with 'usdt' (asset[0]) on a case-insensitive basis", err.Error())
+	})
+
+	// Test exact duplicate asset symbol (should fail)
+	t.Run("exact duplicate asset symbol", func(t *testing.T) {
+		cfg := AssetsConfig{
+			Assets: []AssetConfig{
+				{Symbol: "usdt", SuggestedBlockchainID: 1},
+				{Symbol: "usdt", SuggestedBlockchainID: 137},
+			},
+		}
+		err := verifyAssetsConfig(&cfg)
+		require.Error(t, err)
+		assert.Equal(t, "duplicate asset symbol 'usdt' (asset[1]) conflicts with 'usdt' (asset[0]) on a case-insensitive basis", err.Error())
+	})
+
+	// Test distinct asset symbols (should pass)
+	t.Run("distinct asset symbols", func(t *testing.T) {
+		cfg := AssetsConfig{
+			Assets: []AssetConfig{
+				{Symbol: "usdt", SuggestedBlockchainID: 1},
+				{Symbol: "usdc", SuggestedBlockchainID: 1},
+			},
+		}
+		err := verifyAssetsConfig(&cfg)
+		require.NoError(t, err)
+	})
+
+	// Test duplicate symbol where one asset is disabled (should pass — disabled assets are skipped)
+	t.Run("duplicate symbol with disabled asset", func(t *testing.T) {
+		cfg := AssetsConfig{
+			Assets: []AssetConfig{
+				{Symbol: "usdt", SuggestedBlockchainID: 1},
+				{Symbol: "USDT", Disabled: true},
+			},
+		}
+		err := verifyAssetsConfig(&cfg)
+		require.NoError(t, err)
+	})
+
 	// Test custom symbol for token (inherits from asset when empty)
 	t.Run("custom symbol for token", func(t *testing.T) {
 		cfg := AssetsConfig{

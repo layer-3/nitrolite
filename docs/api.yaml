@@ -497,7 +497,7 @@ types:
           optional: true
         - name: limit
           type: integer
-          description: Number of items to return
+          description: Number of items to return. A value of 0 is treated the same as omitting the field — the server default is used.
           optional: true
         - name: sort
           type: string

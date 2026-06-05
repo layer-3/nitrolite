@@ -76,7 +76,7 @@ func (s *DBStore) GetApps(appID *string, ownerWallet *string, pagination *core.P
 
 	offset, limit := pagination.GetOffsetAndLimit(DefaultLimit, MaxLimit)
 
-	query = query.Order("created_at DESC").Offset(int(offset)).Limit(int(limit))
+	query = query.Order("created_at DESC").Offset(core.SafeOffset(offset)).Limit(int(limit))
 
 	var dbApps []AppV1
 	if err := query.Find(&dbApps).Error; err != nil {
@@ -88,7 +88,10 @@ func (s *DBStore) GetApps(appID *string, ownerWallet *string, pagination *core.P
 		apps[i] = databaseAppToCore(&dbApp)
 	}
 
-	metadata := calculatePaginationMetadata(totalCount, offset, limit)
+	metadata, err := calculatePaginationMetadata(totalCount, offset, limit)
+	if err != nil {
+		return nil, core.PaginationMetadata{}, fmt.Errorf("failed to calculate pagination: %w", err)
+	}
 
 	return apps, metadata, nil
 }

@@ -103,11 +103,14 @@ type SignerConfig struct {
 
 // ValidationLimits defines configurable upper bounds for dynamic-length request fields.
 type ValidationLimits struct {
-	MaxParticipants       int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
-	MaxSessionDataLen     int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
-	MaxAppMetadataLen     int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
-	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
-	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	MaxParticipants   int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
+	MaxSessionDataLen int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
+	MaxAppMetadataLen int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
+	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
+	MaxSignedUpdates  int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	// MaxSessionKeysPerUser is a soft per-user cap on active session keys, a DoS/storage
+	// bound enforced when a submit activates a key (new registration or reactivation).
+	// A value <= 0 disables the cap entirely (unlimited). Default 100.
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 
@@ -150,6 +153,21 @@ func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
 	return nil
 }
 
+// maxParticipantsUint16Safe is the largest MaxParticipants value that cannot overflow the
+// uint16 quorum-weight accumulators: 257 × 255 = 65535 = math.MaxUint16.
+const maxParticipantsUint16Safe = 257
+
+func validateValidationLimits(vl ValidationLimits) error {
+	if vl.MaxParticipants > maxParticipantsUint16Safe {
+		return fmt.Errorf(
+			"NITRONODE_MAX_PARTICIPANTS must be ≤ %d to prevent quorum-weight overflow (uint16 ceiling), got %d",
+			maxParticipantsUint16Safe,
+			vl.MaxParticipants,
+		)
+	}
+	return nil
+}
+
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
 	closers := []func() error{} // collect closer functions for resources that need cleanup
@@ -175,6 +193,9 @@ func InitBackbone() *Backbone {
 	}
 	if err := validateBlockchainGasLimit(conf.BlockchainGasLimit); err != nil {
 		logger.Fatal("invalid blockchain gas limit config", "error", err)
+	}
+	if err := validateValidationLimits(conf.ValidationLimits); err != nil {
+		logger.Fatal("invalid validation limits config", "error", err)
 	}
 
 	logger.Info("config loaded", "version", Version)

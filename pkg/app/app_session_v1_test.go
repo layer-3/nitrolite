@@ -72,51 +72,12 @@ func TestGenerateAppSessionIDV1(t *testing.T) {
 	assert.NotEqual(t, id1, id3)
 }
 
-func TestGenerateRebalanceBatchIDV1(t *testing.T) {
-	t.Parallel()
-	versions := []AppSessionVersionV1{
-		{SessionID: "0x1111111111111111111111111111111111111111111111111111111111111111", Version: 1},
-		{SessionID: "0x2222222222222222222222222222222222222222222222222222222222222222", Version: 2},
-	}
-
-	id1, err := GenerateRebalanceBatchIDV1(versions)
-	require.NoError(t, err)
-	assert.NotEmpty(t, id1)
-
-	// Deterministic
-	id2, err := GenerateRebalanceBatchIDV1(versions)
-	require.NoError(t, err)
-	assert.Equal(t, id1, id2)
-
-	// Different version should produce a different ID
-	versions[0].Version = 99
-	id3, err := GenerateRebalanceBatchIDV1(versions)
-	require.NoError(t, err)
-	assert.NotEqual(t, id1, id3)
-}
-
-func TestGenerateRebalanceTransactionIDV1(t *testing.T) {
-	t.Parallel()
-	batchID := "0x1111111111111111111111111111111111111111111111111111111111111111"
-	sessionID := "0x2222222222222222222222222222222222222222222222222222222222222222"
-	asset := "USDC"
-
-	id1, err := GenerateRebalanceTransactionIDV1(batchID, sessionID, asset)
-	require.NoError(t, err)
-	assert.NotEmpty(t, id1)
-
-	id2, err := GenerateRebalanceTransactionIDV1(batchID, sessionID, asset)
-	require.NoError(t, err)
-	assert.Equal(t, id1, id2)
-}
-
 func TestEnums(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, "operate", AppStateUpdateIntentOperate.String())
 	assert.Equal(t, "deposit", AppStateUpdateIntentDeposit.String())
 	assert.Equal(t, "withdraw", AppStateUpdateIntentWithdraw.String())
 	assert.Equal(t, "close", AppStateUpdateIntentClose.String())
-	assert.Equal(t, "rebalance", AppStateUpdateIntentRebalance.String())
 	assert.Equal(t, "unknown", AppStateUpdateIntent(255).String())
 
 	assert.Equal(t, "", AppSessionStatusVoid.String())

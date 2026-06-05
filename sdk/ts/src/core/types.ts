@@ -53,7 +53,6 @@ export enum TransactionType {
   Transfer = 30,
   Commit = 40,
   Release = 41,
-  Rebalance = 42,
   Migrate = 100,
   EscrowLock = 110,
   MutualLock = 120,

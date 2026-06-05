@@ -38,7 +38,7 @@ func TestSubmitAppState_OperateIntent_NoRedistribution_Success(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -154,7 +154,7 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -277,7 +277,7 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 		nodeAddress,
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -418,7 +418,7 @@ func TestSubmitAppState_WithdrawIntent_ReceiverHomeChannelChallenged_NoNodeSig(t
 		nodeAddress,
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -544,7 +544,7 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 		"0xNode",
 		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -665,7 +665,7 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 		nodeAddress,
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -832,7 +832,7 @@ func TestSubmitAppState_CloseIntent_AllocationMismatch_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -932,7 +932,7 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1046,7 +1046,7 @@ func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) 
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1158,7 +1158,7 @@ func TestSubmitAppState_DepositIntent_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1214,7 +1214,7 @@ func TestSubmitAppState_ClosedSession_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1285,7 +1285,7 @@ func TestSubmitAppState_InvalidVersion_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1361,7 +1361,7 @@ func TestSubmitAppState_SessionNotFound_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1422,7 +1422,7 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1531,7 +1531,7 @@ func TestSubmitAppState_WithdrawIntent_InvalidDecimalPrecision_Rejected(t *testi
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1636,7 +1636,7 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1758,7 +1758,7 @@ func TestSubmitAppState_AppRegistryDisabled(t *testing.T) {
 		"0xNode",
 		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1864,7 +1864,7 @@ func TestSubmitAppState_WithdrawIntent_DuplicateAllocation_Rejected(t *testing.T
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1955,7 +1955,7 @@ func TestSubmitAppState_CloseIntent_DuplicateAllocation_Rejected(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2048,7 +2048,7 @@ func TestSubmitAppState_OperateIntent_DuplicateAllocation_Rejected(t *testing.T)
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2157,7 +2157,7 @@ func TestSubmitAppState_VerifyQuorumWeightOver255(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2269,7 +2269,7 @@ func TestSubmitAppState_VerifyQuorumWrapToZero(t *testing.T) {
 		"0xNode",
 		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"

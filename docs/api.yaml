@@ -193,7 +193,7 @@ types:
           description: A unique application session identifier
         - name: intent
           type: string
-          description: The intent of the app session update (operate, deposit, withdraw, close, rebalance)
+          description: The intent of the app session update (operate, deposit, withdraw, close)
         - name: version
           type: string
           description: Version of the app state
@@ -297,9 +297,9 @@ types:
         - escrow_lock
         - escrow_withdraw
         - migrate
-        - rebalance
         - finalize
         - challenge_rescue
+        - unknown # fallback for legacy/removed types in response rows (e.g. former rebalance=42); not a valid request filter value
 
   - transaction:
       description: Transaction record
@@ -765,20 +765,6 @@ api:
                   description: The signature quorum requirement is not satisfied
                 - message: ongoing_transition
                   description: There is an ongoing transition that must be resolved first
-            - name: rebalance_app_sessions
-              description: Rebalance multiple application sessions atomically
-              request:
-                - field_name: signed_updates
-                  type: array
-                  description: List of signed application session state updates to be submitted (each update must have intent 'rebalance')
-                  items:
-                    type: signed_app_state_update
-              response:
-                - field_name: batch_id
-                  type: string
-                  description: A unique identifier of executed rebalance operation
-
-              errors: []
             - name: get_app_definition
               description: Retrieve the application definition for a specific app session. Returns a successful response with `definition` omitted when no app session exists for the given ID.
               request:

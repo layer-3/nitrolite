@@ -21,7 +21,6 @@ const (
 	AppSessionsV1Group                       Group  = "app_sessions.v1"
 	AppSessionsV1SubmitDepositStateMethod    Method = "app_sessions.v1.submit_deposit_state"
 	AppSessionsV1SubmitAppStateMethod        Method = "app_sessions.v1.submit_app_state"
-	AppSessionsV1RebalanceAppSessionsMethod  Method = "app_sessions.v1.rebalance_app_sessions"
 	AppSessionsV1GetAppDefinitionMethod      Method = "app_sessions.v1.get_app_definition"
 	AppSessionsV1GetAppSessionsMethod        Method = "app_sessions.v1.get_app_sessions"
 	AppSessionsV1CreateAppSessionMethod      Method = "app_sessions.v1.create_app_session"

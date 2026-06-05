@@ -22,6 +22,14 @@ type AssetsConfig struct {
 
 // AssetConfig represents configuration for a single asset (e.g., USDC, USDT).
 // An asset can have multiple token representations across different blockchains.
+//
+// All tokens listed under one asset are treated as fully fungible 1:1
+// representations of the same asset: off-chain credit denominated in this asset
+// can be redeemed from any of these token inventories, regardless of which one
+// originally backed it. Operators MUST NOT group economically non-equivalent
+// tokens (e.g. a test token and production USDC) under one symbol — equivalence
+// cannot be verified programmatically and is an operator responsibility. See
+// docs/protocol/security-and-limitations.md ("Asset-symbol equivalence").
 type AssetConfig struct {
 	// Name is the human-readable name of the asset (e.g., "USD Coin")
 	// If empty, it will inherit the Symbol value during validation

@@ -1224,6 +1224,7 @@ type PaginationParams struct {
 }
 
 // GetOffsetAndLimit extracts offset and limit from pagination params with defaults and max limit enforcement.
+// A limit of 0 is treated the same as an absent limit: the defaultLimit is used.
 func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (offset, limit uint32) {
 	offset = 0
 	limit = defaultLimit
@@ -1232,7 +1233,7 @@ func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (off
 		if p.Offset != nil {
 			offset = *p.Offset
 		}
-		if p.Limit != nil {
+		if p.Limit != nil && *p.Limit > 0 {
 			limit = min(*p.Limit, maxLimit)
 		}
 	}

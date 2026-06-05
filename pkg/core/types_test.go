@@ -593,4 +593,9 @@ func TestPaginationParams_GetOffsetAndLimit(t *testing.T) {
 	lim = 200
 	o, l = p.GetOffsetAndLimit(10, 100)
 	assert.Equal(t, uint32(100), l) // Capped at max
+
+	lim = 0
+	o, l = p.GetOffsetAndLimit(10, 100)
+	assert.Equal(t, uint32(10), l) // Zero treated as absent — falls back to defaultLimit
+	assert.Equal(t, uint32(5), o)
 }

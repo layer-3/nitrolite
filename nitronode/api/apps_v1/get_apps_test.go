@@ -142,6 +142,70 @@ func TestGetApps_FilterByOwnerWallet(t *testing.T) {
 	assert.Equal(t, "0x1111111111111111111111111111111111111111", resp.Apps[0].OwnerWallet)
 }
 
+// TestGetApps_NilLimit verifies that omitting pagination.limit (nil) uses the default
+// and succeeds without error.
+func TestGetApps_NilLimit(t *testing.T) {
+	mockStore := &MockStore{
+		getAppsFn: func(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
+			require.NotNil(t, pagination)
+			assert.Nil(t, pagination.Limit)
+			return []app.AppInfoV1{}, core.PaginationMetadata{Page: 1, PerPage: 50, PageCount: 0, TotalCount: 0}, nil
+		},
+	}
+
+	handler := NewHandler(mockStore, nil, nil, 4096)
+
+	reqPayload := rpc.AppsV1GetAppsRequest{
+		Pagination: &rpc.PaginationParamsV1{}, // Limit is nil
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppsV1GetAppsMethod), payload),
+	}
+
+	handler.GetApps(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.NoError(t, ctx.Response.Error())
+}
+
+// TestGetApps_ZeroLimit verifies that pagination.limit == 0 is treated as absent
+// (coerced to the default limit) and succeeds without error.
+func TestGetApps_ZeroLimit(t *testing.T) {
+	zero := uint32(0)
+	mockStore := &MockStore{
+		getAppsFn: func(_ *string, _ *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error) {
+			require.NotNil(t, pagination)
+			require.NotNil(t, pagination.Limit)
+			assert.Equal(t, uint32(0), *pagination.Limit)
+			return []app.AppInfoV1{}, core.PaginationMetadata{Page: 1, PerPage: 10, PageCount: 0, TotalCount: 0}, nil
+		},
+	}
+
+	handler := NewHandler(mockStore, nil, nil, 4096)
+
+	reqPayload := rpc.AppsV1GetAppsRequest{
+		Pagination: &rpc.PaginationParamsV1{
+			Limit: &zero,
+		},
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppsV1GetAppsMethod), payload),
+	}
+
+	handler.GetApps(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.NoError(t, ctx.Response.Error())
+}
+
 // TestGetApps_NormalizesOwnerWallet verifies that an owner_wallet filter submitted in
 // mixed case is normalized to canonical lowercase before being passed to the store.
 func TestGetApps_NormalizesOwnerWallet(t *testing.T) {

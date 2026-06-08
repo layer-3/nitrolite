@@ -78,21 +78,6 @@ func (h *Handler) SubmitDepositState(c *rpc.Context) {
 			return rpc.Errorf("no signatures provided")
 		}
 
-		if h.appRegistryEnabled {
-			registeredApp, err := tx.GetApp(appSession.ApplicationID)
-			if err != nil {
-				return rpc.Errorf("failed to look up application: %v", err)
-			}
-			if registeredApp == nil {
-				return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
-			}
-
-			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
-			if err != nil {
-				return rpc.NewError(err)
-			}
-		}
-
 		// Lock the user's state to prevent concurrent modifications
 		_, err = tx.LockUserState(userState.UserWallet, userState.Asset)
 		if err != nil {

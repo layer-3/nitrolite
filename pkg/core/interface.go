@@ -47,19 +47,6 @@ type BlockchainClient interface {
 	FinalizeEscrowWithdrawal(candidate State) (string, error)
 }
 
-// ========= AppRegistryClient Interface =========
-
-type AppRegistryClient interface {
-	ApproveToken(amount decimal.Decimal) (string, error)
-	GetBalance(user string) (decimal.Decimal, error)
-	GetTokenDecimals() (uint8, error)
-
-	Lock(targetWallet string, amount decimal.Decimal) (string, error)
-	Relock() (string, error)
-	Unlock() (string, error)
-	Withdraw(destinationWallet string) (string, error)
-}
-
 // ========= TransitionValidator Interface =========
 
 // StateAdvancer applies state transitions
@@ -167,7 +154,6 @@ type ChannelHubEventHandlerStore interface {
 	// has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
-
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
@@ -183,13 +169,4 @@ type ChannelHubEventHandlerStore interface {
 	// RecordTransaction creates a transaction row linking state transitions. Used by the
 	// event handler to record the ChallengeRescue transaction associated with the squash.
 	RecordTransaction(tx Transaction, applicationID string) error
-}
-
-type LockingContractEventHandler interface {
-	HandleUserLockedBalanceUpdated(context.Context, LockingContractEventHandlerStore, *UserLockedBalanceUpdatedEvent) error
-}
-
-type LockingContractEventHandlerStore interface {
-	// UpdateUserStaked updates the total staked amount for a user on a specific blockchain.
-	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
 }

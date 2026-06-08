@@ -82,7 +82,6 @@ func TestSubmitSessionKeyState_Success(t *testing.T) {
 		maxSessionKeyIDs: 10,
 		maxParticipants:  32,
 		maxSessionData:   1024,
-		maxSignedUpdates: 16,
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)

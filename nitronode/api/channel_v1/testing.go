@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
@@ -160,34 +159,6 @@ func (m *MockStore) ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset,
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockStore) GetAppCount(ownerWallet string) (uint64, error) {
-	args := m.Called(ownerWallet)
-	return args.Get(0).(uint64), args.Error(1)
-}
-
-func (m *MockStore) GetTotalUserStaked(wallet string) (decimal.Decimal, error) {
-	args := m.Called(wallet)
-	return args.Get(0).(decimal.Decimal), args.Error(1)
-}
-
-func (m *MockStore) RecordAction(wallet string, gatedAction core.GatedAction) error {
-	args := m.Called(wallet, gatedAction)
-	return args.Error(0)
-}
-
-func (m *MockStore) GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error) {
-	args := m.Called(wallet, gatedAction, window)
-	return args.Get(0).(uint64), args.Error(1)
-}
-
-func (m *MockStore) GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error) {
-	args := m.Called(userWallet, window)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(map[core.GatedAction]uint64), args.Error(1)
-}
-
 func NewMockSigner() sign.Signer {
 	key, _ := crypto.GenerateKey()
 
@@ -247,14 +218,6 @@ type MockStatePacker struct {
 func (m *MockStatePacker) PackState(state core.State) ([]byte, error) {
 	args := m.Called(state)
 	return args.Get(0).([]byte), args.Error(1)
-}
-
-type MockActionGateway struct {
-	Err error
-}
-
-func (m *MockActionGateway) AllowAction(_ action_gateway.Store, _ string, _ core.GatedAction) error {
-	return m.Err
 }
 
 // VerifyNodeSignature verifies that a hex-encoded channel signature was produced by the expected node address.

@@ -1,6 +1,6 @@
 # App Session V1 API Implementation
 
-This directory contains the V1 API handlers for app session management, implementing the `create_app_session`, `submit_deposit_state`, `submit_app_state`, `rebalance_app_sessions`, `get_app_sessions`, `get_app_definition`, `submit_session_key_state`, and `get_last_key_states` endpoints.
+This directory contains the V1 API handlers for app session management, implementing the `create_app_session`, `submit_deposit_state`, `submit_app_state`, `get_app_sessions`, `get_app_definition`, `submit_session_key_state`, and `get_last_key_states` endpoints.
 
 
 ## Architecture
@@ -14,7 +14,6 @@ This directory contains the V1 API handlers for app session management, implemen
   - `create_app_session.go` - Create app session endpoint
   - `submit_deposit_state.go` - Submit deposit state endpoint
   - `submit_app_state.go` - Submit app state endpoint (operate, withdraw, close)
-  - `rebalance_app_sessions.go` - Rebalance app sessions endpoint
   - `get_app_sessions.go` - Get app sessions endpoint (with filtering)
   - `get_app_definition.go` - Get app definition endpoint
   - `submit_session_key_state.go` - Submit session key state endpoint
@@ -346,217 +345,7 @@ For withdraw and close intents, the handler issues new channel states to partici
 - Stores the new channel state
 - Records the release transaction
 
-### 4. `app_sessions.v1.rebalance_app_sessions`
-
-**Purpose**: Processes multi-session rebalancing operations atomically. Rebalancing redistributes funds across multiple app sessions in a single atomic operation, potentially involving multiple assets.
-
-**Use Cases**:
-- **Liquidity Management**: Redistribute liquidity among sessions
-- **Portfolio Rebalancing**: Adjust allocations across multiple gaming sessions or trading positions
-- **Cross-Session Settlements**: Settle obligations between multiple app sessions atomically
-- **Session Consolidation**: Move funds from multiple sessions into fewer sessions for efficiency
-- **Multi-Asset Swaps**: Exchange different assets between sessions (e.g., Session A sends USDC to Session B, Session B sends ETH to Session A)
-
-**Key Features**:
-- Atomic operation across multiple sessions
-- Multi-asset support (can rebalance multiple assets simultaneously)
-- Conservation enforcement (sum of changes per asset must equal zero)
-- Batch-based transaction model with deterministic batch IDs
-- Quorum verification for each participating session
-
-**Request**:
-```json
-{
-  "signed_updates": [
-    {
-      "app_state_update": {
-        "app_session_id": "0xsession1...",
-        "intent": "rebalance",
-        "version": 5,
-        "allocations": [
-          {"participant": "0xUser1", "asset": "USDC", "amount": "100"},
-          {"participant": "0xUser1", "asset": "ETH", "amount": "0.5"}
-        ],
-        "session_data": "..."
-      },
-      "quorum_sigs": ["0xsig1...", "0xsig2..."]
-    },
-    {
-      "app_state_update": {
-        "app_session_id": "0xsession2...",
-        "intent": "rebalance",
-        "version": 3,
-        "allocations": [
-          {"participant": "0xUser2", "asset": "USDC", "amount": "200"},
-          {"participant": "0xUser2", "asset": "ETH", "amount": "1.5"}
-        ],
-        "session_data": "..."
-      },
-      "quorum_sigs": ["0xsig3...", "0xsig4..."]
-    }
-  ]
-}
-```
-
-**Response**:
-```json
-{
-  "batch_id": "0xbatch123..."
-}
-```
-
-**Validation**:
-
-*Common Validation:*
-- At least 2 sessions required for rebalancing
-- All updates must have `intent = "rebalance"`
-- Each session can only appear once in the rebalance
-- All sessions must exist and be open
-- Version must be sequential (current + 1) for each session
-- Signatures must meet quorum for each session
-- All allocations must be non-negative
-- All allocations must be to valid participants
-
-*Conservation Validation:*
-- Sum of all balance changes must equal zero **per asset**
-- Formula: `Σ (new_balance[session_i][A] - current_balance[session_i][A]) = 0` for each asset A
-- This ensures funds are redistributed, not created or destroyed
-
-**Signature Verification**:
-- Uses ABI encoding via `PackAppStateUpdateV1` for each session
-- Recovers signer addresses from ECDSA signatures
-- Validates that signers are participants in their respective sessions
-- Accumulates signature weights to verify quorum is met for each session
-
-**Transaction Model**:
-
-Rebalancing uses a **batch-based transaction model** where a generated batch ID acts as an intermediate clearing account:
-
-```
-Session A (loses USDC, gains ETH)  →  Batch ID  →  Session B (gains USDC, loses ETH)
-Session C (loses USDC)             →  Batch ID  →  Session D (gains USDC)
-```
-
-Each asset flows through the batch ID independently, but all flows are part of one atomic operation.
-
-**Batch ID Generation**:
-
-The batch ID is deterministically generated from session IDs and versions using ABI encoding:
-
-```go
-// GenerateRebalanceBatchIDV1 creates a deterministic batch ID
-sessionVersions := []AppSessionVersionV1{
-    {SessionID: "0xSessionA", Version: 5},
-    {SessionID: "0xSessionB", Version: 3},
-}
-batchID := GenerateRebalanceBatchIDV1(sessionVersions)
-// Result: 0xBatch456... (Keccak256 hash of ABI-encoded data)
-```
-
-This ensures:
-- **Deterministic**: Same sessions + versions always produce the same batch ID
-- **Unique**: Different version combinations produce different batch IDs
-- **State-Bound**: Batch ID is tied to the exact state versions being modified
-
-**Transaction Recording**:
-
-For each session and asset involved, transactions are created:
-
-*For sessions losing funds:*
-```go
-Transaction{
-    TxType: TransactionTypeRebalance,
-    FromAccount: app_session_id,
-    ToAccount: batch_id,
-    Amount: amount_leaving_session,
-    Asset: asset
-}
-```
-
-*For sessions gaining funds:*
-```go
-Transaction{
-    TxType: TransactionTypeRebalance,
-    FromAccount: batch_id,
-    ToAccount: app_session_id,
-    Amount: amount_entering_session,
-    Asset: asset
-}
-```
-
-**Ledger Entries**:
-
-In addition to transactions, ledger entries are recorded for each session and asset:
-
-```go
-// For session losing 100 USDC
-RecordLedgerEntry(app_session_id, "USDC", -100, nil)
-
-// For session gaining 50 USDC and 0.5 ETH
-RecordLedgerEntry(app_session_id, "USDC", 50, nil)
-RecordLedgerEntry(app_session_id, "ETH", 0.5, nil)
-```
-
-**Example Flow: Multi-Asset Swap**
-
-Three app sessions with multiple assets:
-- **Session A**: Has 200 USDC and 1 ETH → needs 100 USDC and 1.5 ETH (loses 100 USDC, gains 0.5 ETH)
-- **Session B**: Has 50 USDC and 2 ETH → needs 150 USDC and 1.5 ETH (gains 100 USDC, loses 0.5 ETH)
-
-1. **Prepare Signed Updates**: Each session's participants sign an `app_state_update` with `intent: "rebalance"` and new allocations
-2. **Submit to API**: POST to `/v1/app_sessions/rebalance_app_sessions` with both signed updates
-3. **Node Processing** (atomic transaction):
-   - Validate all sessions and signatures
-   - Generate batch ID: `keccak256("0xSessionA" + "5" + "0xSessionB" + "3")` → `0xBatch789`
-   - Calculate balance changes:
-     - Session A: USDC -100, ETH +0.5
-     - Session B: USDC +100, ETH -0.5
-   - Verify conservation: USDC (-100 + 100 = 0), ETH (+0.5 - 0.5 = 0) ✓
-   - Record 4 transactions (2 assets × 2 sessions)
-   - Record 4 ledger entries
-   - Update both session versions
-4. **Result**: Sessions rebalanced atomically, batch ID `0xBatch789` returned
-
-**Querying Rebalancing Operations**:
-
-```sql
--- Find all rebalance transactions
-SELECT * FROM ledger_transactions
-WHERE tx_type = 'rebalance'
-ORDER BY created_at DESC;
-
--- Find all sessions in a specific rebalance batch
-SELECT * FROM ledger_transactions
-WHERE (from_account = '0xBatch789' OR to_account = '0xBatch789')
-  AND tx_type = 'rebalance'
-ORDER BY asset, created_at;
-
--- Find rebalances affecting a specific session
-SELECT * FROM ledger_transactions
-WHERE (from_account = '0xSessionA' OR to_account = '0xSessionA')
-  AND tx_type = 'rebalance'
-ORDER BY created_at DESC;
-```
-
-**Comparison with Other Operations**:
-
-| Feature | Deposit | Withdraw | Operate | Close | **Rebalance** |
-|---------|---------|----------|---------|-------|---------------|
-| Affects | 1 session | 1 session | 1 session | 1 session | **Multiple sessions** |
-| Assets | Single | Single | Single | Single | **Multiple** |
-| Funds Source | User channel | Session | Within session | Session to users | **Session to session** |
-| Transaction Count | 1 | N | 0 | N | **N × M (sessions × assets)** |
-| Atomicity | Single session | Single session | Single session | Single session | **Cross-session** |
-
-**Security Considerations**:
-1. **Signature Verification**: Each session's signatures are independently verified against its quorum requirements
-2. **Atomicity**: The entire operation is wrapped in a database transaction - partial completion is impossible
-3. **Conservation**: The system enforces that funds are redistributed per asset, not created or destroyed
-4. **Deterministic Batch IDs**: Based on session IDs and versions - prevents replay and ensures uniqueness
-5. **Version Checking**: Prevents concurrent modifications to the same session
-6. **No State Mutation**: Only sessions included in the rebalance are modified
-
-### 5. `app_sessions.v1.get_app_sessions`
+### 4. `app_sessions.v1.get_app_sessions`
 
 **Purpose**: Retrieves application sessions with optional filtering by participant or app session ID. Includes participant allocations for each session.
 
@@ -628,7 +417,7 @@ ORDER BY created_at DESC;
 - Status is converted to string representation ("open"/"closed")
 - SessionData is null if empty string
 
-### 6. `app_sessions.v1.get_app_definition`
+### 5. `app_sessions.v1.get_app_definition`
 
 **Purpose**: Retrieves the application definition for a specific app session. Returns the immutable configuration established at session creation.
 
@@ -670,7 +459,7 @@ ORDER BY created_at DESC;
 - Does not include dynamic state like version, status, or allocations
 - Nonce is from the session definition (not current version)
 
-### 7. `app_sessions.v1.submit_session_key_state`
+### 6. `app_sessions.v1.submit_session_key_state`
 
 **Purpose**: Submits a session key state for registration, rotation/update, or revocation. Session keys allow delegated signing for app sessions, enabling applications to sign on behalf of a user's wallet.
 
@@ -727,7 +516,7 @@ ORDER BY created_at DESC;
 - Recovers signer address from ECDSA signature
 - Validates that recovered address matches `user_address`
 
-### 8. `app_sessions.v1.get_last_key_states`
+### 7. `app_sessions.v1.get_last_key_states`
 
 **Purpose**: Retrieves the latest non-expired session key states for a user, with optional filtering by session key address.
 
@@ -774,14 +563,12 @@ ORDER BY created_at DESC;
 - `create_app_session.go` - Create app session endpoint handler
 - `submit_deposit_state.go` - Submit deposit state endpoint handler
 - `submit_app_state.go` - Submit app state endpoint handler (operate, withdraw, close)
-- `rebalance_app_sessions.go` - Rebalance app sessions endpoint handler
 - `get_app_sessions.go` - Get app sessions endpoint handler (with filtering and pagination)
 - `get_app_definition.go` - Get app definition endpoint handler
 - `submit_session_key_state.go` - Submit session key state endpoint handler
 - `get_last_key_states.go` - Get last session key states endpoint handler
 - `interface.go` - Store and signature validator interfaces
 - `utils.go` - Mapping functions between RPC and core types
-- `rebalance_app_sessions_test.go` - Comprehensive tests for rebalancing
 
 **Business Logic** (`pkg/app/`):
 - `app_session_v1.go` - Type definitions and ABI encoding functions
@@ -811,21 +598,7 @@ The implementation uses Ethereum ABI encoding for deterministic hashing and sign
   - `sessionData` as `string`
 - Amount encoded as string representation of decimal for precision
 - Returns Keccak256 hash of ABI-encoded data
-- Used in `submit_deposit_state` and `rebalance_app_sessions` to verify participant signatures
-
-#### `GenerateRebalanceBatchIDV1(sessionVersions []AppSessionVersionV1) (string, error)`
-- Generates a deterministic batch ID for rebalancing operations using ABI encoding
-- Encodes: array of tuples (bytes32 sessionID, uint64 version)
-- Returns Keccak256 hash as hex string
-- Used in `rebalance_app_sessions` to create a unique identifier for the batch
-- Ensures deterministic IDs based on participating sessions and their versions
-
-#### `GenerateRebalanceTransactionIDV1(batchID, sessionID, asset string) (string, error)`
-- Generates a deterministic transaction ID for rebalance transactions using ABI encoding
-- Encodes: batchID (bytes32), sessionID (bytes32), asset (string)
-- Returns Keccak256 hash as hex string
-- Used in `rebalance_app_sessions` to create unique transaction IDs
-- Ensures each session-asset combination has a unique transaction ID within the batch
+- Used in `submit_deposit_state` to verify participant signatures
 
 #### `GenerateSessionKeyStateIDV1(userAddress, sessionKey string, version uint64) (string, error)`
 - Generates a deterministic ID from user_address, session_key, and version
@@ -932,7 +705,6 @@ handler := app_session_v1.NewHandler(
 router.Register(rpc.AppSessionsV1CreateAppSessionMethod, handler.CreateAppSession)
 router.Register(rpc.AppSessionsV1SubmitDepositStateMethod, handler.SubmitDepositState)
 router.Register(rpc.AppSessionsV1SubmitAppStateMethod, handler.SubmitAppState)
-router.Register(rpc.AppSessionsV1RebalanceAppSessionsMethod, handler.RebalanceAppSessions)
 router.Register(rpc.AppSessionsV1GetAppSessionsMethod, handler.GetAppSessions)
 router.Register(rpc.AppSessionsV1GetAppDefinitionMethod, handler.GetAppDefinition)
 router.Register(rpc.AppSessionsV1SubmitSessionKeyStateMethod, handler.SubmitSessionKeyState)
@@ -1011,7 +783,6 @@ Following `channel_v1` structure:
 | Amount handling | Varies | **String representation for precision** |
 | Quorum validation | Not implemented | **Weighted signature quorum** |
 | Deposit validation | Basic | **Asset matching + amount validation** |
-| Multi-session rebalancing | Not available | **Atomic cross-session rebalancing** |
 | Architecture | Mixed concerns | **Clean separation** |
 | File structure | Single file | **Separate file per endpoint** |
 

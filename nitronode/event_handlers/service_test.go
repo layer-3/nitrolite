@@ -1343,35 +1343,6 @@ func TestHandleEscrowWithdrawalFinalized_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleUserLockedBalanceUpdated_Success(t *testing.T) {
-	// Setup
-	mockStore := new(MockStore)
-	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
-
-	service := &EventHandlerService{}
-
-	// Test data
-	userWallet := "0x1234567890123456789012345678901234567890"
-	blockchainID := uint64(1)
-	balance := decimal.NewFromInt(1000)
-
-	event := &core.UserLockedBalanceUpdatedEvent{
-		UserAddress:  userWallet,
-		BlockchainID: blockchainID,
-		Balance:      balance,
-	}
-
-	// Mock expectations
-	mockStore.On("UpdateUserStaked", userWallet, blockchainID, balance).Return(nil)
-
-	// Execute
-	err := service.HandleUserLockedBalanceUpdated(ctx, mockStore, event)
-
-	// Assert
-	require.NoError(t, err)
-	mockStore.AssertExpectations(t)
-}
-
 // TestHandleHomeChannelCheckpointed_BackfillsUserSig covers the recovery path for the wedge
 // scenario: a node-only state was checkpointed on chain (e.g. the receiver of a transfer signed
 // the receiver state and submitted it directly). The reactor extracts the user signature from the
@@ -2292,36 +2263,6 @@ func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
-}
-
-func TestHandleUserLockedBalanceUpdated_StoreError(t *testing.T) {
-	// Setup
-	mockStore := new(MockStore)
-	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
-
-	service := &EventHandlerService{}
-
-	// Test data
-	userWallet := "0x1234567890123456789012345678901234567890"
-	blockchainID := uint64(1)
-	balance := decimal.NewFromInt(500)
-
-	event := &core.UserLockedBalanceUpdatedEvent{
-		UserAddress:  userWallet,
-		BlockchainID: blockchainID,
-		Balance:      balance,
-	}
-
-	// Mock expectations
-	mockStore.On("UpdateUserStaked", userWallet, blockchainID, balance).Return(errors.New("db error"))
-
-	// Execute
-	err := service.HandleUserLockedBalanceUpdated(ctx, mockStore, event)
-
-	// Assert
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "db error")
-	mockStore.AssertExpectations(t)
 }
 
 func TestHandleEscrowDepositsPurged_ClosesEscrowChannels(t *testing.T) {

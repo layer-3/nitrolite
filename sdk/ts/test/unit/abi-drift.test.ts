@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { AppRegistryAbi } from '../../src/blockchain/evm/app_registry_abi.js';
 import { ChannelHubAbi } from '../../src/blockchain/evm/channel_hub_abi.js';
 import { Erc20Abi } from '../../src/blockchain/evm/erc20_abi.js';
 
@@ -92,23 +91,6 @@ function diffConsumedFunctions(
         );
 }
 
-function diffSdkSubsetAgainstManifest(
-    contract: string,
-    expectedSignatures: ReadonlyMap<string, string>,
-    sdkAbi: readonly AbiEntry[]
-): FunctionDiff[] {
-    const sdkSigs = functionSignatures(sdkAbi);
-
-    return [...expectedSignatures]
-        .map(([name, expected]) => ({
-            contract,
-            name,
-            artifact: expected,
-            sdk: sdkSigs.get(name),
-        }))
-        .filter(({ artifact: expected, sdk }) => expected !== sdk);
-}
-
 describe('contract ABI drift guards', () => {
     it('keeps checked-in ChannelHub ABI aligned with Foundry artifact for every artifact function', () => {
         const artifactSigs = functionSignatures(
@@ -165,30 +147,6 @@ describe('contract ABI drift guards', () => {
                 loadArtifact('contracts/out/ERC20.sol/ERC20.default.json'),
                 Erc20Abi as readonly AbiEntry[],
                 consumedFunctions
-            )
-        ).toEqual([]);
-    });
-
-    it('keeps manually checked-in AppRegistry ABI aligned with SDK-consumed function manifest', () => {
-        // There is currently no AppRegistry/NonSlashableAppRegistry Foundry artifact in this repo.
-        // Until that source/artifact exists, guard the SDK-consumed ABI surface explicitly.
-        const expected = new Map([
-            ['UNLOCK_PERIOD', 'UNLOCK_PERIOD() -> (uint256) view'],
-            ['asset', 'asset() -> (address) view'],
-            ['balanceOf', 'balanceOf(address) -> (uint256) view'],
-            ['lock', 'lock(address,uint256) -> () nonpayable'],
-            ['lockStateOf', 'lockStateOf(address) -> (uint8) view'],
-            ['relock', 'relock() -> () nonpayable'],
-            ['unlock', 'unlock() -> () nonpayable'],
-            ['unlockTimestampOf', 'unlockTimestampOf(address) -> (uint256) view'],
-            ['withdraw', 'withdraw(address) -> () nonpayable'],
-        ]);
-
-        expect(
-            diffSdkSubsetAgainstManifest(
-                'AppRegistry',
-                expected,
-                AppRegistryAbi as readonly AbiEntry[]
             )
         ).toEqual([]);
     });
@@ -253,26 +211,4 @@ describe('contract ABI drift guards', () => {
         ]);
     });
 
-    it('reports adversarial AppRegistry manifest signature changes', () => {
-        const expected = new Map([['lock', 'lock(address,uint256) -> () nonpayable']]);
-
-        expect(
-            diffSdkSubsetAgainstManifest('AppRegistry', expected, [
-                {
-                    type: 'function',
-                    name: 'lock',
-                    inputs: [{ type: 'address' }, { type: 'uint256' }],
-                    outputs: [],
-                    stateMutability: 'view',
-                },
-            ])
-        ).toEqual([
-            {
-                contract: 'AppRegistry',
-                name: 'lock',
-                artifact: 'lock(address,uint256) -> () nonpayable',
-                sdk: 'lock(address,uint256) -> () view',
-            },
-        ]);
-    });
 });

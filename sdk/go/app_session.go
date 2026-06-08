@@ -250,43 +250,6 @@ func (c *Client) SubmitAppState(ctx context.Context, appStateUpdate app.AppState
 	return nil
 }
 
-// RebalanceAppSessions rebalances multiple application sessions atomically.
-//
-// This method performs atomic rebalancing across multiple app sessions, ensuring
-// that funds are redistributed consistently without the risk of partial updates.
-//
-// Parameters:
-//   - signedUpdates: Slice of signed app state updates to apply atomically
-//
-// Returns:
-//   - BatchID for tracking the rebalancing operation
-//   - Error if the request fails
-//
-// Example:
-//
-//	updates := []app.SignedAppStateUpdateV1{...}
-//	batchID, err := client.RebalanceAppSessions(ctx, updates)
-//	fmt.Printf("Rebalance batch ID: %s\n", batchID)
-func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.SignedAppStateUpdateV1) (string, error) {
-	// Transform SDK types to RPC types
-	rpcUpdates := make([]rpc.SignedAppStateUpdateV1, 0, len(signedUpdates))
-	for _, update := range signedUpdates {
-		rpcUpdate := transformSignedAppStateUpdateToRPC(update)
-		rpcUpdates = append(rpcUpdates, rpcUpdate)
-	}
-
-	req := rpc.AppSessionsV1RebalanceAppSessionsRequest{
-		SignedUpdates: rpcUpdates,
-	}
-
-	resp, err := c.rpcClient.AppSessionsV1RebalanceAppSessions(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("failed to rebalance app sessions: %w", err)
-	}
-
-	return resp.BatchID, nil
-}
-
 // ============================================================================
 // Session Key Methods
 // ============================================================================

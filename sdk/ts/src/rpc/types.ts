@@ -150,36 +150,6 @@ export interface ChannelSessionKeyStateV1 {
 }
 
 // ============================================================================
-// App Registry Types
-// ============================================================================
-
-/**
- * AppV1 represents a registered application definition (without timestamps)
- */
-export interface AppV1 {
-  /** Application identifier */
-  id: string;
-  /** Owner's wallet address */
-  owner_wallet: string;
-  /** Application metadata */
-  metadata: string;
-  /** Current version */
-  version: string;
-  /** Whether sessions can be created without owner approval */
-  creation_approval_not_required: boolean;
-}
-
-/**
- * AppInfoV1 represents full application info including timestamps
- */
-export interface AppInfoV1 extends AppV1 {
-  /** Creation timestamp (unix seconds) */
-  created_at: string;
-  /** Last update timestamp (unix seconds) */
-  updated_at: string;
-}
-
-// ============================================================================
 // Asset and Blockchain Types
 // ============================================================================
 
@@ -225,8 +195,6 @@ export interface BlockchainInfoV1 {
   blockchain_id: string; // uint64 as string
   /** Channel hub contract address on this network */
   channel_hub_address: Address;
-  /** Locking contract address on this network */
-  locking_contract_address?: Address;
 }
 
 // ============================================================================
@@ -281,24 +249,6 @@ export interface PaginationParamsV1 {
   offset?: number; // uint32
   /** Number of items to return */
   limit?: number; // uint32
-}
-
-// ============================================================================
-// Action Allowance Types
-// ============================================================================
-
-/**
- * ActionAllowanceV1 represents the allowance information for a specific gated action
- */
-export interface ActionAllowanceV1 {
-  /** The specific action being gated (transfer, app_session_deposit, app_session_operation, app_session_withdrawal) */
-  gated_action: string;
-  /** Time window for which the allowance is valid (e.g. "24h0m0s") */
-  time_window: string;
-  /** Total allowance for the action within the time window */
-  allowance: string;
-  /** Amount already used within the time window */
-  used: string;
 }
 
 /**

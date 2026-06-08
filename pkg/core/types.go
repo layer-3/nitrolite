@@ -740,9 +740,8 @@ const (
 
 	TransactionTypeTransfer TransactionType = 30
 
-	TransactionTypeCommit    TransactionType = 40
-	TransactionTypeRelease   TransactionType = 41
-	TransactionTypeRebalance TransactionType = 42
+	TransactionTypeCommit  TransactionType = 40
+	TransactionTypeRelease TransactionType = 41
 
 	TransactionTypeMigrate    TransactionType = 100
 	TransactionTypeEscrowLock TransactionType = 110
@@ -778,8 +777,6 @@ func (t TransactionType) String() string {
 		return "escrow_withdraw"
 	case TransactionTypeMigrate:
 		return "migrate"
-	case TransactionTypeRebalance:
-		return "rebalance"
 	case TransactionTypeFinalize:
 		return "finalize"
 	case TransactionTypeChallengeRescue:
@@ -1056,15 +1053,6 @@ func (t TransitionType) String() string {
 	}
 }
 
-func (t TransitionType) GatedAction() GatedAction {
-	switch t {
-	case TransitionTypeTransferSend:
-		return GatedActionTransfer
-	default:
-		return ""
-	}
-}
-
 // Transition represents a state transition
 type Transition struct {
 	Type      TransitionType  `json:"type"`       // Type of state transition
@@ -1105,7 +1093,6 @@ type Blockchain struct {
 	Name                   string `json:"name"`                     // Blockchain name
 	ID                     uint64 `json:"id"`                       // Blockchain network ID
 	ChannelHubAddress      string `json:"channel_hub_address"`      // Address of the ChannelHub contract on this blockchain
-	LockingContractAddress string `json:"locking_contract_address"` // Address of the Locking contract on this blockchain
 	BlockStep              uint64 `json:"block_step"`               // Number of blocks between each channel update
 }
 
@@ -1125,63 +1112,6 @@ type Token struct {
 	Address      string `json:"address"`       // Token contract address
 	BlockchainID uint64 `json:"blockchain_id"` // Blockchain network ID
 	Decimals     uint8  `json:"decimals"`      // Number of decimal places
-}
-
-// GatedAction represents an action that can be gated behind certain conditions, such as feature flags or access controls.
-type GatedAction string
-
-var (
-	GatedActionTransfer GatedAction = "transfer"
-
-	GatedActionAppSessionCreation   GatedAction = "app_session_creation"
-	GatedActionAppSessionOperation  GatedAction = "app_session_operation"
-	GatedActionAppSessionDeposit    GatedAction = "app_session_deposit"
-	GatedActionAppSessionWithdrawal GatedAction = "app_session_withdrawal"
-)
-
-// ID returns a unique identifier for the GatedAction, which can be used for efficient storage and retrieval in databases or feature flag systems.
-func (g GatedAction) ID() uint8 {
-	switch g {
-	case GatedActionTransfer:
-		return 1
-	case GatedActionAppSessionCreation:
-		return 10
-	case GatedActionAppSessionOperation:
-		return 11
-	case GatedActionAppSessionDeposit:
-		return 12
-	case GatedActionAppSessionWithdrawal:
-		return 13
-	}
-	return 0
-}
-
-// GatedActionFromID returns the GatedAction corresponding to the given uint8 ID.
-// Returns an empty GatedAction and false if the ID is unknown.
-func GatedActionFromID(id uint8) (GatedAction, bool) {
-	switch id {
-	case 1:
-		return GatedActionTransfer, true
-	case 10:
-		return GatedActionAppSessionCreation, true
-	case 11:
-		return GatedActionAppSessionOperation, true
-	case 12:
-		return GatedActionAppSessionDeposit, true
-	case 13:
-		return GatedActionAppSessionWithdrawal, true
-	default:
-		return "", false
-	}
-}
-
-// ActionAllowance represents the allowance information for a specific gated action,
-// including the time window for which the allowance applies, the total allowance, and the amount used.
-type ActionAllowance struct {
-	GatedAction GatedAction
-	TimeWindow  string
-	Allowance   uint64
-	Used        uint64
 }
 
 // ========= Blockchain CLient Response Types =========

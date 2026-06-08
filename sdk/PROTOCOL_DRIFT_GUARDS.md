@@ -47,7 +47,7 @@ External-node mode does not start a local Nitronode and does not assert local-on
 - RPC method drift: compares Go RPC method literals, Nitronode router registrations, TS method constants, and public TS client wrappers.
 - RPC DTO drift: compares Go JSON-tagged DTO structs against TS request/response interfaces for required fields, optional fields, and scalar/container shape.
 - Public API drift: snapshots root runtime exports and compiler-derived TypeScript signatures for `@yellow-org/sdk` and `@yellow-org/sdk-compat`, including type-only exports, interfaces, functions, classes, public class methods, enums, constants, and type aliases.
-- ABI drift: compares checked-in `ChannelHub` functions against the current Foundry artifact, checks SDK-consumed ERC20 functions against the ERC20 artifact, and guards the manually checked-in AppRegistry ABI against an explicit consumed-function manifest until that contract artifact exists in this repo.
+- ABI drift: compares checked-in `ChannelHub` functions against the current Foundry artifact and checks SDK-consumed ERC20 functions against the ERC20 artifact.
 - Signing drift: compares TS app-session and session-key packers against Go-generated canonical vectors for create, deposit, withdraw, operate, fractional decimal, and uint64 boundary cases.
 - Transform drift: checks raw Nitronode response fixtures for app sessions, node config, assets, and strict failure on unsupported required shapes.
 - Compat drift: checks current v1 app-session shape, legacy flat fallback shape, and asset decimal conversion in `NitroliteClient.getAppSessionsList()`.
@@ -92,7 +92,7 @@ Each guard includes at least one negative test or mutation-style check that prov
 - Missing RPC method or client wrapper: update Go method constants, router registrations, TS method constants, and the public TS client wrapper together. If the method is intentionally raw-only, add an explicit exemption in the RPC drift test.
 - DTO optionality or field drift: compare the failing method/type/field path in the drift output, then update the Go JSON-tagged struct and TS request/response interface in the same PR.
 - Public API snapshot drift: treat the diff as an SDK API change. If intentional, update snapshots with `npm run drift:check -- -u` in the affected package and document the API change in the PR body.
-- ABI drift: regenerate Foundry artifacts and SDK ABI files with `cd contracts && forge build` and `cd ../sdk/ts && npm run codegen-abi`. If AppRegistry changes, remember it is currently manifest-guarded because the matching artifact is not in this repo.
+- ABI drift: regenerate Foundry artifacts and SDK ABI files with `cd contracts && forge build` and `cd ../sdk/ts && npm run codegen-abi`.
 - Signing hash mismatch: regenerate Go source-of-truth vectors with `go run ./scripts/drift/generate-app-signing-vectors.go`, then inspect whether the change is field order, enum value, amount formatting, nonce/version encoding, or exact session-data bytes.
 - Transform fixture failure: update or add raw Nitronode fixtures only for wire shapes the SDK intentionally supports. Do not silently accept missing required fields that would later crash consumers.
 - Compat mapping failure: current v1 SDK shapes are primary. Legacy fallbacks must stay explicit in tests; do not add broad best-effort mappers without fixture coverage.

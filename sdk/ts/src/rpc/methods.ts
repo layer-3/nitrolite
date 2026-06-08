@@ -29,7 +29,6 @@ export const ChannelsV1GetLastKeyStatesMethod: Method = 'channels.v1.get_last_ke
 export const AppSessionsV1Group: Group = 'app_sessions.v1';
 export const AppSessionsV1SubmitDepositStateMethod: Method = 'app_sessions.v1.submit_deposit_state';
 export const AppSessionsV1SubmitAppStateMethod: Method = 'app_sessions.v1.submit_app_state';
-export const AppSessionsV1RebalanceAppSessionsMethod: Method = 'app_sessions.v1.rebalance_app_sessions';
 export const AppSessionsV1GetAppDefinitionMethod: Method = 'app_sessions.v1.get_app_definition';
 export const AppSessionsV1GetAppSessionsMethod: Method = 'app_sessions.v1.get_app_sessions';
 export const AppSessionsV1CreateAppSessionMethod: Method = 'app_sessions.v1.create_app_session';
@@ -38,16 +37,10 @@ export const AppSessionsV1CreateAppSessionMethod: Method = 'app_sessions.v1.crea
 export const AppSessionsV1SubmitSessionKeyStateMethod: Method = 'app_sessions.v1.submit_session_key_state';
 export const AppSessionsV1GetLastKeyStatesMethod: Method = 'app_sessions.v1.get_last_key_states';
 
-// Apps Group - V1 Methods
-export const AppsV1Group: Group = 'apps.v1';
-export const AppsV1GetAppsMethod: Method = 'apps.v1.get_apps';
-export const AppsV1SubmitAppVersionMethod: Method = 'apps.v1.submit_app_version';
-
 // User Group - V1 Methods
 export const UserV1Group: Group = 'user.v1';
 export const UserV1GetBalancesMethod: Method = 'user.v1.get_balances';
 export const UserV1GetTransactionsMethod: Method = 'user.v1.get_transactions';
-export const UserV1GetActionAllowancesMethod: Method = 'user.v1.get_action_allowances';
 
 // Node Group - V1 Methods
 export const NodeV1Group: Group = 'node.v1';

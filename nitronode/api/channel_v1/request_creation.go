@@ -83,14 +83,6 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 	var nodeSig string
 	err = h.useStoreInTx(func(tx Store) error {
-		// Gate the incoming transition through the action gateway before any state
-		// is signed, stored, or receiver-side state is issued. Mirrors SubmitState so
-		// gated actions (e.g. transfer_send) cannot bypass the 24h allowance by
-		// piggybacking on channel creation.
-		if err := h.actionGateway.AllowAction(tx, incomingState.UserWallet, incomingState.Transition.Type.GatedAction()); err != nil {
-			return rpc.NewError(err)
-		}
-
 		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
 		if err != nil {
 			return rpc.Errorf("failed to lock user state: %v", err)

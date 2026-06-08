@@ -181,15 +181,6 @@ func (c *Client) AppSessionsV1CreateAppSession(ctx context.Context, req AppSessi
 	return resp, nil
 }
 
-// AppSessionsV1RebalanceAppSessions rebalances multiple application sessions atomically.
-func (c *Client) AppSessionsV1RebalanceAppSessions(ctx context.Context, req AppSessionsV1RebalanceAppSessionsRequest) (AppSessionsV1RebalanceAppSessionsResponse, error) {
-	var resp AppSessionsV1RebalanceAppSessionsResponse
-	if err := c.call(ctx, AppSessionsV1RebalanceAppSessionsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
 // AppSessionsV1Register initiates session key registration.
 func (c *Client) AppSessionsV1SubmitSessionKeyState(ctx context.Context, req AppSessionsV1SubmitSessionKeyStateRequest) (AppSessionsV1SubmitSessionKeyStateRequest, error) {
 	var resp AppSessionsV1SubmitSessionKeyStateRequest
@@ -203,28 +194,6 @@ func (c *Client) AppSessionsV1SubmitSessionKeyState(ctx context.Context, req App
 func (c *Client) AppSessionsV1GetLastKeyStates(ctx context.Context, req AppSessionsV1GetLastKeyStatesRequest) (AppSessionsV1GetLastKeyStatesResponse, error) {
 	var resp AppSessionsV1GetLastKeyStatesResponse
 	if err := c.call(ctx, AppSessionsV1GetLastKeyStatesMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// ============================================================================
-// Apps Group - V1 API Methods
-// ============================================================================
-
-// AppsV1GetApps retrieves registered applications with optional filtering.
-func (c *Client) AppsV1GetApps(ctx context.Context, req AppsV1GetAppsRequest) (AppsV1GetAppsResponse, error) {
-	var resp AppsV1GetAppsResponse
-	if err := c.call(ctx, AppsV1GetAppsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// AppsV1SubmitAppVersion submits a new application version (currently only creation is supported).
-func (c *Client) AppsV1SubmitAppVersion(ctx context.Context, req AppsV1SubmitAppVersionRequest) (AppsV1SubmitAppVersionResponse, error) {
-	var resp AppsV1SubmitAppVersionResponse
-	if err := c.call(ctx, AppsV1SubmitAppVersionMethod, req, &resp); err != nil {
 		return resp, err
 	}
 	return resp, nil
@@ -247,15 +216,6 @@ func (c *Client) UserV1GetBalances(ctx context.Context, req UserV1GetBalancesReq
 func (c *Client) UserV1GetTransactions(ctx context.Context, req UserV1GetTransactionsRequest) (UserV1GetTransactionsResponse, error) {
 	var resp UserV1GetTransactionsResponse
 	if err := c.call(ctx, UserV1GetTransactionsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
-// UserV1GetActionAllowances retrieves the user's current action allowances for channels and app sessions.
-func (c *Client) UserV1GetActionAllowances(ctx context.Context, req UserV1GetActionAllowancesRequest) (UserV1GetActionAllowancesResponse, error) {
-	var resp UserV1GetActionAllowancesResponse
-	if err := c.call(ctx, UserV1GetActionAllowancesMethod, req, &resp); err != nil {
 		return resp, err
 	}
 	return resp, nil

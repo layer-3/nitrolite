@@ -47,7 +47,6 @@ helm delete my-release
 | config.envSecret | string | `""` | Name of the secret containing environment variables |
 | config.blockchains | string | `""` | Blockchains configuration |
 | config.assets | string | `""` | Assets configuration |
-| config.actionGateway | string | `""` | Action Gateway configuration |
 | replicaCount | int | `1` | Number of replicas |
 | image.repository | string | `"ghcr.io/layer-3/nitrolite/nitronode"` | Docker image repository |
 | image.tag | string | `"v1.0.0-rc.0"` | Docker image tag |

@@ -73,24 +73,12 @@ QUERIES
   assets [chain_id]             List supported assets (optionally filter by chain)
   balances [wallet]             Get user balances (defaults to configured wallet)
   transactions [wallet]         Get transaction history
-  action-allowances [wallet]    Get action allowances
   state [wallet] <asset>        Get latest state
   home-channel [wallet] <asset> Get home channel
   escrow-channel <channel_id>   Get escrow channel by ID
 
-APP REGISTRY
-  app-info <app_id>                    Show application details
-  my-apps                              List your registered applications
-  register-app <app_id> [no-approval]  Register a new application
-  app-sessions                         List app sessions
-
-SECURITY TOKEN OPERATIONS
-  security-token approve <chain_id> <amount>                  Approve security token spending
-  security-token balance <chain_id> [wallet]                  Check escrowed security token balance
-  security-token escrow <chain_id> [target_address] <amount>  Escrow security tokens
-  security-token initiate-withdrawal <chain_id>               Start unlock period
-  security-token cancel-withdrawal <chain_id>                 Cancel unlock and re-lock
-  security-token withdraw <chain_id> <destination>            Withdraw unlocked security tokens
+APP SESSIONS
+  app-sessions                  List app sessions
 
 OTHER
   help                          Display this help message
@@ -511,9 +499,6 @@ func (o *Operator) nodeInfo(ctx context.Context) {
 	for _, bc := range config.Blockchains {
 		fmt.Printf("  - %s (ID: %d)\n", bc.Name, bc.ID)
 		fmt.Printf("    Channel Hub: %s\n", bc.ChannelHubAddress)
-		if bc.LockingContractAddress != "" {
-			fmt.Printf("    Locking:     %s\n", bc.LockingContractAddress)
-		}
 	}
 }
 
@@ -745,90 +730,6 @@ func (o *Operator) listTransactions(ctx context.Context, wallet string) {
 		fmt.Printf("  To:        %s\n", tx.ToAccount)
 		fmt.Printf("  Amount:    %s %s\n", tx.Amount.String(), tx.Asset)
 		fmt.Printf("  Created:   %s\n", tx.CreatedAt.Format("2006-01-02 15:04:05"))
-	}
-}
-
-func (o *Operator) getActionAllowances(ctx context.Context, wallet string) {
-	allowances, err := o.client.GetActionAllowances(ctx, wallet)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get action allowances: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Action Allowances for %s\n", wallet)
-	fmt.Println("========================================")
-	if len(allowances) == 0 {
-		fmt.Println("No action allowances found")
-		return
-	}
-
-	for _, a := range allowances {
-		fmt.Printf("- %s\n", a.GatedAction)
-		fmt.Printf("  Window:    %s\n", a.TimeWindow)
-		fmt.Printf("  Used:      %d / %d\n", a.Used, a.Allowance)
-		remaining := uint64(0)
-		if a.Allowance > a.Used {
-			remaining = a.Allowance - a.Used
-		}
-		fmt.Printf("  Remaining: %d\n", remaining)
-	}
-}
-
-// ============================================================================
-// App Registry
-// ============================================================================
-
-func (o *Operator) getApps(ctx context.Context, appID *string, ownerWallet *string) {
-	fmt.Println("Fetching registered applications...")
-
-	apps, _, err := o.client.GetApps(ctx, &sdk.GetAppsOptions{
-		AppID:       appID,
-		OwnerWallet: ownerWallet,
-	})
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get apps: %v\n", err)
-		return
-	}
-
-	if len(apps) == 0 {
-		fmt.Println("No applications found.")
-		return
-	}
-
-	fmt.Printf("Found %d application(s):\n\n", len(apps))
-	for _, a := range apps {
-		fmt.Printf("  App ID:       %s\n", a.App.ID)
-		fmt.Printf("  Owner:        %s\n", a.App.OwnerWallet)
-		fmt.Printf("  Version:      %d\n", a.App.Version)
-		if a.App.CreationApprovalNotRequired {
-			fmt.Println("  Approval:     Not required")
-		} else {
-			fmt.Println("  Approval:     Required")
-		}
-		if a.App.Metadata != "" {
-			fmt.Printf("  Metadata:     %s\n", a.App.Metadata)
-		}
-		fmt.Printf("  Created:      %s\n", a.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("  Updated:      %s\n", a.UpdatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Println()
-	}
-}
-
-func (o *Operator) registerApp(ctx context.Context, appID, metadata string, creationApprovalNotRequired bool) {
-	fmt.Printf("Registering application: %s...\n", appID)
-
-	err := o.client.RegisterApp(ctx, appID, metadata, creationApprovalNotRequired)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to register app: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Application registered")
-	fmt.Printf("  App ID:   %s\n", appID)
-	if creationApprovalNotRequired {
-		fmt.Println("  Approval: Not required for session creation")
-	} else {
-		fmt.Println("  Approval: Required for session creation")
 	}
 }
 
@@ -1278,145 +1179,6 @@ func (o *Operator) listAppSessionKeys(ctx context.Context, wallet string) {
 		}
 		fmt.Printf("  Expires At:      %s\n", state.ExpiresAt.Format("2006-01-02 15:04:05"))
 	}
-}
-
-// ============================================================================
-// Security Token Operations
-// ============================================================================
-
-func (o *Operator) escrowSecurityTokens(ctx context.Context, chainIDStr, targetAddress, amountStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	amount, err := o.parseAmount(amountStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	// Default target to own wallet if not specified
-	if targetAddress == "" {
-		targetAddress = o.getImportedWalletAddress()
-		if targetAddress == "" {
-			fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first.")
-			return
-		}
-		fmt.Printf("INFO: Using configured wallet as target: %s\n", targetAddress)
-	}
-
-	fmt.Printf("Escrowing %s security tokens for %s on chain %d...\n", amount.String(), targetAddress, chainID)
-
-	txHash, err := o.client.EscrowSecurityTokens(ctx, targetAddress, chainID, amount)
-	if err != nil {
-		fmt.Printf("ERROR: Escrow failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens escrowed")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) initiateSecurityWithdrawal(ctx context.Context, chainIDStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Initiating security tokens withdrawal on chain %d...\n", chainID)
-
-	txHash, err := o.client.InitiateSecurityTokensWithdrawal(ctx, chainID)
-	if err != nil {
-		fmt.Printf("ERROR: Initiate withdrawal failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawal initiated")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) cancelSecurityWithdrawal(ctx context.Context, chainIDStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Cancelling security tokens withdrawal on chain %d...\n", chainID)
-
-	txHash, err := o.client.CancelSecurityTokensWithdrawal(ctx, chainID)
-	if err != nil {
-		fmt.Printf("ERROR: Cancel withdrawal failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawal cancelled (re-locked)")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) withdrawSecurityTokens(ctx context.Context, chainIDStr, destination string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Withdrawing security tokens to %s on chain %d...\n", destination, chainID)
-
-	txHash, err := o.client.WithdrawSecurityTokens(ctx, chainID, destination)
-	if err != nil {
-		fmt.Printf("ERROR: Withdraw security tokens failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawn")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) approveSecurityToken(ctx context.Context, chainIDStr, amountStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	amount, err := o.parseAmount(amountStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Approving %s security tokens on chain %d...\n", amount.String(), chainID)
-
-	txHash, err := o.client.ApproveSecurityToken(ctx, chainID, amount)
-	if err != nil {
-		fmt.Printf("ERROR: Approve security token failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security token spending approved")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) securityBalance(ctx context.Context, chainIDStr, wallet string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Querying security token balance for %s on chain %d...\n", wallet, chainID)
-
-	balance, err := o.client.GetLockedBalance(ctx, chainID, wallet)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get security token balance: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Security token balance: %s\n", balance.String())
 }
 
 // ============================================================================

@@ -391,7 +391,10 @@ types:
           description: >
             Session-key holder's EIP-191 signature over the same payload as user_sig —
             abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash) — proving possession of the key
-            being registered. Required on every submit to prevent registration of keys the submitter does not control.
+            being registered. Required when expires_at is in the future (registration, update, re-activation)
+            to prevent registration of keys the submitter does not control. Optional for revocation
+            (expires_at at or before now): a wallet may revoke unilaterally with user_sig alone so a lost or
+            uncooperative session key cannot block revocation.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -423,7 +426,7 @@ types:
           description: User's signature over the session key metadata to authorize the registration/update of the session key
         - name: session_key_sig
           type: string
-          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
+          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required when expires_at is in the future (registration, update, re-activation) to prevent registration of keys the submitter does not control. Optional for revocation (expires_at at or before now); a wallet may revoke unilaterally with user_sig alone so a lost or uncooperative session key cannot block revocation.
 
   - pagination_params:
       description: Pagination request parameters
@@ -601,15 +604,16 @@ api:
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
 
-                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
-                on every submit, including the revocation path — the session key must co-sign its
-                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
-                supported by this method; that flow requires a separate code path and is tracked
-                as a follow-up.
+                Activation, update, and re-activation (`expires_at` in the future) require both
+                `user_sig` (wallet) and `session_key_sig` (session-key holder, proving possession).
+                Revocation (`expires_at` at or before now) requires only `user_sig`: a wallet may
+                revoke unilaterally so a lost, unavailable, or compromised session key cannot block
+                revocation of its own delegation. Any `session_key_sig` supplied on the revocation
+                path is ignored.
               request:
                 - field_name: state
                   type: channel_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state
@@ -792,15 +796,16 @@ api:
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
 
-                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
-                on every submit, including the revocation path — the session key must co-sign its
-                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
-                supported by this method; that flow requires a separate code path and is tracked
-                as a follow-up.
+                Activation, update, and re-activation (`expires_at` in the future) require both
+                `user_sig` (wallet) and `session_key_sig` (session-key holder, proving possession).
+                Revocation (`expires_at` at or before now) requires only `user_sig`: a wallet may
+                revoke unilaterally so a lost, unavailable, or compromised session key cannot block
+                revocation of its own delegation. Any `session_key_sig` supplied on the revocation
+                path is ignored.
               request:
                 - field_name: state
                   type: app_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state

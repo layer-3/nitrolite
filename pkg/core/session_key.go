@@ -132,17 +132,14 @@ func GetChannelSessionKeyAuthMetadataHashV1(userAddress string, version uint64, 
 	return hashedMetadata, nil
 }
 
-// ValidateChannelSessionKeyStateV1 verifies both signatures over the registration payload:
-// user_sig must recover to state.UserAddress (wallet authorizes the delegation) and
-// session_key_sig must recover to state.SessionKey (session-key holder proves possession).
-// Both signatures sign the same PackChannelKeyStateV1(session_key, metadataHash) payload;
-// session_key binds the packed bytes and user_address binds the metadata hash, so a
-// signature minted for one (wallet, session_key) pair cannot be replayed for another.
-func ValidateChannelSessionKeyStateV1(state ChannelSessionKeyStateV1) error {
-	if state.SessionKeySig == "" {
-		return fmt.Errorf("session_key_sig is required")
-	}
-
+// ValidateChannelSessionKeyStateUserSigV1 verifies only user_sig over the registration payload:
+// user_sig must recover to state.UserAddress (wallet authorizes the change). This is the
+// revocation path (submitted expires_at <= now): the session-key holder's session_key_sig is
+// intentionally not required so a lost, unavailable, or malicious delegate cannot veto the
+// wallet's revocation of its own delegation. session_key binds the packed bytes and
+// user_address binds the metadata hash, so the signature authorizes exactly this revocation and
+// cannot be replayed for another key, wallet, or version.
+func ValidateChannelSessionKeyStateUserSigV1(state ChannelSessionKeyStateV1) error {
 	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
 	if err != nil {
 		return fmt.Errorf("failed to get metadata hash: %w", err)
@@ -168,6 +165,41 @@ func ValidateChannelSessionKeyStateV1(state ChannelSessionKeyStateV1) error {
 	}
 	if !strings.EqualFold(recoveredUser.String(), state.UserAddress) {
 		return fmt.Errorf("invalid signature: recovered address %s does not match wallet %s", recoveredUser.String(), state.UserAddress)
+	}
+
+	return nil
+}
+
+// ValidateChannelSessionKeyStateV1 verifies both signatures over the registration payload:
+// user_sig must recover to state.UserAddress (wallet authorizes the delegation) and
+// session_key_sig must recover to state.SessionKey (session-key holder proves possession).
+// Both signatures sign the same PackChannelKeyStateV1(session_key, metadataHash) payload;
+// session_key binds the packed bytes and user_address binds the metadata hash, so a
+// signature minted for one (wallet, session_key) pair cannot be replayed for another. Used for
+// activation, extension, and rotation (submitted expires_at > now); revocation uses
+// ValidateChannelSessionKeyStateUserSigV1.
+func ValidateChannelSessionKeyStateV1(state ChannelSessionKeyStateV1) error {
+	if state.SessionKeySig == "" {
+		return fmt.Errorf("session_key_sig is required")
+	}
+
+	if err := ValidateChannelSessionKeyStateUserSigV1(state); err != nil {
+		return err
+	}
+
+	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(state.UserAddress, state.Version, state.Assets, state.ExpiresAt.Unix())
+	if err != nil {
+		return fmt.Errorf("failed to get metadata hash: %w", err)
+	}
+
+	packed, err := PackChannelKeyStateV1(state.SessionKey, metadataHash)
+	if err != nil {
+		return fmt.Errorf("failed to pack session key state: %w", err)
+	}
+
+	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
+	if err != nil {
+		return fmt.Errorf("failed to create address recoverer: %w", err)
 	}
 
 	sessionKeySigBytes, err := hexutil.Decode(state.SessionKeySig)

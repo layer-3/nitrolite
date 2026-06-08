@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -69,6 +70,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 	if len(coreState.Assets) > h.maxSessionKeyIDs {
 		c.Fail(rpc.Errorf("invalid_session_key_state: assets array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
+		return
+	}
+	// An empty assets list authorizes no usable asset, so it is only meaningful as a
+	// revocation/deactivation state (expires_at <= now). Rejecting it for a future
+	// expires_at prevents an active current version that authorizes nothing.
+	if len(coreState.Assets) == 0 && coreState.ExpiresAt.After(time.Now()) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: assets must be non-empty unless expires_at is in the past"), "")
 		return
 	}
 	if err := h.validateSessionKeyAssets(coreState.Assets); err != nil {
@@ -190,15 +198,15 @@ func (h *Handler) validateSessionKeyAssets(assets []string) error {
 	for _, asset := range assets {
 		normalized := strings.ToLower(asset)
 		if asset != normalized {
-			return rpc.Errorf("non-canonical asset '%s', expected '%s'", asset, normalized)
+			return fmt.Errorf("non-canonical asset '%s', expected '%s'", asset, normalized)
 		}
 		if _, ok := seen[normalized]; ok {
-			return rpc.Errorf("duplicate asset '%s'", asset)
+			return fmt.Errorf("duplicate asset '%s'", asset)
 		}
 		seen[normalized] = struct{}{}
 
 		if _, err := h.memoryStore.GetAssetDecimals(normalized); err != nil {
-			return rpc.Errorf("unsupported asset '%s'", asset)
+			return fmt.Errorf("unsupported asset '%s'", asset)
 		}
 	}
 	return nil

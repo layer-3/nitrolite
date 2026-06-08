@@ -265,6 +265,91 @@ func TestChannelSubmitSessionKeyState_RejectsUnsupportedAsset(t *testing.T) {
 	mockMemoryStore.AssertExpectations(t)
 }
 
+// An empty assets list authorizes no usable asset, so it is only meaningful as a
+// revocation/deactivation state (expires_at <= now). Submitting an empty list with a future
+// expires_at must be rejected so it can never become an active current version that
+// authorizes nothing. The allowed past-expires_at companion is
+// TestChannelSubmitSessionKeyState_AllowsEmptyAssetsWithPastExpiresAt.
+func TestChannelSubmitSessionKeyState_RejectsEmptyAssetsWithFutureExpiresAt(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		memoryStore:      allAssetsMemoryStore(),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	reqPayload := rpc.ChannelsV1SubmitSessionKeyStateRequest{
+		State: rpc.ChannelSessionKeyStateV1{
+			UserAddress: "0x1111111111111111111111111111111111111111",
+			SessionKey:  "0x3333333333333333333333333333333333333333",
+			Version:     "1",
+			Assets:      []string{},
+			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
+			UserSig:     "0xdeadbeef",
+		},
+	}
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "assets must be non-empty unless expires_at is in the past")
+	// The submission is rejected before any store interaction.
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// An empty assets list with a past expires_at is the revocation/deactivation state and must
+// be accepted: it stores the version-sequenced state while authorizing no asset, and the
+// auth path filters expires_at > now so the key is inactive.
+func TestChannelSubmitSessionKeyState_AllowsEmptyAssetsWithPastExpiresAt(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		memoryStore:      allAssetsMemoryStore(),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{}, expiresAt, userSigner, sessionKeySigner)
+
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
+	mockStore.On("StoreChannelSessionKeyState", mock.AnythingOfType("core.ChannelSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.ChannelsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
 func TestChannelSubmitSessionKeyState_AtMaxLimit(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
@@ -579,7 +664,7 @@ func TestChannelSubmitSessionKeyState_MissingUserSig(t *testing.T) {
 			UserAddress: "0x1111111111111111111111111111111111111111",
 			SessionKey:  "0x3333333333333333333333333333333333333333",
 			Version:     "1",
-			Assets:      []string{},
+			Assets:      []string{"usdc"},
 			ExpiresAt:   strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
 			UserSig:     "",
 		},
@@ -620,7 +705,7 @@ func TestChannelSubmitSessionKeyState_VersionMismatch(t *testing.T) {
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 
 	// Submit version 3 when latest is 0 (expects 1)
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, []string{}, expiresAt, userSigner, sessionKeySigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 3, []string{"usdc"}, expiresAt, userSigner, sessionKeySigner)
 
 	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindChannel).Return(0, time.Time{}, nil)
 
@@ -743,7 +828,7 @@ func TestChannelSubmitSessionKeyState_SignatureMismatch(t *testing.T) {
 	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 
 	// Sign with differentSigner but claim userAddress
-	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{}, expiresAt, differentSigner, sessionKeySigner)
+	reqPayload := buildSignedChannelSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, []string{"usdc"}, expiresAt, differentSigner, sessionKeySigner)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)

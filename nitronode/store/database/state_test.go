@@ -54,8 +54,6 @@ func TestDBStore_StoreUserState_ApplicationID(t *testing.T) {
 		defer cleanup()
 
 		store := NewDBStore(db)
-		_, err := store.LockUserState("0xuserapp", "USDC")
-		require.NoError(t, err)
 
 		require.NoError(t, storeLocked(t, store, newState("state-app"), "my-app"))
 
@@ -70,8 +68,6 @@ func TestDBStore_StoreUserState_ApplicationID(t *testing.T) {
 		defer cleanup()
 
 		store := NewDBStore(db)
-		_, err := store.LockUserState("0xuserapp", "USDC")
-		require.NoError(t, err)
 
 		require.NoError(t, storeLocked(t, store, newState("state-noapp"), ""))
 

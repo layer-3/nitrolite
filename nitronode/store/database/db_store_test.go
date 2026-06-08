@@ -35,10 +35,6 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 			},
 		}
 
-		// Lock user state before storing (ensures row exists in user_balances)
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
 		balances, err := store.GetUserBalances("0xuser123")
@@ -90,12 +86,6 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-
-		// Lock user states before storing (ensures rows exist in user_balances)
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-		_, err = store.LockUserState("0xuser123", "ETH")
-		require.NoError(t, err)
 
 		require.NoError(t, storeLocked(t, store, state1, ""))
 		require.NoError(t, storeLocked(t, store, state2, ""))
@@ -163,10 +153,6 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 			},
 		}
 
-		// Lock user state before storing (ensures row exists in user_balances)
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state1, ""))
 		require.NoError(t, storeLocked(t, store, state2, ""))
 
@@ -218,10 +204,6 @@ func TestDBStore_GetUserBalances(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-
-		// Lock user state before storing (ensures row exists in user_balances)
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
 
 		require.NoError(t, storeLocked(t, store, state1, ""))
 		require.NoError(t, storeLocked(t, store, state2, ""))
@@ -302,13 +284,9 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
 	})
 
@@ -358,13 +336,9 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "home deposit is still ongoing")
 	})
@@ -438,13 +412,9 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
 	})
 
@@ -517,13 +487,9 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "mutual lock is still ongoing")
 	})
@@ -582,13 +548,9 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
 	})
 
@@ -635,14 +597,10 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 			// No signatures
 		}
 
-		// Lock user state before storing
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		require.NoError(t, storeLocked(t, store, state, ""))
 
 		// Should not error because there's no signed state
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.NoError(t, err)
 	})
 
@@ -717,8 +675,6 @@ func TestDBStore_EnsureNoOngoingStateTransitions(t *testing.T) {
 
 	storeState := func(t *testing.T, store DatabaseStore, state core.State) {
 		t.Helper()
-		_, err := store.LockUserState(wallet, asset)
-		require.NoError(t, err)
 		require.NoError(t, storeLocked(t, store, state, ""))
 	}
 
@@ -882,9 +838,6 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 		// Node-only state at version 2; gate would normally skip this row and find
 		// nothing else, returning nil. To exercise the wedge, also seed an older
 		// bilateral state at version 1.
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
-
 		bilateralUserSig := "0xprior"
 		bilateralNodeSig := "0xpriornode"
 		bilateral := core.State{
@@ -929,7 +882,7 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 		require.NoError(t, storeLocked(t, store, nodeOnly, ""))
 
 		// Pre-backfill: gate sees bilateral row at version 1, channel.state_version is 2 → mismatch.
-		err = store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
+		err := store.EnsureNoOngoingStateTransitions("0xuser123", "USDC")
 		require.Error(t, err)
 
 		// Backfill the user signature recovered from the on-chain event.
@@ -970,9 +923,6 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			StateVersion:      1,
 		}
 		require.NoError(t, store.CreateChannel(channel))
-
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
 
 		state := core.State{
 			ID:            "state1",
@@ -1045,8 +995,6 @@ func TestDBStore_UpdateStateSigsIfMissing(t *testing.T) {
 			StateVersion:      1,
 		}))
 
-		_, err := store.LockUserState("0xuser123", "USDC")
-		require.NoError(t, err)
 		userSig := "0xusersigonly"
 		state := core.State{
 			ID:            "state-user-only",
@@ -1128,8 +1076,6 @@ func TestDBStore_SumNetTransitionAmountAfterVersion(t *testing.T) {
 			nodeSig := "0xnodesig"
 			s.NodeSig = &nodeSig
 		}
-		_, err := store.LockUserState(wallet, asset)
-		require.NoError(t, err)
 		require.NoError(t, storeLocked(t, store, s, ""))
 	}
 
@@ -1316,8 +1262,6 @@ func TestDBStore_HasSignedFinalize(t *testing.T) {
 			nodeSig := "0xnodesig"
 			s.NodeSig = &nodeSig
 		}
-		_, err := store.LockUserState(wallet, asset)
-		require.NoError(t, err)
 		require.NoError(t, storeLocked(t, store, s, ""))
 	}
 
@@ -1435,8 +1379,6 @@ func TestDBStore_EnsureNoOngoingEscrowOperation(t *testing.T) {
 
 	storeState := func(t *testing.T, store DatabaseStore, state core.State) {
 		t.Helper()
-		_, err := store.LockUserState(wallet, asset)
-		require.NoError(t, err)
 		require.NoError(t, storeLocked(t, store, state, ""))
 	}
 

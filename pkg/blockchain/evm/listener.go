@@ -24,26 +24,35 @@ const (
 // deduplicated delivery even across restarts. Cancel the context passed to Listen
 // for graceful shutdown.
 type Listener struct {
-	contractAddress common.Address
-	client          EVMClient
-	blockchainID    uint64
-	blockStep       uint64 // max blocks per FilterLogs call during reconciliation
-	logger          log.Logger
-	handleEvent     HandleEvent
-	eventGetter     ContractEventGetter
+	contractAddress       common.Address
+	client                EVMClient
+	blockchainID          uint64
+	blockStep             uint64 // max blocks per FilterLogs call during reconciliation
+	logger                log.Logger
+	handleEvent           HandleEvent // live events (Phase 2); typically the ConfirmationGate
+	handleHistoricalEvent HandleEvent // historical events (Phase 1); typically the reactor directly
+	eventGetter           ContractEventGetter
 }
 
 // NewListener creates a Listener. blockStep controls how many blocks are fetched
 // per RPC call during historical reconciliation.
-func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
+//
+// eventHandler is invoked for live events (Phase 2); historicalEventHandler is invoked
+// for historical events (Phase 1). The two handlers may be the same function. The split
+// exists so callers can route live events through a ConfirmationGate while replaying
+// historical events directly to the reactor — historical events come from `eth_getLogs`
+// and are by definition canonical, so the gate adds no safety value for them (see
+// reorg-fix-spec.md §4.4 step 5).
+func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
 	return &Listener{
-		contractAddress: contractAddress,
-		client:          client,
-		blockchainID:    blockchainID,
-		blockStep:       blockStep,
-		logger:          logger.WithName("evm"),
-		handleEvent:     eventHandler,
-		eventGetter:     eventGetter,
+		contractAddress:       contractAddress,
+		client:                client,
+		blockchainID:          blockchainID,
+		blockStep:             blockStep,
+		logger:                logger.WithName("evm"),
+		handleEvent:           eventHandler,
+		handleHistoricalEvent: historicalEventHandler,
+		eventGetter:           eventGetter,
 	}
 }
 
@@ -265,7 +274,7 @@ func (l *Listener) processEvents(
 			}
 			l.logger.Debug("received historical event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
-			if err := l.handleEvent(evCtx, eventLog); err != nil {
+			if err := l.handleHistoricalEvent(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
 			}

@@ -136,6 +136,11 @@ func (m *mockChannelHubStore) RecordTransaction(tx core.Transaction, application
 	return args.Error(0)
 }
 
+func (m *mockChannelHubStore) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
+	args := m.Called(txHash, logIndex, blockchainID)
+	return args.Bool(0), args.Error(1)
+}
+
 // mockChannelHubEventHandler captures events dispatched by the reactor.
 type mockChannelHubEventHandler struct {
 	mock.Mock
@@ -248,11 +253,14 @@ func packNonIndexed(t *testing.T, eventName string, args ...interface{}) []byte 
 }
 
 // newReactor creates a ChannelHubReactor wired to the provided mocks.
+// Sets up a default IsContractEventProcessed expectation that returns (false, nil)
+// so existing tests don't need to set it up individually.
 func newReactor(blockchainID uint64, nodeAddress string, handler *mockChannelHubEventHandler, assetStore *MockAssetStore, store *mockChannelHubStore) *ChannelHubReactor {
+	store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error {
 		return fn(store)
 	}
-	return NewChannelHubReactor(blockchainID, nodeAddress, handler, assetStore, useStoreInTx)
+	return NewChannelHubReactor(blockchainID, nodeAddress, handler, assetStore, useStoreInTx, store)
 }
 
 // expectStoreContractEvent sets up the mock expectation for StoreContractEvent.
@@ -1037,6 +1045,75 @@ func TestChannelHubReactor_HandleEscrowDepositsPurged(t *testing.T) {
 	require.NoError(t, err)
 	handler.AssertExpectations(t)
 	store.AssertExpectations(t)
+}
+
+func TestChannelHubReactor_HandleEvent_PreCheckError(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	tokenAddr := common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+	amount := big.NewInt(1_000_000)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["NodeBalanceUpdated"].ID,
+			common.BytesToHash(tokenAddr.Bytes()),
+		},
+		Data:        packNonIndexed(t, "NodeBalanceUpdated", amount),
+		BlockNumber: 100,
+		TxHash:      common.HexToHash("0xaabbcc"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	// Pre-check returns an error — reactor must fall through and process normally.
+	store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, assert.AnError)
+	assetStore.On("GetTokenAsset", blockchainID, tokenAddr.String()).Return("usdc", nil)
+	assetStore.On("GetTokenDecimals", blockchainID, tokenAddr.String()).Return(uint8(6), nil)
+	handler.On("HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	expectStoreContractEvent(store, "NodeBalanceUpdated", 100, blockchainID)
+
+	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+	reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store)
+
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+
+	// Business logic and StoreContractEvent must still be called.
+	handler.AssertCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+	store.AssertExpectations(t)
+}
+
+func TestChannelHubReactor_HandleEvent_AlreadyProcessed(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	txHash := common.HexToHash("0xaabbcc")
+
+	logEntry := types.Log{
+		Topics:      []common.Hash{channelHubAbi.Events["NodeBalanceUpdated"].ID},
+		BlockNumber: 100,
+		TxHash:      txHash,
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	// Pre-check returns true — event already committed.
+	store.On("IsContractEventProcessed", txHash.String(), uint32(0), blockchainID).Return(true, nil)
+
+	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+	reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store)
+
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+
+	// Neither business logic nor StoreContractEvent should be called.
+	handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+	store.AssertNotCalled(t, "StoreContractEvent", mock.Anything)
 }
 
 func TestChannelHubReactor_UnknownEvent(t *testing.T) {

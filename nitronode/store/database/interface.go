@@ -296,4 +296,10 @@ type DatabaseStore interface {
 
 	// IsContractEventPresent checks if a specific contract event has already been stored.
 	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see reorg-fix-spec.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 }

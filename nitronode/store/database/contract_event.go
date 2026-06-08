@@ -55,6 +55,22 @@ func (s *DBStore) GetLatestContractEventBlockNumber(contractAddress string, bloc
 	return blockNumber, nil
 }
 
+// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+// has already been committed, regardless of which block it appeared in.
+func (s *DBStore) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
+	var ev ContractEvent
+	err := s.db.Where("transaction_hash = ? AND log_index = ? AND blockchain_id = ?",
+		strings.ToLower(txHash), logIndex, blockchainID).
+		Take(&ev).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // IsContractEventPresent checks whether a specific contract event has already been stored.
 func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
 	var ev ContractEvent

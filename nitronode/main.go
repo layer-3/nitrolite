@@ -121,7 +121,7 @@ func main() {
 				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
 			}
 
-			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx)
+			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
 
 			blockTimestampFetcher := func(blockHash common.Hash) (time.Time, error) {

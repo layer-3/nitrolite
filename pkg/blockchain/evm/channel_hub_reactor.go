@@ -112,6 +112,12 @@ type ChannelHubReactorStore interface {
 
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
+
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see reorg-fix-spec.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 }
 
 var channelHubAbi *abi.ABI
@@ -148,16 +154,18 @@ type ChannelHubReactor struct {
 	nodeAddress      string
 	eventHandler     core.ChannelHubEventHandler
 	assetStore       AssetStore
+	store            ChannelHubReactorStore // non-transactional; used for the pre-check in HandleEvent
 	useStoreInTx     ChannelHubReactorStoreTxProvider
 	onEventProcessed func(blockchainID uint64, success bool)
 }
 
-func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider) *ChannelHubReactor {
+func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider, store ChannelHubReactorStore) *ChannelHubReactor {
 	return &ChannelHubReactor{
 		blockchainID: blockchainID,
 		nodeAddress:  nodeAddress,
 		eventHandler: eventHandler,
 		assetStore:   assetStore,
+		store:        store,
 		useStoreInTx: useStoreInTx,
 	}
 }
@@ -178,7 +186,25 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	err := r.useStoreInTx(func(store ChannelHubReactorStore) error {
+	// Pre-check: skip already-committed events without opening a transaction.
+	// This converts the constraint-violation rollback path into a clean early exit and
+	// is required for the reconciliation walk (§4.4) to replay events without errors.
+	// Reorged events with a changed block-level logIndex pass through this check;
+	// they are handled by the reactor's business-logic idempotency (see reorg-fix-spec.md §6.6).
+	processed, err := r.store.IsContractEventProcessed(l.TxHash.String(), uint32(l.Index), r.blockchainID)
+	if err != nil {
+		logger.Warn("failed to check if contract event was already processed, proceeding",
+			"error", err, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
+	} else if processed {
+		logger.Info("skipping re-delivered event, already committed",
+			"event", eventName, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
+		if r.onEventProcessed != nil {
+			r.onEventProcessed(r.blockchainID, true)
+		}
+		return nil
+	}
+
+	err = r.useStoreInTx(func(store ChannelHubReactorStore) error {
 		var err error
 		switch eventID {
 		case channelHubAbi.Events["NodeBalanceUpdated"].ID:

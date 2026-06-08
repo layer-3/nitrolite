@@ -260,7 +260,9 @@ When `Removed: true` arrives in the Pusher:
 
 ### 6.6 Reactor defense-in-depth: skip re-delivered events
 
-When the gate lets a re-added event through (same tx re-mined in a new block after a reorg, confirmed by a fresh timer), the reactor would attempt to process an event it has already committed. Currently this surfaces as a DB constraint-violation error and a full transaction rollback — noisy and potentially confusing.
+When a re-added event reaches the reactor (same tx re-mined in a new block after a reorg, confirmed by a fresh gate timer), the reactor attempts to process an event it has already committed. This guard converts what is currently a DB constraint-violation error and a full transaction rollback into a clean, explicit logged exit.
+
+**Important limitation:** this guard identifies events by `(txHash, logIndex, blockchainID)`, where `log_index` is a **block-level** index in go-ethereum — the position of this log among all logs in the entire block, across all transactions. If a transaction is re-mined in a new block where different transactions precede it, its logs receive different block-level `log_index` values. The new `(txHash, newLogIndex, blockchainID)` tuple does not match any committed row, so `IsContractEventProcessed` returns `false` and **the reorged event passes through this check**. In that case the reactor's business-logic idempotency is the actual guard (see below). This guard therefore only catches exact re-deliveries — cases where `log_index` is unchanged.
 
 Add a new method to `ChannelHubReactorStore`:
 
@@ -268,21 +270,53 @@ Add a new method to `ChannelHubReactorStore`:
 // IsContractEventProcessed reports whether an event identified by
 // (txHash, logIndex, blockchainID) has already been committed,
 // regardless of which block it appeared in.
+// NOTE: uses block-level logIndex — does not detect reorged events
+// where the same tx re-mines with a different block-level log position.
 IsContractEventProcessed(txHash string, logIndex uint, blockchainID uint64) (bool, error)
 ```
 
 At the top of `HandleEvent`, before entering `useStoreInTx`, call this method. If the event is already committed, log at **`INFO`** ("skipping re-delivered event, already committed") and return `nil` immediately. No transaction is opened; no state is touched.
 
-The existing unique constraint on `(transaction_hash, log_index, blockchain_id)` in `contract_events` remains as the definitive safety net. This pre-check converts the constraint-violation rollback path into a clean, explicit, logged early exit that also serves as the idempotency guard for the reconciliation re-scan path.
+Reorged events that pass through this check are still neutralized by the reactor's **business-logic idempotency**:
+
+- `HandleHomeChannelCreated` has an explicit early-return when the channel is already open.
+- `HandleHomeChannelCheckpointed` and `RefreshUserEnforcedBalance` use set-semantics (overwrite, not accumulate).
+- The `StoreContractEvent` unique constraint on `(transaction_hash, log_index, blockchain_id)` remains as the final backstop for the case where `log_index` happens to be unchanged.
+
+The value of `IsContractEventProcessed` is therefore:
+
+1. **Noise reduction for exact re-deliveries** — converts a constraint-violation rollback (logged as an error by the gate poller) into a clean INFO exit with no DB transaction opened.
+2. **Correctness for the reconciliation walk (§4.4)** — when the node replays already-processed historical events on startup, every re-delivered event would otherwise produce a constraint-violation error and potentially stall the walk. This pre-check makes the reconciliation path viable.
 
 Together, §6.5 and §6.6 produce two complementary log signals:
 
 | Signal | Source | Level | Meaning |
 | --- | --- | --- | --- |
 | "post-gate reorg detected for event X" | Gate | WARN | Committed block was reorged; residual-risk scenario is active |
-| "skipping re-delivered event X" | Reactor | INFO | Same tx re-mined; reactor correctly skips it |
+| "skipping re-delivered event X" | Reactor | INFO | Same tx re-mined at same block position; reactor correctly skips it |
 
-If the operator sees the WARN but never the INFO, the transaction was not re-mined — the stale DB state from §2.1 is in effect.
+If the operator sees the WARN but never the INFO, either the transaction was not re-mined, or it was re-mined at a different block position (this check did not fire; business-logic idempotency handled it silently).
+
+#### Reorg-safe idempotency — separate task
+
+To make the idempotency check itself robust to reorged events regardless of block position, the idempotency key must be stable across re-mining. The block-level `log_index` is not stable; a **tx-relative log index** is.
+
+The tx-relative log index is the 0-based position of a log within its own transaction's emitted logs. It is invariant: the same transaction always emits the same logs in the same order, so its tx-relative indices never change across reorgs. The EVM guarantees that all logs of a transaction arrive consecutively in ascending block-level order, so the tx-relative index can be computed in-process as:
+
+```
+tx_log_index = l.Index - min(l.Index for all logs of l.TxHash in this block)
+```
+
+No RPC call is required — the minimum is established by the first log of each transaction seen in a block, which always arrives before subsequent logs of the same transaction.
+
+Implementing this requires:
+
+- **DB migration**: add `tx_log_index` column to `contract_events`; replace the unique index `(transaction_hash, log_index, blockchain_id)` with `(transaction_hash, tx_log_index, blockchain_id)`.
+- **`BlockchainEvent` struct**: add `TxLogIndex uint32` field.
+- **Reactor**: maintain a small in-memory map `(blockHash, txHash) → minBlockLogIndex` to compute `tx_log_index` for each incoming event; evict entries when a new block is first seen.
+- **`IsContractEventProcessed` and `StoreContractEvent`**: operate on `tx_log_index` instead of `log_index`.
+
+**This is a separate task.** It is not part of the current confirmation-gate scope. Until it is implemented, the reactor relies on business-logic idempotency for the reorged-different-position case, which is correct but not explicitly guarded at the storage layer.
 
 ### 6.7 Block timestamp cache
 

@@ -235,6 +235,14 @@ In the single-node deployment model, the ChannelHub is deployed by the Node oper
 - **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. Signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
 - **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
 
+### Asset-symbol equivalence
+
+The unified asset model treats every chain-specific token configured under a single asset symbol as a fully fungible 1:1 representation of the same asset. Off-chain credit denominated in an asset can therefore be redeemed from any token inventory sharing that symbol, independent of which inventory originally backed it. The validator binds unchanneled credit to the chain/token chosen at first channel creation, enforcing only that the asset symbol matches — not that the tokens are economically equivalent.
+
+This is intended behaviour: it enables cross-chain redemption. The only harmful configuration is an operator mapping economically non-equivalent tokens under one symbol (e.g. a test token and production USDC), which would let credit sourced from the cheap inventory be redeemed against the valuable one.
+
+**The Node operator MUST configure only economically equivalent (1:1 redeemable) tokens under a single asset symbol.** Token equivalence cannot be verified programmatically and is an operator configuration responsibility. See `docs/protocol/security-and-limitations.md` for the full trust-assumption statement.
+
 ---
 
 ## Signature Validation Security

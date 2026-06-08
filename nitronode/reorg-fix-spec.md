@@ -80,16 +80,16 @@ If a log with `Removed: true` arrives for the same `(txHash, blockHash, logIndex
 
 ### 4.3 Out-of-order delivery
 
-The re-added event (no `Removed: true`, new block) may arrive at the listener before the corresponding `Removed: true` log for the old block. Because the re-added event is in a different block, it carries a different `blockHash` and therefore a different key. The two events are handled independently:
+The re-added event (no `Removed: true`, new block) may arrive at the listener before the corresponding `Removed: true` log for the old block. When this happens, the gate **replaces** the pending entry for `(txHash, logIndex)` with the new one and resets the confirmation timer under the new block's key:
 
-- The re-added event starts a fresh timer under its own key.
-- The `Removed: true` log, when it arrives, looks up the OLD block's key — which has no pending timer (it was never created, or it already expired) — and performs a no-op.
+- On the non-removed re-add, scan the queue by `(txHash, logIndex)` — ignoring `blockHash` — and drop any existing entry. Append the new event with a fresh `arrivedAt`.
+- The subsequent `Removed: true` log for the OLD block carries the old `blockHash` and therefore matches neither the queued (new-block) entry nor any `recentlyForwarded` record. It performs a no-op.
 
-This means out-of-order delivery requires no special case beyond the normal path: the block-scoped key prevents the remove from accidentally cancelling the re-added event's timer.
+This collapses the two-entry coexistence model into a single live entry per `(txHash, logIndex)`. The behavior is observationally equivalent — exactly one event is forwarded, and it is the latest re-mining — and it removes the only state-divergence path between the queue and `recentlyForwarded`.
 
-- On a `Removed: true` log for a key that **has no pending timer**: no-op. The event either confirmed and was already processed (reorg arrived after the window), or belongs to a different block whose timer was never started (re-add arrived first, has its own key).
+- On a `Removed: true` log for a key that **has no pending timer and no `recentlyForwarded` record**: no-op. The event either belongs to a block that was already replaced by a later re-add (handled above), or it is a stale removal from a fork the gate has no record of.
 
-> Repeated reorgs of the same transaction are theoretically possible but imply a chain-level consensus failure. The gate's cancel/restart cycle handles each naturally; no special cap is needed.
+> Repeated reorgs of the same transaction are theoretically possible but imply a chain-level consensus failure. The gate's replace/restart cycle handles each naturally; no special cap is needed.
 
 ### 4.4 Startup and reconciliation
 
@@ -124,9 +124,9 @@ On startup, for each chain, after the `block_hash` migration has been applied:
    > **Why walk stored hashes, not block numbers?** In normal operation most blocks contain no `ChannelHub` events, so `contract_events` has no row for them. A block-number walk would find nothing to compare at event-gap heights and could miss a reorg that occurred entirely within such a gap. Walking by stored block hashes ensures every comparison is against a block the reactor actually processed.
 
 4. Set the scan start to `commonAncestorBlockNum`. Events between `commonAncestorBlockNum` and `latestBlockNum` that came from the reorged fork are still present in the DB. The reactor has no rollback mechanism for those rows — the re-scan below will re-apply canonical events over them where the transaction was re-mined (idempotent), and leave the orphaned DB state in place where the transaction was not re-mined (residual risk; see §2.1). State-setting operations (`UpdateChannel`, `RefreshUserEnforcedBalance`) will overwrite with canonical values for re-mined events; rows from dropped transactions remain as stale data with no automated cleanup.
-5. Start the event scan from `commonAncestorBlockNum` (or genesis if step 1 found no rows). Feed all replayed events **directly to the reactor, bypassing the gate entirely**. Historical events come from `eth_getLogs` and are, by definition, already in the current canonical chain. The common-ancestor walk in steps 2–3 additionally confirms that the starting block is canonical. There is no incremental reorg risk to guard against for these events, and applying a full confirmation delay would only stall the node on restart for no safety benefit. The gate applies exclusively to live WebSocket events; any reorgs of very-recent blocks during replay are handled by the buffered live-subscription signals processed immediately after replay completes (step 7).
+5. Start the event scan from `commonAncestorBlockNum` (or genesis if step 1 found no rows). Replayed events may flow through the same path as live events (Listener → gate → reactor); the gate does not require a separate bypass. Historical events come from `eth_getLogs` and are, by definition, already in the current canonical chain — the common-ancestor walk in steps 2–3 additionally confirms that the starting block is canonical, so there is no incremental reorg risk to guard against. Provided that the gate uses each event's **block timestamp** as the `arrivedAt` reference (see §6.7), historical events are immediately mature on first poll and forward without per-event delay; the only added cost is one block-timestamp RPC per unique historical block and at most one poll-tick of latency.
 6. The reactor is idempotent for replayed events: `HandleHomeChannelCreated` has an explicit early-return guard when the channel is already open; `HandleHomeChannelCheckpointed` and `RefreshUserEnforcedBalance` use set-semantics (not accumulation) and recompute from the latest DB state. `StoreContractEvent` is called last inside the DB transaction and enforces a unique constraint on `(transaction_hash, log_index, blockchain_id)`. If a duplicate is inserted, Postgres returns a constraint-violation error, causing the entire transaction (including all state mutations in the same `useStoreInTx` call) to roll back. The reactor therefore cannot double-apply state changes for an event it has already committed.
-7. Historical log queries (`eth_getLogs`) return only canonical chain events — there are no `Removed: true` signals during replay. The gate operates in timer-only mode during reconciliation. Removal signals from the live WebSocket subscription that arrive during the replay phase are buffered in the listener's `currentCh` and processed only after the historical replay phase completes.
+7. Historical log queries (`eth_getLogs`) return only canonical chain events — there are no `Removed: true` signals during replay. Removal signals from the live WebSocket subscription that arrive during the replay phase are buffered in the listener's `currentCh` and reach the gate only after the historical replay phase completes; if they cancel a re-mined event that has already been forwarded, the post-gate reorg detection in §6.5 logs them.
 
 ---
 
@@ -163,15 +163,18 @@ The reactor itself does not change. All the listener's existing logic — subscr
 
 **Handling `Removed: true` logs:** currently `listener.go:289-294` skips removed logs before they reach the handler. This skip must be moved: the listener should forward removed logs to `gate.HandleEvent` (they still carry the `Removed` flag on `types.Log`), and the gate alone decides whether to cancel a pending timer or ignore the signal. The reactor never sees a `Removed: true` log.
 
-### 6.2 Event identity for removal scanning
+### 6.2 Event identity for queue keying
 
-The Listener delivers events in strict block order, so the queue is naturally ordered by arrival time. When a `Removed: true` log arrives in the Pusher, it scans the queue for the **first** entry matching `(txHash, logIndex)` and deletes it.
+The Listener delivers events in strict block order, so the queue is naturally ordered by arrival time. Two distinct scan keys are used against the queue:
 
-`blockHash` is deliberately excluded from the removal scan key. Because the queue is FIFO and reorgs produce the re-add event *after* the original event, the original always sits earlier in the queue than any re-add. Scanning for `(txHash, logIndex)` and deleting the first match therefore always targets the original entry and leaves any re-add untouched.
+- **`(txHash, logIndex)` — used by both Pusher paths (non-removed re-add and removed cancellation).** On a non-removed arrival, any existing entry with the same `(txHash, logIndex)` is dropped and the new event appended with a fresh `arrivedAt`. Because re-adds always replace the prior entry, the queue holds at most one entry per `(txHash, logIndex)` at any time.
+- **`(txHash, blockHash, logIndex)` — used by the Removed-cancel scan against the queue.** A `Removed: true` log only cancels a queued entry when the full key matches. A Removed for an OLD block whose entry has already been replaced by a newer re-add will not match the queued (new-block) entry and will fall through to the `recentlyForwarded` lookup (§6.5).
+
+`blockHash` is excluded from the re-add scan key so that a re-mining of the same tx replaces the original regardless of which block it landed in. `blockHash` is included on the Removed scan so that a stale removal for an already-replaced fork cannot cancel a live entry.
 
 A single transaction can emit multiple events for the same `txHash` (e.g., two `ChannelDeposited` logs in a batch open). `logIndex` disambiguates these; it is unique per log within a block and is present in both the live event and its corresponding `Removed: true` log.
 
-`blockHash` is still present in each `types.Log` stored in the queue and is used by:
+`blockHash` is also used by:
 - The `recentlyForwarded` detection map (§6.5) — keyed by `(txHash, blockHash, logIndex)` to identify which specific occurrence was forwarded.
 - `StoreContractEvent` in the reactor — stored in `contract_events` for the reconciliation walk (§4.4).
 
@@ -185,12 +188,12 @@ type queueEntry struct {
     arrivedAt time.Time
 }
 
-type eventKey struct {          // used for removal scan
+type eventKey struct {          // used for re-add scan (replace prior entry)
     txHash   common.Hash
     logIndex uint
 }
 
-type forwardedKey struct {      // used for post-gate reorg detection
+type forwardedKey struct {      // used for Removed-cancel scan and post-gate reorg detection
     txHash    common.Hash
     blockHash common.Hash
     logIndex  uint
@@ -200,8 +203,8 @@ type ConfirmationGate struct {
     delay             time.Duration
     chainID           uint64
     handler           HandleEvent
-    queue             []queueEntry               // protected by mu
-    recentlyForwarded map[forwardedKey]time.Time  // protected by mu; TTL = 2× delay
+    queue             []queueEntry                // protected by mu
+    recentlyForwarded map[forwardedKey]time.Time  // protected by mu; entries are kept for a small multiple of `delay` (see §6.5)
     mu                sync.Mutex
 }
 ```
@@ -212,8 +215,8 @@ type ConfirmationGate struct {
 
 Receives `types.Log` from the Listener. On each event:
 
-- If `Removed: true` — scan the queue for the first entry matching `(txHash, logIndex)` and delete it. If no match found, check `recentlyForwarded` for a post-gate reorg signal (see §6.5).
-- Otherwise — append `(log, time.Now())` to the queue tail.
+- If `Removed: true` — scan the queue for an entry matching the full `(txHash, blockHash, logIndex)` key and delete it. If no match is found, check `recentlyForwarded` for a post-gate reorg signal (see §6.5).
+- Otherwise — drop any existing queue entry with the same `(txHash, logIndex)` (ignoring `blockHash`), then append `(log, arrivedAt)` to the queue tail. `arrivedAt` is the block timestamp (see §6.7), falling back to `time.Now()` only on fetch failure.
 
 No expiration check, no forwarding. Push only.
 
@@ -266,7 +269,7 @@ When `Removed: true` arrives in the Pusher:
 - **No match in queue, but `forwardedKey{txHash, blockHash, logIndex}` found in `recentlyForwarded`** → the event was already forwarded to the Reactor and its block has now been reorged out. Log at **`WARN`** with `txHash`, `blockHash`, `logIndex`, `chainID`. Remove the entry.
 - **Match in neither** → log at `DEBUG` ("removal for unknown/stale event" — predates the current run or arrived long after the TTL).
 
-`recentlyForwarded` entries are evicted lazily: when the Pusher reads an entry, it checks `time.Since(forwardedAt) > 2 × delay` and discards stale entries on access. The map stays small because post-gate reorgs are rare and `Removed: true` arrives within one or two block-times of the reorg. No separate cleanup goroutine is needed.
+`recentlyForwarded` entries are evicted on a TTL that is a small multiple of `delay` — long enough that any `Removed: true` for a forwarded event arrives while the entry is still present, short enough that the map remains bounded. The exact multiplier is an implementation choice (current value: see `recentMultiplier` in `confirmation_gate.go`; e.g. 2 or 3 work in practice). Eviction may be performed lazily on Pusher access, in a periodic Poller sweep, or by any equivalent strategy; the post-gate detection contract above is what matters, not the eviction mechanism. The map stays small because post-gate reorgs are rare and `Removed: true` arrives within one or two block-times of the reorg. No separate cleanup goroutine is required.
 
 ### 6.6 Reactor defense-in-depth: skip re-delivered events
 

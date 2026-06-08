@@ -145,8 +145,9 @@ func TestConfirmationGate_ReorgCancel(t *testing.T) {
 	assert.Equal(t, int32(0), callCount.Load(), "handler must never be called after reorg cancel")
 }
 
-// T4: a re-delivered event (same tx/logIndex, different blockHash) replaces the original;
-// the Removed for the old blockHash is a no-op; the new event is forwarded once.
+// T4: a re-delivered event (same tx/logIndex, different blockHash) replaces the original
+// in the queue; the late-arriving Removed for the old blockHash is a no-op (no queue match,
+// no recentlyForwarded match); the new event is forwarded once.
 func TestConfirmationGate_OutOfOrder(t *testing.T) {
 	t.Parallel()
 
@@ -163,12 +164,13 @@ func TestConfirmationGate_OutOfOrder(t *testing.T) {
 	bhOld := common.HexToHash("0xAA")
 	bhNew := common.HexToHash("0xBB")
 
-	// Event A: original block
+	// Event A: original block — queued under (tx, bhOld, 0).
 	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bhOld, 0, false)))
-	// Event B: re-mined in new block (same txHash/logIndex, different blockHash)
+	// Event B: re-mined in new block (same txHash/logIndex, different blockHash) —
+	// replaces A in the queue under (tx, bhNew, 0) and resets the confirmation timer.
 	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bhNew, 0, false)))
-	// Removed for old block: matches A's full key (bh=0xAA) and removes it from queue.
-	// B (bh=0xBB) is left untouched.
+	// Removed for old block (bhOld): the queued entry now has bhNew, so the full-key
+	// scan finds no match. recentlyForwarded is empty (nothing forwarded yet). No-op.
 	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bhOld, 0, true)))
 
 	// Wait long enough for the poll goroutine to fire (pollInterval=50ms) and the delay to

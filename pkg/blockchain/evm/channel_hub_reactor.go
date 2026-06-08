@@ -81,6 +81,13 @@ type ChannelHubReactorStore interface {
 	// in tests.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID and
+	// returns the channel read under that lock, deriving the lock key from the channel in
+	// SQL so no stale pre-lock snapshot is used. Event handlers must use this instead of a
+	// GetChannelByID + LockUserState pair, which reads channel status before the lock and
+	// races a concurrent submit_state finalization. Returns nil if the channel is absent.
+	LockUserStateForHomeChannel(channelID string) (*core.Channel, error)
+
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
 	// state when the corresponding column is currently NULL. Either signature may be
 	// empty to skip that side.

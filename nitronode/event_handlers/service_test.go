@@ -43,8 +43,7 @@ func TestHandleHomeChannelCreated_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusOpen &&
@@ -101,9 +100,8 @@ func TestHandleHomeChannelCreated_IgnoresReplayOnInitializedChannel(t *testing.T
 				StateVersion: 1,
 			}
 
-			mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-			// LockUserState is called before the replay guard, so it fires even on replays.
-			mockStore.On("LockUserState", channel.UserWallet, channel.Asset).Return(decimal.Zero, nil)
+			// LockUserStateForHomeChannel is called before the replay guard, so it fires even on replays.
+			mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 
 			err := service.HandleHomeChannelCreated(ctx, mockStore, event)
 
@@ -117,7 +115,7 @@ func TestHandleHomeChannelCreated_IgnoresReplayOnInitializedChannel(t *testing.T
 }
 
 // TestHandleHomeChannelCreated_AcquiresUserLockBeforeMutation pins the race fix:
-// the handler must call LockUserState(userWallet, asset) before UpdateChannel so an
+// the handler must call LockUserStateForHomeChannel before UpdateChannel so an
 // in-flight receiver-issuance RPC cannot read Status=Void, store an unsigned receiver
 // row, and commit before we flip to Open. See HandleHomeChannelCheckpointed and
 // HandleHomeChannelClosed for the same pattern.
@@ -146,12 +144,11 @@ func TestHandleHomeChannelCreated_AcquiresUserLockBeforeMutation(t *testing.T) {
 	}
 
 	var locked bool
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).
+	mockStore.On("LockUserStateForHomeChannel", channelID).
 		Run(func(mock.Arguments) { locked = true }).
-		Return(decimal.Zero, nil)
+		Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(core.Channel) bool {
-		require.True(t, locked, "LockUserState must be called before UpdateChannel")
+		require.True(t, locked, "LockUserStateForHomeChannel must be called before UpdateChannel")
 		return true
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
@@ -226,8 +223,7 @@ func TestHandleHomeChannelCreated_BackfillsUnsignedReceiverStateOnOpen(t *testin
 				StateVersion: createVersion,
 			}
 
-			mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-			mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+			mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 			mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 				return ch.ChannelID == channelID &&
 					ch.Status == core.ChannelStatusOpen &&
@@ -315,8 +311,7 @@ func TestHandleHomeChannelCreated_HeadAlreadySigned_NoBackfill(t *testing.T) {
 		StateVersion: createVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, createVersion, "", "").Return(nil)
@@ -358,8 +353,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusOpen &&
@@ -379,6 +373,55 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
+}
+
+// TestHandleHomeChannelCheckpointed_DoesNotReopenFinalizedChannel pins the race fix: a
+// concurrent submit_state can co-sign a Finalize and flip the channel Open→Closing in the
+// window between reading the channel and acquiring the lock. Because the handler now reads the
+// channel UNDER the lock (LockUserStateForHomeChannel), it observes Closing and the
+// non-challenged path leaves the status untouched — it must NOT persist Open and silently
+// reopen the finalized channel. Returning the post-lock Closing snapshot here simulates the
+// concurrent finalize having committed first.
+func TestHandleHomeChannelCheckpointed_DoesNotReopenFinalizedChannel(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	// Post-lock snapshot: a concurrent submit_state Finalize already flipped Open→Closing.
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusClosing,
+		StateVersion: 3,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+	// Status must be preserved as Closing — never reopened to Open.
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusClosing &&
+			ch.StateVersion == 5
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	// Not challenged → no Finalize lookup and no head-sig backfill on this path.
+	mockStore.AssertNotCalled(t, "HasSignedFinalize", channelID)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", channelID, false)
 }
 
 func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
@@ -410,8 +453,7 @@ func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
 		ChallengeExpiry: challengeExpiry,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusChallenged &&
@@ -456,8 +498,7 @@ func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
 		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
@@ -481,7 +522,7 @@ func TestHandleHomeChannelChallenged_ChannelNotFound(t *testing.T) {
 		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(nil, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(nil, nil)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
@@ -509,7 +550,7 @@ func TestHandleHomeChannelChallenged_TypeMismatch(t *testing.T) {
 		ChallengeExpiry: uint64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
 
@@ -548,8 +589,7 @@ func TestHandleHomeChannelChallenged_FromClosingState(t *testing.T) {
 		ChallengeExpiry: challengeExpiry,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusChallenged &&
@@ -567,7 +607,7 @@ func TestHandleHomeChannelChallenged_FromClosingState(t *testing.T) {
 }
 
 // TestHandleHomeChannelChallenged_AcquiresUserLockBeforeMutation pins the race fix:
-// the handler must call LockUserState(userWallet, asset) before UpdateChannel so an
+// the handler must call LockUserStateForHomeChannel before UpdateChannel so an
 // in-flight receiver-issuance RPC cannot read Status=Open, node-sign a receiver state
 // and commit after the status flip to Challenged. See HandleHomeChannelClosed for the
 // same pattern.
@@ -597,12 +637,11 @@ func TestHandleHomeChannelChallenged_AcquiresUserLockBeforeMutation(t *testing.T
 	}
 
 	var locked bool
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).
+	mockStore.On("LockUserStateForHomeChannel", channelID).
 		Run(func(mock.Arguments) { locked = true }).
-		Return(decimal.Zero, nil)
+		Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(core.Channel) bool {
-		require.True(t, locked, "LockUserState must be called before UpdateChannel")
+		require.True(t, locked, "LockUserStateForHomeChannel must be called before UpdateChannel")
 		return true
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
@@ -639,8 +678,7 @@ func TestHandleHomeChannelClosed_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusClosed &&
@@ -1374,8 +1412,7 @@ func TestHandleHomeChannelCheckpointed_BackfillsUserSig(t *testing.T) {
 		UserSig:      userSig,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.StateVersion == 5
 	})).Return(nil)
@@ -1415,8 +1452,7 @@ func TestHandleHomeChannelCheckpointed_BackfillError(t *testing.T) {
 		UserSig:      "0xdeadbeef",
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xdeadbeef", "").Return(errors.New("db error"))
@@ -1504,8 +1540,7 @@ func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 		UserSig:      checkpointUserSig,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusOpen &&
 			ch.StateVersion == checkpointVersion &&
@@ -1594,8 +1629,7 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 		UserSig:      "0xusersig",
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusOpen &&
 			ch.StateVersion == checkpointVersion &&
@@ -1670,8 +1704,7 @@ func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testi
 		UserSig:      userSig,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusClosing &&
@@ -1694,7 +1727,7 @@ func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testi
 }
 
 // TestHandleHomeChannelCheckpointed_AcquiresUserLockBeforeMutation pins the race fix:
-// the handler must call LockUserState before flipping Status from Challenged to Open
+// the handler must call LockUserStateForHomeChannel before flipping Status from Challenged to Open
 // and backfilling the off-chain head. Otherwise an in-flight receiver-issuance RPC
 // can read Status=Challenged, choose to store an unsigned receiver row, and commit
 // after the backfill — leaving the latest head unsigned on a now-Open channel.
@@ -1723,12 +1756,11 @@ func TestHandleHomeChannelCheckpointed_AcquiresUserLockBeforeMutation(t *testing
 	}
 
 	var locked bool
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).
+	mockStore.On("LockUserStateForHomeChannel", channelID).
 		Run(func(mock.Arguments) { locked = true }).
-		Return(decimal.Zero, nil)
+		Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(core.Channel) bool {
-		require.True(t, locked, "LockUserState must be called before UpdateChannel")
+		require.True(t, locked, "LockUserStateForHomeChannel must be called before UpdateChannel")
 		return true
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
@@ -1794,8 +1826,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusClosed && ch.StateVersion == closureVersion
 	})).Return(nil)
@@ -1894,8 +1925,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	// Terminal Close clears any lingering challenge expiry alongside the status flip.
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusClosed &&
@@ -1978,8 +2008,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NegativeNet_ClampsToZero(t *tes
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
@@ -2063,8 +2092,7 @@ func TestHandleHomeChannelClosed_TimeoutAfterFinalize_AppendsRescue(t *testing.T
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == closureVersion &&
@@ -2172,8 +2200,7 @@ func TestHandleHomeChannelClosed_CooperativeCloseAfterChallenge_ZeroRescue(t *te
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, asset).Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == closureVersion &&
@@ -2250,8 +2277,7 @@ func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 		StateVersion: closureVersion,
 	}
 
-	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
-	mockStore.On("LockUserState", userWallet, "USDC").Return(decimal.Zero, nil)
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 	mockStore.On("UpdateChannel", mock.Anything).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "USDC").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)

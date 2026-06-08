@@ -84,30 +84,15 @@ chains                        List supported blockchains
 assets [chain_id]             List supported assets (optionally filter by chain)
 balances [wallet]             Get user balances (defaults to configured wallet)
 transactions [wallet]         Get transaction history
-action-allowances [wallet]    Get action allowances
 state [wallet] <asset>        Get latest state
 home-channel [wallet] <asset> Get home channel
 escrow-channel <channel_id>   Get escrow channel by ID
 ```
 
-### App Registry
+### App Sessions
 
 ```text
-app-info <app_id>                    Show application details
-my-apps                              List your registered applications
-register-app <app_id> [no-approval]  Register a new application
-app-sessions                         List app sessions
-```
-
-### Security Token Operations
-
-```text
-security-token approve <chain_id> <amount>                  Approve security token spending
-security-token balance <chain_id> [wallet]                  Check escrowed security token balance
-security-token escrow <chain_id> [target_address] <amount>  Escrow security tokens
-security-token initiate-withdrawal <chain_id>               Start unlock period
-security-token cancel-withdrawal <chain_id>                 Cancel unlock and re-lock
-security-token withdraw <chain_id> <destination>            Withdraw unlocked security tokens
+app-sessions                  List app sessions
 ```
 
 ### Other

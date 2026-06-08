@@ -130,6 +130,46 @@ func TestValidateAppSessionKeyStateV1(t *testing.T) {
 	assert.Error(t, ValidateAppSessionKeyStateV1(stateCrossKey))
 }
 
+func TestValidateAppSessionKeyStateUserSigV1(t *testing.T) {
+	t.Parallel()
+	userSigner, userAddress := createTestSigner(t)
+	_, sessionKeyAddr := createTestSigner(t)
+
+	baseState := AppSessionKeyStateV1{
+		UserAddress: userAddress,
+		SessionKey:  sessionKeyAddr,
+		Version:     1,
+		ExpiresAt:   time.Now().Add(-time.Hour), // revocation
+	}
+
+	packed, err := PackAppSessionKeyStateV1(baseState)
+	require.NoError(t, err)
+	userSig, err := userSigner.Sign(packed)
+	require.NoError(t, err)
+
+	state := baseState
+	state.UserSig = hexutil.Encode(userSig)
+
+	// Valid user_sig alone passes — no session_key_sig required on the revocation path.
+	require.NoError(t, ValidateAppSessionKeyStateUserSigV1(state))
+
+	// A missing session_key_sig is irrelevant here (the field stays empty above).
+	// user_sig signed by the wrong wallet is rejected.
+	wrongSigner, _ := createTestSigner(t)
+	wrongUserSig, err := wrongSigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongUser := state
+	stateWrongUser.UserSig = hexutil.Encode(wrongUserSig)
+	err = ValidateAppSessionKeyStateUserSigV1(stateWrongUser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "user_sig does not match user_address")
+
+	// Tampered version diverges the packed bytes, so recovery no longer matches.
+	stateTampered := state
+	stateTampered.Version = 2
+	assert.Error(t, ValidateAppSessionKeyStateUserSigV1(stateTampered))
+}
+
 func TestPackAppSessionKeyStateV1(t *testing.T) {
 	t.Parallel()
 	expiresAt := time.Unix(1739812234, 0)

@@ -1,6 +1,5 @@
 import { Address, encodeAbiParameters, keccak256, toHex } from 'viem';
 import { AppDefinitionV1, AppStateUpdateV1, AppSessionKeyStateV1 } from './types.js';
-import { AppV1 } from '../rpc/types.js';
 
 /**
  * PackCreateAppSessionRequestV1 packs the Definition and SessionData for signing using ABI encoding.
@@ -116,36 +115,6 @@ export function generateAppSessionIDV1(definition: AppDefinitionV1): `0x${string
   );
 
   // Return the Keccak256 hash as hex string
-  return keccak256(packed);
-}
-
-/**
- * PackAppV1 packs the AppV1 for signing using ABI encoding.
- * Matches Go SDK's PackAppV1.
- *
- * @param app - The application definition to pack
- * @returns Keccak256 hash of the ABI-encoded app data
- */
-export function packAppV1(app: AppV1): `0x${string}` {
-  const metadataHash = keccak256(toHex(new TextEncoder().encode(app.metadata)));
-
-  const packed = encodeAbiParameters(
-    [
-      { type: 'string' },    // id
-      { type: 'address' },   // ownerWallet
-      { type: 'bytes32' },   // metadata (hashed)
-      { type: 'uint64' },    // version
-      { type: 'bool' },      // creationApprovalNotRequired
-    ],
-    [
-      app.id,
-      app.owner_wallet as Address,
-      metadataHash,
-      BigInt(app.version),
-      app.creation_approval_not_required,
-    ]
-  );
-
   return keccak256(packed);
 }
 

@@ -43,8 +43,6 @@ type BlockchainConfig struct {
 	ChannelHubAddress string `yaml:"channel_hub_address"`
 	// ChannelHubSigValidators maps validator IDs to the addresses of signature validators for the ChannelHub contract on this blockchain
 	ChannelHubSigValidators map[uint8]string `yaml:"channel_hub_sig_validators"`
-	// LockingContractAddress is the address of the locking contract on this blockchain
-	LockingContractAddress string `yaml:"locking_contract_address"`
 }
 
 // LoadEnabledBlockchains loads and validates blockchain configurations from a YAML file.
@@ -86,16 +84,12 @@ func verifyBlockchainsConfig(cfg *BlockchainsConfig) error {
 			return fmt.Errorf("invalid blockchain name '%s', should match snake_case format", bc.Name)
 		}
 
-		if bc.ChannelHubAddress == "" && bc.LockingContractAddress == "" {
-			return fmt.Errorf("blockchain '%s' must specify at least one of channel_hub_address or locking_contract_address", bc.Name)
+		if bc.ChannelHubAddress == "" {
+			return fmt.Errorf("blockchain '%s' must specify channel_hub_address", bc.Name)
 		}
 
-		if bc.ChannelHubAddress != "" && !contractAddressRegex.MatchString(bc.ChannelHubAddress) {
+		if !contractAddressRegex.MatchString(bc.ChannelHubAddress) {
 			return fmt.Errorf("invalid channel hub address '%s' for blockchain '%s'", bc.ChannelHubAddress, bc.Name)
-		}
-
-		if bc.LockingContractAddress != "" && !contractAddressRegex.MatchString(bc.LockingContractAddress) {
-			return fmt.Errorf("invalid locking contract address '%s' for blockchain '%s'", bc.LockingContractAddress, bc.Name)
 		}
 
 		if bc.BlockStep == 0 {

@@ -4,28 +4,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
 [
   {
     "kind": "interface",
-    "name": "ActionAllowance",
-    "properties": [
-      "allowance: bigint",
-      "gatedAction: string",
-      "timeWindow: string",
-      "used: bigint",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "ActionAllowanceV1",
-    "properties": [
-      "allowance: string",
-      "gated_action: string",
-      "time_window: string",
-      "used: string",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
     "name": "AppAllocationV1",
     "properties": [
       "amount: Decimal",
@@ -51,20 +29,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [
       "(wsURL: string, applicationID?: string): string",
     ],
-  },
-  {
-    "kind": "interface",
-    "name": "AppInfoV1",
-    "properties": [
-      "created_at: string",
-      "creation_approval_not_required: boolean",
-      "id: string",
-      "metadata: string",
-      "owner_wallet: string",
-      "updated_at: string",
-      "version: string",
-    ],
-    "signatures": [],
   },
   {
     "kind": "const",
@@ -464,67 +428,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [],
   },
   {
-    "kind": "const",
-    "name": "AppsV1GetAppsMethod",
-    "type": "string",
-  },
-  {
-    "kind": "interface",
-    "name": "AppsV1GetAppsRequest",
-    "properties": [
-      "app_id: string",
-      "owner_wallet: string",
-      "pagination: PaginationParamsV1",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "AppsV1GetAppsResponse",
-    "properties": [
-      "apps: AppInfoV1[]",
-      "metadata: PaginationMetadataV1",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "const",
-    "name": "AppsV1Group",
-    "type": "string",
-  },
-  {
-    "kind": "const",
-    "name": "AppsV1SubmitAppVersionMethod",
-    "type": "string",
-  },
-  {
-    "kind": "interface",
-    "name": "AppsV1SubmitAppVersionRequest",
-    "properties": [
-      "app: AppV1",
-      "owner_sig: string",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "AppsV1SubmitAppVersionResponse",
-    "properties": [],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "AppV1",
-    "properties": [
-      "creation_approval_not_required: boolean",
-      "id: string",
-      "metadata: string",
-      "owner_wallet: string",
-      "version: string",
-    ],
-    "signatures": [],
-  },
-  {
     "kind": "interface",
     "name": "Asset",
     "properties": [
@@ -604,7 +507,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "blockStep: bigint",
       "channelHubAddress: Address",
       "id: bigint",
-      "lockingContractAddress: Address",
       "name: string",
     ],
     "signatures": [],
@@ -646,7 +548,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "properties": [
       "blockchain_id: string",
       "channel_hub_address: Address",
-      "locking_contract_address: Address",
       "name: string",
     ],
     "signatures": [],
@@ -1008,9 +909,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "name": "Client",
     "properties": [
       "acknowledge: (asset: string): Promise<core.State>",
-      "approveSecurityToken: (chainId: bigint, amount: Decimal): Promise<string>",
       "approveToken: (chainId: bigint, asset: string, amount: Decimal): Promise<string>",
-      "cancelSecurityTokensWithdrawal: (blockchainId: bigint): Promise<string>",
       "challenge: (state: core.State): Promise<string>",
       "checkTokenAllowance: (chainId: bigint, tokenAddress: string, owner: string): Promise<bigint>",
       "checkpoint: (asset: string): Promise<string>",
@@ -1018,11 +917,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "closeHomeChannel: (asset: string): Promise<core.State>",
       "createAppSession: (definition: app.AppDefinitionV1, sessionData: string, quorumSigs: string[], opts?: { ownerSig?: string; }): Promise<{ appSessionId: string; version: string; status: string; }>",
       "deposit: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
-      "escrowSecurityTokens: (targetWalletAddress: string, blockchainId: bigint, amount: Decimal): Promise<string>",
-      "getActionAllowances: (wallet: Address): Promise<core.ActionAllowance[]>",
       "getAppDefinition: (appSessionId: string): Promise<app.AppDefinitionV1 | null>",
       "getAppSessions: (options?: { appSessionId?: string; wallet?: Address; status?: string; page?: number; pageSize?: number; }): Promise<{ sessions: app.AppSessionInfoV1[]; metadata: core.PaginationMetadata; }>",
-      "getApps: (options?: { appId?: string; ownerWallet?: string; page?: number; pageSize?: number; }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata; }>",
       "getAssets: (blockchainId?: bigint): Promise<core.Asset[]>",
       "getBalances: (wallet: Address): Promise<core.BalanceEntry[]>",
       "getBlockchains: (): Promise<core.Blockchain[]>",
@@ -1033,13 +929,12 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getLastAppKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<app.AppSessionKeyStateV1[]>",
       "getLastChannelKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<ChannelSessionKeyStateV1[]>",
       "getLatestState: (wallet: Address, asset: string, onlySigned: boolean): Promise<core.State | null>",
-      "getLockedBalance: (chainId: bigint, wallet: string): Promise<Decimal>",
       "getOnChainBalance: (chainId: bigint, asset: string, wallet: Address): Promise<Decimal>",
       "getTransactions: (wallet: Address, options?: { asset?: string; txType?: core.TransactionType; fromTime?: bigint; toTime?: bigint; page?: number; pageSize?: number; }): Promise<{ transactions: core.Transaction[]; metadata: core.PaginationMetadata; }>",
       "getUserAddress: (): Address",
-      "initiateSecurityTokensWithdrawal: (blockchainId: bigint): Promise<string>",
       "ping: (): Promise<void>",
-      "registerApp: (appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void>",
+      "revokeChannelSessionKey: (state: Omit<ChannelSessionKeyStateV1, 'user_sig' | 'session_key_sig'>): Promise<void>",
+      "revokeSessionKey: (state: Omit<app.AppSessionKeyStateV1, 'user_sig' | 'session_key_sig'>): Promise<void>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
       "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
@@ -1055,7 +950,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "waitForClose: (): Promise<void>",
       "watchValidatorRegistered: (chainId: bigint, fromBlock?: bigint, signal?: AbortSignal): AsyncGenerator<core.ValidatorRegisteredEvent>",
       "withdraw: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
-      "withdrawSecurityTokens: (blockchainId: bigint, destinationWalletAddress: string): Promise<string>",
     ],
     "staticProperties": [
       "create: (wsURL: string, stateSigner: StateSigner, txSigner: TransactionSigner, ...opts: Option[]): Promise<Client>",
@@ -1767,13 +1661,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
   },
   {
     "kind": "function",
-    "name": "packAppV1",
-    "signatures": [
-      "(app: AppV1): \`0x\${string}\`",
-    ],
-  },
-  {
-    "kind": "function",
     "name": "packChallengeState",
     "signatures": [
       "(state: State, assetStore: AssetStore): Promise<\`0x\${string}\`>",
@@ -1867,8 +1754,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "appSessionsV1SubmitAppState: (req: API.AppSessionsV1SubmitAppStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitAppStateResponse>",
       "appSessionsV1SubmitDepositState: (req: API.AppSessionsV1SubmitDepositStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitDepositStateResponse>",
       "appSessionsV1SubmitSessionKeyState: (req: API.AppSessionsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitSessionKeyStateResponse>",
-      "appsV1GetApps: (req: API.AppsV1GetAppsRequest, signal?: AbortSignal): Promise<API.AppsV1GetAppsResponse>",
-      "appsV1SubmitAppVersion: (req: API.AppsV1SubmitAppVersionRequest, signal?: AbortSignal): Promise<API.AppsV1SubmitAppVersionResponse>",
       "channelsV1GetChannels: (req: API.ChannelsV1GetChannelsRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetChannelsResponse>",
       "channelsV1GetEscrowChannel: (req: API.ChannelsV1GetEscrowChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetEscrowChannelResponse>",
       "channelsV1GetHomeChannel: (req: API.ChannelsV1GetHomeChannelRequest, signal?: AbortSignal): Promise<API.ChannelsV1GetHomeChannelResponse>",
@@ -1884,7 +1769,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "nodeV1GetConfig: (signal?: AbortSignal): Promise<API.NodeV1GetConfigResponse>",
       "nodeV1Ping: (signal?: AbortSignal): Promise<void>",
       "start: (url: string, handleClosure: (err?: Error) => void): Promise<void>",
-      "userV1GetActionAllowances: (req: API.UserV1GetActionAllowancesRequest, signal?: AbortSignal): Promise<API.UserV1GetActionAllowancesResponse>",
       "userV1GetBalances: (req: API.UserV1GetBalancesRequest, signal?: AbortSignal): Promise<API.UserV1GetBalancesResponse>",
       "userV1GetTransactions: (req: API.UserV1GetTransactionsRequest, signal?: AbortSignal): Promise<API.UserV1GetTransactionsResponse>",
     ],
@@ -2122,13 +2006,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
   },
   {
     "kind": "function",
-    "name": "transformActionAllowance",
-    "signatures": [
-      "(a: ActionAllowanceV1): core.ActionAllowance",
-    ],
-  },
-  {
-    "kind": "function",
     "name": "transformAppDefinitionFromRPC",
     "signatures": [
       "(raw: any): AppDefinitionV1",
@@ -2311,27 +2188,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
   },
   {
     "kind": "const",
-    "name": "UserV1GetActionAllowancesMethod",
-    "type": "string",
-  },
-  {
-    "kind": "interface",
-    "name": "UserV1GetActionAllowancesRequest",
-    "properties": [
-      "wallet: Address",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "UserV1GetActionAllowancesResponse",
-    "properties": [
-      "allowances: ActionAllowanceV1[]",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "const",
     "name": "UserV1GetBalancesMethod",
     "type": "string",
   },
@@ -2478,9 +2334,6 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "AppSessionsV1SubmitDepositStateMethod",
   "AppSessionsV1SubmitSessionKeyStateMethod",
   "AppStateUpdateIntent",
-  "AppsV1GetAppsMethod",
-  "AppsV1Group",
-  "AppsV1SubmitAppVersionMethod",
   "CHANNEL_HUB_VERSION",
   "ChannelDefaultSigner",
   "ChannelParticipant",
@@ -2538,7 +2391,6 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "StatePackerV1",
   "TransactionType",
   "TransitionType",
-  "UserV1GetActionAllowancesMethod",
   "UserV1GetBalancesMethod",
   "UserV1GetTransactionsMethod",
   "UserV1Group",
@@ -2598,13 +2450,11 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "nextState",
   "packAppSessionKeyStateV1",
   "packAppStateUpdateV1",
-  "packAppV1",
   "packChallengeState",
   "packChannelKeyStateV1",
   "packCreateAppSessionRequestV1",
   "packState",
   "payloadError",
-  "transformActionAllowance",
   "transformAppDefinitionFromRPC",
   "transformAppDefinitionToRPC",
   "transformAppSessionInfo",

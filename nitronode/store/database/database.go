@@ -246,7 +246,6 @@ func migratePostgres(cnf DatabaseConfig, embedMigrations embed.FS) error {
 
 func migrateSqlite(db *gorm.DB) error {
 	if err := db.AutoMigrate(
-		&AppV1{},
 		&AppLedgerEntryV1{},
 		&Channel{},
 		&AppSessionV1{},
@@ -262,8 +261,6 @@ func migrateSqlite(db *gorm.DB) error {
 		&ChannelSessionKeyAssetV1{},
 		&CurrentSessionKeyStateV1{},
 		&UserBalance{},
-		&UserStakedV1{},
-		&ActionLogEntryV1{},
 		&LifespanMetric{},
 	); err != nil {
 		return err

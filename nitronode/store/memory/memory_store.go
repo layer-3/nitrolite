@@ -242,7 +242,7 @@ func (ms *MemoryStoreV1) GetTokenDecimals(blockchainID uint64, tokenAddress stri
 	}
 	decimals, ok := decimalsOnChain[tokenAddress]
 	if !ok {
-		return 0, fmt.Errorf("token %s is not supported on blockchain with ID '%d'", tokenAddress, blockchainID)
+		return 0, fmt.Errorf("token %s is not supported on blockchain with ID '%d': %w", tokenAddress, blockchainID, core.ErrTokenNotSupported)
 	}
 	return decimals, nil
 }
@@ -257,7 +257,7 @@ func (ms *MemoryStoreV1) GetTokenAsset(blockchainID uint64, tokenAddress string)
 	}
 	asset, ok := assetsOnChain[tokenAddress]
 	if !ok {
-		return "", fmt.Errorf("token %s is not supported on blockchain with ID '%d'", tokenAddress, blockchainID)
+		return "", fmt.Errorf("token %s is not supported on blockchain with ID '%d': %w", tokenAddress, blockchainID, core.ErrTokenNotSupported)
 	}
 	return asset.Symbol, nil
 }

@@ -161,6 +161,18 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	channel.StateVersion = event.StateVersion
 
+	// ChannelHub.createChannel can emit ChannelCheckpointed before ChannelCreated for an
+	// initial non-deposit/non-withdraw state. If this checkpoint is processed while the
+	// local row is still the Void seed from CreateChannel, the on-chain checkpoint is
+	// sufficient evidence that the channel has been materialized: promote Void to Open
+	// here instead of leaving a bumped state_version on a Void channel until the later
+	// ChannelCreated event replays. That replay then no-ops via the Status >= Open guard
+	// in HandleHomeChannelCreated.
+	wasVoid := channel.Status == core.ChannelStatusVoid
+	if wasVoid {
+		channel.Status = core.ChannelStatusOpen
+	}
+
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 	if wasChallenged {
 		// Reconstruct the post-Finalize Closing marker from channel_states: if the node
@@ -199,9 +211,11 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	// When a challenge is cleared, the off-chain head may sit above event.StateVersion:
 	// any receiver state issued during the challenge was stored unsigned and is now the
 	// channel's actual latest state. Backfill the node signature on that head so future
-	// flows treat it as fully co-signed. On normal Open→Open checkpoints the head row
-	// is already node-signed via the RPC path and this is a no-op.
-	if wasChallenged {
+	// flows treat it as fully co-signed. The same applies to a Void→Open promotion: a
+	// concurrent RPC may have stored an unsigned receiver head while the channel was
+	// still Void (mirrors HandleHomeChannelCreated). On normal Open→Open checkpoints the
+	// head row is already node-signed via the RPC path and this is a no-op.
+	if wasChallenged || wasVoid {
 		if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
 			return err
 		}

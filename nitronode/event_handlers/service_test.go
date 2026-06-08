@@ -381,6 +381,53 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleHomeChannelCheckpointed_FromVoidPromotesToOpen(t *testing.T) {
+	// ChannelCheckpointed can arrive before ChannelCreated for an initial state. A checkpoint
+	// on a still-Void channel must promote it to Open rather than leave a bumped state_version
+	// on a Void row until the later ChannelCreated event replays.
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusVoid,
+		StateVersion: 0,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 1,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+	mockStore.On("LockUserState", userWallet, "usdc").Return(decimal.Zero, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == 1
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(1), "", "").Return(nil)
+	// Void→Open promotion runs the head-sig backfill (mirrors HandleHomeChannelCreated);
+	// no off-chain head present → no-op. HasSignedFinalize is only consulted on the
+	// Challenged path and must not be reached here.
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "HasSignedFinalize", channelID)
+}
+
 func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
 	// Channel must be marked Challenged with the challenge expiry so CheckActiveChannel and
 	// RefreshUserEnforcedBalance stop treating it as open. Auto-checkpoint stays disabled:

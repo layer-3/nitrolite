@@ -154,6 +154,14 @@ These changes are reflected only in cumulative net flows until enforced on-chain
 
 ---
 
+### App session closure and participant atomicity
+
+Closing an app session distributes locked allocations back to each participant by issuing a new release receive-state on every participant's home channel. The operation is **atomic across all participants** — if the Node cannot issue a release for any one participant, the entire close aborts.
+
+In particular, the Node refuses to issue a release to a recipient with an in-flight escrow operation on the affected asset (escrow lock, mutual lock, or escrow deposit/withdrawal awaiting on-chain finalization), so a single participant's pending escrow blocks cooperative closure for everyone else in the session until it resolves. See [`contracts/SECURITY.md`](contracts/SECURITY.md) for the full rationale and recovery paths.
+
+---
+
 ## On-chain protocol (enforcement plane)
 
 The on-chain contract is the **final arbiter** of correctness.

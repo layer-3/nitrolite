@@ -66,7 +66,7 @@ This directory contains the V1 API handlers for app session management, implemen
 ```
 
 **Validation**:
-- At least 2 participants required
+- At least 1 participant required
 - Nonce must be non-zero
 - Quorum cannot exceed total signature weights
 - All weights must be non-negative

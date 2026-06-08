@@ -97,6 +97,16 @@ This means out-of-order delivery requires no special case beyond the normal path
 
 Before the reconciliation logic described below can function, `block_hash` must be added as a column to `contract_events` and to the `core.BlockchainEvent` struct. The value is available in `types.Log.BlockHash` at the time the gate calls the reactor. Without this column, reorg detection in steps 2–4 is not possible.
 
+**Why `block_hash` is the minimal required addition — and why alternatives fail:**
+
+The reconciliation walk needs to answer one question per stored block: "is this specific block still in the canonical chain?" The only RPC call that answers it directly is `eth_getBlockByHash(hash)` — it returns `null` if the block is no longer canonical. Without the stored hash, two alternatives were evaluated and both fail:
+
+- **`block_number` alone is insufficient.** After a reorg, a *different* block can occupy the same height. Calling `eth_getBlockByNumber(storedBlockNumber)` always returns a block — but it may be a new block from the reorged fork. Without the original hash there is no way to tell whether the block returned is the one the reactor processed.
+
+- **`transaction_hash` via `eth_getTransactionReceipt` is insufficient.** A block can be reorged out even if every one of its transactions was re-mined in a new block at the same height. In that case all receipt lookups return `blockNumber` matching the stored value, but the original block is gone and the stored DB state no longer corresponds to the canonical chain. Additionally, the backward walk (step 3) must traverse every stored *block* in descending order; rows in `contract_events` only exist for blocks that contained a `ChannelHub` event. A reorg that diverged entirely within a gap — blocks with no relevant events — is invisible to a tx-receipt-based walk.
+
+`block_hash` is a single `CHAR(66)` column. Its addition enables exact, O(1)-per-step canonicality checks and is the only approach that handles all reorg scenarios correctly.
+
 #### Definition: latest processed block
 
 The **latest processed block** for a chain is the highest block number at which the reactor successfully committed at least one event to the database — identical to the listener's existing startup cursor (`MAX(block_number)` in `contract_events` for this `blockchain_id` and contract address, computed by `GetLatestContractEventBlockNumber`). This is distinct from the highest block the listener ever *saw*: the listener may have seen many blocks that contained no relevant events and therefore left no `contract_events` rows.

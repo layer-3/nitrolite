@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -26,7 +25,7 @@ const (
 // for graceful shutdown.
 type Listener struct {
 	contractAddress common.Address
-	client          bind.ContractBackend
+	client          EVMClient
 	blockchainID    uint64
 	blockStep       uint64 // max blocks per FilterLogs call during reconciliation
 	logger          log.Logger
@@ -36,7 +35,7 @@ type Listener struct {
 
 // NewListener creates a Listener. blockStep controls how many blocks are fetched
 // per RPC call during historical reconciliation.
-func NewListener(contractAddress common.Address, client bind.ContractBackend, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
+func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
 	return &Listener{
 		contractAddress: contractAddress,
 		client:          client,
@@ -106,9 +105,9 @@ func (l *Listener) logBackOff(count uint64, originator string) (time.Duration, b
 // On subscription failure it retries with exponential backoff. Returns non-nil only
 // when the handler or the event-presence check fails.
 func (l *Listener) listenEvents(ctx context.Context) error {
-	lastBlock, err := l.eventGetter.GetLatestContractEventBlockNumber(l.contractAddress.String(), l.blockchainID)
+	lastBlock, err := findCommonAncestor(ctx, l.client, l.eventGetter, l.contractAddress.String(), l.blockchainID, l.logger)
 	if err != nil {
-		return fmt.Errorf("failed to get latest processed block: %w", err)
+		return fmt.Errorf("failed to find common ancestor: %w", err)
 	}
 
 	var backOffCount atomic.Uint64

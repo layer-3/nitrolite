@@ -87,4 +87,5 @@ type BlockchainEvent struct {
 	BlockNumber     uint64 `json:"block_number"`
 	TransactionHash string `json:"transaction_hash"`
 	LogIndex        uint32 `json:"log_index"`
+	BlockHash       string `json:"block_hash"`
 }

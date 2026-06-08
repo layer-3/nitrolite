@@ -271,6 +271,7 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 			ContractAddress: l.Address.Hex(),
 			TransactionHash: l.TxHash.String(),
 			LogIndex:        uint32(l.Index),
+			BlockHash:       l.BlockHash.Hex(),
 		}); err != nil {
 			logger.Warn("error storing contract event", "error", err, "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 			return errors.Wrap(err, "error storing contract event")

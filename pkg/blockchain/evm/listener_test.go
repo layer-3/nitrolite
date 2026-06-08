@@ -59,7 +59,8 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	eventGetter.On("GetLatestContractEventBlockNumber", addr.String(), uint64(1)).Return(uint64(0), nil)
+	// No stored events → findCommonAncestor returns 0 immediately (genesis).
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(0), "", nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -154,9 +155,10 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	logger := log.NewNoopLogger()
 	addr := common.HexToAddress("0x123")
 
-	// Start from block 100
+	// Start from block 100 (canonical — HeaderByHash returns non-nil).
 	eventGetter := new(MockContractEventGetter)
-	eventGetter.On("GetLatestContractEventBlockNumber", addr.String(), uint64(1)).Return(uint64(100), nil)
+	blockHash100 := common.HexToHash("0xdeadbeef")
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(100), blockHash100.Hex(), nil)
 	// Historical event at block 105 is not present
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(105), mock.Anything, uint32(0)).Return(false, nil)
 	// Current event at block 111 — after historical is done, first current event triggers check
@@ -183,6 +185,10 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	}
 
 	listener := NewListener(addr, mockClient, 1, 10, logger, handleEvent, eventGetter)
+
+	// findCommonAncestor: block 100 is canonical.
+	canonicalHeader := &types.Header{Number: big.NewInt(100)}
+	mockClient.On("HeaderByHash", mock.Anything, blockHash100).Return(canonicalHeader, nil)
 
 	// Mock HeaderByNumber (current tip is 110)
 	currentHeader := &types.Header{Number: big.NewInt(110)}

@@ -198,6 +198,10 @@ func (s *DBStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, 
 	// status to Closing while we wait on the balance lock would not be reflected. This separate
 	// statement takes a fresh snapshot once the lock is acquired, so the returned status reflects
 	// any such committed transition.
+	//
+	// NOTE: requires READ COMMITTED isolation (Postgres default, and nitronode never overrides it).
+	// Under REPEATABLE READ or SERIALIZABLE this statement still sees the transaction-start
+	// snapshot, returning the stale pre-lock status and negating the fix.
 	return s.GetChannelByID(channelID)
 }
 

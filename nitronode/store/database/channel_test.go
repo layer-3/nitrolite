@@ -308,9 +308,18 @@ func TestDBStore_LockUserStateForHomeChannel(t *testing.T) {
 			got <- lockResult{channel: ch, err: err}
 		}()
 
-		// Give the call time to start and block on the balance lock, then let the competing
-		// transaction commit the Closing status.
-		time.Sleep(200 * time.Millisecond)
+		// Wait until the call is actually blocked on the balance-row lock before letting the
+		// competing transaction commit Closing. A fixed sleep is non-deterministic: under load
+		// the goroutine might not yet be in SELECT ... FOR UPDATE, so the competitor would commit
+		// before the lock is contended and the race would never be exercised. Poll pg_locks for an
+		// ungranted lock instead — that only appears once a backend is waiting on the lock.
+		require.Eventually(t, func() bool {
+			var waiting int64
+			if err := db.Raw(`SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting).Error; err != nil {
+				return false
+			}
+			return waiting > 0
+		}, 5*time.Second, 5*time.Millisecond, "LockUserStateForHomeChannel never blocked on the balance lock")
 		close(proceed)
 
 		require.NoError(t, <-txDone)

@@ -156,11 +156,12 @@ type ChannelHubEventHandlerStore interface {
 	// in tests.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
-	// LockUserStateForHomeChannel locks the balance row of the user owning channelID and
-	// returns the channel read under that lock, deriving the lock key from the channel in
-	// SQL so no stale pre-lock snapshot is used. Event handlers must use this instead of a
-	// GetChannelByID + LockUserState pair, which reads channel status before the lock and
-	// races a concurrent submit_state finalization. Returns nil if the channel is absent.
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID. On
+	// postgres it derives the lock key from the channel in SQL and returns the channel read
+	// under that lock; on non-postgres (sqlite in tests) the snapshot is taken before the lock
+	// for test compatibility. Event handlers must use this instead of a GetChannelByID +
+	// LockUserState pair, which reads channel status before the lock and races a concurrent
+	// submit_state finalization. Returns nil if the channel is absent.
 	LockUserStateForHomeChannel(channelID string) (*Channel, error)
 
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state

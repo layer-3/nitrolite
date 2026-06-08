@@ -57,13 +57,9 @@ func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx c
 func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCreatedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
-	// Acquire the user's balance-row lock and read the channel under it before mutating
-	// channel status or backfilling the off-chain head. Receiver/release issuance paths
-	// lock the same row up front and then re-check Status via CheckActiveChannel; without
-	// this lock an in-flight RPC can read Status=Void, decide to store an unsigned receiver
-	// row, and commit before we flip to Open — leaving the latest head unsigned on a
-	// technically opened channel. The lock+read is a single store call so the channel
-	// snapshot is consistent with the lock. See HandleHomeChannelCheckpointed and
+	// Acquire the user's balance-row lock and read the channel under it before mutating status:
+	// the lock guards against a concurrent submit_state flipping channel status (e.g. Void→Open
+	// receiver issuance) between the read and our write. See HandleHomeChannelCheckpointed and
 	// HandleHomeChannelClosed for the same pattern.
 	channel, err := tx.LockUserStateForHomeChannel(chanID)
 	if err != nil {

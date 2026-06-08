@@ -229,6 +229,38 @@ func TestWebsocketConnection_RateLimitedFrame_ClosesConnection(t *testing.T) {
 	require.Equal(t, 2, limiter.calls, "limiter was consulted for both frames")
 }
 
+func TestWebsocketConnection_EmptyFrame_ChargedByLimiter(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsConnMock := newGorillaWsConnMock(ctx)
+	limiter := &stubLimiter{rejectAt: 1} // reject the very first frame
+	cfg := rpc.WebsocketConnectionConfig{
+		ConnectionID:     "conn-emptyframe",
+		WebsocketConn:    wsConnMock,
+		FrameRateLimiter: limiter,
+	}
+	conn, err := rpc.NewWebsocketConnection(cfg)
+	require.NoError(t, err)
+
+	closureCh := make(chan error, 1)
+	conn.Serve(ctx, func(err error) { closureCh <- err })
+
+	// Empty frames are malformed RPC and must spend a request-count token
+	// before the empty-message skip, otherwise they flood for free (MF3-L14).
+	wsConnMock.addMessageToRead("")
+
+	select {
+	case err := <-closureCh:
+		require.NoError(t, err, "rate-limit close is graceful")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("empty frame bypassed the rate limiter")
+	}
+	require.Equal(t, 1, limiter.calls, "limiter must be consulted for empty frames")
+}
+
 func TestWebsocketConnection_ServeQueueFullClosesCleanly(t *testing.T) {
 	t.Parallel()
 

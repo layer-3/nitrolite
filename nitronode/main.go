@@ -50,8 +50,6 @@ func main() {
 		MaxSessionDataLen:     vl.MaxSessionDataLen,
 		MaxSessionKeyIDs:      vl.MaxSessionKeyIDs,
 		MaxSessionKeysPerUser: vl.MaxSessionKeysPerUser,
-		RateLimitPerSec:       bb.RateLimitPerSec,
-		RateLimitBurst:        bb.RateLimitBurst,
 	}
 	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.RuntimeMetrics, bb.Logger)
 

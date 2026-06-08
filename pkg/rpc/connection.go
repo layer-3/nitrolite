@@ -400,11 +400,10 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 			return
 		}
 
-		if len(messageBytes) == 0 {
-			conn.logger.Debug("received empty message, skipping")
-			continue // Skip empty messages
-		}
-
+		// Charge every inbound frame against the rate limiter before any
+		// skip, including empty/protocol-invalid ones. Empty frames are
+		// malformed RPC and must still spend a request-count token, otherwise
+		// they can be flooded for free (MF3-L14).
 		if !conn.frameRateLimiter.Admit(time.Now(), len(messageBytes)) {
 			conn.logger.Warn("frame rate limit exceeded; closing connection",
 				"origin", conn.origin,
@@ -416,6 +415,11 @@ func (conn *WebsocketConnection) readMessages(handleClosure func(error)) {
 			}
 			handleClosure(nil)
 			return
+		}
+
+		if len(messageBytes) == 0 {
+			conn.logger.Debug("received empty message, skipping")
+			continue // Skip empty messages
 		}
 
 		select {

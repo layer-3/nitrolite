@@ -428,32 +428,6 @@ func TestClient_SubmitAppState(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestClient_RebalanceAppSessions(t *testing.T) {
-	t.Parallel()
-	mockDialer := NewMockDialer()
-	mockDialer.Dial(context.Background(), "", nil)
-
-	mockResp := rpc.AppSessionsV1RebalanceAppSessionsResponse{
-		BatchID: "0xBatchID",
-	}
-	mockDialer.RegisterResponse(rpc.AppSessionsV1RebalanceAppSessionsMethod.String(), mockResp)
-
-	client := &Client{
-		rpcClient: rpc.NewClient(mockDialer),
-	}
-
-	updates := []app.SignedAppStateUpdateV1{
-		{
-			AppStateUpdate: app.AppStateUpdateV1{AppSessionID: "0xS1"},
-			QuorumSigs:     []string{"sig1"},
-		},
-	}
-
-	batchID, err := client.RebalanceAppSessions(context.Background(), updates)
-	require.NoError(t, err)
-	assert.Equal(t, "0xBatchID", batchID)
-}
-
 func TestClient_SubmitAppSessionKeyState(t *testing.T) {
 	t.Parallel()
 	mockDialer := NewMockDialer()

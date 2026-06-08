@@ -309,27 +309,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
   },
   {
     "kind": "const",
-    "name": "AppSessionsV1RebalanceAppSessionsMethod",
-    "type": "string",
-  },
-  {
-    "kind": "interface",
-    "name": "AppSessionsV1RebalanceAppSessionsRequest",
-    "properties": [
-      "signed_updates: SignedAppStateUpdateV1[]",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "interface",
-    "name": "AppSessionsV1RebalanceAppSessionsResponse",
-    "properties": [
-      "batch_id: string",
-    ],
-    "signatures": [],
-  },
-  {
-    "kind": "const",
     "name": "AppSessionsV1SubmitAppStateMethod",
     "type": "string",
   },
@@ -408,15 +387,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [],
   },
   {
-    "kind": "interface",
-    "name": "AppSessionVersionV1",
-    "properties": [
-      "sessionId: string",
-      "version: bigint",
-    ],
-    "signatures": [],
-  },
-  {
     "constructors": [
       "(inner: StateSigner): AppSessionWalletSignerV1",
     ],
@@ -435,7 +405,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "Deposit = 1",
       "Withdraw = 2",
       "Close = 3",
-      "Rebalance = 4",
     ],
     "name": "AppStateUpdateIntent",
   },
@@ -964,7 +933,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getTransactions: (wallet: Address, options?: { asset?: string; txType?: core.TransactionType; fromTime?: bigint; toTime?: bigint; page?: number; pageSize?: number; }): Promise<{ transactions: core.Transaction[]; metadata: core.PaginationMetadata; }>",
       "getUserAddress: (): Address",
       "ping: (): Promise<void>",
-      "rebalanceAppSessions: (signedUpdates: app.SignedAppStateUpdateV1[]): Promise<string>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
       "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
@@ -1236,20 +1204,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "name": "generateNonce",
     "signatures": [
       "(): bigint",
-    ],
-  },
-  {
-    "kind": "function",
-    "name": "generateRebalanceBatchIDV1",
-    "signatures": [
-      "(sessionVersions: AppSessionVersionV1[]): \`0x\${string}\`",
-    ],
-  },
-  {
-    "kind": "function",
-    "name": "generateRebalanceTransactionIDV1",
-    "signatures": [
-      "(batchId: string, sessionId: string, asset: string): \`0x\${string}\`",
     ],
   },
   {
@@ -1795,7 +1749,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "appSessionsV1GetAppDefinition: (req: API.AppSessionsV1GetAppDefinitionRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppDefinitionResponse>",
       "appSessionsV1GetAppSessions: (req: API.AppSessionsV1GetAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetAppSessionsResponse>",
       "appSessionsV1GetLastKeyStates: (req: API.AppSessionsV1GetLastKeyStatesRequest, signal?: AbortSignal): Promise<API.AppSessionsV1GetLastKeyStatesResponse>",
-      "appSessionsV1RebalanceAppSessions: (req: API.AppSessionsV1RebalanceAppSessionsRequest, signal?: AbortSignal): Promise<API.AppSessionsV1RebalanceAppSessionsResponse>",
       "appSessionsV1SubmitAppState: (req: API.AppSessionsV1SubmitAppStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitAppStateResponse>",
       "appSessionsV1SubmitDepositState: (req: API.AppSessionsV1SubmitDepositStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitDepositStateResponse>",
       "appSessionsV1SubmitSessionKeyState: (req: API.AppSessionsV1SubmitSessionKeyStateRequest, signal?: AbortSignal): Promise<API.AppSessionsV1SubmitSessionKeyStateResponse>",
@@ -2026,7 +1979,6 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "Transfer = 30",
       "Commit = 40",
       "Release = 41",
-      "Rebalance = 42",
       "Migrate = 100",
       "EscrowLock = 110",
       "MutualLock = 120",
@@ -2376,7 +2328,6 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "AppSessionsV1GetAppSessionsMethod",
   "AppSessionsV1GetLastKeyStatesMethod",
   "AppSessionsV1Group",
-  "AppSessionsV1RebalanceAppSessionsMethod",
   "AppSessionsV1SubmitAppStateMethod",
   "AppSessionsV1SubmitDepositStateMethod",
   "AppSessionsV1SubmitSessionKeyStateMethod",
@@ -2467,8 +2418,6 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "generateAppSessionIDV1",
   "generateChannelMetadata",
   "generateNonce",
-  "generateRebalanceBatchIDV1",
-  "generateRebalanceTransactionIDV1",
   "getChannelSessionKeyAuthMetadataHashV1",
   "getEscrowChannelId",
   "getHomeChannelId",

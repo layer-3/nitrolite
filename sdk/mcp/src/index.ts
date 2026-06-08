@@ -255,7 +255,7 @@ function categorizeMethod(name: string): string {
 function categorizeGoMethod(name: string): string {
     const lower = name.toLowerCase();
     if (/channel|deposit|withdraw|transfer|checkpoint|challenge|acknowledge|close/.test(lower)) return 'Channels & Transactions';
-    if (/appsession|appstate|appdef|rebalance/.test(lower)) return 'App Sessions';
+    if (/appsession|appstate|appdef/.test(lower)) return 'App Sessions';
     if (/sessionkey|keystate/.test(lower)) return 'Session Keys';
     if (/balance|transaction|user/.test(lower)) return 'User Queries';
     if (/config|blockchain|asset|ping/.test(lower)) return 'Node & Config';

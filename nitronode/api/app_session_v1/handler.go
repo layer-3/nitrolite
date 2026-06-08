@@ -35,7 +35,6 @@ type Handler struct {
 	maxParticipants       int
 	maxSessionData        int
 	maxSessionKeyIDs      int
-	maxSignedUpdates      int
 	maxSessionKeysPerUser int
 }
 
@@ -48,7 +47,7 @@ func NewHandler(
 	statePacker core.StatePacker,
 	nodeAddress string,
 	m metrics.RuntimeMetricExporter,
-	maxParticipants, maxSessionData, maxSessionKeyIDs, maxSignedUpdates int,
+	maxParticipants, maxSessionData, maxSessionKeyIDs int,
 	maxSessionKeysPerUser int,
 ) *Handler {
 	return &Handler{
@@ -62,7 +61,6 @@ func NewHandler(
 		maxParticipants:       maxParticipants,
 		maxSessionData:        maxSessionData,
 		maxSessionKeyIDs:      maxSessionKeyIDs,
-		maxSignedUpdates:      maxSignedUpdates,
 		maxSessionKeysPerUser: maxSessionKeysPerUser,
 	}
 }

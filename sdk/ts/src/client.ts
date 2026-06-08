@@ -1464,45 +1464,6 @@ export class Client {
     await this.rpcClient.appSessionsV1SubmitAppState(req);
   }
 
-  /**
-   * RebalanceAppSessions rebalances multiple application sessions atomically.
-   *
-   * This method performs atomic rebalancing across multiple app sessions, ensuring
-   * that funds are redistributed consistently without the risk of partial updates.
-   *
-   * @param signedUpdates - Array of signed app state updates to apply atomically
-   * @returns BatchID for tracking the rebalancing operation
-   *
-   * @example
-   * ```typescript
-   * const updates: app.SignedAppStateUpdateV1[] = [
-   *   {
-   *     appStateUpdate: { appSessionId: 'session1', intent: app.AppStateUpdateIntent.Rebalance, ... },
-   *     quorumSigs: ['sig1', 'sig2'],
-   *   },
-   *   {
-   *     appStateUpdate: { appSessionId: 'session2', intent: app.AppStateUpdateIntent.Rebalance, ... },
-   *     quorumSigs: ['sig3', 'sig4'],
-   *   },
-   * ];
-   * const batchId = await client.rebalanceAppSessions(updates);
-   * console.log('Rebalance batch ID:', batchId);
-   * ```
-   */
-  async rebalanceAppSessions(
-    signedUpdates: app.SignedAppStateUpdateV1[]
-  ): Promise<string> {
-    // Transform SDK types to RPC types
-    const rpcUpdates = signedUpdates.map(transformSignedAppStateUpdateToRPC);
-
-    const req: API.AppSessionsV1RebalanceAppSessionsRequest = {
-      signed_updates: rpcUpdates as any, // RPC type
-    };
-
-    const resp = await this.rpcClient.appSessionsV1RebalanceAppSessions(req);
-    return resp.batch_id;
-  }
-
   // ============================================================================
   // Channel Session Key Methods
   // ============================================================================

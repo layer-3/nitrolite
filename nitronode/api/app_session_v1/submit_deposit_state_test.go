@@ -81,7 +81,6 @@ func TestSubmitDepositState_Success(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	// Test data - create one key for both app session and channel state signing
@@ -393,7 +392,6 @@ func TestSubmitDepositState_InvalidTransitionType(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	// Test data
@@ -533,7 +531,6 @@ func TestSubmitDepositState_QuorumNotMet(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	// Test data - create one key for both app session and channel state signing
@@ -690,7 +687,6 @@ func TestSubmitDepositState_DuplicateAllocation_Rejected(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -819,7 +815,6 @@ func TestSubmitDepositState_InvalidDecimalPrecision_Rejected(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -948,7 +943,6 @@ func TestSubmitDepositState_NonParticipantZeroAllocation_Rejected(t *testing.T) 
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -1082,7 +1076,6 @@ func TestSubmitDepositState_MissingDepositedAssetAllocation_Rejected(t *testing.
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -1215,7 +1208,6 @@ func TestSubmitDepositState_SpuriousZeroAllocation_Rejected(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	userRawSigner := NewMockSigner()
@@ -1347,7 +1339,6 @@ func TestSubmitDepositState_VerifyQuorumWeightOver255(t *testing.T) {
 		maxParticipants:  32,
 		maxSessionData:   1024,
 		maxSessionKeyIDs: 256,
-		maxSignedUpdates: 16,
 	}
 
 	// Participant1 signs both channel state and app state update (weight 200).

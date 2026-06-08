@@ -13,7 +13,6 @@ export enum AppStateUpdateIntent {
   Deposit = 1,
   Withdraw = 2,
   Close = 3,
-  Rebalance = 4,
 }
 
 /**
@@ -39,8 +38,6 @@ export function appStateUpdateIntentToString(intent: AppStateUpdateIntent): stri
       return 'withdraw';
     case AppStateUpdateIntent.Close:
       return 'close';
-    case AppStateUpdateIntent.Rebalance:
-      return 'rebalance';
     default:
       return 'unknown';
   }
@@ -95,14 +92,6 @@ export interface AppDefinitionV1 {
   participants: AppParticipantV1[];
   quorum: number; // uint8
   nonce: bigint; // uint64
-}
-
-/**
- * AppSessionVersionV1 represents a session ID and version pair for rebalancing operations
- */
-export interface AppSessionVersionV1 {
-  sessionId: string;
-  version: bigint; // uint64
 }
 
 /**

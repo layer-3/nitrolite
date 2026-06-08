@@ -165,7 +165,6 @@ Canonical reference: `docs/api.yaml`. Methods are grouped by domain with `v1` ve
 | `create_app_session` | Create a new app session between participants |
 | `submit_app_state` | Submit app state update (Operate, Withdraw, or Close intent) |
 | `submit_deposit_state` | Submit a deposit into an app session |
-| `rebalance_app_sessions` | Atomic rebalancing across multiple app sessions |
 | `get_app_definition` | Retrieve app definition for a session |
 | `get_app_sessions` | List app sessions with optional filtering |
 | `submit_session_key_state` | Register/update an app session key |
@@ -232,7 +231,6 @@ const client = await Client.create(
 | `createAppSession(definition, sessionData, quorumSigs)` | Create app session |
 | `submitAppState(appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
 | `submitAppSessionDeposit(appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
-| `rebalanceAppSessions(signedUpdates)` | Atomic rebalancing across multiple app sessions |
 
 ### Security Token Locking (on-chain escrow)
 
@@ -294,7 +292,6 @@ defer client.Close()
 | `CreateAppSession(ctx, def, sessionData, quorumSigs)` | Create app session |
 | `SubmitAppState(ctx, appStateUpdate, quorumSigs)` | Submit app state (Operate, Withdraw, or Close intent) |
 | `SubmitAppSessionDeposit(ctx, appStateUpdate, quorumSigs, asset, amount)` | Deposit into app session |
-| `RebalanceAppSessions(ctx, signedUpdates)` | Atomic rebalancing across multiple app sessions |
 
 ### Security Token Locking (on-chain escrow)
 

@@ -30,11 +30,10 @@ type RPCRouterConfig struct {
 	MinChallenge uint32
 	MaxChallenge uint32
 
-	MaxParticipants           int
-	MaxSessionDataLen         int
-	MaxRebalanceSignedUpdates int
-	MaxSessionKeyIDs          int
-	MaxSessionKeysPerUser     int
+	MaxParticipants       int
+	MaxSessionDataLen     int
+	MaxSessionKeyIDs      int
+	MaxSessionKeysPerUser int
 
 	RateLimitPerSec float64
 	RateLimitBurst  float64
@@ -96,7 +95,7 @@ func NewRPCRouter(
 
 	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, cfg.MaxChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs, cfg.MaxSessionKeysPerUser)
 	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
-		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates, cfg.MaxSessionKeysPerUser)
+		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxSessionKeysPerUser)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)
 	userV1Handler := user_v1.NewHandler(dbStore, useUserV1StoreInTx)
 
@@ -108,9 +107,6 @@ func NewRPCRouter(
 	appSessionV1Group.Handle(rpc.AppSessionsV1GetAppSessionsMethod.String(), appSessionV1Handler.GetAppSessions)
 	appSessionV1Group.Handle(rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), appSessionV1Handler.SubmitSessionKeyState)
 	appSessionV1Group.Handle(rpc.AppSessionsV1GetLastKeyStatesMethod.String(), appSessionV1Handler.GetLastKeyStates)
-	if cfg.MaxRebalanceSignedUpdates >= 2 {
-		appSessionV1Group.Handle(rpc.AppSessionsV1RebalanceAppSessionsMethod.String(), appSessionV1Handler.RebalanceAppSessions)
-	}
 
 	channelV1Group := r.Node.NewGroup(rpc.ChannelV1Group.String())
 	channelV1Group.Handle(rpc.ChannelsV1GetChannelsMethod.String(), channelV1Handler.GetChannels)

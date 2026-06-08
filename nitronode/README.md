@@ -9,7 +9,6 @@ Nitronode provides a WebSocket-based RPC service that allows users and applicati
 - Perform instant off-chain transfers between users
 - Execute multi-party application sessions with arbitrary logic
 - Delegate signing authority via session keys
-- Atomically rebalance funds across multiple application sessions
 - Track balances and transaction history across all supported assets
 
 The node monitors blockchain events, validates state transitions using a monotonic sequence logic, and ensures secure coordination between on-chain channels and off-chain state updates.
@@ -32,7 +31,7 @@ Nitronode is built with a modular architecture:
 The WebSocket RPC service exposes several API groups:
 
 1. **channel_v1**: Core payment channel management (Creation, State Submission, Latest State).
-2. **app_session_v1**: Advanced application session management (Creation, Deposits, Rebalancing).
+2. **app_session_v1**: Advanced application session management (Creation, Deposits).
 3. **user_v1**: User-specific queries (Balances, Transaction History).
 4. **node_v1**: Node-level information (Config, Supported Assets).
 

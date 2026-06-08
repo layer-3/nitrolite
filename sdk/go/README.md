@@ -57,7 +57,6 @@ client.CreateAppSession(ctx, definition, sessionData, sigs)   // Create session
 client.CreateAppSession(ctx, def, data, sigs, opts)           // Create with owner approval
 client.SubmitAppSessionDeposit(ctx, update, sigs, asset, amount) // Deposit to session
 client.SubmitAppState(ctx, update, sigs)                      // Update session
-client.RebalanceAppSessions(ctx, signedUpdates)               // Atomic rebalance
 ```
 
 ### Session Keys — App Sessions
@@ -364,7 +363,6 @@ def, err := client.GetAppDefinition(ctx, appSessionID)
 sessionID, version, status, err := client.CreateAppSession(ctx, def, data, sigs)
 nodeSig, err := client.SubmitAppSessionDeposit(ctx, update, sigs, asset, amount)
 err := client.SubmitAppState(ctx, update, sigs)
-batchID, err := client.RebalanceAppSessions(ctx, signedUpdates)
 ```
 
 #### Owner Approval for App Session Creation

@@ -183,16 +183,6 @@ export interface AppSessionsV1SubmitAppStateRequest {
 
 export interface AppSessionsV1SubmitAppStateResponse {}
 
-export interface AppSessionsV1RebalanceAppSessionsRequest {
-  /** List of signed application session state updates */
-  signed_updates: SignedAppStateUpdateV1[];
-}
-
-export interface AppSessionsV1RebalanceAppSessionsResponse {
-  /** Unique identifier for this rebalancing operation */
-  batch_id: string;
-}
-
 export interface AppSessionsV1GetAppDefinitionRequest {
   /** Application session ID */
   app_session_id: string;

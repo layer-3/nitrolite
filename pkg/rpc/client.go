@@ -181,15 +181,6 @@ func (c *Client) AppSessionsV1CreateAppSession(ctx context.Context, req AppSessi
 	return resp, nil
 }
 
-// AppSessionsV1RebalanceAppSessions rebalances multiple application sessions atomically.
-func (c *Client) AppSessionsV1RebalanceAppSessions(ctx context.Context, req AppSessionsV1RebalanceAppSessionsRequest) (AppSessionsV1RebalanceAppSessionsResponse, error) {
-	var resp AppSessionsV1RebalanceAppSessionsResponse
-	if err := c.call(ctx, AppSessionsV1RebalanceAppSessionsMethod, req, &resp); err != nil {
-		return resp, err
-	}
-	return resp, nil
-}
-
 // AppSessionsV1Register initiates session key registration.
 func (c *Client) AppSessionsV1SubmitSessionKeyState(ctx context.Context, req AppSessionsV1SubmitSessionKeyStateRequest) (AppSessionsV1SubmitSessionKeyStateRequest, error) {
 	var resp AppSessionsV1SubmitSessionKeyStateRequest

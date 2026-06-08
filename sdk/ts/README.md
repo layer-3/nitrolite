@@ -67,7 +67,6 @@ client.createAppSession(definition, sessionData, sigs)          // Create sessio
 client.createAppSession(def, data, sigs, { ownerSig })          // Create with owner approval
 client.submitAppSessionDeposit(update, sigs, asset, amount)     // Deposit to session
 client.submitAppState(update, sigs)                             // Update session
-client.rebalanceAppSessions(signedUpdates)                      // Atomic rebalance
 ```
 
 ### App Session Keys
@@ -423,8 +422,6 @@ const nodeSig = await client.submitAppSessionDeposit(
 );
 
 await client.submitAppState(appUpdate, quorumSigs);
-
-const batchId = await client.rebalanceAppSessions(signedUpdates);
 ```
 
 #### Owner Approval for App Session Creation

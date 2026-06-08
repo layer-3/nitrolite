@@ -34,7 +34,7 @@ func TestCreateAppSession_Success(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real test wallet for participant1
@@ -134,7 +134,7 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create real test wallets for participant1 and participant2
@@ -236,7 +236,7 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 				mockStatePacker,
 				"0xnode",
 				metrics.NewNoopRuntimeMetricExporter(),
-				32, 1024, 256, 16, 100,
+				32, 1024, 256, 100,
 			)
 
 			participant1 := "0x1111111111111111111111111111111111111111"
@@ -297,7 +297,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -366,7 +366,7 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -429,7 +429,7 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a wallet that is NOT a participant
@@ -505,7 +505,7 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real wallet for participant1
@@ -595,7 +595,7 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Create a real wallet for participant1
@@ -682,7 +682,7 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -745,7 +745,7 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Test data
@@ -789,6 +789,82 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xnode",
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 100,
+	)
+
+	// Two participants each with weight 200; real total = 400, wraps to 144 in uint8.
+	// Quorum = 200 is achievable (wallet1 alone covers it) but 200 > 144 would have
+	// triggered a false rejection before the fix.
+	wallet1 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := "0x2222222222222222222222222222222222222222"
+
+	appDef := app.AppDefinitionV1{
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 200},
+			{WalletAddress: participant2, SignatureWeight: 200},
+		},
+		Quorum: 200,
+		Nonce:  12345,
+	}
+	sig1 := wallet1.SignCreateRequest(t, appDef, "")
+
+	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
+		Definition: rpc.AppDefinitionV1{
+			Application: "test-app",
+			Participants: []rpc.AppParticipantV1{
+				{WalletAddress: participant1, SignatureWeight: 200},
+				{WalletAddress: participant2, SignatureWeight: 200},
+			},
+			Quorum: 200,
+			Nonce:  "12345",
+		},
+		QuorumSigs: []string{sig1},
+	}
+
+	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
+	}
+
+	handler.CreateAppSession(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("Unexpected error: total weights 400 with quorum 200 must be accepted, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}
+
+// TestCreateAppSession_DuplicateParticipantAcrossCases verifies that two participant
+// addresses that differ only in letter case are detected as duplicates. Without address
+// normalization the duplicate-check map would key on the raw representation and accept
+// the same wallet twice.
 func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 	mockStore := new(MockStore)
 
@@ -808,7 +884,7 @@ func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	lower := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -864,7 +940,7 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 		mockStatePacker,
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// 128+128=256 wraps to 0 in uint8 — any quorum > 0 would appear unreachable.
@@ -933,7 +1009,7 @@ func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
 		new(MockStatePacker),
 		"0xnode",
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	// Real total = 200+200 = 400; quorum = 255 (max uint8 but still < 400, so valid).

@@ -251,7 +251,7 @@ func NewRuntimeMetricExporter(reg prometheus.Registerer) (RuntimeMetricExporter,
 			Help: "Total transactions recorded. Labels: asset, tx_type (see " +
 				"core.TransactionType — transfer / release / commit / home_deposit " +
 				"/ home_withdrawal / mutual_lock / escrow_deposit / escrow_lock / " +
-				"escrow_withdraw / migrate / rebalance / finalize), application_id. " +
+				"escrow_withdraw / migrate / finalize), application_id. " +
 				"Pair with transactions_amount_total for value-weighted views.",
 		}, []string{"asset", "tx_type", "application_id"}),
 		transactionsAmountTotal: prometheus.NewCounterVec(prometheus.CounterOpts{

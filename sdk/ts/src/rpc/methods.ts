@@ -29,7 +29,6 @@ export const ChannelsV1GetLastKeyStatesMethod: Method = 'channels.v1.get_last_ke
 export const AppSessionsV1Group: Group = 'app_sessions.v1';
 export const AppSessionsV1SubmitDepositStateMethod: Method = 'app_sessions.v1.submit_deposit_state';
 export const AppSessionsV1SubmitAppStateMethod: Method = 'app_sessions.v1.submit_app_state';
-export const AppSessionsV1RebalanceAppSessionsMethod: Method = 'app_sessions.v1.rebalance_app_sessions';
 export const AppSessionsV1GetAppDefinitionMethod: Method = 'app_sessions.v1.get_app_definition';
 export const AppSessionsV1GetAppSessionsMethod: Method = 'app_sessions.v1.get_app_sessions';
 export const AppSessionsV1CreateAppSessionMethod: Method = 'app_sessions.v1.create_app_session';

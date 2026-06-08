@@ -138,13 +138,6 @@ export class RPCClient {
     return this.call(Methods.AppSessionsV1SubmitAppStateMethod, req, signal);
   }
 
-  async appSessionsV1RebalanceAppSessions(
-    req: API.AppSessionsV1RebalanceAppSessionsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1RebalanceAppSessionsResponse> {
-    return this.call(Methods.AppSessionsV1RebalanceAppSessionsMethod, req, signal);
-  }
-
   async appSessionsV1GetAppDefinition(
     req: API.AppSessionsV1GetAppDefinitionRequest,
     signal?: AbortSignal

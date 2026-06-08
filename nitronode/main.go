@@ -25,6 +25,8 @@ import (
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
+const blockTimestampFetchTimeout = 10 * time.Second
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "stress-test" {
 		os.Exit(stress.Run(os.Args[2:]))
@@ -121,7 +123,22 @@ func main() {
 
 			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
+
+			blockTimestampFetcher := func(blockHash common.Hash) (time.Time, error) {
+				fetchCtx, cancel := context.WithTimeout(context.Background(), blockTimestampFetchTimeout)
+				defer cancel()
+				header, err := client.HeaderByHash(fetchCtx, blockHash)
+				if err != nil {
+					return time.Time{}, err
+				}
+				return time.Unix(int64(header.Time), 0), nil
+			}
+
+			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
+			gate := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, blockTimestampFetcher, logger)
+			gate.Start(blockchainCtx)
+
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, gate.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

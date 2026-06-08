@@ -215,11 +215,14 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     failed event; the next Listen invocation re-fetches from the same
 //     cursor. Transient handler failures retry instead of silently dropping.
 //
-//  4. Reorged-out logs are discarded. Live deliveries with Removed=true are
-//     dropped. A reorg that fully removes a ChannelChallenged log also
-//     removes the matching on-chain status transition to DISPUTED, so the
-//     contract's Path-1 (challenge-timeout) close cannot subsequently fire
-//     for the same channel.
+//  4. Reorged-out logs are forwarded to the handler (ConfirmationGate).
+//     Live deliveries with Removed=true are passed to the handler so the
+//     gate can cancel any pending confirmation timer for that event. The
+//     reactor never sees Removed=true logs directly; the gate filters them
+//     before forwarding confirmed events. The lastBlock cursor and
+//     IsContractEventPresent dedup check are skipped for Removed=true events
+//     so neither the resume cursor nor the idempotency guard is corrupted
+//     by a reorg signal.
 //
 // A consequence used by the nitronode event handlers: for any channel that
 // closes via Path-1 (challenge-timeout, ChannelHub Closed-from-DISPUTED),
@@ -287,26 +290,22 @@ func (l *Listener) processEvents(
 			eventSubscription.Unsubscribe()
 			return nil
 		case eventLog := <-currentCh:
-			// During a chain reorganization geth re-delivers orphaned logs with
-			// Removed: true. Skip them to avoid applying phantom state changes.
-			if eventLog.Removed {
-				l.logger.Warn("skipping removed log from reorg", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index, "txHash", eventLog.TxHash.Hex())
-				continue
-			}
-			*lastBlock = eventLog.BlockNumber
-			if !currentCheckDone {
-				present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
-				if err != nil {
-					eventSubscription.Unsubscribe()
-					return fmt.Errorf("failed to check current event presence: %w", err)
+			if !eventLog.Removed {
+				*lastBlock = eventLog.BlockNumber
+				if !currentCheckDone {
+					present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
+					if err != nil {
+						eventSubscription.Unsubscribe()
+						return fmt.Errorf("failed to check current event presence: %w", err)
+					}
+					if present {
+						l.logger.Debug("skipping already present current event", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
+						continue
+					}
+					currentCheckDone = true
 				}
-				if present {
-					l.logger.Debug("skipping already present current event", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
-					continue
-				}
-				currentCheckDone = true
+				l.logger.Debug("received current event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			}
-			l.logger.Debug("received current event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
 			if err := l.handleEvent(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
@@ -397,11 +396,3 @@ func (l *Listener) reconcileBlockRange(
 	}
 }
 
-// TODO: the current reorg handling (skipping Removed logs) prevents new damage but
-// does not undo side effects from the original delivery if it was already processed.
-// A more robust approach is a confirmation buffer: hold live logs in memory keyed by
-// block number, only apply them after N confirmations (new blocks on top), and discard
-// any log that arrives with Removed: true while still in the buffer. This adds N blocks
-// of latency (~12s × N on mainnet) but guarantees that only finalized events reach the
-// handler. On L2s where reorgs are near-zero, the latency trade-off may not be worth it,
-// so this should be configurable per chain.

@@ -283,3 +283,45 @@ Together, §6.5 and §6.6 produce two complementary log signals:
 | "skipping re-delivered event X" | Reactor | INFO | Same tx re-mined; reactor correctly skips it |
 
 If the operator sees the WARN but never the INFO, the transaction was not re-mined — the stale DB state from §2.1 is in effect.
+
+### 6.7 Block timestamp cache
+
+#### Purpose
+
+The gate uses the **block timestamp** of each event as its `arrivedAt` reference rather than wall-clock time. This ensures that events replayed from historical blocks (whose timestamps are minutes or hours in the past) are forwarded immediately on the first Poller tick, without waiting for the full confirmation delay to elapse again.
+
+Fetching the block timestamp requires one `eth_getBlockByHash` RPC call per block. A single block can produce multiple events (e.g. two `ChannelDeposited` logs in a batch open). The **block timestamp cache** avoids the redundant RPC calls: the first event from a block fetches and stores the timestamp; subsequent events from the same block read it from the cache.
+
+#### Data structure
+
+```go
+blockTimestampCache map[common.Hash]time.Time // protected by mu; evicted by Poller
+```
+
+The cache is keyed by `blockHash`. Values are written once (on the first event from a block) and are never modified.
+
+#### Eviction
+
+The cache grows monotonically without eviction: every block that produces at least one relevant event adds a permanent entry. Over the lifetime of a long-running node, this is an unbounded memory leak.
+
+Entries are evicted by the Poller in the same sweep pass that cleans `recentlyForwarded`. An entry is safe to remove once:
+
+> `now − blockTimestamp > recentMultiplier × delay`
+
+At that age, every event from the block has either been forwarded (within `delay` of its `arrivedAt`) or cancelled by a `Removed: true` signal. No new event from the same block can arrive after it (the listener delivers events in ascending block order). The cached timestamp therefore serves no further purpose.
+
+**Eviction is performed in `poll()`, under the mutex, after the `recentlyForwarded` sweep:**
+
+```go
+for bh, ts := range g.blockTimestampCache {
+    if now.Sub(ts) > recentMultiplier*g.delay {
+        delete(g.blockTimestampCache, bh)
+    }
+}
+```
+
+#### Bound after eviction
+
+With eviction, the cache holds at most one entry per block whose timestamp falls within the window `[now − recentMultiplier×delay, now]`. That is at most `recentMultiplier × delay × (blocks per second)` entries — a small constant for every supported chain.
+
+Each entry is 56 bytes (`common.Hash` 32 B + `time.Time` 24 B). Even the worst case would be under 100 KB.

@@ -43,6 +43,10 @@ type BlockchainConfig struct {
 	ChannelHubAddress string `yaml:"channel_hub_address"`
 	// ChannelHubSigValidators maps validator IDs to the addresses of signature validators for the ChannelHub contract on this blockchain
 	ChannelHubSigValidators map[uint8]string `yaml:"channel_hub_sig_validators"`
+	// ConfirmationDelaySecs is the number of seconds to wait before processing an event.
+	// Set to 0 to process events immediately (disables the confirmation gate).
+	// Maximum meaningful value is ~780s (Ethereum Casper FFG hard finality).
+	ConfirmationDelaySecs uint32 `yaml:"confirmation_delay_secs"`
 }
 
 // LoadEnabledBlockchains loads and validates blockchain configurations from a YAML file.

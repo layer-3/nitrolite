@@ -303,6 +303,69 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 	assert.Equal(t, []uint64{100}, handledBlocks)
 }
 
+func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
+	t.Parallel()
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+	eventGetter := new(MockContractEventGetter)
+
+	// Track which logs reached handleEvent.
+	var handledLogs []types.Log
+	handleEvent := func(ctx context.Context, eventLog types.Log) error {
+		handledLogs = append(handledLogs, eventLog)
+		return nil
+	}
+
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, logger, handleEvent, eventGetter)
+
+	// No historical events.
+	historicalCh := make(chan types.Log)
+	close(historicalCh)
+
+	currentCh := make(chan types.Log, 2)
+
+	// Event 1: non-Removed at block 10 — triggers IsContractEventPresent check,
+	// advances lastBlock, sets currentCheckDone = true.
+	normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc")}
+	eventGetter.On("IsContractEventPresent", uint64(1), uint64(10), mock.Anything, uint32(0)).Return(false, nil).Once()
+
+	// Event 2: Removed=true at block 11 — must NOT advance lastBlock, must NOT call
+	// IsContractEventPresent, but MUST reach handleEvent.
+	removedLog := types.Log{BlockNumber: 11, Index: 0, TxHash: common.HexToHash("0xdef"), Removed: true}
+
+	currentCh <- normalLog
+	currentCh <- removedLog
+
+	sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		// Give processEvents enough time to drain both buffered events, then cancel.
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	var lastBlock uint64
+	err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
+	require.NoError(t, err)
+
+	// Both events must have reached handleEvent.
+	require.Len(t, handledLogs, 2, "handleEvent must be called for both the normal and the Removed event")
+
+	// Verify first call was the normal log and second was the removed log.
+	assert.Equal(t, uint64(10), handledLogs[0].BlockNumber)
+	assert.False(t, handledLogs[0].Removed)
+	assert.Equal(t, uint64(11), handledLogs[1].BlockNumber)
+	assert.True(t, handledLogs[1].Removed)
+
+	// lastBlock must NOT have advanced past the normal event's block.
+	assert.Equal(t, uint64(10), lastBlock, "lastBlock must not be advanced by a Removed=true event")
+
+	// IsContractEventPresent must have been called exactly once (for the normal log only).
+	eventGetter.AssertNumberOfCalls(t, "IsContractEventPresent", 1)
+	eventGetter.AssertExpectations(t)
+}
+
 func TestReconcileBlockRange_ContextCancellation(t *testing.T) {
 	t.Parallel()
 	mockClient := new(MockEVMClient)

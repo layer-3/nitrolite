@@ -631,6 +631,8 @@ On-chain fund accounting is correct in both cases — each chain pays from its o
 
 * **Node trust for off-chain transfer routing**: Off-chain transfers between parties are routed through the Node. The sender signs a state where their allocation decreases; the Node is expected to countersign it and also countersign a corresponding credit state for the receiver. The on-chain contract cannot enforce atomicity between two independent channel updates. A malicious Node could apply the sender's state while withholding the receiver's credit, effectively capturing the transferred funds. Users must trust the Node to faithfully execute both legs of every off-chain transfer.
 
+* **Asset-symbol equivalence**: All tokens configured under one asset symbol are treated as fully fungible 1:1 representations, so off-chain credit can be redeemed from any token inventory sharing that symbol. The Node operator MUST configure only economically equivalent (1:1 redeemable) tokens under a single symbol; equivalence cannot be verified programmatically and is an operator configuration responsibility.
+
 ---
 
 ## Signature validation

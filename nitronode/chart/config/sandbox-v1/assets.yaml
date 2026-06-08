@@ -1,3 +1,8 @@
+# WARNING: all tokens grouped under one symbol are treated as fully fungible 1:1
+# representations of the same asset — off-chain credit can be redeemed from any of
+# these token inventories. Group only economically equivalent (1:1 redeemable)
+# tokens under one symbol. Equivalence cannot be verified programmatically and is an
+# operator responsibility. See docs/protocol/security-and-limitations.md.
 assets:
   - name: "Ether"
     symbol: "eth"

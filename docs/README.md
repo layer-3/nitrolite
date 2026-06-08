@@ -32,13 +32,11 @@ The following communication flows are not yet documented:
 ```text
 cerebro/                    # Cerebro Testing Client
 nitronode/
-    action_gateway/         # Rate limiting via gated actions
     api/
         app_session_v1/     # App session endpoints (create, deposit, operate, withdraw, close)
-        apps_v1/            # Application registry endpoints
         channel_v1/         # Channel endpoints (create, submit_state, get_state, transfer)
         node_v1/            # Node info endpoints
-        user_v1/            # User endpoints (balances, staking)
+        user_v1/            # User endpoints (balances, transactions)
     config/
         migrations/
             postgres/       # Goose SQL migrations (embedded at compile time)
@@ -50,7 +48,7 @@ nitronode/
     blockchain_worker.go    # Processes pending BlockchainAction records
     runtime.go              # Embeds migrations, initializes services
     main.go                 # Entry point, EVM listeners, metric exporters
-contracts/                  # Smart contracts (ChannelHub, Locking, etc.)
+contracts/                  # Smart contracts (ChannelHub, ChannelEngine, escrow engines)
 docs/                       # This directory
 pkg/
     app/                    # App session types (AppSessionStatus, quorum, allocations)

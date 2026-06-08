@@ -12,7 +12,6 @@ import (
 )
 
 var _ core.ChannelHubEventHandler = &EventHandlerService{}
-var _ core.LockingContractEventHandler = &EventHandlerService{}
 
 // EventHandlerService processes blockchain events and updates the local database state accordingly.
 // It handles events from both home channels (user state channels) and escrow channels (temporary lock channels).
@@ -879,16 +878,5 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 	}
 
 	logger.Info("handled EscrowWithdrawalFinalized event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
-	return nil
-}
-
-func (s *EventHandlerService) HandleUserLockedBalanceUpdated(ctx context.Context, tx core.LockingContractEventHandlerStore, event *core.UserLockedBalanceUpdatedEvent) error {
-	logger := log.FromContext(ctx)
-	err := tx.UpdateUserStaked(event.UserAddress, event.BlockchainID, event.Balance)
-	if err != nil {
-		return err
-	}
-
-	logger.Info("handled UserLockedBalanceUpdatedEvent event", "userWallet", event.UserAddress, "blockchainID", event.BlockchainID, "balance", event.Balance)
 	return nil
 }

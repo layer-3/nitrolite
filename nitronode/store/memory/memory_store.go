@@ -33,11 +33,10 @@ func NewMemoryStoreV1(assetsConfig AssetsConfig, blockchainsConfig map[uint64]Bl
 		}
 
 		blockchains = append(blockchains, core.Blockchain{
-			ID:                     bc.ID,
-			Name:                   bc.Name,
-			ChannelHubAddress:      bc.ChannelHubAddress,
-			LockingContractAddress: bc.LockingContractAddress,
-			BlockStep:              bc.BlockStep,
+			ID:                bc.ID,
+			Name:              bc.Name,
+			ChannelHubAddress: bc.ChannelHubAddress,
+			BlockStep:         bc.BlockStep,
 		})
 	}
 	slices.SortFunc(blockchains, func(a, b core.Blockchain) int {

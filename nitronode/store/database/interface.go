@@ -109,7 +109,6 @@ type DatabaseStore interface {
 	// channel status field has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
-
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
@@ -162,20 +161,6 @@ type DatabaseStore interface {
 
 	// GetStateByID retrieves a state by its deterministic ID.
 	GetStateByID(stateID string) (*core.State, error)
-
-	// --- App Registry Operations ---
-
-	// CreateApp registers a new application. Returns an error if the app ID already exists.
-	CreateApp(entry app.AppV1) error
-
-	// GetApp retrieves a single application by ID. Returns nil if not found.
-	GetApp(appID string) (*app.AppInfoV1, error)
-
-	// GetApps retrieves applications with optional filtering by app ID, owner wallet, and pagination.
-	GetApps(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error)
-
-	// GetAppCount returns the total number of applications owned by a specific wallet.
-	GetAppCount(ownerWallet string) (uint64, error)
 
 	// --- App Session Operations ---
 
@@ -293,26 +278,6 @@ type DatabaseStore interface {
 
 	// GetUserBalanceSummary returns the off-chain liquidity requirement per blockchain and asset.
 	GetUserBalanceSummary() ([]UserBalanceSummary, error)
-
-	// --- User Staked Operations ---
-
-	// UpdateUserStaked upserts the staked amount for a user on a specific blockchain.
-	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
-
-	// GetTotalUserStaked returns the total staked amount for a user across all blockchains.
-	GetTotalUserStaked(wallet string) (decimal.Decimal, error)
-
-	// --- Action Log Operations ---
-
-	// RecordAction inserts a new action log entry for a user.
-	RecordAction(wallet string, gatedAction core.GatedAction) error
-
-	// GetUserActionCount returns the number of actions matching the given wallet, method, and path
-	// within the specified time window.
-	GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error)
-
-	// GetUserActionCounts returns a map of gated actions to their respective counts for a user within the specified time window.
-	GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error)
 
 	// --- Contract Event Operations ---
 

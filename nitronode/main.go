@@ -43,19 +43,17 @@ func main() {
 
 	vl := bb.ValidationLimits
 	rpcRouterCfg := api.RPCRouterConfig{
-		NodeVersion:  bb.NodeVersion,
-		MinChallenge: bb.ChannelMinChallengeDuration,
-		MaxChallenge: bb.ChannelMaxChallengeDuration,
-		AppRegistryEnabled:    bb.AppRegistryEnabled,
+		NodeVersion:           bb.NodeVersion,
+		MinChallenge:          bb.ChannelMinChallengeDuration,
+		MaxChallenge:          bb.ChannelMaxChallengeDuration,
 		MaxParticipants:       vl.MaxParticipants,
 		MaxSessionDataLen:     vl.MaxSessionDataLen,
-		MaxAppMetadataLen:     vl.MaxAppMetadataLen,
 		MaxSessionKeyIDs:      vl.MaxSessionKeyIDs,
 		MaxSessionKeysPerUser: vl.MaxSessionKeysPerUser,
 		RateLimitPerSec:       bb.RateLimitPerSec,
 		RateLimitBurst:        bb.RateLimitBurst,
 	}
-	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.ActionGateway, bb.RuntimeMetrics, bb.Logger)
+	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.RuntimeMetrics, bb.Logger)
 
 	rpcListenAddr := ":7824"
 	rpcListenEndpoint := "/ws"
@@ -140,30 +138,6 @@ func main() {
 			})
 		} else {
 			logger.Info("channel hub address is not configured for blockchain", "blockchainID", b.ID)
-		}
-
-		if b.LockingContractAddress != "" {
-			appRegistryClient, err := evm.NewLockingClient(common.HexToAddress(b.LockingContractAddress), client, b.ID)
-			if err != nil {
-				logger.Fatal("failed to create locking client", "error", err, "blockchainID", b.ID)
-			}
-
-			useLCRStoreInTx := func(h evm.LockingContractReactorStoreTxHandler) error {
-				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
-			}
-
-			reactor, err := evm.NewLockingContractReactor(b.ID, eventHandlerService, appRegistryClient.GetTokenDecimals, useLCRStoreInTx)
-			if err != nil {
-				logger.Fatal("failed to create app registry reactor", "error", err, "blockchainID", b.ID)
-			}
-
-			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.LockingContractAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
-			l.Listen(blockchainCtx, func(err error) {
-				if err != nil {
-					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)
-				}
-			})
 		}
 	}
 

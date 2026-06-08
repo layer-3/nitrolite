@@ -29,12 +29,10 @@ func TestCreateAppSession_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -78,9 +76,6 @@ func TestCreateAppSession_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 	mockStore.On("CreateAppSession", mock.MatchedBy(func(session any) bool {
 		return true // Accept any app session for now
 	})).Return(nil).Once()
@@ -134,12 +129,10 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -193,9 +186,6 @@ func TestCreateAppSession_QuorumWithMultipleSignatures(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
 
 	// Create RPC context
@@ -241,12 +231,10 @@ func TestCreateAppSession_ZeroNonce(t *testing.T) {
 			handler := NewHandler(
 				storeTxProvider,
 				mockAssetStore,
-				&MockActionGateway{},
 				mockSigner,
 				core.NewStateAdvancerV1(mockAssetStore),
 				mockStatePacker,
 				"0xnode",
-				true,
 				metrics.NewNoopRuntimeMetricExporter(),
 				32, 1024, 256, 100,
 			)
@@ -304,12 +292,10 @@ func TestCreateAppSession_QuorumExceedsTotalWeights(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -375,12 +361,10 @@ func TestCreateAppSession_NoSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -440,12 +424,10 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -480,10 +462,6 @@ func TestCreateAppSession_SignatureFromNonParticipant(t *testing.T) {
 		},
 		QuorumSigs: []string{sig},
 	}
-
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
@@ -522,12 +500,10 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -577,10 +553,6 @@ func TestCreateAppSession_QuorumNotMet(t *testing.T) {
 		},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
-
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -618,12 +590,10 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -669,10 +639,6 @@ func TestCreateAppSession_DuplicateSignatures(t *testing.T) {
 		},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
-
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -711,12 +677,10 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -738,10 +702,6 @@ func TestCreateAppSession_InvalidSignatureHex(t *testing.T) {
 		},
 		QuorumSigs: []string{"not-valid-hex"}, // Invalid hex string
 	}
-
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
@@ -780,12 +740,10 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -809,10 +767,6 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 		QuorumSigs: []string{"0xa100000000"},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
-
 	// Create RPC context
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -835,346 +789,6 @@ func TestCreateAppSession_SignatureRecoveryFailure(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestCreateAppSession_AppNotRegistered(t *testing.T) {
-	mockStore := new(MockStore)
-
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
-
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xnode",
-		true,
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 100,
-	)
-
-	wallet1 := NewTestAppSessionWallet(t)
-	participant1 := wallet1.Address
-
-	appDef := app.AppDefinitionV1{
-		ApplicationID: "unregistered-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 1},
-		},
-		Quorum: 1,
-		Nonce:  12345,
-	}
-	sig1 := wallet1.SignCreateRequest(t, appDef, "")
-
-	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
-		Definition: rpc.AppDefinitionV1{
-			Application: "unregistered-app",
-			Participants: []rpc.AppParticipantV1{
-				{WalletAddress: participant1, SignatureWeight: 1},
-			},
-			Quorum: 1,
-			Nonce:  "12345",
-		},
-		QuorumSigs: []string{sig1},
-	}
-
-	// GetApp returns nil (not found)
-	mockStore.On("GetApp", "unregistered-app").Return(nil, nil).Once()
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
-	}
-
-	handler.CreateAppSession(ctx)
-
-	assert.NotNil(t, ctx.Response)
-	err = ctx.Response.Error()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not registered")
-
-	mockStore.AssertExpectations(t)
-}
-
-func TestCreateAppSession_OwnerSigRequired(t *testing.T) {
-	mockStore := new(MockStore)
-
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
-
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xnode",
-		true,
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 100,
-	)
-
-	wallet1 := NewTestAppSessionWallet(t)
-	participant1 := wallet1.Address
-
-	appDef := app.AppDefinitionV1{
-		ApplicationID: "restricted-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 1},
-		},
-		Quorum: 1,
-		Nonce:  12345,
-	}
-	sig1 := wallet1.SignCreateRequest(t, appDef, "")
-
-	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
-		Definition: rpc.AppDefinitionV1{
-			Application: "restricted-app",
-			Participants: []rpc.AppParticipantV1{
-				{WalletAddress: participant1, SignatureWeight: 1},
-			},
-			Quorum: 1,
-			Nonce:  "12345",
-		},
-		QuorumSigs: []string{sig1},
-		// No OwnerSig provided
-	}
-
-	// App requires approval (CreationApprovalNotRequired = false)
-	mockStore.On("GetApp", "restricted-app").Return(&app.AppInfoV1{
-		App: app.AppV1{
-			ID:                          "restricted-app",
-			OwnerWallet:                 "0xowneraddr",
-			CreationApprovalNotRequired: false,
-		},
-	}, nil).Once()
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
-	}
-
-	handler.CreateAppSession(ctx)
-
-	assert.NotNil(t, ctx.Response)
-	err = ctx.Response.Error()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "owner_sig is required")
-
-	mockStore.AssertExpectations(t)
-}
-
-func TestCreateAppSession_OwnerSigSuccess(t *testing.T) {
-	mockStore := new(MockStore)
-
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
-
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xnode",
-		true,
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 100,
-	)
-
-	// Create participant and owner wallets
-	wallet1 := NewTestAppSessionWallet(t)
-	ownerWallet := NewTestAppSessionWallet(t)
-	participant1 := wallet1.Address
-
-	appDef := app.AppDefinitionV1{
-		ApplicationID: "restricted-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 1},
-		},
-		Quorum: 1,
-		Nonce:  12345,
-	}
-	sessionData := `{"game": "poker"}`
-
-	// Participant signs for quorum
-	sig1 := wallet1.SignCreateRequest(t, appDef, sessionData)
-	// Owner signs for approval
-	ownerSig := ownerWallet.SignCreateRequest(t, appDef, sessionData)
-
-	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
-		Definition: rpc.AppDefinitionV1{
-			Application: "restricted-app",
-			Participants: []rpc.AppParticipantV1{
-				{WalletAddress: participant1, SignatureWeight: 1},
-			},
-			Quorum: 1,
-			Nonce:  "12345",
-		},
-		QuorumSigs:  []string{sig1},
-		SessionData: sessionData,
-		OwnerSig:    ownerSig,
-	}
-
-	// App requires approval — owner wallet matches
-	mockStore.On("GetApp", "restricted-app").Return(&app.AppInfoV1{
-		App: app.AppV1{
-			ID:                          "restricted-app",
-			OwnerWallet:                 ownerWallet.Address,
-			CreationApprovalNotRequired: false,
-		},
-	}, nil).Once()
-	mockStore.On("CreateAppSession", mock.MatchedBy(func(session any) bool {
-		return true
-	})).Return(nil).Once()
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
-	}
-
-	handler.CreateAppSession(ctx)
-
-	assert.NotNil(t, ctx.Response)
-
-	if respErr := ctx.Response.Error(); respErr != nil {
-		t.Fatalf("Unexpected error response: %v", respErr)
-	}
-
-	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
-
-	var resp rpc.AppSessionsV1CreateAppSessionResponse
-	err = ctx.Response.Payload.Translate(&resp)
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, resp.AppSessionID)
-	assert.Equal(t, "1", resp.Version)
-	assert.Equal(t, app.AppSessionStatusOpen.String(), resp.Status)
-
-	mockStore.AssertExpectations(t)
-}
-
-// TestCreateAppSession_AppRegistryDisabled verifies that when appRegistryEnabled=false,
-// app lookup, owner signature validation, and AllowAction are all skipped.
-func TestCreateAppSession_AppRegistryDisabled(t *testing.T) {
-	mockStore := new(MockStore)
-
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
-
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xnode",
-		false, // appRegistryEnabled=false
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 100,
-	)
-
-	wallet1 := NewTestAppSessionWallet(t)
-	participant1 := wallet1.Address
-	participant2 := "0x2222222222222222222222222222222222222222"
-
-	appDef := app.AppDefinitionV1{
-		ApplicationID: "test-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 1},
-			{WalletAddress: participant2, SignatureWeight: 1},
-		},
-		Quorum: 1,
-		Nonce:  12345,
-	}
-	sessionData := `{"test": "data"}`
-	sig1 := wallet1.SignCreateRequest(t, appDef, sessionData)
-
-	reqPayload := rpc.AppSessionsV1CreateAppSessionRequest{
-		Definition: rpc.AppDefinitionV1{
-			Application: "test-app",
-			Participants: []rpc.AppParticipantV1{
-				{WalletAddress: participant1, SignatureWeight: 1},
-				{WalletAddress: participant2, SignatureWeight: 1},
-			},
-			Quorum: 1,
-			Nonce:  "12345",
-		},
-		QuorumSigs:  []string{sig1},
-		SessionData: sessionData,
-	}
-
-	// Only CreateAppSession should be called — NO GetApp, NO AllowAction
-	mockStore.On("CreateAppSession", mock.MatchedBy(func(session any) bool {
-		return true
-	})).Return(nil).Once()
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1CreateAppSessionMethod), payload),
-	}
-
-	handler.CreateAppSession(ctx)
-
-	assert.NotNil(t, ctx.Response)
-	if respErr := ctx.Response.Error(); respErr != nil {
-		t.Fatalf("Unexpected error response: %v", respErr)
-	}
-	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
-
-	var resp rpc.AppSessionsV1CreateAppSessionResponse
-	err = ctx.Response.Payload.Translate(&resp)
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.AppSessionID)
-	assert.Equal(t, "1", resp.Version)
-	assert.Equal(t, app.AppSessionStatusOpen.String(), resp.Status)
-
-	// Strict: GetApp and AllowAction must NOT have been called
-	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
-	mockStore.AssertExpectations(t)
-}
-
-// TestCreateAppSession_TotalWeightsOver255 verifies that session creation succeeds when the
-// real sum of participant weights exceeds 255 but the quorum is still achievable. With a
-// uint8 accumulator the sum wraps modulo 256, which can make a valid quorum look unreachable
-// at creation time (e.g. weights 200+200=400 wraps to 144, and quorum=200 falsely appears
-// to exceed total). The accumulator must be at least uint16 to avoid this.
 func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
 	mockStore := new(MockStore)
 	storeTxProvider := func(fn StoreTxHandler) error {
@@ -1188,12 +802,10 @@ func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -1229,9 +841,6 @@ func TestCreateAppSession_TotalWeightsOver255(t *testing.T) {
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -1270,12 +879,10 @@ func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -1310,7 +917,6 @@ func TestCreateAppSession_DuplicateParticipantAcrossCases(t *testing.T) {
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
 	assert.Contains(t, respErr.Error(), "duplicate participant address")
-	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
 	mockStore.AssertNotCalled(t, "CreateAppSession", mock.Anything)
 }
 
@@ -1329,12 +935,10 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)
@@ -1368,9 +972,6 @@ func TestCreateAppSession_TotalWeightsWrapToZero(t *testing.T) {
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", CreationApprovalNotRequired: true},
-	}, nil).Once()
 	mockStore.On("CreateAppSession", mock.Anything).Return(nil).Once()
 
 	payload, err := rpc.NewPayload(reqPayload)
@@ -1403,12 +1004,10 @@ func TestCreateAppSession_QuorumExceedsTotalWeights_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		new(MockAssetStore),
-		&MockActionGateway{},
 		NewMockChannelSigner(),
 		core.NewStateAdvancerV1(new(MockAssetStore)),
 		new(MockStatePacker),
 		"0xnode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
 		32, 1024, 256, 100,
 	)

@@ -10,7 +10,7 @@ import { Decimal } from 'decimal.js';
 import * as core from './core/index.js';
 import * as app from './app/index.js';
 import * as API from './rpc/api.js';
-import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types.js';
+import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1 } from './rpc/types.js';
 import { RPCClient } from './rpc/client.js';
 import { WebsocketDialer } from './rpc/dialer.js';
 import { ClientAssetStore } from './asset_store.js';
@@ -29,7 +29,6 @@ import {
   transformSignedAppStateUpdateToRPC,
   transformAppSessionInfo,
   transformAppDefinitionFromRPC,
-  transformActionAllowance,
 } from './utils.js';
 import {
   transformChannelSessionKeyState,
@@ -107,7 +106,6 @@ export class Client {
   private exitPromise: Promise<void>;
   private exitResolve?: () => void;
   private blockchainClients: Map<bigint, blockchain.evm.Client>;
-  private blockchainLockingClients: Map<bigint, blockchain.evm.LockingClient>;
   private homeBlockchains: Map<string, bigint>;
   private stateSigner: StateSigner;
   private txSigner: TransactionSigner;
@@ -127,7 +125,6 @@ export class Client {
     this.txSigner = txSigner;
     this.assetStore = assetStore;
     this.blockchainClients = new Map();
-    this.blockchainLockingClients = new Map();
     this.homeBlockchains = new Map();
     this.stateAdvancer = new core.StateAdvancerV1(assetStore);
 
@@ -964,92 +961,6 @@ export class Client {
   }
 
   // ============================================================================
-  // Locking On-Chain Methods
-  // ============================================================================
-
-  /**
-   * Lock tokens into the Locking contract on the specified blockchain.
-   * The tokens are locked for the specified target address. Before calling this method,
-   * you must approve the Locking contract to spend your tokens using approveSecurityToken.
-   *
-   * @param targetWalletAddress - The Ethereum address to lock tokens for
-   * @param blockchainId - The blockchain network ID
-   * @param amount - The amount of tokens to lock (in human-readable decimals, e.g., 100.5 USDC)
-   * @returns Transaction hash
-   */
-  async escrowSecurityTokens(targetWalletAddress: string, blockchainId: bigint, amount: Decimal): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.lock(
-      targetWalletAddress as Address,
-      amount,
-    );
-  }
-
-  /**
-   * Initiate the unlock process for locked tokens in the Locking contract.
-   * After the unlock period elapses, withdrawSecurityTokens can be called to retrieve the tokens.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @returns Transaction hash
-   */
-  async initiateSecurityTokensWithdrawal(blockchainId: bigint): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.unlock();
-  }
-
-  /**
-   * Re-lock tokens that are currently in the unlocking state,
-   * cancelling the pending unlock and returning them to the locked state.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @returns Transaction hash
-   */
-  async cancelSecurityTokensWithdrawal(blockchainId: bigint): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.relock();
-  }
-
-  /**
-   * Withdraw unlocked tokens from the Locking contract to the specified destination.
-   * Can only be called after the unlock period has fully elapsed.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @param destinationWalletAddress - The Ethereum address to receive the withdrawn tokens
-   * @returns Transaction hash
-   */
-  async withdrawSecurityTokens(blockchainId: bigint, destinationWalletAddress: string): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.withdraw(
-      destinationWalletAddress as Address,
-    );
-  }
-
-  /**
-   * Approve the Locking contract to spend tokens on behalf of the caller.
-   * This must be called before escrowSecurityTokens.
-   *
-   * @param chainId - The blockchain network ID
-   * @param amount - The amount of tokens to approve
-   * @returns Transaction hash
-   */
-  async approveSecurityToken(chainId: bigint, amount: Decimal): Promise<string> {
-    await this.initializeLockingClient(chainId);
-    return this.blockchainLockingClients.get(chainId)!.approveToken(amount);
-  }
-
-  /**
-   * Get the locked balance of a user in the Locking contract.
-   *
-   * @param chainId - The blockchain network ID
-   * @param wallet - The Ethereum address to check
-   * @returns The locked balance as a Decimal (adjusted for token decimals)
-   */
-  async getLockedBalance(chainId: bigint, wallet: string): Promise<Decimal> {
-    await this.initializeLockingClient(chainId);
-    return this.blockchainLockingClients.get(chainId)!.getBalance(wallet as Address);
-  }
-
-  // ============================================================================
   // Node Information Methods
   // ============================================================================
 
@@ -1194,26 +1105,6 @@ export class Client {
       transactions: resp.transactions.map(transformTransaction),
       metadata: transformPaginationMetadata(resp.metadata),
     };
-  }
-
-  /**
-   * GetActionAllowances retrieves the action allowances for a user based on their staking level.
-   *
-   * @param wallet - The user's wallet address
-   * @returns Array of action allowances for each gated action
-   *
-   * @example
-   * ```typescript
-   * const allowances = await client.getActionAllowances('0x1234...');
-   * for (const a of allowances) {
-   *   console.log(`${a.gatedAction}: ${a.used}/${a.allowance} (${a.timeWindow})`);
-   * }
-   * ```
-   */
-  async getActionAllowances(wallet: Address): Promise<core.ActionAllowance[]> {
-    const req: API.UserV1GetActionAllowancesRequest = { wallet };
-    const resp = await this.rpcClient.userV1GetActionAllowances(req);
-    return resp.allowances.map(transformActionAllowance);
   }
 
   // ============================================================================
@@ -1571,87 +1462,6 @@ export class Client {
     };
 
     await this.rpcClient.appSessionsV1SubmitAppState(req);
-  }
-
-  // ============================================================================
-  // App Registry Methods
-  // ============================================================================
-
-  /**
-   * GetApps retrieves registered applications with optional filtering.
-   *
-   * @param options - Optional filters (appId, ownerWallet, pagination)
-   * @returns Array of registered apps and pagination metadata
-   *
-   * @example
-   * ```typescript
-   * const { apps, metadata } = await client.getApps({ ownerWallet: '0x1234...' });
-   * for (const app of apps) {
-   *   console.log(`${app.id}: owned by ${app.owner_wallet}`);
-   * }
-   * ```
-   */
-  async getApps(options?: {
-    appId?: string;
-    ownerWallet?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata }> {
-    const req: API.AppsV1GetAppsRequest = {
-      app_id: options?.appId,
-      owner_wallet: options?.ownerWallet,
-      pagination: options?.page && options?.pageSize ? {
-        offset: (options.page - 1) * options.pageSize,
-        limit: options.pageSize,
-      } : undefined,
-    };
-    const resp = await this.rpcClient.appsV1GetApps(req);
-    return {
-      apps: resp.apps,
-      metadata: transformPaginationMetadata(resp.metadata),
-    };
-  }
-
-  /**
-   * RegisterApp registers a new application in the app registry.
-   * Currently only version 1 (creation) is supported.
-   *
-   * The method builds the app definition from the provided parameters,
-   * using the client's signer address as the owner wallet and version 1.
-   * It then packs and signs the definition automatically.
-   *
-   * Session key signers are not allowed to perform this action; the main
-   * wallet signer must be used.
-   *
-   * @param appID - The application identifier
-   * @param metadata - The application metadata
-   * @param creationApprovalNotRequired - Whether sessions can be created without owner approval
-   *
-   * @example
-   * ```typescript
-   * await client.registerApp('my-app', '{"name": "My App"}', false);
-   * ```
-   */
-  async registerApp(appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void> {
-    const appDef: AppV1 = {
-      id: appID,
-      owner_wallet: this.txSigner.getAddress(),
-      metadata,
-      version: '1',
-      creation_approval_not_required: creationApprovalNotRequired,
-    };
-
-    const packed = app.packAppV1(appDef);
-    if (!this.txSigner.signPersonalMessage) {
-      throw new Error('TransactionSigner must implement signPersonalMessage for app registration');
-    }
-    const ownerSig = await this.txSigner.signPersonalMessage(packed);
-
-    const req: API.AppsV1SubmitAppVersionRequest = {
-      app: appDef,
-      owner_sig: ownerSig,
-    };
-    await this.rpcClient.appsV1SubmitAppVersion(req);
   }
 
   // ============================================================================
@@ -2014,32 +1824,6 @@ export class Client {
     );
 
     this.blockchainClients.set(chainId, blockchainClient);
-  }
-
-  /**
-   * Initialize a Locking contract client for a specific chain.
-   * This is called lazily when a locking operation is needed.
-   */
-  private async initializeLockingClient(chainId: bigint): Promise<void> {
-    if (this.blockchainLockingClients.has(chainId)) {
-      return;
-    }
-
-    const { rpcUrl, blockchainInfo } = await this.getBlockchainRPCInfo(chainId);
-
-    if (!blockchainInfo.lockingContractAddress) {
-      throw new Error(`locking contract address not configured for blockchain ${chainId}`);
-    }
-
-    const { publicClient, walletClient } = this.createEVMClients(chainId, rpcUrl);
-
-    const lockingClient = new blockchain.evm.LockingClient(
-      blockchainInfo.lockingContractAddress,
-      publicClient,
-      walletClient || undefined,
-    );
-
-    this.blockchainLockingClients.set(chainId, lockingClient);
   }
 
   /**

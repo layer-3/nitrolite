@@ -21,32 +21,22 @@ package main
 //     pre-existing channel; the withdraw step will open/credit its ledger
 //     automatically.
 //
-//  4. App registry: if the node was started with the app registry disabled
-//     (apps.v1 group disabled), the registration step is skipped at runtime
-//     and app sessions are created against unregistered app IDs. No action
-//     is required from the operator — the example detects this via a probe
-//     call to GetApps.
-//
 // This example demonstrates:
-//  1. Register apps in the app registry (skipped if apps.v1 group is disabled)
-//  2. Create first app session for wallet 1
-//  3. Deposit YUSD into first app session by wallet 1
+//  1. Create first app session for wallet 1
+//  2. Deposit YUSD into first app session by wallet 1
 //     (auto-opens wallet 1's YUSD channel via Acknowledge if missing)
-//  4. Create second app session for wallet 2 with wallet 3 as a participant
-//  5. Deposit YELLOW into second app session by wallet 2
+//  3. Create second app session for wallet 2 with wallet 3 as a participant
+//  4. Deposit YELLOW into second app session by wallet 2
 //     (auto-opens wallet 2's YELLOW channel via Acknowledge if missing)
-//  6. Redistribute app state within app session so that participant with wallet 3 also has some allocation
-//  7. Wallet 3 withdraws from his app session
-//  8. Close both app sessions
-//  9. Fail case: attempt to create app session for unregistered app (expected to fail).
-//     Skipped entirely when the app registry is disabled.
+//  5. Redistribute app state within app session so that participant with wallet 3 also has some allocation
+//  6. Wallet 3 withdraws from his app session
+//  7. Close both app sessions
 
 import (
 	"context"
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -58,11 +48,6 @@ import (
 	"github.com/layer-3/nitrolite/pkg/sign"
 	sdk "github.com/layer-3/nitrolite/sdk/go"
 )
-
-// appRegistryDisabledMsg is the error fragment returned by the node when the
-// apps.v1 RPC group is disabled by configuration. The example uses this to
-// decide whether to skip the registration step.
-const appRegistryDisabledMsg = "apps.v1 group is disabled"
 
 func main() {
 	ctx := context.Background()
@@ -158,41 +143,14 @@ func main() {
 	ensureChannelOpen(ctx, "Wallet 2", wallet2Client, "yellow")
 	fmt.Println()
 
-	// --- 1. Register Apps ---
-	fmt.Println("=== Step 1: Registering Apps ===")
-
+	// --- App IDs ---
+	// App sessions can be created against any app ID without prior registration.
 	suffix := fmt.Sprintf("%06d", rand.Intn(1000000))
 	app1ID := "test-app-" + suffix
 	app2ID := "multi-party-app-" + suffix
 
-	// Probe the apps.v1 group via GetApps. If the node has the app registry
-	// disabled, the probe returns an error containing appRegistryDisabledMsg
-	// and we skip registration entirely — app sessions can still be created
-	// against unregistered IDs in that mode.
-	appRegistryEnabled := true
-	if _, _, err := wallet1Client.GetApps(ctx, nil); err != nil {
-		if strings.Contains(err.Error(), appRegistryDisabledMsg) {
-			appRegistryEnabled = false
-			fmt.Println("ℹ App registry is disabled on the node — skipping app registration")
-		} else {
-			log.Fatalf("Failed to query app registry: %v", err)
-		}
-	}
-
-	if appRegistryEnabled {
-		if err := wallet1Client.RegisterApp(ctx, app1ID, "{}", true); err != nil {
-			log.Fatalf("Failed to register %s: %v", app1ID, err)
-		}
-		fmt.Printf("✓ Registered app: %s\n", app1ID)
-
-		if err := wallet1Client.RegisterApp(ctx, app2ID, "{}", false); err != nil {
-			log.Fatalf("Failed to register %s: %v", app2ID, err)
-		}
-		fmt.Printf("✓ Registered app: %s (owner approval required)\n\n", app2ID)
-	}
-
-	// --- 2. Create App Session 1 (Single Participant: Wallet 1) ---
-	fmt.Println("=== Step 2: Creating App Session 1 (Wallet 1 only) ===")
+	// --- 1. Create App Session 1 (Single Participant: Wallet 1) ---
+	fmt.Println("=== Step 1: Creating App Session 1 (Wallet 1 only) ===")
 
 	session1Definition := app.AppDefinitionV1{
 		ApplicationID: app1ID,
@@ -215,8 +173,8 @@ func main() {
 	}
 	fmt.Printf("✓ Created App Session 1: %s\n\n", session1ID)
 
-	// --- 3. Deposit YUSD into Session 1 ---
-	fmt.Println("=== Step 3: Depositing YUSD into Session 1 ===")
+	// --- 2. Deposit YUSD into Session 1 ---
+	fmt.Println("=== Step 2: Depositing YUSD into Session 1 ===")
 
 	session1DepositAmount := decimal.NewFromFloat(0.0001)
 	session1DepositUpdate := app.AppStateUpdateV1{
@@ -239,8 +197,8 @@ func main() {
 	}
 	fmt.Printf("✓ Deposited %s YUSD into Session 1\n\n", session1DepositAmount)
 
-	// --- 4. Create App Session 2 (Multi-Party: Wallet 2 & 3) ---
-	fmt.Println("=== Step 4: Creating App Session 2 (Wallet 2 & 3) ===")
+	// --- 3. Create App Session 2 (Multi-Party: Wallet 2 & 3) ---
+	fmt.Println("=== Step 3: Creating App Session 2 (Wallet 2 & 3) ===")
 
 	appID := app2ID
 
@@ -315,8 +273,8 @@ func main() {
 	}
 	fmt.Printf("✓ Created App Session 2: %s\n\n", session2ID)
 
-	// --- 5. Deposit YELLOW into Session 2 by Wallet 2 ---
-	fmt.Println("=== Step 5: Depositing YELLOW into Session 2 ===")
+	// --- 4. Deposit YELLOW into Session 2 by Wallet 2 ---
+	fmt.Println("=== Step 4: Depositing YELLOW into Session 2 ===")
 
 	session2DepositAmount := decimal.NewFromFloat(0.00015)
 	session2DepositUpdate := app.AppStateUpdateV1{
@@ -349,8 +307,8 @@ func main() {
 		fmt.Printf("Session 2 before redistribution - Version: %d, Allocations: %+v\n\n", session2InfoBeforeRedist[0].Version, session2InfoBeforeRedist[0].Allocations)
 	}
 
-	// --- 6. Redistribute within Session 2 (Wallet 2 -> Wallet 3) ---
-	fmt.Println("=== Step 6: Redistributing funds in Session 2 ===")
+	// --- 5. Redistribute within Session 2 (Wallet 2 -> Wallet 3) ---
+	fmt.Println("=== Step 5: Redistributing funds in Session 2 ===")
 
 	session2RedistributeUpdate := app.AppStateUpdateV1{
 		AppSessionID: session2ID,
@@ -377,8 +335,8 @@ func main() {
 	}
 	fmt.Println("✓ Redistributed YELLOW: Wallet 2 (0.0001) -> Wallet 3 (0.00005)")
 
-	// --- 7. Wallet 3 Withdraws from Session 2 ---
-	fmt.Println("=== Step 7: Wallet 3 Withdrawing from Session 2 ===")
+	// --- 6. Wallet 3 Withdraws from Session 2 ---
+	fmt.Println("=== Step 6: Wallet 3 Withdrawing from Session 2 ===")
 
 	session2WithdrawUpdate := app.AppStateUpdateV1{
 		AppSessionID: session2ID,
@@ -405,8 +363,8 @@ func main() {
 		fmt.Println("✓ Wallet 3 successfully withdrew YELLOW back to channel")
 	}
 
-	// --- 8. Close Both App Sessions ---
-	fmt.Println("=== Step 8: Closing Both App Sessions ===")
+	// --- 7. Close Both App Sessions ---
+	fmt.Println("=== Step 7: Closing Both App Sessions ===")
 
 	// Close Session 1
 	session1CloseUpdate := app.AppStateUpdateV1{
@@ -456,36 +414,6 @@ func main() {
 		log.Printf("⚠ Close Session 2 Error: %v", err)
 	} else {
 		fmt.Println("✓ Session 2 successfully closed")
-	}
-
-	// --- 9. Fail Case: Create App Session for Unregistered App ---
-	// Only meaningful when the app registry is enabled — with apps.v1 disabled
-	// every app ID is "unregistered" from the registry's perspective and the
-	// node accepts the create call, so the fail-case has nothing to assert.
-	if appRegistryEnabled {
-		fmt.Println("\n=== Step 9: Creating App Session for Unregistered App (expected to fail) ===")
-
-		unregisteredDefinition := app.AppDefinitionV1{
-			ApplicationID: "unregistered-app-" + suffix,
-			Participants: []app.AppParticipantV1{
-				{WalletAddress: wallet1Address, SignatureWeight: 100},
-			},
-			Quorum: 100,
-			Nonce:  uint64(time.Now().UnixNano()),
-		}
-
-		unregisteredCreateRequest, err := app.PackCreateAppSessionRequestV1(unregisteredDefinition, "{}")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		unregisteredSig, _ := appSession1Signer.Sign(unregisteredCreateRequest)
-		_, _, _, err = wallet1Client.CreateAppSession(ctx, unregisteredDefinition, "{}", []string{unregisteredSig.String()})
-		if err != nil {
-			fmt.Printf("✓ Expected error: %v\n", err)
-		} else {
-			fmt.Println("✗ Unexpected success: app session was created for unregistered app")
-		}
 	}
 
 	fmt.Println("\n=== Example Complete ===")

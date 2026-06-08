@@ -69,7 +69,6 @@ describe('TS RPC drift guards', () => {
         ['node.v1.get_assets', 'getAssets'],
         ['user.v1.get_balances', 'getBalances'],
         ['user.v1.get_transactions', 'getTransactions'],
-        ['user.v1.get_action_allowances', 'getActionAllowances'],
         ['channels.v1.get_home_channel', 'getHomeChannel'],
         ['channels.v1.get_escrow_channel', 'getEscrowChannel'],
         ['channels.v1.get_channels', 'getChannels'],
@@ -83,8 +82,6 @@ describe('TS RPC drift guards', () => {
         ['app_sessions.v1.create_app_session', 'createAppSession'],
         ['app_sessions.v1.submit_session_key_state', 'submitSessionKeyState'],
         ['app_sessions.v1.get_last_key_states', 'getLastAppKeyStates'],
-        ['apps.v1.get_apps', 'getApps'],
-        ['apps.v1.submit_app_version', 'registerApp'],
     ]);
 
     const intentionallyRawOnlyMethods = new Set([

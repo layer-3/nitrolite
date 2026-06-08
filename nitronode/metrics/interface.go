@@ -80,12 +80,12 @@ func (noopRuntimeMetricExporter) IncAppSessionUpdateSigValidation(string, app.Ap
 }
 func (noopRuntimeMetricExporter) IncBlockchainAction(string, uint64, string, bool) {
 }
-func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool)            {}
-func (noopRuntimeMetricExporter) IncRPCInflight(string)                      {}
-func (noopRuntimeMetricExporter) DecRPCInflight(string)                      {}
-func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration) {}
+func (noopRuntimeMetricExporter) IncBlockchainEvent(uint64, bool)                    {}
+func (noopRuntimeMetricExporter) IncRPCInflight(string)                              {}
+func (noopRuntimeMetricExporter) DecRPCInflight(string)                              {}
+func (noopRuntimeMetricExporter) ObserveDBQueryDuration(string, time.Duration)       {}
 func (noopRuntimeMetricExporter) SeedRPCMethodMetrics([]string, map[string][]string) {}
-func (noopRuntimeMetricExporter) SeedBlockchainEventMetrics([]uint64)          {}
+func (noopRuntimeMetricExporter) SeedBlockchainEventMetrics([]uint64)                {}
 
 // StoreMetricExporter defines the interface for setting metrics that are stored and updated by a separate metric worker.
 //

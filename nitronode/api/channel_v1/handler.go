@@ -14,7 +14,6 @@ import (
 type Handler struct {
 	useStoreInTx          StoreTxProvider
 	memoryStore           MemoryStore
-	actionGateway         ActionGateway
 	nodeSigner            *core.ChannelDefaultSigner
 	stateAdvancer         core.StateAdvancer
 	statePacker           core.StatePacker
@@ -30,7 +29,6 @@ type Handler struct {
 func NewHandler(
 	useStoreInTx StoreTxProvider,
 	memoryStore MemoryStore,
-	actionGateway ActionGateway,
 	nodeSigner *core.ChannelDefaultSigner,
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
@@ -45,7 +43,6 @@ func NewHandler(
 		statePacker:           statePacker,
 		useStoreInTx:          useStoreInTx,
 		memoryStore:           memoryStore,
-		actionGateway:         actionGateway,
 		nodeSigner:            nodeSigner,
 		nodeAddress:           nodeAddress,
 		minChallenge:          minChallenge,

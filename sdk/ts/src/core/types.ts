@@ -165,7 +165,6 @@ export interface Blockchain {
   name: string;
   id: bigint; // uint64
   channelHubAddress: Address;
-  lockingContractAddress?: Address;
   blockStep: bigint; // uint64
 }
 
@@ -209,13 +208,6 @@ export interface BalanceEntry {
   asset: string;
   balance: Decimal;
   enforced: Decimal;
-}
-
-export interface ActionAllowance {
-  gatedAction: string;
-  timeWindow: string;
-  allowance: bigint;
-  used: bigint;
 }
 
 // ============================================================================

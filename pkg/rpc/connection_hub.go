@@ -169,4 +169,3 @@ func (hub *ConnectionHub) Publish(userID string, response []byte) {
 		conn.WriteRawResponse(response)
 	}
 }
-

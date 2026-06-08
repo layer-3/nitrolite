@@ -66,20 +66,6 @@ func (h *Handler) SubmitAppState(c *rpc.Context) {
 			return rpc.Errorf("app session is already closed")
 		}
 
-		if h.appRegistryEnabled {
-			registeredApp, err := tx.GetApp(appSession.ApplicationID)
-			if err != nil {
-				return rpc.Errorf("failed to look up application: %v", err)
-			}
-			if registeredApp == nil {
-				return rpc.Errorf("application %s is not registered", appSession.ApplicationID)
-			}
-			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, appStateUpd.Intent.GatedAction())
-			if err != nil {
-				return rpc.NewError(err)
-			}
-		}
-
 		if len(reqPayload.QuorumSigs) > len(appSession.Participants) {
 			return rpc.Errorf("quorum_sigs count (%d) exceeds participants count (%d)", len(reqPayload.QuorumSigs), len(appSession.Participants))
 		}

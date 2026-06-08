@@ -1,7 +1,6 @@
 package user_v1
 
 import (
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/pkg/core"
 )
 
@@ -27,11 +26,4 @@ type Store interface {
 		FromTime *uint64,
 		ToTime *uint64,
 		Paginate *core.PaginationParams) ([]core.Transaction, core.PaginationMetadata, error)
-
-	action_gateway.Store
-}
-
-type ActionGateway interface {
-	// GetUserAllowances retrieves the action allowances for a user, which define what actions the user is permitted to perform.
-	GetUserAllowances(tx action_gateway.Store, userAddress string) ([]core.ActionAllowance, error)
 }

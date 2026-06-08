@@ -268,7 +268,6 @@ func (s *DBStore) HasSignedFinalize(channelID string) (bool, error) {
 	return count > 0, nil
 }
 
-
 // SumNetTransitionAmountAfterVersion returns the net effect on the user's home-channel
 // balance of transitions stored against channelID strictly above minVersion. Receiver
 // credits (TransferReceive, Release) contribute positively; sender debits

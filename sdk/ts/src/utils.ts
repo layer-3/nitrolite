@@ -4,7 +4,7 @@
 
 import * as core from './core/types.js';
 import * as API from './rpc/api.js';
-import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1, ActionAllowanceV1 } from './rpc/types.js';
+import { AssetV1, BalanceEntryV1, ChannelV1, LedgerV1, TransitionV1, StateV1, TransactionV1, PaginationMetadataV1 } from './rpc/types.js';
 import { Decimal } from 'decimal.js';
 import { Address } from 'viem';
 
@@ -41,7 +41,6 @@ export function transformNodeConfig(resp: API.NodeV1GetConfigResponse): core.Nod
     name: info.name,
     id: BigInt(info.blockchain_id),
     channelHubAddress: info.channel_hub_address as Address,
-    lockingContractAddress: info.locking_contract_address as Address | undefined,
     blockStep: 0n, // Not provided in RPC response
   }));
 
@@ -278,22 +277,6 @@ export function transformPaginationMetadata(
     perPage: metadata.per_page,
     totalCount: metadata.total_count,
     pageCount: metadata.page_count,
-  };
-}
-
-// ============================================================================
-// Action Allowance Transformations
-// ============================================================================
-
-/**
- * Transform RPC ActionAllowanceV1 to core ActionAllowance
- */
-export function transformActionAllowance(a: ActionAllowanceV1): core.ActionAllowance {
-  return {
-    gatedAction: a.gated_action,
-    timeWindow: a.time_window,
-    allowance: BigInt(a.allowance),
-    used: BigInt(a.used),
   };
 }
 

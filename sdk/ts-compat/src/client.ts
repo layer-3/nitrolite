@@ -11,7 +11,6 @@ import type {
     AppParticipantV1,
     AppAllocationV1,
     AppSessionKeyStateV1,
-    AppInfoV1,
     ChannelSessionKeyStateV1,
 } from '@yellow-org/sdk';
 import type * as core from '@yellow-org/sdk';
@@ -161,7 +160,6 @@ export class NitroliteClient {
     private _lastAppSessionsListError: string | null = null;
     private _lastAppSessionsListErrorLogged: string | null = null;
     private _blockchains: core.Blockchain[] | null = null;
-    private _lockingTokenDecimals = new Map<number, number>();
     private _blockchainRPCs: Record<number, string>;
     private _publicClients = new Map<number, PublicClient>();
 
@@ -1226,10 +1224,6 @@ export class NitroliteClient {
         return this._blockchains;
     }
 
-    async getActionAllowances(wallet?: Address): Promise<core.ActionAllowance[]> {
-        return this.innerClient.getActionAllowances(wallet ?? this.userAddress);
-    }
-
     async getEscrowChannel(escrowChannelId: string): Promise<core.Channel> {
         const channel = await this.innerClient.getEscrowChannel(escrowChannelId);
         if (!channel) {
@@ -1238,118 +1232,4 @@ export class NitroliteClient {
         return channel;
     }
 
-    // -----------------------------------------------------------------------
-    // App registry
-    // -----------------------------------------------------------------------
-
-    async getApps(options?: {
-        appId?: string;
-        ownerWallet?: string;
-        page?: number;
-        pageSize?: number;
-    }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata }> {
-        return this.innerClient.getApps(options);
-    }
-
-    async registerApp(
-        appID: string,
-        metadata: string,
-        creationApprovalNotRequired: boolean,
-    ): Promise<void> {
-        await this.innerClient.registerApp(appID, metadata, creationApprovalNotRequired);
-    }
-
-    // -----------------------------------------------------------------------
-    // Security token locking
-    // -----------------------------------------------------------------------
-
-    async lockSecurityTokens(
-        targetWallet: Address,
-        chainId: number,
-        amount: bigint,
-    ): Promise<string> {
-        if (amount <= 0n) throw new Error('amount must be positive');
-        const decimals = await this.getLockingTokenDecimals(chainId);
-        const humanAmount = this.toHumanAmount(amount, decimals);
-        return this.innerClient.escrowSecurityTokens(
-            targetWallet,
-            BigInt(chainId),
-            humanAmount,
-        );
-    }
-
-    async initiateSecurityTokensWithdrawal(chainId: number): Promise<string> {
-        return this.innerClient.initiateSecurityTokensWithdrawal(BigInt(chainId));
-    }
-
-    async cancelSecurityTokensWithdrawal(chainId: number): Promise<string> {
-        return this.innerClient.cancelSecurityTokensWithdrawal(BigInt(chainId));
-    }
-
-    async withdrawSecurityTokens(
-        chainId: number,
-        destination: Address,
-    ): Promise<string> {
-        return this.innerClient.withdrawSecurityTokens(BigInt(chainId), destination);
-    }
-
-    async approveSecurityToken(chainId: number, amount: bigint): Promise<string> {
-        if (amount <= 0n) throw new Error('amount must be positive');
-        const decimals = await this.getLockingTokenDecimals(chainId);
-        const humanAmount = this.toHumanAmount(amount, decimals);
-        return this.innerClient.approveSecurityToken(BigInt(chainId), humanAmount);
-    }
-
-    async getLockedBalance(chainId: number, wallet?: Address): Promise<bigint> {
-        const balance = await this.innerClient.getLockedBalance(
-            BigInt(chainId),
-            wallet ?? this.userAddress,
-        );
-        const decimals = await this.getLockingTokenDecimals(chainId);
-        return BigInt(balance.mul(new Decimal(10).pow(decimals)).toFixed(0));
-    }
-
-    private static readonly LOCKING_ASSET_ABI = [
-        { type: 'function', name: 'asset', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
-    ] as const;
-
-    private static readonly ERC20_DECIMALS_ABI = [
-        { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
-    ] as const;
-
-    private async getLockingTokenDecimals(chainId: number): Promise<number> {
-        const cached = this._lockingTokenDecimals.get(chainId);
-        if (cached !== undefined) return cached;
-
-        const blockchains = await this.ensureBlockchains();
-        const chain = blockchains.find((b) => b.id === BigInt(chainId));
-        if (!chain?.lockingContractAddress) {
-            throw new Error(`No locking contract configured for chain ${chainId}`);
-        }
-
-        const rpcUrl = this._blockchainRPCs[chainId];
-        if (!rpcUrl) {
-            throw new Error(
-                `No RPC URL configured for chain ${chainId}. ` +
-                'Pass blockchainRPCs in NitroliteClientConfig to use locking methods.',
-            );
-        }
-
-        const publicClient = createPublicClient({ transport: http(rpcUrl) });
-
-        const tokenAddress = await publicClient.readContract({
-            address: chain.lockingContractAddress,
-            abi: NitroliteClient.LOCKING_ASSET_ABI,
-            functionName: 'asset',
-        }) as Address;
-
-        const decimals = await publicClient.readContract({
-            address: tokenAddress,
-            abi: NitroliteClient.ERC20_DECIMALS_ABI,
-            functionName: 'decimals',
-        }) as number;
-
-        this._lockingTokenDecimals.set(chainId, decimals);
-        return decimals;
-    }
 }

@@ -97,12 +97,6 @@ func (m *MockStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 	return args.Error(0)
 }
 
-// UpdateUserStaked mocks updating the total staked amount for a user
-func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error {
-	args := m.Called(wallet, blockchainID, amount)
-	return args.Error(0)
-}
-
 // UpdateStateSigsIfMissing mocks backfilling missing user and/or node signatures
 // for a stored state.
 func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
@@ -128,7 +122,6 @@ func (m *MockStore) HasSignedFinalize(channelID string) (bool, error) {
 	args := m.Called(channelID)
 	return args.Bool(0), args.Error(1)
 }
-
 
 // StoreUserState mocks persisting a user state row.
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {

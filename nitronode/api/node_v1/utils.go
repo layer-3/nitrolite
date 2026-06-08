@@ -13,7 +13,6 @@ func mapBlockchainV1(blockchain core.Blockchain) rpc.BlockchainInfoV1 {
 		Name:                   blockchain.Name,
 		BlockchainID:           strconv.FormatUint(blockchain.ID, 10),
 		ChannelHubAddress:      blockchain.ChannelHubAddress,
-		LockingContractAddress: blockchain.LockingContractAddress,
 	}
 }
 

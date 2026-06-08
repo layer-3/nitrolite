@@ -42,6 +42,7 @@ export function transformNodeConfig(resp: API.NodeV1GetConfigResponse): core.Nod
     id: BigInt(info.blockchain_id),
     channelHubAddress: info.channel_hub_address as Address,
     blockStep: 0n, // Not provided in RPC response
+    confirmationDelaySecs: info.confirmation_delay_secs ?? 0,
   }));
 
   return {

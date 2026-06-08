@@ -506,6 +506,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "properties": [
       "blockStep: bigint",
       "channelHubAddress: Address",
+      "confirmationDelaySecs: number",
       "id: bigint",
       "name: string",
     ],
@@ -548,6 +549,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "properties": [
       "blockchain_id: string",
       "channel_hub_address: Address",
+      "confirmation_delay_secs: number",
       "name: string",
     ],
     "signatures": [],

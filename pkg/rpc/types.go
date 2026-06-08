@@ -264,6 +264,9 @@ type BlockchainInfoV1 struct {
 	BlockchainID string `json:"blockchain_id"`
 	// ChannelHubAddress is the contract address on this network
 	ChannelHubAddress string `json:"channel_hub_address"`
+	// ConfirmationDelaySecs is the number of seconds the node waits before crediting a deposit event.
+	// Zero means the gate is disabled and events are processed immediately.
+	ConfirmationDelaySecs uint32 `json:"confirmation_delay_secs"`
 }
 
 // ============================================================================

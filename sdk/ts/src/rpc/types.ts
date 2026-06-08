@@ -195,6 +195,8 @@ export interface BlockchainInfoV1 {
   blockchain_id: string; // uint64 as string
   /** Channel hub contract address on this network */
   channel_hub_address: Address;
+  /** Seconds the node waits before crediting a deposit event; 0 means gate is disabled */
+  confirmation_delay_secs?: number;
 }
 
 // ============================================================================

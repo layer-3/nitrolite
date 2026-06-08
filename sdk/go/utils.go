@@ -30,6 +30,7 @@ func transformNodeConfig(resp rpc.NodeV1GetConfigResponse) (*core.NodeConfig, er
 			ID:                     blockchainID,
 			ChannelHubAddress:      info.ChannelHubAddress,
 			BlockStep:              0, // Not provided in RPC response
+			ConfirmationDelaySecs:  info.ConfirmationDelaySecs,
 		})
 	}
 

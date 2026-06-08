@@ -569,18 +569,17 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	userSigStr := userSig.String()
 	incomingSenderState.UserSig = &userSigStr
 
-	// Mock expectations — should reach the issueTransferReceiverState check
-	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
-	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
-	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
-	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
+	// Mock expectations. The self-transfer check now runs inside lockTransferBalances,
+	// before any balance row is locked or any state is stored, so none of the store
+	// methods below should be reached. Marked Maybe() to document that they are
+	// deliberately not expected.
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil).Maybe()
+	mockTxStore.On("LockUserState", mock.Anything, asset).Return(decimal.Zero, nil).Maybe()
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil).Maybe()
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil).Maybe()
+	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil).Maybe()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
-
-	// Sender state is stored before the transition-specific logic
-	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
-		return state.UserWallet == senderWallet && state.NodeSig != nil
-	}), mock.Anything).Return(nil)
+	mockTxStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	rpcState := toRPCState(*incomingSenderState)
 	reqPayload := rpc.ChannelsV1SubmitStateRequest{

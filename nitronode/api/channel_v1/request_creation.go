@@ -83,9 +83,16 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 	var nodeSig string
 	err = h.useStoreInTx(func(tx Store) error {
-		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
-		if err != nil {
-			return rpc.Errorf("failed to lock user state: %v", err)
+		if incomingState.Transition.Type == core.TransitionTypeTransferSend {
+			// Lock both sender and receiver balance rows up front in deterministic
+			// order so concurrent opposite-direction transfers can't deadlock.
+			if _, err := h.lockTransferBalances(tx, incomingState); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset); err != nil {
+				return rpc.Errorf("failed to lock user state: %v", err)
+			}
 		}
 
 		// Reject if any home channel for this (wallet, asset) is not fully closed on-chain.

@@ -153,16 +153,22 @@ func (s *DBStore) StoreUserState(state core.State, applicationID string) error {
 	wallet := strings.ToLower(state.UserWallet)
 	balance := dbState.HomeUserBalance
 
-	err = s.db.Model(&UserBalance{}).
+	res := s.db.Model(&UserBalance{}).
 		Where("user_wallet = ? AND asset = ?", wallet, state.Asset).
 		Updates(map[string]interface{}{
 			"balance":            balance,
 			"home_blockchain_id": state.HomeLedger.BlockchainID,
 			"updated_at":         time.Now(),
-		}).Error
+		})
 
-	if err != nil {
-		return fmt.Errorf("failed to update user balance: %w", err)
+	if res.Error != nil {
+		return fmt.Errorf("failed to update user balance: %w", res.Error)
+	}
+	// The balance row must already exist (callers invoke LockUserState first, which
+	// inserts it). A zero-row update means the lock-before-store invariant was violated,
+	// so fail the transaction instead of leaving channel_states and user_balances divergent.
+	if res.RowsAffected != 1 {
+		return fmt.Errorf("failed to update user balance: expected 1 row affected, got %d (missing LockUserState?)", res.RowsAffected)
 	}
 
 	return nil

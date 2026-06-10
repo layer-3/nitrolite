@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func TestChannel_TableName(t *testing.T) {
@@ -194,6 +197,141 @@ func TestDBStore_GetChannelByID(t *testing.T) {
 	})
 }
 
+func TestDBStore_LockUserStateForHomeChannel(t *testing.T) {
+	t.Run("Success - returns channel and ensures balance row", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		channel := core.Channel{
+			ChannelID:         "0xhomechannel123",
+			UserWallet:        "0xuser123",
+			Asset:             "usdc",
+			Type:              core.ChannelTypeHome,
+			BlockchainID:      1,
+			TokenAddress:      "0xtoken123",
+			ChallengeDuration: 86400,
+			Nonce:             1,
+			Status:            core.ChannelStatusOpen,
+			StateVersion:      7,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+
+		result, err := store.LockUserStateForHomeChannel("0xhomechannel123")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "0xhomechannel123", result.ChannelID)
+		assert.Equal(t, "0xuser123", result.UserWallet)
+		assert.Equal(t, core.ChannelStatusOpen, result.Status)
+		assert.Equal(t, uint64(7), result.StateVersion)
+
+		// The balance row keyed by the channel's (wallet, asset) is ensured by the lock.
+		balances, err := store.GetUserBalances("0xuser123")
+		require.NoError(t, err)
+		require.Len(t, balances, 1)
+		assert.Equal(t, "usdc", balances[0].Asset)
+	})
+
+	t.Run("Channel not found returns nil", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		result, err := store.LockUserStateForHomeChannel("0xnonexistent")
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	// Regression for MF3-H02: a status flip that commits while LockUserStateForHomeChannel is
+	// blocked on the balance lock must be reflected in the returned channel. Requires real
+	// FOR UPDATE concurrency, so it only runs against Postgres.
+	t.Run("Postgres - returns status committed while waiting on the lock", func(t *testing.T) {
+		if os.Getenv("TEST_DB_DRIVER") != "postgres" {
+			t.Skip("requires postgres for FOR UPDATE concurrency semantics")
+		}
+
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		channel := core.Channel{
+			ChannelID:    "0xhomechannel123",
+			UserWallet:   "0xuser123",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeHome,
+			BlockchainID: 1,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 7,
+		}
+		require.NoError(t, store.CreateChannel(channel))
+		// Ensure the balance row exists so the competing transaction has a row to lock.
+		_, err := store.LockUserStateForHomeChannel(channel.ChannelID)
+		require.NoError(t, err)
+
+		locked := make(chan struct{})
+		proceed := make(chan struct{})
+		txDone := make(chan error, 1)
+
+		// Competing transaction: hold the balance lock, flip status to Closing, commit only
+		// once the main call is blocking on the lock.
+		go func() {
+			txDone <- db.Transaction(func(tx *gorm.DB) error {
+				var b UserBalance
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("user_wallet = ? AND asset = ?", channel.UserWallet, channel.Asset).
+					First(&b).Error; err != nil {
+					return err
+				}
+				if err := tx.Model(&Channel{}).
+					Where("channel_id = ?", channel.ChannelID).
+					Update("status", core.ChannelStatusClosing).Error; err != nil {
+					return err
+				}
+				close(locked)
+				<-proceed
+				return nil
+			})
+		}()
+
+		<-locked
+
+		type lockResult struct {
+			channel *core.Channel
+			err     error
+		}
+		got := make(chan lockResult, 1)
+		go func() {
+			ch, err := store.LockUserStateForHomeChannel(channel.ChannelID)
+			got <- lockResult{channel: ch, err: err}
+		}()
+
+		// Wait until the call is actually blocked on the balance-row lock before letting the
+		// competing transaction commit Closing. A fixed sleep is non-deterministic: under load
+		// the goroutine might not yet be in SELECT ... FOR UPDATE, so the competitor would commit
+		// before the lock is contended and the race would never be exercised. Poll pg_locks for an
+		// ungranted lock instead — that only appears once a backend is waiting on the lock.
+		require.Eventually(t, func() bool {
+			var waiting int64
+			if err := db.Raw(`SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting).Error; err != nil {
+				return false
+			}
+			return waiting > 0
+		}, 5*time.Second, 5*time.Millisecond, "LockUserStateForHomeChannel never blocked on the balance lock")
+		close(proceed)
+
+		require.NoError(t, <-txDone)
+
+		res := <-got
+		require.NoError(t, res.err)
+		require.NotNil(t, res.channel)
+		assert.Equal(t, core.ChannelStatusClosing, res.channel.Status,
+			"channel status must reflect the transition committed while waiting on the lock")
+	})
+}
+
 func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 	t.Run("Success - Get active home channel", func(t *testing.T) {
 		db, cleanup := SetupTestDB(t)
@@ -234,7 +372,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -295,7 +433,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -341,7 +479,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -369,7 +507,7 @@ func TestDBStore_GetActiveHomeChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetActiveHomeChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -482,7 +620,7 @@ func TestDBStore_CheckActiveChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		approvedSigValidators, status, err := store.CheckActiveChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -542,7 +680,7 @@ func TestDBStore_CheckActiveChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		approvedSigValidators, status, err := store.CheckActiveChannel("0xuser123", "USDC")
 		require.NoError(t, err)
@@ -589,7 +727,7 @@ func TestDBStore_CheckActiveChannel(t *testing.T) {
 				NodeNetFlow: decimal.Zero,
 			},
 		}
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		// Check for different asset
 		approvedSigValidators, status, err := store.CheckActiveChannel("0xuser123", "ETH")

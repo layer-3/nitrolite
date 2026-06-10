@@ -933,6 +933,8 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getTransactions: (wallet: Address, options?: { asset?: string; txType?: core.TransactionType; fromTime?: bigint; toTime?: bigint; page?: number; pageSize?: number; }): Promise<{ transactions: core.Transaction[]; metadata: core.PaginationMetadata; }>",
       "getUserAddress: (): Address",
       "ping: (): Promise<void>",
+      "revokeChannelSessionKey: (state: Omit<ChannelSessionKeyStateV1, 'user_sig' | 'session_key_sig'>): Promise<void>",
+      "revokeSessionKey: (state: Omit<app.AppSessionKeyStateV1, 'user_sig' | 'session_key_sig'>): Promise<void>",
       "setHomeBlockchain: (asset: string, blockchainId: bigint): Promise<void>",
       "signAppSessionKeyOwnership: (state: app.AppSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",
       "signChannelSessionKeyOwnership: (state: ChannelSessionKeyStateV1, sessionKeySigner: EthereumMsgSigner): Promise<Hex>",

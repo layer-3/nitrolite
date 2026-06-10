@@ -19,8 +19,17 @@ import (
 // Case-insensitive, since callers may submit checksummed or lowercased hex.
 var HashRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 
+// LowercaseHashRegex matches the strict lowercase canonical form of a 32-byte
+// hash, rejecting checksummed or uppercase hex.
+var LowercaseHashRegex = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+
 // IsValidHash reports whether s is a well-formed 32-byte hash (see HashRegex).
-func IsValidHash(s string) bool {
+// When requireLowercase is true, s must be in strict lowercase canonical form
+// (see LowercaseHashRegex); otherwise checksummed and uppercase hex are accepted.
+func IsValidHash(s string, requireLowercase bool) bool {
+	if requireLowercase {
+		return LowercaseHashRegex.MatchString(s)
+	}
 	return HashRegex.MatchString(s)
 }
 

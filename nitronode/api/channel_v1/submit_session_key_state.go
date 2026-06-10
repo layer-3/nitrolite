@@ -2,6 +2,7 @@ package channel_v1
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -71,23 +72,59 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: assets array exceeds maximum length of %d", h.maxSessionKeyIDs), "")
 		return
 	}
+	// An empty assets list authorizes no usable asset, so it is only meaningful as a
+	// revocation/deactivation state (expires_at <= now). Rejecting it for a future
+	// expires_at prevents an active current version that authorizes nothing.
+	if len(coreState.Assets) == 0 && coreState.ExpiresAt.After(time.Now()) {
+		c.Fail(rpc.Errorf("invalid_session_key_state: assets must be non-empty unless expires_at is in the past"), "")
+		return
+	}
+	if err := h.validateSessionKeyAssets(coreState.Assets); err != nil {
+		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+		return
+	}
 	if coreState.UserSig == "" {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
-	if coreState.SessionKeySig == "" {
-		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
-		return
-	}
 
-	// Validate both signatures: wallet's user_sig and session-key holder's session_key_sig.
-	if err := core.ValidateChannelSessionKeyStateV1(coreState); err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
-		return
-	}
-
-	// Validate version and store the session key state
+	// A submit with expires_at after now activates, extends, or rotates the key and requires
+	// both signatures. A submit with expires_at <= now is a revocation: it only deactivates an
+	// existing delegation, so the wallet's user_sig alone authorizes it. Requiring session_key_sig
+	// on the revocation path would let a lost, unavailable, or malicious session key veto its own
+	// revocation, stranding the user until the prior expires_at naturally passes. now is captured
+	// here and reused for the cap/version logic inside the transaction so the active/inactive
+	// decision is consistent across both.
 	now := time.Now()
+	if coreState.ExpiresAt.After(now) {
+		if coreState.SessionKeySig == "" {
+			c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+			return
+		}
+		// Validate both signatures: wallet's user_sig and session-key holder's session_key_sig.
+		if err := core.ValidateChannelSessionKeyStateV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+	} else {
+		// Revocation only deactivates an existing delegation. Version 1 means there is no prior
+		// delegation, so reject it before LockSessionKeyState can seed a permanent ownership
+		// claim for a session_key the caller never proved possession of: a legitimate revoke is
+		// always version >= 2, since registration at version 1 is future-dated and requires both
+		// signatures.
+		if coreState.Version == 1 {
+			c.Fail(rpc.Errorf("invalid_session_key_state: cannot revoke a session key with no prior delegation"), "")
+			return
+		}
+		// Validate only the wallet's user_sig. Any session_key_sig present is ignored, so clear
+		// it before persisting to keep stored revocation rows canonical.
+		if err := core.ValidateChannelSessionKeyStateUserSigV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+		coreState.SessionKeySig = ""
+	}
+
 	// revoked is true only when this submit transitions an active key to inactive,
 	// so the revocation log is not emitted for inactive-to-inactive updates.
 	var revoked bool
@@ -173,4 +210,29 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		"userAddress", coreState.UserAddress,
 		"sessionKey", coreState.SessionKey,
 		"version", coreState.Version)
+}
+
+// validateSessionKeyAssets rejects an assets list that contains a non-canonical asset, a
+// duplicate, or an asset the node does not support. Assets must already be lowercased because
+// they are persisted lowercased (StoreChannelSessionKeyState) and looked up lowercased
+// (ValidateChannelSessionKeyForAsset); rejecting a non-canonical asset keeps the user-signed
+// payload identical to what is stored. Empty assets lists are allowed; the per-asset checks
+// only run on entries.
+func (h *Handler) validateSessionKeyAssets(assets []string) error {
+	seen := make(map[string]struct{}, len(assets))
+	for _, asset := range assets {
+		normalized := strings.ToLower(asset)
+		if asset != normalized {
+			return fmt.Errorf("non-canonical asset '%s', expected '%s'", asset, normalized)
+		}
+		if _, ok := seen[normalized]; ok {
+			return fmt.Errorf("duplicate asset '%s'", asset)
+		}
+		seen[normalized] = struct{}{}
+
+		if _, err := h.memoryStore.GetAssetDecimals(normalized); err != nil {
+			return fmt.Errorf("unsupported asset '%s'", asset)
+		}
+	}
+	return nil
 }

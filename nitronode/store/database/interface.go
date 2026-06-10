@@ -28,6 +28,13 @@ type DatabaseStore interface {
 	// Returns the current balance or zero if the row was just inserted.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID (must be used
+	// within a transaction). On postgres the lock key is derived from the channel in SQL and the
+	// channel is read under the lock, avoiding the stale pre-lock snapshot of a GetChannelByID +
+	// LockUserState pair; on non-postgres (sqlite in tests) the snapshot is taken before the lock
+	// for test compatibility. Returns nil if the channel does not exist.
+	LockUserStateForHomeChannel(channelID string) (*core.Channel, error)
+
 	// GetUserTransactions retrieves transaction history for a user with optional filters.
 	GetUserTransactions(wallet string, asset *string, txType *core.TransactionType, fromTime *uint64, toTime *uint64, paginate *core.PaginationParams) ([]core.Transaction, core.PaginationMetadata, error)
 

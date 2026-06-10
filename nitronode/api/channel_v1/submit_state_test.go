@@ -51,6 +51,82 @@ func TestSubmitState_InvalidUserWallet_Rejected(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "LockUserState", mock.Anything, mock.Anything)
 }
 
+func TestSubmitState_ActiveChannelMissingState_Rejected(t *testing.T) {
+	// An active home channel always has its initial state stored by request_creation.
+	// If CheckActiveChannel reports an active channel but GetLastUserState returns nil,
+	// SubmitState must fail closed rather than bootstrapping a synthetic Void state.
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      mockSigner.PublicKey().Address().String(),
+		minChallenge:     uint32(3600),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+	}
+
+	userSigner := NewMockSigner()
+	senderWallet := userSigner.PublicKey().Address().String()
+	receiverWallet := "0x0987654321098765432109876543210987654321"
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+
+	currentState := core.State{
+		ID:            core.GetStateID(senderWallet, asset, 1, 1),
+		Asset:         asset,
+		UserWallet:    senderWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+	incomingState := currentState.NextState()
+	_, err := incomingState.ApplyTransferSendTransition(receiverWallet, decimal.NewFromInt(100))
+	require.NoError(t, err)
+
+	// Reports an active channel, but no stored state exists for the (wallet, asset) slot.
+	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(nil, nil)
+
+	rpcState := toRPCState(*incomingState)
+	payload, err := rpc.NewPayload(rpc.ChannelsV1SubmitStateRequest{State: rpcState})
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "active channel has no stored state")
+	// Failed before signing/persistence.
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+	mockTxStore.AssertExpectations(t)
+}
+
 func TestSubmitState_TransferSend_Success(t *testing.T) {
 	// Setup
 	mockTxStore := new(MockStore)

@@ -117,6 +117,16 @@ func (m *MockStore) LockUserState(wallet, asset string) (decimal.Decimal, error)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+// LockUserStateForHomeChannel mocks locking the balance row of the channel owner and
+// returning the channel read under that lock.
+func (m *MockStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	args := m.Called(channelID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
 // HasSignedFinalize mocks the existence check for a node-signed Finalize state on the given home channel.
 func (m *MockStore) HasSignedFinalize(channelID string) (bool, error) {
 	args := m.Called(channelID)

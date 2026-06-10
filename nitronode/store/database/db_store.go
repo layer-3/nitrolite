@@ -145,6 +145,66 @@ func (s *DBStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
 	return balance.Balance, nil
 }
 
+// LockUserStateForHomeChannel acquires the balance-row lock of the user owning channelID and
+// returns the channel read *after* the lock is held. The order matters: the lock is taken first,
+// then the channel is read in a separate statement, so a concurrent transaction (e.g. submit_state
+// co-signing a Finalize and flipping the channel to Closing) that commits while we wait on the lock
+// is reflected in the returned status. Callers that previously did GetChannelByID followed by
+// LockUserState must use this instead — the separate read is read-before-lock and races.
+//
+// Returns (nil, nil) if the channel does not exist. Channel-type checks remain the caller's
+// responsibility.
+func (s *DBStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	channelID = strings.ToLower(channelID)
+	if !strings.HasPrefix(channelID, "0x") {
+		channelID = "0x" + channelID
+	}
+
+	// Non-postgres (sqlite in tests) cannot SELECT ... FOR UPDATE and has no real concurrency
+	// in those paths; resolve, ensure the balance row via LockUserState, and read directly.
+	if s.db.Dialector.Name() != "postgres" {
+		channel, err := s.GetChannelByID(channelID)
+		if err != nil || channel == nil {
+			return channel, err
+		}
+		if _, err := s.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+			return nil, err
+		}
+		return channel, nil
+	}
+
+	// Resolve the channel's (wallet, asset) lock key. These columns are immutable for a given
+	// channel, so reading them at this statement's snapshot is safe even though status is not.
+	var key struct {
+		UserWallet string
+		Asset      string
+	}
+	result := s.db.Raw(`SELECT user_wallet, asset FROM channels WHERE channel_id = ?`, channelID).Scan(&key)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to resolve lock key for channel %s: %w", channelID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	// Acquire the (wallet, asset) balance-row lock first (ensures the row, then SELECT ... FOR
+	// UPDATE). This blocks until any concurrent transaction holding the row commits.
+	if _, err := s.LockUserState(key.UserWallet, key.Asset); err != nil {
+		return nil, err
+	}
+
+	// Read the channel only after the lock is held. A single SELECT ... FOR UPDATE OF b that
+	// joins channels would return c.* from the statement-start snapshot — a Finalize that flips
+	// status to Closing while we wait on the balance lock would not be reflected. This separate
+	// statement takes a fresh snapshot once the lock is acquired, so the returned status reflects
+	// any such committed transition.
+	//
+	// NOTE: requires READ COMMITTED isolation (Postgres default, and nitronode never overrides it).
+	// Under REPEATABLE READ or SERIALIZABLE this statement still sees the transaction-start
+	// snapshot, returning the stale pre-lock status and negating the fix.
+	return s.GetChannelByID(channelID)
+}
+
 // EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 // This method prevents race conditions by ensuring blockchain state versions
 // match the user's last signed state version before accepting new transitions.

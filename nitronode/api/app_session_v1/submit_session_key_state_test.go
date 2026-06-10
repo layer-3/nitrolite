@@ -291,7 +291,10 @@ func TestSubmitSessionKeyState_InvalidUserAddress(t *testing.T) {
 	assert.Contains(t, respErr.Error(), "invalid user_address")
 }
 
-func TestSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
+// A version-1 revoke has no prior delegation to deactivate; allowing it would let a wallet
+// seed a permanent (session_key, kind) ownership claim for a key it never proved possession
+// of. It must be rejected before LockSessionKeyState runs, so no seed row is ever written.
+func TestSubmitSessionKeyState_RevokeFirstSubmit_Rejected(t *testing.T) {
 	mockStore := new(MockStore)
 	userSigner := NewMockSigner()
 	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
@@ -306,13 +309,8 @@ func TestSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 		maxSessionKeyIDs: 10,
 	}
 
-	// expires_at in the past expresses a revoke: the same monotonic version sequence
-	// is preserved, the auth path filters expires_at > now so the key is deactivated.
 	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 1, nil, nil, expiresAt, userSigner, sessionKeySigner)
-
-	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(0, time.Time{}, nil)
-	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
 
 	payload, err := rpc.NewPayload(reqPayload)
 	require.NoError(t, err)
@@ -325,8 +323,11 @@ func TestSubmitSessionKeyState_RevokeWithPastExpiresAt(t *testing.T) {
 	handler.SubmitSessionKeyState(ctx)
 
 	require.NotNil(t, ctx.Response)
-	assert.Nil(t, ctx.Response.Error())
-	mockStore.AssertExpectations(t)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "no prior delegation")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "StoreAppSessionKeyState", mock.Anything)
 }
 
 // Covers the typical revocation path: an active key (latestVersion > 0, prev expires_at in
@@ -655,7 +656,11 @@ func TestSubmitSessionKeyState_AllowsUpdateForExistingKeyAtCap(t *testing.T) {
 	mockStore.AssertNotCalled(t, "CountSessionKeysForUser", mock.Anything)
 }
 
-func TestSubmitSessionKeyState_RejectsNonLowercaseApplicationID(t *testing.T) {
+// submitStateExpectingError builds a request with the given application/session IDs and
+// asserts the handler rejects it at the validation boundary with errSubstr, without ever
+// reaching the store.
+func submitStateExpectingError(t *testing.T, applicationIDs, appSessionIDs []string, errSubstr string) {
+	t.Helper()
 	mockStore := new(MockStore)
 	handler := &Handler{
 		useStoreInTx: func(handler StoreTxHandler) error {
@@ -674,8 +679,8 @@ func TestSubmitSessionKeyState_RejectsNonLowercaseApplicationID(t *testing.T) {
 			UserAddress:    userAddress,
 			SessionKey:     sessionKeyAddress,
 			Version:        "1",
-			ApplicationIDs: []string{"App-1"},
-			AppSessionIDs:  []string{},
+			ApplicationIDs: applicationIDs,
+			AppSessionIDs:  appSessionIDs,
 			ExpiresAt:      strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
 			UserSig:        "0xdeadbeef",
 		},
@@ -694,51 +699,26 @@ func TestSubmitSessionKeyState_RejectsNonLowercaseApplicationID(t *testing.T) {
 	require.NotNil(t, ctx.Response)
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
-	assert.Contains(t, respErr.Error(), "application_ids must be lowercase, got: App-1")
+	assert.Contains(t, respErr.Error(), errSubstr)
 	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
 }
 
-func TestSubmitSessionKeyState_RejectsNonLowercaseAppSessionID(t *testing.T) {
-	mockStore := new(MockStore)
-	handler := &Handler{
-		useStoreInTx: func(handler StoreTxHandler) error {
-			return handler(mockStore)
-		},
-		metrics:          metrics.NewNoopRuntimeMetricExporter(),
-		maxSessionKeyIDs: 10,
-	}
+func TestSubmitSessionKeyState_RejectsInvalidApplicationID(t *testing.T) {
+	const errSubstr = "application_ids must contain only lowercase letters, digits, dashes, and underscores"
+	// Uppercase, illegal character, and over the 66-char column width all fail the regex.
+	submitStateExpectingError(t, []string{"App-1"}, nil, errSubstr)
+	submitStateExpectingError(t, []string{"bad id"}, nil, errSubstr)
+	submitStateExpectingError(t, []string{strings.Repeat("a", 67)}, nil, errSubstr)
+}
 
-	userSigner := NewMockSigner()
-	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
-	sessionKeyAddress := "0x3333333333333333333333333333333333333333"
-
-	reqPayload := rpc.AppSessionsV1SubmitSessionKeyStateRequest{
-		State: rpc.AppSessionKeyStateV1{
-			UserAddress:    userAddress,
-			SessionKey:     sessionKeyAddress,
-			Version:        "1",
-			ApplicationIDs: []string{},
-			AppSessionIDs:  []string{"Session-ABC"},
-			ExpiresAt:      strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10),
-			UserSig:        "0xdeadbeef",
-		},
-	}
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
-	}
-
-	handler.SubmitSessionKeyState(ctx)
-
-	require.NotNil(t, ctx.Response)
-	respErr := ctx.Response.Error()
-	require.NotNil(t, respErr)
-	assert.Contains(t, respErr.Error(), "app_session_ids must be lowercase, got: Session-ABC")
-	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+func TestSubmitSessionKeyState_RejectsInvalidAppSessionID(t *testing.T) {
+	const errSubstr = "app_session_ids must be 0x-prefixed 32-byte lowercase hex hashes"
+	// Non-hash strings, short/long hex, and well-formed-but-uppercase hex all fail
+	// the single lowercase-canonical check via the same error path.
+	submitStateExpectingError(t, nil, []string{"Session-ABC"}, errSubstr)
+	submitStateExpectingError(t, nil, []string{"0x1234"}, errSubstr)
+	submitStateExpectingError(t, nil, []string{strings.Repeat("z", 64)}, errSubstr)
+	submitStateExpectingError(t, nil, []string{"0x" + strings.Repeat("A", 64)}, errSubstr)
 }
 
 func TestSubmitSessionKeyState_SignatureMismatch(t *testing.T) {
@@ -879,6 +859,131 @@ func TestSubmitSessionKeyState_RejectsMismatchedSessionKeySig(t *testing.T) {
 	respErr := ctx.Response.Error()
 	require.NotNil(t, respErr)
 	assert.Contains(t, respErr.Error(), "session_key_sig does not match session_key")
+	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// Wallet-only revocation: a submit with a past expires_at and NO session_key_sig is accepted
+// on the strength of user_sig alone. This is the core remediation — a lost, unavailable, or
+// uncooperative session key can no longer veto revocation of its own delegation.
+func TestSubmitSessionKeyState_RevokeUserSigOnly_Succeeds(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	// keySigner=nil → SessionKeySig stays empty; the revocation path must not require it.
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, nil, nil, expiresAt, userSigner, nil)
+
+	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(1, prevActiveExpiresAt, nil)
+	mockStore.On("StoreAppSessionKeyState", mock.AnythingOfType("app.AppSessionKeyStateV1")).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
+// On the revocation path a present-but-mismatched session_key_sig is ignored, not validated.
+// The same signature would be rejected on the active path (see RejectsMismatchedSessionKeySig).
+func TestSubmitSessionKeyState_RevokeIgnoresMismatchedSessionKeySig(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+	otherSigner := NewMockSigner()
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	// SessionKeySig signed by an unrelated key — would fail the active path, ignored on revoke.
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, nil, nil, expiresAt, userSigner, otherSigner)
+
+	prevActiveExpiresAt := time.Now().Add(24 * time.Hour)
+	mockStore.On("LockSessionKeyState", userAddress, sessionKeyAddress, database.SessionKeyKindAppSession).Return(1, prevActiveExpiresAt, nil)
+	// The ignored session_key_sig must be cleared before persisting so stored revocation
+	// rows never retain unverified client input.
+	mockStore.On("StoreAppSessionKeyState", mock.MatchedBy(func(s app.AppSessionKeyStateV1) bool {
+		return s.SessionKeySig == ""
+	})).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	assert.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
+// Even on the revocation path the wallet's user_sig must be valid: a revoke signed by a key
+// other than the user_address is rejected, so revocation stays a wallet-only right (not anyone's).
+func TestSubmitSessionKeyState_RevokeInvalidUserSig_Rejected(t *testing.T) {
+	mockStore := new(MockStore)
+	userSigner := NewMockSigner()
+	differentSigner := NewMockSigner()
+	userAddress := strings.ToLower(userSigner.PublicKey().Address().String())
+	sessionKeySigner := NewMockSigner()
+	sessionKeyAddress := strings.ToLower(sessionKeySigner.PublicKey().Address().String())
+
+	handler := &Handler{
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockStore)
+		},
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 10,
+	}
+
+	expiresAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	// user_sig produced by a key other than userAddress; no session_key_sig.
+	reqPayload := buildSignedSessionKeyStateReq(t, userAddress, sessionKeyAddress, 2, nil, nil, expiresAt, differentSigner, nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), payload),
+	}
+
+	handler.SubmitSessionKeyState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "user_sig does not match user_address")
 	mockStore.AssertNotCalled(t, "LockSessionKeyState", mock.Anything, mock.Anything, mock.Anything)
 }
 

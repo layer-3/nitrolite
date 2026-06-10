@@ -82,11 +82,13 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 	applicationID := rpc.GetApplicationID(c)
 
 	var nodeSig string
+	var receiverWallet string
 	err = h.useStoreInTx(func(tx Store) error {
 		if incomingState.Transition.Type == core.TransitionTypeTransferSend {
 			// Lock both sender and receiver balance rows up front in deterministic
 			// order so concurrent opposite-direction transfers can't deadlock.
-			if _, err := h.lockTransferBalances(tx, incomingState); err != nil {
+			receiverWallet, err = h.lockTransferBalances(tx, incomingState)
+			if err != nil {
 				return err
 			}
 		} else {
@@ -233,7 +235,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 				// We return Node's signature, the user is expected to submit this on blockchain.
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, receiverWallet, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}

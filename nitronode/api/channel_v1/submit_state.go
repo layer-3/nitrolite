@@ -38,11 +38,13 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 	var nodeSig string
 	incomingTransition := incomingState.Transition
+	var receiverWallet string
 	err = h.useStoreInTx(func(tx Store) error {
 		if incomingTransition.Type == core.TransitionTypeTransferSend {
 			// Lock both sender and receiver balance rows up front in deterministic
 			// order so concurrent opposite-direction transfers can't deadlock.
-			if _, err := h.lockTransferBalances(tx, incomingState); err != nil {
+			receiverWallet, err = h.lockTransferBalances(tx, incomingState)
+			if err != nil {
 				return err
 			}
 		} else {
@@ -169,7 +171,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				}
 
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, receiverWallet, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}

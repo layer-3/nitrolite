@@ -33,6 +33,12 @@ type Listener struct {
 	handleEvent           HandleEvent // live events and recent historical events; typically the ConfirmationGate
 	handleHistoricalEvent HandleEvent // historical events older than confirmationDelay; typically the reactor directly
 	eventGetter           ContractEventGetter
+
+	// Single-entry block-timestamp cache for ensureBlockTimestamp. The listener's
+	// processEvents loop is strictly serial (Phase 1 drains before Phase 2, each
+	// phase processes one event at a time), so these fields require no mutex.
+	lastBlockHash      common.Hash
+	lastBlockTimestamp time.Time
 }
 
 // NewListener creates a Listener. blockStep controls how many blocks are fetched
@@ -283,7 +289,21 @@ func (l *Listener) processEvents(
 			}
 			l.logger.Debug("received historical event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
-			handler := l.routeHistoricalEvent(ctx, eventLog)
+			eventLog, err := l.ensureBlockTimestamp(ctx, eventLog)
+			if err != nil {
+				l.logger.Warn("failed to ensure block timestamp for historical event, routing through gate",
+					"error", err,
+					"blockchainID", l.blockchainID,
+					"blockNumber", eventLog.BlockNumber,
+					"blockHash", eventLog.BlockHash.Hex(),
+				)
+				if err := l.handleEvent(evCtx, eventLog); err != nil {
+					eventSubscription.Unsubscribe()
+					return err
+				}
+				continue
+			}
+			handler := l.routeHistoricalEvent(eventLog)
 			if err := handler(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
@@ -325,6 +345,19 @@ func (l *Listener) processEvents(
 				l.logger.Debug("received current event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			}
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
+			if !eventLog.Removed {
+				ensured, err := l.ensureBlockTimestamp(ctx, eventLog)
+				if err != nil {
+					l.logger.Warn("failed to ensure block timestamp for current event, routing through gate",
+						"error", err,
+						"blockchainID", l.blockchainID,
+						"blockNumber", eventLog.BlockNumber,
+						"blockHash", eventLog.BlockHash.Hex(),
+					)
+				} else {
+					eventLog = ensured
+				}
+			}
 			if err := l.handleEvent(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
@@ -414,6 +447,51 @@ func (l *Listener) reconcileBlockRange(
 	}
 }
 
+// ensureBlockTimestamp returns eventLog with BlockTimestamp guaranteed non-zero.
+//
+// Most EVM chains and providers populate BlockTimestamp in the JSON-RPC response,
+// in which case eventLog is returned unchanged. For chains/providers that do NOT
+// populate it (notably Avalanche C-Chain via ava-labs/libevm, and older BSC
+// dataseed nodes), this method fetches the block header via HeaderByHash and
+// populates the field on the local-stack copy of types.Log.
+//
+// Single-entry cache (lastBlockHash) elides repeat fetches for consecutive events
+// from the same block — the only relevant case because the listener delivers events
+// in block order.
+//
+// Single-threaded use only: relies on the Listener's serial processEvents loop
+// (Phase 1 historical fully drains before Phase 2 live; each phase processes one
+// event at a time). No mutex on the cache fields. A future refactor that
+// parallelizes event handling must add synchronization or switch to a thread-safe
+// cache.
+//
+// On HeaderByHash failure, returns the original eventLog and the error. Callers
+// decide whether to fall back to the gate (which is the conservative behavior;
+// see live-path and routeHistoricalEvent below).
+func (l *Listener) ensureBlockTimestamp(ctx context.Context, eventLog types.Log) (types.Log, error) {
+	if eventLog.BlockTimestamp != 0 {
+		return eventLog, nil
+	}
+
+	if eventLog.BlockHash == l.lastBlockHash && !l.lastBlockTimestamp.IsZero() {
+		eventLog.BlockTimestamp = uint64(l.lastBlockTimestamp.Unix())
+		return eventLog, nil
+	}
+
+	headerCtx, cancel := context.WithTimeout(ctx, rpcRequestTimeout)
+	defer cancel()
+	header, err := l.client.HeaderByHash(headerCtx, eventLog.BlockHash)
+	if err != nil {
+		return eventLog, err
+	}
+
+	blockTime := time.Unix(int64(header.Time), 0)
+	l.lastBlockHash = eventLog.BlockHash
+	l.lastBlockTimestamp = blockTime
+	eventLog.BlockTimestamp = header.Time
+	return eventLog, nil
+}
+
 // routeHistoricalEvent chooses the handler for a Phase 1 event based on the age of
 // its block. Events whose block timestamp is older than confirmationDelay are routed
 // to handleHistoricalEvent (they are past the reorg window and safe to forward
@@ -421,29 +499,20 @@ func (l *Listener) reconcileBlockRange(
 // handleEvent so they pass through the gate. When confirmationDelay is zero, every
 // event is routed to handleHistoricalEvent.
 //
-// On a HeaderByHash fetch error the function falls back to handleEvent: routing
-// through the gate is the conservative choice (it preserves the reorg-protection
-// invariant at the cost of a small delay), and the gate's own block-timestamp
-// fetcher will retry the lookup with its own fallback.
-func (l *Listener) routeHistoricalEvent(ctx context.Context, eventLog types.Log) HandleEvent {
+// Reads eventLog.BlockTimestamp directly — callers are expected to have invoked
+// ensureBlockTimestamp first. Defense-in-depth: if BlockTimestamp is zero (caller
+// failed to ensure it), route through handleEvent (the gate) as the conservative
+// choice.
+func (l *Listener) routeHistoricalEvent(eventLog types.Log) HandleEvent {
 	if l.confirmationDelay == 0 {
 		return l.handleHistoricalEvent
 	}
 
-	headerCtx, cancel := context.WithTimeout(ctx, rpcRequestTimeout)
-	defer cancel()
-	header, err := l.client.HeaderByHash(headerCtx, eventLog.BlockHash)
-	if err != nil {
-		l.logger.Warn("failed to fetch block timestamp for historical event, routing through gate",
-			"error", err,
-			"blockchainID", l.blockchainID,
-			"blockNumber", eventLog.BlockNumber,
-			"blockHash", eventLog.BlockHash.Hex(),
-		)
+	if eventLog.BlockTimestamp == 0 {
 		return l.handleEvent
 	}
 
-	blockTime := time.Unix(int64(header.Time), 0)
+	blockTime := time.Unix(int64(eventLog.BlockTimestamp), 0)
 	if time.Since(blockTime) < l.confirmationDelay {
 		return l.handleEvent
 	}

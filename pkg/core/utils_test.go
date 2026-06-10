@@ -856,13 +856,9 @@ func TestDecimalToInt256(t *testing.T) {
 }
 
 func TestIsValidHash(t *testing.T) {
-	valid := []string{
-		"0x1111111111111111111111111111111111111111111111111111111111111111",
-		"0xabcdefABCDEF0000000000000000000000000000000000000000000000000000",
-	}
-	for _, s := range valid {
-		assert.True(t, IsValidHash(s), "expected %q to be valid", s)
-	}
+	lowercase := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	uppercase := "0xABCDEF0000000000000000000000000000000000000000000000000000000000"
+	mixed := "0xabcdefABCDEF0000000000000000000000000000000000000000000000000000"
 
 	invalid := []string{
 		"",
@@ -872,7 +868,24 @@ func TestIsValidHash(t *testing.T) {
 		"0x11111111111111111111111111111111111111111111111111111111111111111", // 65 hex
 		"0xzz11111111111111111111111111111111111111111111111111111111111111",  // non-hex
 	}
-	for _, s := range invalid {
-		assert.False(t, IsValidHash(s), "expected %q to be invalid", s)
-	}
+
+	t.Run("case-insensitive", func(t *testing.T) {
+		for _, s := range []string{lowercase, uppercase, mixed} {
+			assert.True(t, IsValidHash(s, false), "expected %q to be valid", s)
+		}
+		for _, s := range invalid {
+			assert.False(t, IsValidHash(s, false), "expected %q to be invalid", s)
+		}
+	})
+
+	t.Run("require lowercase", func(t *testing.T) {
+		assert.True(t, IsValidHash(lowercase, true), "expected %q to be valid", lowercase)
+		// uppercase and mixed are well-formed hex but not canonical lowercase.
+		for _, s := range []string{uppercase, mixed} {
+			assert.False(t, IsValidHash(s, true), "expected %q to be rejected", s)
+		}
+		for _, s := range invalid {
+			assert.False(t, IsValidHash(s, true), "expected %q to be invalid", s)
+		}
+	})
 }

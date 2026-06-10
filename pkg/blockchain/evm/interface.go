@@ -44,6 +44,9 @@ type AssetStore interface {
 type EVMClient interface {
 	ethereum.ChainStateReader
 	bind.ContractBackend
-	// HeaderByHash is used by the reconciliation walk to verify block canonicality.
+	// HeaderByHash is used by the gate's block-timestamp fetcher and by the
+	// Listener's age-based routing of Phase 1 events. It returns whatever header
+	// the node has for the given hash (which may be a side-chain header) — it is
+	// NOT suitable for canonicality checks; use HeaderByNumber for that.
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 }

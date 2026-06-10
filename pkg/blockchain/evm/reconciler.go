@@ -2,16 +2,19 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
 // findCommonAncestor determines the last block in the canonical chain that the
 // node has already processed. It walks stored block hashes backward until it
-// finds one that eth_getBlockByHash confirms is canonical, then returns that
-// block number as the safe replay start point.
+// finds a stored hash that matches the canonical chain's hash at that height,
+// then returns that block number as the safe replay start point.
 //
 // Returns 0 when no stored events exist or when every stored block has been
 // reorged out — in both cases the caller should replay from genesis/start-block.
@@ -38,18 +41,12 @@ func findCommonAncestor(
 			return 0, ctx.Err()
 		}
 
-		hash := common.HexToHash(blockHash)
-		header, err := client.HeaderByHash(ctx, hash)
+		canonical, err := isStoredBlockCanonical(ctx, client, blockNum, common.HexToHash(blockHash))
 		if err != nil {
 			return 0, fmt.Errorf("check canonicality of block %d (%s): %w", blockNum, blockHash, err)
 		}
 
-		if header != nil {
-			// This block is still in the canonical chain.
-			if blockNum != header.Number.Uint64() {
-				// Sanity check: the block at this hash should have the number we stored.
-				return 0, fmt.Errorf("block hash %s has unexpected number: stored %d, chain %d", blockHash, blockNum, header.Number.Uint64())
-			}
+		if canonical {
 			logger.Info("reconciliation: found common ancestor",
 				"blockchainID", blockchainID,
 				"blockNumber", blockNum,
@@ -81,4 +78,37 @@ func findCommonAncestor(
 		blockNum = prevNum
 		blockHash = prevHash
 	}
+}
+
+// isStoredBlockCanonical reports whether the block currently occupying blockNum
+// in the canonical chain has the given storedHash. It uses HeaderByNumber rather
+// than HeaderByHash because the two answer different questions:
+//
+//   - HeaderByHash returns any header the node has indexed, including orphan
+//     side-chain headers still cached locally. A successful return does NOT prove
+//     the block is in the canonical chain. A reorged-out hash may also come back
+//     as ethereum.NotFound depending on the backend's pruning policy —
+//     conflating those two outcomes with a single boolean is unsafe.
+//
+//   - HeaderByNumber returns the block currently occupying that height in the
+//     canonical chain. Comparing its hash to the stored hash is definitive: equal
+//     means the stored block is canonical, different means it has been reorged
+//     out.
+//
+// ethereum.NotFound from HeaderByNumber (e.g. the chain has pruned the height or
+// has not yet produced a block at that height) is treated as "not canonical"
+// rather than a fatal error, so the caller walks backward instead of crashing
+// the listener on startup.
+func isStoredBlockCanonical(ctx context.Context, client EVMClient, blockNum uint64, storedHash common.Hash) (bool, error) {
+	header, err := client.HeaderByNumber(ctx, new(big.Int).SetUint64(blockNum))
+	if err != nil {
+		if errors.Is(err, ethereum.NotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if header == nil {
+		return false, nil
+	}
+	return header.Hash() == storedHash, nil
 }

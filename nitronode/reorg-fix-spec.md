@@ -99,11 +99,13 @@ Before the reconciliation logic described below can function, `block_hash` must 
 
 **Why `block_hash` is the minimal required addition — and why alternatives fail:**
 
-The reconciliation walk needs to answer one question per stored block: "is this specific block still in the canonical chain?" The only RPC call that answers it directly is `eth_getBlockByHash(hash)` — it returns `null` if the block is no longer canonical. Without the stored hash, two alternatives were evaluated and both fail:
+The reconciliation walk needs to answer one question per stored block: "is this specific block still in the canonical chain?" The definitive answer combines the stored hash with an `eth_getBlockByNumber(storedBlockNumber)` lookup — the canonical chain has exactly one block at each height, and comparing its hash to the stored hash tells us whether the stored block is still canonical. Without the stored hash, two alternatives were evaluated and both fail:
 
 - **`block_number` alone is insufficient.** After a reorg, a *different* block can occupy the same height. Calling `eth_getBlockByNumber(storedBlockNumber)` always returns a block — but it may be a new block from the reorged fork. Without the original hash there is no way to tell whether the block returned is the one the reactor processed.
 
 - **`transaction_hash` via `eth_getTransactionReceipt` is insufficient.** A block can be reorged out even if every one of its transactions was re-mined in a new block at the same height. In that case all receipt lookups return `blockNumber` matching the stored value, but the original block is gone and the stored DB state no longer corresponds to the canonical chain. Additionally, the backward walk (step 3) must traverse every stored *block* in descending order; rows in `contract_events` only exist for blocks that contained a `ChannelHub` event. A reorg that diverged entirely within a gap — blocks with no relevant events — is invisible to a tx-receipt-based walk.
+
+Note that `eth_getBlockByHash(storedHash)` alone is **not** suitable as the canonicality check: a node may still have the orphan side-chain header cached locally and return it successfully, so a non-null response does not prove the block is in the canonical chain. The check must use `eth_getBlockByNumber` so the response is by definition the current canonical block at that height.
 
 `block_hash` is a single `CHAR(66)` column. Its addition enables exact, O(1)-per-step canonicality checks and is the only approach that handles all reorg scenarios correctly.
 
@@ -116,10 +118,11 @@ The **latest processed block** for a chain is the highest block number at which 
 On startup, for each chain, after the `block_hash` migration has been applied:
 
 1. Query `contract_events` for the latest committed event: `latestBlockNum = MAX(block_number)`, `latestBlockHash = block_hash` at that row. If no rows exist, start the scan from the chain's configured genesis / start block and skip to step 5.
-2. Call `eth_getBlockByHash(latestBlockHash)` on the chain's RPC.
-   - If the response is non-null: `latestBlockHash` is still in the canonical chain — no reorg above this block. Proceed to step 4.
-   - If the response is null: the block has been reorged out. Proceed to step 3.
-3. **Common-ancestor walk using stored block hashes:** query `contract_events` for the next-older distinct `block_hash` (the highest `block_number` strictly below the current candidate). Repeat step 2 with this hash. Continue until a block hash is found that is still in the canonical chain, or until no older stored hash exists (treat genesis as the fallback). This height is the **common ancestor**.
+2. Call `eth_getBlockByNumber(latestBlockNum)` on the chain's RPC and compare the returned block's hash against `latestBlockHash`.
+   - **Hash matches** → the stored block is the current canonical block at that height; no reorg above it. Proceed to step 4.
+   - **Hash differs** → a different block now occupies that height; the stored block has been reorged out. Proceed to step 3.
+   - **`ethereum.NotFound`** (RPC has no canonical block at that number, e.g. the height was pruned) → treat as reorged-out and proceed to step 3 rather than failing startup.
+3. **Common-ancestor walk using stored block hashes:** query `contract_events` for the next-older distinct `block_hash` (the highest `block_number` strictly below the current candidate). Repeat step 2 with this (number, hash) pair. Continue until a stored block is confirmed canonical, or until no older stored hash exists (treat genesis as the fallback). This height is the **common ancestor**.
 
    > **Why walk stored hashes, not block numbers?** In normal operation most blocks contain no `ChannelHub` events, so `contract_events` has no row for them. A block-number walk would find nothing to compare at event-gap heights and could miss a reorg that occurred entirely within such a gap. Walking by stored block hashes ensures every comparison is against a block the reactor actually processed.
 

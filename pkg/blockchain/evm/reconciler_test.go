@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -15,12 +16,28 @@ import (
 )
 
 const (
-	testContract    = "0x1234567890abcdef1234567890abcdef12345678"
+	testContract     = "0x1234567890abcdef1234567890abcdef12345678"
 	testBlockchainID = uint64(1)
 )
 
 func newTestLogger() log.Logger {
 	return log.NewNoopLogger()
+}
+
+// makeHeader builds a Header with a deterministic (and unique-per-seed) hash for
+// the given block number. Two calls with different seeds produce headers whose
+// Hash() values differ, which lets canonicality tests distinguish "this stored
+// block is canonical" (same seed) from "this stored block was reorged out"
+// (different seed at the same number).
+func makeHeader(blockNum int64, seed int64) *types.Header {
+	return &types.Header{
+		Number:     big.NewInt(blockNum),
+		Difficulty: big.NewInt(seed),
+	}
+}
+
+func bigEqual(want *big.Int) interface{} {
+	return mock.MatchedBy(func(got *big.Int) bool { return got != nil && got.Cmp(want) == 0 })
 }
 
 // TestFindCommonAncestor_NoStoredEvents verifies that when no contract events exist,
@@ -37,6 +54,7 @@ func TestFindCommonAncestor_NoStoredEvents(t *testing.T) {
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), result)
+	client.AssertNotCalled(t, "HeaderByNumber")
 	client.AssertNotCalled(t, "HeaderByHash")
 }
 
@@ -48,12 +66,12 @@ func TestFindCommonAncestor_LatestBlockCanonical(t *testing.T) {
 	client := new(MockEVMClient)
 	getter := new(MockContractEventGetter)
 
-	blockHash := common.HexToHash("0xaabbccdd")
-	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
-		Return(uint64(500), blockHash.Hex(), nil)
+	header := makeHeader(500, 1)
+	storedHash := header.Hash()
 
-	canonicalHeader := &types.Header{Number: big.NewInt(500)}
-	client.On("HeaderByHash", mock.Anything, blockHash).Return(canonicalHeader, nil)
+	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
+		Return(uint64(500), storedHash.Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(500))).Return(header, nil)
 
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
@@ -61,56 +79,85 @@ func TestFindCommonAncestor_LatestBlockCanonical(t *testing.T) {
 	getter.AssertNotCalled(t, "GetPreviousDistinctBlockHash")
 }
 
-// TestFindCommonAncestor_SingleReorgDepth verifies that when the latest block is reorged out
-// but the previous one is canonical, findCommonAncestor returns the previous block number.
+// TestFindCommonAncestor_SingleReorgDepth verifies that when the latest stored block has
+// been reorged out (canonical chain has a different block at that height), findCommonAncestor
+// walks back one step and returns the previous canonical block.
 func TestFindCommonAncestor_SingleReorgDepth(t *testing.T) {
 	t.Parallel()
 
 	client := new(MockEVMClient)
 	getter := new(MockContractEventGetter)
 
-	reorgedHash := common.HexToHash("0xreorged0")
-	canonicalHash := common.HexToHash("0xcanon000")
+	// Block 200 was reorged: stored hash came from a now-orphan block; canonical chain
+	// has a different block at the same height.
+	storedAt200 := makeHeader(200, 1)
+	canonicalAt200 := makeHeader(200, 2)
+	require.NotEqual(t, storedAt200.Hash(), canonicalAt200.Hash())
+
+	// Block 190 is canonical.
+	headerAt190 := makeHeader(190, 1)
+	storedAt190 := headerAt190.Hash()
 
 	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
-		Return(uint64(200), reorgedHash.Hex(), nil)
-
-	// Latest block (200) reorged out.
-	client.On("HeaderByHash", mock.Anything, reorgedHash).Return(nil, nil)
-
-	// Walk to previous block (190) which is canonical.
+		Return(uint64(200), storedAt200.Hash().Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(200))).Return(canonicalAt200, nil)
 	getter.On("GetPreviousDistinctBlockHash", testContract, testBlockchainID, uint64(200)).
-		Return(uint64(190), canonicalHash.Hex(), nil)
-
-	canonicalHeader := &types.Header{Number: big.NewInt(190)}
-	client.On("HeaderByHash", mock.Anything, canonicalHash).Return(canonicalHeader, nil)
+		Return(uint64(190), storedAt190.Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(190))).Return(headerAt190, nil)
 
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(190), result)
 }
 
-// TestFindCommonAncestor_WalkToGenesis verifies that when all stored blocks are reorged out,
-// findCommonAncestor returns 0 (genesis fallback).
+// TestFindCommonAncestor_NotFoundTreatedAsReorg verifies that when HeaderByNumber returns
+// ethereum.NotFound (e.g. the RPC backend has pruned that height, or no canonical block
+// exists at that number yet), the walk continues backward instead of crashing the listener.
+// This is the regression the colleague flagged: the old HeaderByHash path treated NotFound
+// as a fatal startup error.
+func TestFindCommonAncestor_NotFoundTreatedAsReorg(t *testing.T) {
+	t.Parallel()
+
+	client := new(MockEVMClient)
+	getter := new(MockContractEventGetter)
+
+	storedAt200 := common.HexToHash("0xreorged200")
+	headerAt190 := makeHeader(190, 1)
+
+	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
+		Return(uint64(200), storedAt200.Hex(), nil)
+	// HeaderByNumber(200) returns NotFound — must NOT be treated as fatal.
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(200))).Return(nil, ethereum.NotFound)
+
+	getter.On("GetPreviousDistinctBlockHash", testContract, testBlockchainID, uint64(200)).
+		Return(uint64(190), headerAt190.Hash().Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(190))).Return(headerAt190, nil)
+
+	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
+	require.NoError(t, err)
+	assert.Equal(t, uint64(190), result)
+}
+
+// TestFindCommonAncestor_WalkToGenesis verifies that when all stored blocks have been
+// reorged out (canonical hashes differ at every stored height), findCommonAncestor returns
+// 0 (genesis fallback).
 func TestFindCommonAncestor_WalkToGenesis(t *testing.T) {
 	t.Parallel()
 
 	client := new(MockEVMClient)
 	getter := new(MockContractEventGetter)
 
-	hash300 := common.HexToHash("0x0000300")
-	hash200 := common.HexToHash("0x0000200")
+	storedAt300 := makeHeader(300, 1).Hash()
+	storedAt200 := makeHeader(200, 1).Hash()
+	canonicalAt300 := makeHeader(300, 2)
+	canonicalAt200 := makeHeader(200, 2)
 
 	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
-		Return(uint64(300), hash300.Hex(), nil)
-
-	// Block 300 reorged out.
-	client.On("HeaderByHash", mock.Anything, hash300).Return(nil, nil)
+		Return(uint64(300), storedAt300.Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(300))).Return(canonicalAt300, nil)
 	getter.On("GetPreviousDistinctBlockHash", testContract, testBlockchainID, uint64(300)).
-		Return(uint64(200), hash200.Hex(), nil)
-
-	// Block 200 reorged out.
-	client.On("HeaderByHash", mock.Anything, common.HexToHash(hash200.Hex())).Return(nil, nil)
+		Return(uint64(200), storedAt200.Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(200))).Return(canonicalAt200, nil)
 	getter.On("GetPreviousDistinctBlockHash", testContract, testBlockchainID, uint64(200)).
 		Return(uint64(0), "", nil)
 
@@ -135,7 +182,7 @@ func TestFindCommonAncestor_PreMigrationLatestRow(t *testing.T) {
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(450), result)
-	client.AssertNotCalled(t, "HeaderByHash")
+	client.AssertNotCalled(t, "HeaderByNumber")
 }
 
 // TestFindCommonAncestor_PreMigrationMidWalk verifies that when a pre-migration row (empty
@@ -147,13 +194,12 @@ func TestFindCommonAncestor_PreMigrationMidWalk(t *testing.T) {
 	client := new(MockEVMClient)
 	getter := new(MockContractEventGetter)
 
-	reorgedHash := common.HexToHash("0xreorgedX")
+	storedAt300 := makeHeader(300, 1).Hash()
+	canonicalAt300 := makeHeader(300, 2)
 
 	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
-		Return(uint64(300), reorgedHash.Hex(), nil)
-
-	// Block 300 reorged out.
-	client.On("HeaderByHash", mock.Anything, reorgedHash).Return(nil, nil)
+		Return(uint64(300), storedAt300.Hex(), nil)
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(300))).Return(canonicalAt300, nil)
 
 	// Walk backward hits a pre-migration row with empty hash at block 250.
 	getter.On("GetPreviousDistinctBlockHash", testContract, testBlockchainID, uint64(300)).
@@ -162,12 +208,12 @@ func TestFindCommonAncestor_PreMigrationMidWalk(t *testing.T) {
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(250), result)
-	// HeaderByHash must NOT be called for the zero-hash pre-migration row.
-	client.AssertNumberOfCalls(t, "HeaderByHash", 1)
+	// HeaderByNumber must NOT be called for the zero-hash pre-migration row.
+	client.AssertNumberOfCalls(t, "HeaderByNumber", 1)
 }
 
-// TestFindCommonAncestor_HeaderByHashError verifies that RPC errors are propagated.
-func TestFindCommonAncestor_HeaderByHashError(t *testing.T) {
+// TestFindCommonAncestor_RPCError verifies that non-NotFound RPC errors are propagated.
+func TestFindCommonAncestor_RPCError(t *testing.T) {
 	t.Parallel()
 
 	client := new(MockEVMClient)
@@ -177,7 +223,8 @@ func TestFindCommonAncestor_HeaderByHashError(t *testing.T) {
 	getter.On("GetLatestContractEventBlockHashAndNumber", testContract, testBlockchainID).
 		Return(uint64(100), blockHash.Hex(), nil)
 
-	client.On("HeaderByHash", mock.Anything, blockHash).Return(nil, errors.New("rpc timeout"))
+	client.On("HeaderByNumber", mock.Anything, bigEqual(big.NewInt(100))).
+		Return(nil, errors.New("rpc timeout"))
 
 	_, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.Error(t, err)

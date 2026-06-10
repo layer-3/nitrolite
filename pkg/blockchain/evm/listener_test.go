@@ -155,9 +155,12 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	logger := log.NewNoopLogger()
 	addr := common.HexToAddress("0x123")
 
-	// Start from block 100 (canonical — HeaderByHash returns non-nil).
+	// Start from block 100, canonical: the reconciler will compute its hash via HeaderByNumber(100)
+	// and compare against the stored hash. We construct a deterministic Header so we can pre-compute
+	// the hash and feed it back as the stored value.
+	canonicalAt100 := &types.Header{Number: big.NewInt(100), Difficulty: big.NewInt(1)}
+	blockHash100 := canonicalAt100.Hash()
 	eventGetter := new(MockContractEventGetter)
-	blockHash100 := common.HexToHash("0xdeadbeef")
 	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(100), blockHash100.Hex(), nil)
 	// Historical event at block 105 is not present
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(105), mock.Anything, uint32(0)).Return(false, nil)
@@ -186,11 +189,13 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 
 	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
-	// findCommonAncestor: block 100 is canonical.
-	canonicalHeader := &types.Header{Number: big.NewInt(100)}
-	mockClient.On("HeaderByHash", mock.Anything, blockHash100).Return(canonicalHeader, nil)
+	// findCommonAncestor: HeaderByNumber(100) returns the same header we hashed above,
+	// so the stored hash matches and block 100 is confirmed canonical.
+	mockClient.On("HeaderByNumber", mock.Anything, mock.MatchedBy(func(n *big.Int) bool {
+		return n != nil && n.Cmp(big.NewInt(100)) == 0
+	})).Return(canonicalAt100, nil)
 
-	// Mock HeaderByNumber (current tip is 110)
+	// Mock HeaderByNumber(nil) for the chain-tip lookup (current tip is 110).
 	currentHeader := &types.Header{Number: big.NewInt(110)}
 	mockClient.On("HeaderByNumber", mock.Anything, (*big.Int)(nil)).Return(currentHeader, nil)
 

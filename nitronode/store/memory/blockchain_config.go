@@ -45,7 +45,6 @@ type BlockchainConfig struct {
 	ChannelHubSigValidators map[uint8]string `yaml:"channel_hub_sig_validators"`
 	// ConfirmationDelaySecs is the number of seconds to wait before processing an event.
 	// Set to 0 to process events immediately (disables the confirmation gate).
-	// Maximum meaningful value is ~780s (Ethereum Casper FFG hard finality).
 	ConfirmationDelaySecs uint32 `yaml:"confirmation_delay_secs"`
 }
 

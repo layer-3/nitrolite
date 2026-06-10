@@ -239,7 +239,6 @@ No event handling, no Listener awareness. Drain-and-forward only.
 
 | Property | Detail |
 | --- | --- |
-| Zero RPC calls in the gate | Delay is a pure `time.Duration`; no chain queries |
 | Chain-agnostic | `confirmationDelay` is the only chain-specific input |
 | Forward latency after window | At most one tick (~50 ms) |
 | Reorg within window | Pusher's scan removes the entry; Reactor never sees the event |

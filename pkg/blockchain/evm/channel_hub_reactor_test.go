@@ -347,6 +347,34 @@ func TestChannelHubReactor_HandleNodeBalanceUpdated(t *testing.T) {
 		handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
+
+	// Mirror of the case above, but the unsupported-token error surfaces from the
+	// second lookup (GetTokenDecimals) rather than the first. Both guards must
+	// behave identically (MF3-H03), so cover them independently.
+	t.Run("unsupported token from decimals lookup is skipped and recorded", func(t *testing.T) {
+		store := new(mockChannelHubStore)
+		handler := new(mockChannelHubEventHandler)
+		assetStore := new(MockAssetStore)
+
+		assetStore.On("GetTokenAsset", blockchainID, tokenAddr.String()).Return("usdc", nil)
+		assetStore.On("GetTokenDecimals", blockchainID, tokenAddr.String()).
+			Return(uint8(0), fmt.Errorf("token %s is not supported: %w", tokenAddr.String(), core.ErrTokenNotSupported))
+
+		expectStoreContractEvent(store, "NodeBalanceUpdated", 200, blockchainID)
+
+		reactor := newReactor(blockchainID, nodeAddr.String(), handler, assetStore, store)
+
+		var processedSuccess bool
+		reactor.SetOnEventProcessed(func(_ uint64, success bool) {
+			processedSuccess = success
+		})
+
+		err := reactor.HandleEvent(context.Background(), logEntry)
+		require.NoError(t, err)
+		assert.True(t, processedSuccess)
+		handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
 }
 
 func TestChannelHubReactor_HandleHomeChannelCreated(t *testing.T) {

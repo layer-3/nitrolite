@@ -421,6 +421,108 @@ func TestHandleHomeChannelCheckpointed_FromVoidPromotesToOpen(t *testing.T) {
 	mockStore.AssertNotCalled(t, "HasSignedFinalize", channelID)
 }
 
+// TestHandleHomeChannelCheckpointed_FromVoidBackfillsUnsignedReceiverHead pins the Void→Open
+// arm of the head-sig backfill. The checkpoint can arrive before ChannelCreated while a
+// concurrent RPC has already stored an unsigned transfer_receive/release head above the
+// checkpoint version. Promoting Void→Open must node-sign that head so it is treated as fully
+// co-signed — mirroring TestHandleHomeChannelCreated_BackfillsUnsignedReceiverStateOnOpen for
+// the checkpoint path. Without the `|| wasVoid` clause this head would stay unsigned on an Open
+// channel and the test would fail.
+func TestHandleHomeChannelCheckpointed_FromVoidBackfillsUnsignedReceiverHead(t *testing.T) {
+	cases := []struct {
+		name           string
+		transitionType core.TransitionType
+	}{
+		{"transfer_receive", core.TransitionTypeTransferReceive},
+		{"release", core.TransitionTypeRelease},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+			service, nodeAddress := newTestEventHandlerService(t)
+
+			channelID := "0xHomeChannel123"
+			userWallet := "0x1234567890123456789012345678901234567890"
+			asset := "USDC"
+			homeChannelIDPtr := channelID
+			checkpointVersion := uint64(1)
+			headVersion := uint64(2)
+
+			channel := &core.Channel{
+				ChannelID:    channelID,
+				UserWallet:   userWallet,
+				Asset:        asset,
+				Type:         core.ChannelTypeHome,
+				Status:       core.ChannelStatusVoid,
+				StateVersion: 0,
+			}
+
+			// Unsigned receiver credit stored by a concurrent RPC while the channel was still Void,
+			// sitting above the checkpointed version.
+			headState := &core.State{
+				ID:            core.GetStateID(userWallet, asset, 0, headVersion),
+				Asset:         asset,
+				UserWallet:    userWallet,
+				Epoch:         0,
+				Version:       headVersion,
+				HomeChannelID: &homeChannelIDPtr,
+				Transition:    core.Transition{Type: tc.transitionType},
+				HomeLedger: core.Ledger{
+					TokenAddress: "0xtoken",
+					BlockchainID: 1,
+					UserBalance:  decimal.NewFromInt(100),
+					UserNetFlow:  decimal.Zero,
+					NodeBalance:  decimal.Zero,
+					NodeNetFlow:  decimal.Zero,
+				},
+			}
+
+			event := &core.HomeChannelCheckpointedEvent{
+				ChannelID:    channelID,
+				StateVersion: checkpointVersion,
+			}
+
+			mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+			mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+				return ch.ChannelID == channelID &&
+					ch.Status == core.ChannelStatusOpen &&
+					ch.StateVersion == checkpointVersion
+			})).Return(nil)
+			mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
+			// User-sig backfill at the checkpointed version (event.UserSig is empty).
+			mockStore.On("UpdateStateSigsIfMissing", channelID, checkpointVersion, "", "").Return(nil)
+			// backfillOffChainHeadNodeSig finds the unsigned receiver credit above the checkpoint.
+			mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
+
+			var capturedNodeSig string
+			mockStore.On("UpdateStateSigsIfMissing", channelID, headVersion, "", mock.AnythingOfType("string")).
+				Run(func(args mock.Arguments) {
+					capturedNodeSig = args.String(3)
+				}).Return(nil)
+
+			err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+			require.NoError(t, err)
+			require.NotEmpty(t, capturedNodeSig, "node signature must be populated on backfill")
+
+			// Verify the produced signature is from the configured node key.
+			packer := core.NewStatePackerV1(mockEventHandlerAssetStore{})
+			packed, err := packer.PackState(*headState)
+			require.NoError(t, err)
+			sigBytes, err := hexutil.Decode(capturedNodeSig)
+			require.NoError(t, err)
+			validator := core.NewChannelSigValidator(nil)
+			require.NoError(t, validator.Verify(nodeAddress, packed, sigBytes))
+
+			mockStore.AssertExpectations(t)
+			// Void→Open promotion does not consult the Finalize marker.
+			mockStore.AssertNotCalled(t, "HasSignedFinalize", channelID)
+		})
+	}
+}
+
 // TestHandleHomeChannelCheckpointed_DoesNotReopenFinalizedChannel pins the race fix: a
 // concurrent submit_state can co-sign a Finalize and flip the channel Open→Closing in the
 // window between reading the channel and acquiring the lock. Because the handler now reads the

@@ -153,6 +153,13 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	channel.StateVersion = event.StateVersion
 
+	// Snapshot the pre-checkpoint status once and derive both transition flags from it, so the
+	// Void and Challenged branches below are independent of each other's mutation order: either
+	// branch may reassign channel.Status without silently making the other unreachable.
+	prevStatus := channel.Status
+	wasVoid := prevStatus == core.ChannelStatusVoid
+	wasChallenged := prevStatus == core.ChannelStatusChallenged
+
 	// ChannelHub.createChannel can emit ChannelCheckpointed before ChannelCreated for an
 	// initial non-deposit/non-withdraw state. If this checkpoint is processed while the
 	// local row is still the Void seed from CreateChannel, the on-chain checkpoint is
@@ -160,12 +167,10 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	// here instead of leaving a bumped state_version on a Void channel until the later
 	// ChannelCreated event replays. That replay then no-ops via the Status >= Open guard
 	// in HandleHomeChannelCreated.
-	wasVoid := channel.Status == core.ChannelStatusVoid
 	if wasVoid {
 		channel.Status = core.ChannelStatusOpen
 	}
 
-	wasChallenged := channel.Status == core.ChannelStatusChallenged
 	if wasChallenged {
 		// Reconstruct the post-Finalize Closing marker from channel_states: if the node
 		// has already signed a Finalize state for this channel, the off-chain close is

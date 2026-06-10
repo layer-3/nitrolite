@@ -18,7 +18,7 @@ func (h *Handler) GetEscrowChannel(c *rpc.Context) {
 		return
 	}
 
-	if !core.IsValidHash(req.EscrowChannelID) {
+	if !core.IsValidHash(req.EscrowChannelID, false) {
 		c.Fail(rpc.Errorf("invalid escrow_channel_id"), "")
 		return
 	}

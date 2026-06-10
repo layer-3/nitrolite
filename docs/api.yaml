@@ -409,12 +409,20 @@ types:
           type: array
           items:
             type: string
-          description: Application IDs associated with this session key
+          description: >
+            Application IDs associated with this session key. Each entry must
+            match ^[a-z0-9_-]{1,66}$ (lowercase letters, digits, dashes, and
+            underscores, max 66 chars). Malformed entries are rejected before
+            signature verification.
         - name: app_session_id
           type: array
           items:
             type: string
-          description: Application session IDs associated with this session key
+          description: >
+            Application session IDs associated with this session key. Each entry
+            must be a 0x-prefixed 32-byte hash in lowercase canonical form
+            (^0x[0-9a-f]{64}$). Checksummed or uppercase hex is rejected before
+            signature verification.
         - name: expires_at
           type: string
           description: Unix timestamp in seconds indicating when the session key expires

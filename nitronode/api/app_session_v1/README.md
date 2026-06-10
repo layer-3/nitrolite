@@ -500,8 +500,8 @@ For withdraw and close intents, the handler issues new channel states to partici
 - `version` must be greater than 0
 - `expires_at` may be in the past — past values express revocation (the key is retired and the slot is freed)
 - `user_sig` is required
-- `application_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
-- `app_session_ids` entries must be lowercase strings (non-lowercase values are rejected before signature verification)
+- `application_ids` entries must match `^[a-z0-9_-]{1,66}$` (lowercase letters, digits, dashes, underscores, max 66 chars); malformed entries are rejected before signature verification
+- `app_session_ids` entries must be 0x-prefixed 32-byte hashes in lowercase canonical form (`^0x[0-9a-f]{64}$`); checksummed/uppercase hex is rejected before signature verification
 - Version must be sequential (latest_version + 1)
 - Signature must recover to `user_address`
 - The per-user cap (`NITRONODE_MAX_SESSION_KEYS_PER_USER`, default 100) is enforced whenever the submit transitions the slot from inactive to active: a brand-new key (no prior state) or a reactivation (previous latest state's `expires_at` was already in the past). Rotation/update against a still-active key, and revocation submits, are not subject to the cap. A value `<= 0` disables the cap entirely (unlimited session keys per user).

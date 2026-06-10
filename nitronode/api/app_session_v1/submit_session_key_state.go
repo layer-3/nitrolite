@@ -78,17 +78,13 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 	for _, id := range coreState.ApplicationIDs {
 		if !app.IsValidApplicationID(id) {
-			c.Fail(rpc.Errorf("invalid_session_key_state: application_ids must match %s, got: %s", app.ApplicationIDRegex.String(), id), "")
+			c.Fail(rpc.Errorf("invalid_session_key_state: application_ids must contain only lowercase letters, digits, dashes, and underscores (max 66 chars), got: %s", id), "")
 			return
 		}
 	}
 	for _, id := range coreState.AppSessionIDs {
-		if !core.IsValidHash(id) {
-			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be 0x-prefixed 32-byte hashes, got: %s", id), "")
-			return
-		}
-		if id != strings.ToLower(id) {
-			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be lowercase, got: %s", id), "")
+		if !core.IsValidHash(id, true) {
+			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be 0x-prefixed 32-byte lowercase hex hashes, got: %s", id), "")
 			return
 		}
 	}

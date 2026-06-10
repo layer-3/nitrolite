@@ -703,20 +703,21 @@ func submitStateExpectingError(t *testing.T, applicationIDs, appSessionIDs []str
 }
 
 func TestSubmitSessionKeyState_RejectsInvalidApplicationID(t *testing.T) {
-	regex := app.ApplicationIDRegex.String()
+	const errSubstr = "application_ids must contain only lowercase letters, digits, dashes, and underscores"
 	// Uppercase, illegal character, and over the 66-char column width all fail the regex.
-	submitStateExpectingError(t, []string{"App-1"}, nil, "application_ids must match "+regex)
-	submitStateExpectingError(t, []string{"bad id"}, nil, "application_ids must match "+regex)
-	submitStateExpectingError(t, []string{strings.Repeat("a", 67)}, nil, "application_ids must match "+regex)
+	submitStateExpectingError(t, []string{"App-1"}, nil, errSubstr)
+	submitStateExpectingError(t, []string{"bad id"}, nil, errSubstr)
+	submitStateExpectingError(t, []string{strings.Repeat("a", 67)}, nil, errSubstr)
 }
 
 func TestSubmitSessionKeyState_RejectsInvalidAppSessionID(t *testing.T) {
-	// Non-canonical shapes are rejected as malformed hashes before the lowercase check.
-	submitStateExpectingError(t, nil, []string{"Session-ABC"}, "app_session_ids must be 0x-prefixed 32-byte hashes")
-	submitStateExpectingError(t, nil, []string{"0x1234"}, "app_session_ids must be 0x-prefixed 32-byte hashes")
-	submitStateExpectingError(t, nil, []string{strings.Repeat("z", 64)}, "app_session_ids must be 0x-prefixed 32-byte hashes")
-	// Well-formed hash but uppercase hex digits still fail the lowercase canonical check.
-	submitStateExpectingError(t, nil, []string{"0x" + strings.Repeat("A", 64)}, "app_session_ids must be lowercase")
+	const errSubstr = "app_session_ids must be 0x-prefixed 32-byte lowercase hex hashes"
+	// Non-hash strings, short/long hex, and well-formed-but-uppercase hex all fail
+	// the single lowercase-canonical check via the same error path.
+	submitStateExpectingError(t, nil, []string{"Session-ABC"}, errSubstr)
+	submitStateExpectingError(t, nil, []string{"0x1234"}, errSubstr)
+	submitStateExpectingError(t, nil, []string{strings.Repeat("z", 64)}, errSubstr)
+	submitStateExpectingError(t, nil, []string{"0x" + strings.Repeat("A", 64)}, errSubstr)
 }
 
 func TestSubmitSessionKeyState_SignatureMismatch(t *testing.T) {

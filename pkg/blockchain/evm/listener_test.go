@@ -81,12 +81,12 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 		unsub:   func() {},
 	}
 
-	// Mock SubscribeFilterLogs: send a log immediately
+	// Mock SubscribeFilterLogs: send a log immediately. BlockTimestamp is set so
+	// the listener's ensureBlockTimestamp short-circuits and does not call HeaderByHash.
 	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			ch := args.Get(2).(chan<- types.Log)
-			// Send a log immediately
-			ch <- types.Log{BlockNumber: 10, Index: 1}
+			ch <- types.Log{BlockNumber: 10, Index: 1, BlockTimestamp: uint64(time.Now().Unix())}
 		}).
 		Return(sub, nil)
 
@@ -199,8 +199,8 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	currentHeader := &types.Header{Number: big.NewInt(110)}
 	mockClient.On("HeaderByNumber", mock.Anything, (*big.Int)(nil)).Return(currentHeader, nil)
 
-	// Mock FilterLogs (100-110)
-	histLogs := []types.Log{{BlockNumber: 105, Index: 0}}
+	// Mock FilterLogs (100-110). BlockTimestamp is set so ensureBlockTimestamp short-circuits.
+	histLogs := []types.Log{{BlockNumber: 105, Index: 0, BlockTimestamp: uint64(time.Now().Unix())}}
 	mockClient.On("FilterLogs", mock.Anything, mock.Anything).Return(histLogs, nil)
 
 	// Mock SubscribeFilterLogs
@@ -208,8 +208,7 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			ch := args.Get(2).(chan<- types.Log)
-			// Send a current log
-			ch <- types.Log{BlockNumber: 111, Index: 0}
+			ch <- types.Log{BlockNumber: 111, Index: 0, BlockTimestamp: uint64(time.Now().Unix())}
 		}).
 		Return(sub, nil)
 
@@ -239,12 +238,14 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 
 	// Historical: 3 events. First 2 are present (skipped), 3rd is not (handled).
 	// After the 3rd, the check should stop — no IsContractEventPresent call for events 4+.
+	// BlockTimestamp is set so ensureBlockTimestamp short-circuits.
+	ts := uint64(time.Now().Unix())
 	historicalCh := make(chan types.Log, 5)
-	historicalCh <- types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaa")}
-	historicalCh <- types.Log{BlockNumber: 101, Index: 0, TxHash: common.HexToHash("0xbb")}
-	historicalCh <- types.Log{BlockNumber: 102, Index: 0, TxHash: common.HexToHash("0xcc")}
-	historicalCh <- types.Log{BlockNumber: 103, Index: 0, TxHash: common.HexToHash("0xdd")}
-	historicalCh <- types.Log{BlockNumber: 104, Index: 0, TxHash: common.HexToHash("0xee")}
+	historicalCh <- types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaa"), BlockTimestamp: ts}
+	historicalCh <- types.Log{BlockNumber: 101, Index: 0, TxHash: common.HexToHash("0xbb"), BlockTimestamp: ts}
+	historicalCh <- types.Log{BlockNumber: 102, Index: 0, TxHash: common.HexToHash("0xcc"), BlockTimestamp: ts}
+	historicalCh <- types.Log{BlockNumber: 103, Index: 0, TxHash: common.HexToHash("0xdd"), BlockTimestamp: ts}
+	historicalCh <- types.Log{BlockNumber: 104, Index: 0, TxHash: common.HexToHash("0xee"), BlockTimestamp: ts}
 	close(historicalCh)
 
 	// First two are present, third is not
@@ -288,9 +289,10 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 
 	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
-	// Historical channel with events that will block (not closed yet)
+	// Historical channel with events that will block (not closed yet). BlockTimestamp
+	// is set so ensureBlockTimestamp short-circuits.
 	historicalCh := make(chan types.Log, 2)
-	historicalCh <- types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaa")}
+	historicalCh <- types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaa"), BlockTimestamp: uint64(time.Now().Unix())}
 
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil)
 
@@ -367,8 +369,10 @@ func TestListener_PhaseHandlerRouting(t *testing.T) {
 	failLog := types.Log{BlockNumber: 102, Index: 0, TxHash: common.HexToHash("0xccc"), BlockHash: failHash}
 	mockClient.On("HeaderByHash", mock.Anything, failHash).Return(nil, fmt.Errorf("rpc failure")).Once()
 
-	// Live event — always to liveHandler regardless of age.
-	currentLog := types.Log{BlockNumber: 200, Index: 0, TxHash: common.HexToHash("0xddd"), BlockHash: common.HexToHash("0xb1")}
+	// Live event — always to liveHandler regardless of age. BlockTimestamp is set
+	// so ensureBlockTimestamp short-circuits on the Phase 2 path (avoiding a
+	// HeaderByHash call we'd otherwise have to mock).
+	currentLog := types.Log{BlockNumber: 200, Index: 0, TxHash: common.HexToHash("0xddd"), BlockHash: common.HexToHash("0xb1"), BlockTimestamp: uint64(time.Now().Unix())}
 
 	historicalCh := make(chan types.Log, 3)
 	historicalCh <- oldLog
@@ -437,7 +441,9 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 
 	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter)
 
-	histLog := types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaaa"), BlockHash: common.HexToHash("0xa1")}
+	// BlockTimestamp populated by the upstream RPC — ensureBlockTimestamp short-circuits
+	// and routeHistoricalEvent routes directly to historicalHandler because delay == 0.
+	histLog := types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaaa"), BlockHash: common.HexToHash("0xa1"), BlockTimestamp: uint64(time.Now().Unix())}
 	historicalCh := make(chan types.Log, 1)
 	historicalCh <- histLog
 	close(historicalCh)
@@ -462,7 +468,8 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 	require.Len(t, historicalLogs, 1)
 	assert.Equal(t, uint64(100), historicalLogs[0].BlockNumber)
 
-	// HeaderByHash must NOT have been called when delay is 0.
+	// HeaderByHash must NOT have been called — the upstream RPC populated BlockTimestamp,
+	// so ensureBlockTimestamp short-circuits.
 	mockClient.AssertNotCalled(t, "HeaderByHash")
 }
 
@@ -488,8 +495,9 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 	currentCh := make(chan types.Log, 2)
 
 	// Event 1: non-Removed at block 10 — triggers IsContractEventPresent check,
-	// advances lastBlock, sets currentCheckDone = true.
-	normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc")}
+	// advances lastBlock, sets currentCheckDone = true. BlockTimestamp is set so
+	// ensureBlockTimestamp short-circuits.
+	normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc"), BlockTimestamp: uint64(time.Now().Unix())}
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(10), mock.Anything, uint32(0)).Return(false, nil).Once()
 
 	// Event 2: Removed=true at block 11 — must NOT advance lastBlock, must NOT call
@@ -563,4 +571,114 @@ func TestReconcileBlockRange_ContextCancellation(t *testing.T) {
 	// the ctx.Done select and the historicalCh send), but the second batch must not run.
 	assert.LessOrEqual(t, len(received), 1)
 	mockClient.AssertNumberOfCalls(t, "FilterLogs", 1)
+}
+
+// TestEnsureBlockTimestamp_Populated: when BlockTimestamp is already set on the
+// incoming log, ensureBlockTimestamp returns the log unchanged and does not call
+// HeaderByHash. We prove the latter by leaving the mock unconfigured — any call
+// would panic.
+func TestEnsureBlockTimestamp_Populated(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+	eventGetter := new(MockContractEventGetter)
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+
+	originalTs := uint64(1700000000)
+	eventLog := types.Log{
+		BlockNumber:    100,
+		BlockHash:      common.HexToHash("0xabc"),
+		BlockTimestamp: originalTs,
+	}
+
+	got, err := listener.ensureBlockTimestamp(context.Background(), eventLog)
+	require.NoError(t, err)
+	assert.Equal(t, originalTs, got.BlockTimestamp, "BlockTimestamp must be returned unchanged")
+	assert.Equal(t, eventLog.BlockHash, got.BlockHash)
+	mockClient.AssertNotCalled(t, "HeaderByHash")
+}
+
+// TestEnsureBlockTimestamp_Fetch: when BlockTimestamp == 0, ensureBlockTimestamp
+// calls HeaderByHash exactly once and populates BlockTimestamp from header.Time.
+func TestEnsureBlockTimestamp_Fetch(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+	eventGetter := new(MockContractEventGetter)
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+
+	bh := common.HexToHash("0xabc")
+	headerTime := uint64(1700000000)
+	header := &types.Header{Number: big.NewInt(100), Time: headerTime}
+	mockClient.On("HeaderByHash", mock.Anything, bh).Return(header, nil).Once()
+
+	eventLog := types.Log{BlockNumber: 100, BlockHash: bh}
+
+	got, err := listener.ensureBlockTimestamp(context.Background(), eventLog)
+	require.NoError(t, err)
+	assert.Equal(t, headerTime, got.BlockTimestamp, "BlockTimestamp must be populated from header.Time")
+	mockClient.AssertExpectations(t)
+}
+
+// TestEnsureBlockTimestamp_CacheHit: two consecutive events with the same BlockHash
+// (both with BlockTimestamp == 0) must trigger exactly one HeaderByHash call. The
+// second call reads from the single-entry cache.
+func TestEnsureBlockTimestamp_CacheHit(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+	eventGetter := new(MockContractEventGetter)
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+
+	bh := common.HexToHash("0xabc")
+	headerTime := uint64(1700000000)
+	header := &types.Header{Number: big.NewInt(100), Time: headerTime}
+	// Set up exactly ONE HeaderByHash expectation; a second call would fail
+	// AssertExpectations because the mock is .Once().
+	mockClient.On("HeaderByHash", mock.Anything, bh).Return(header, nil).Once()
+
+	first := types.Log{BlockNumber: 100, BlockHash: bh, Index: 0}
+	second := types.Log{BlockNumber: 100, BlockHash: bh, Index: 1}
+
+	got1, err := listener.ensureBlockTimestamp(context.Background(), first)
+	require.NoError(t, err)
+	assert.Equal(t, headerTime, got1.BlockTimestamp)
+
+	got2, err := listener.ensureBlockTimestamp(context.Background(), second)
+	require.NoError(t, err)
+	assert.Equal(t, headerTime, got2.BlockTimestamp)
+
+	mockClient.AssertNumberOfCalls(t, "HeaderByHash", 1)
+	mockClient.AssertExpectations(t)
+}
+
+// TestEnsureBlockTimestamp_FetchError: when HeaderByHash returns an error,
+// ensureBlockTimestamp returns the original (unmutated) eventLog and the error.
+// The caller decides whether to fall back to the gate.
+func TestEnsureBlockTimestamp_FetchError(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+	eventGetter := new(MockContractEventGetter)
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+
+	bh := common.HexToHash("0xabc")
+	mockClient.On("HeaderByHash", mock.Anything, bh).Return(nil, fmt.Errorf("rpc failure")).Once()
+
+	eventLog := types.Log{BlockNumber: 100, BlockHash: bh}
+
+	got, err := listener.ensureBlockTimestamp(context.Background(), eventLog)
+	require.Error(t, err)
+	// On error, BlockTimestamp remains at the input value (0).
+	assert.Equal(t, uint64(0), got.BlockTimestamp)
+	assert.Equal(t, bh, got.BlockHash)
+	mockClient.AssertExpectations(t)
 }

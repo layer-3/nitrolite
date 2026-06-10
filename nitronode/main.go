@@ -25,8 +25,6 @@ import (
 	"github.com/layer-3/nitrolite/pkg/log"
 )
 
-const blockTimestampFetchTimeout = 10 * time.Second
-
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "stress-test" {
 		os.Exit(stress.Run(os.Args[2:]))
@@ -124,25 +122,25 @@ func main() {
 			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
 
-			blockTimestampFetcher := func(blockHash common.Hash) (time.Time, error) {
-				fetchCtx, cancel := context.WithTimeout(context.Background(), blockTimestampFetchTimeout)
-				defer cancel()
-				header, err := client.HeaderByHash(fetchCtx, blockHash)
+			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
+			var liveHandler evm.HandleEvent
+			if confirmationDelay > 0 {
+				gate, err := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, logger)
 				if err != nil {
-					return time.Time{}, err
+					logger.Fatal("failed to create confirmation gate", "error", err, "blockchainID", b.ID)
 				}
-				return time.Unix(int64(header.Time), 0), nil
+				gate.Start(blockchainCtx)
+				liveHandler = gate.HandleEvent
+			} else {
+				liveHandler = reactor.HandleEvent
 			}
 
-			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
-			gate := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, blockTimestampFetcher, logger)
-			gate.Start(blockchainCtx)
-
-			// Live events flow through the confirmation gate. Historical events from eth_getLogs
-			// are routed per-event based on block age: events older than confirmationDelay go
-			// directly to the reactor (past the reorg window); recent events still flow through
-			// the gate because their blocks may still be reorged.
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, gate.HandleEvent, reactor.HandleEvent, bb.DbStore)
+			// Live events flow through the confirmation gate (when delay > 0) or directly to the
+			// reactor (when delay == 0). Historical events from eth_getLogs are routed per-event
+			// based on block age: events older than confirmationDelay go directly to the reactor
+			// (past the reorg window); recent events still flow through the live handler because
+			// their blocks may still be reorged.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

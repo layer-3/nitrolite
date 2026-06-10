@@ -27,28 +27,37 @@ type Listener struct {
 	contractAddress       common.Address
 	client                EVMClient
 	blockchainID          uint64
-	blockStep             uint64 // max blocks per FilterLogs call during reconciliation
+	blockStep             uint64        // max blocks per FilterLogs call during reconciliation
+	confirmationDelay     time.Duration // routing threshold for Phase 1 events; 0 disables age-based routing
 	logger                log.Logger
-	handleEvent           HandleEvent // live events (Phase 2); typically the ConfirmationGate
-	handleHistoricalEvent HandleEvent // historical events (Phase 1); typically the reactor directly
+	handleEvent           HandleEvent // live events and recent historical events; typically the ConfirmationGate
+	handleHistoricalEvent HandleEvent // historical events older than confirmationDelay; typically the reactor directly
 	eventGetter           ContractEventGetter
 }
 
 // NewListener creates a Listener. blockStep controls how many blocks are fetched
 // per RPC call during historical reconciliation.
 //
-// eventHandler is invoked for live events (Phase 2); historicalEventHandler is invoked
-// for historical events (Phase 1). The two handlers may be the same function. The split
-// exists so callers can route live events through a ConfirmationGate while replaying
-// historical events directly to the reactor — historical events come from `eth_getLogs`
-// and are by definition canonical, so the gate adds no safety value for them (see
-// reorg-fix-spec.md §4.4 step 5).
-func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
+// confirmationDelay controls per-event routing for Phase 1 (historical) events:
+//   - When 0: every historical event is routed to historicalEventHandler.
+//   - When > 0: each event's block timestamp is fetched via HeaderByHash. Events older
+//     than confirmationDelay are routed to historicalEventHandler (their block is past
+//     the reorg window, so they are safe to forward directly). Events younger than
+//     confirmationDelay are routed to eventHandler so they pass through the gate —
+//     historical replay reaching very recent blocks is no safer than live delivery
+//     and the gate must still protect against reorgs of those blocks.
+//
+// Live (Phase 2) events always flow to eventHandler.
+//
+// eventHandler is typically the ConfirmationGate; historicalEventHandler is typically
+// the reactor directly. The two handlers may be the same function when no gate is in use.
+func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, confirmationDelay time.Duration, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
 	return &Listener{
 		contractAddress:       contractAddress,
 		client:                client,
 		blockchainID:          blockchainID,
 		blockStep:             blockStep,
+		confirmationDelay:     confirmationDelay,
 		logger:                logger.WithName("evm"),
 		handleEvent:           eventHandler,
 		handleHistoricalEvent: historicalEventHandler,
@@ -274,7 +283,8 @@ func (l *Listener) processEvents(
 			}
 			l.logger.Debug("received historical event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
-			if err := l.handleHistoricalEvent(evCtx, eventLog); err != nil {
+			handler := l.routeHistoricalEvent(ctx, eventLog)
+			if err := handler(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
 			}
@@ -404,3 +414,38 @@ func (l *Listener) reconcileBlockRange(
 	}
 }
 
+// routeHistoricalEvent chooses the handler for a Phase 1 event based on the age of
+// its block. Events whose block timestamp is older than confirmationDelay are routed
+// to handleHistoricalEvent (they are past the reorg window and safe to forward
+// directly). Recent events — whose blocks may still be reorged — are routed to
+// handleEvent so they pass through the gate. When confirmationDelay is zero, every
+// event is routed to handleHistoricalEvent.
+//
+// On a HeaderByHash fetch error the function falls back to handleEvent: routing
+// through the gate is the conservative choice (it preserves the reorg-protection
+// invariant at the cost of a small delay), and the gate's own block-timestamp
+// fetcher will retry the lookup with its own fallback.
+func (l *Listener) routeHistoricalEvent(ctx context.Context, eventLog types.Log) HandleEvent {
+	if l.confirmationDelay == 0 {
+		return l.handleHistoricalEvent
+	}
+
+	headerCtx, cancel := context.WithTimeout(ctx, rpcRequestTimeout)
+	defer cancel()
+	header, err := l.client.HeaderByHash(headerCtx, eventLog.BlockHash)
+	if err != nil {
+		l.logger.Warn("failed to fetch block timestamp for historical event, routing through gate",
+			"error", err,
+			"blockchainID", l.blockchainID,
+			"blockNumber", eventLog.BlockNumber,
+			"blockHash", eventLog.BlockHash.Hex(),
+		)
+		return l.handleEvent
+	}
+
+	blockTime := time.Unix(int64(header.Time), 0)
+	if time.Since(blockTime) < l.confirmationDelay {
+		return l.handleEvent
+	}
+	return l.handleHistoricalEvent
+}

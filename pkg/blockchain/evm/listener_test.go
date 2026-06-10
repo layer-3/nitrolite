@@ -45,7 +45,7 @@ func TestNewListener(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	l := NewListener(addr, mockClient, 1, 100, logger, nil, nil, eventGetter)
+	l := NewListener(addr, mockClient, 1, 100, 0, logger, nil, nil, eventGetter)
 	require.NotNil(t, l)
 	assert.Equal(t, addr, l.contractAddress)
 	assert.Equal(t, uint64(1), l.blockchainID)
@@ -73,7 +73,7 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 100, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 100, 0, logger, handleEvent, handleEvent, eventGetter)
 
 	// Mock SubscribeFilterLogs
 	sub := &MockSubscription{
@@ -110,7 +110,7 @@ func TestListener_ReconcileBlockRange(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	listener := NewListener(addr, mockClient, 1, 10, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
 
 	// Setup FilterLogs mock
 	// We expect a range fetch. start=100, step=10 -> end=110. current=120.
@@ -184,7 +184,7 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
 	// findCommonAncestor: block 100 is canonical.
 	canonicalHeader := &types.Header{Number: big.NewInt(100)}
@@ -230,7 +230,7 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
 	// Historical: 3 events. First 2 are present (skipped), 3rd is not (handled).
 	// After the 3rd, the check should stop — no IsContractEventPresent call for events 4+.
@@ -281,7 +281,7 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
 	// Historical channel with events that will block (not closed yet)
 	historicalCh := make(chan types.Log, 2)
@@ -309,38 +309,73 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 	assert.Equal(t, []uint64{100}, handledBlocks)
 }
 
-// TestListener_PhaseHandlerRouting verifies that Phase 1 (historical) events are routed
-// to handleHistoricalEvent and Phase 2 (live) events are routed to handleEvent. This is
-// the gate-bypass for historical replay (reorg-fix-spec.md §4.4 step 5).
+// TestListener_PhaseHandlerRouting verifies the age-based routing of Phase 1 events:
+//   - Historical events older than confirmationDelay → handleHistoricalEvent (direct, gate bypass)
+//   - Historical events younger than confirmationDelay → handleEvent (through gate; still in reorg window)
+//   - Live (Phase 2) events → handleEvent (always)
+//   - HeaderByHash fetch failures → handleEvent (conservative fallback)
+//
+// See reorg-fix-spec.md §4.4 step 5.
 func TestListener_PhaseHandlerRouting(t *testing.T) {
 	t.Parallel()
 	logger := log.NewNoopLogger()
 	addr := common.HexToAddress("0x123")
+	confirmationDelay := 60 * time.Second
+
+	mockClient := new(MockEVMClient)
 	eventGetter := new(MockContractEventGetter)
 
-	var historicalLogs, liveLogs []types.Log
+	var (
+		mu             sync.Mutex
+		historicalLogs []types.Log
+		liveLogs       []types.Log
+	)
 	historicalHandler := func(_ context.Context, l types.Log) error {
+		mu.Lock()
+		defer mu.Unlock()
 		historicalLogs = append(historicalLogs, l)
 		return nil
 	}
 	liveHandler := func(_ context.Context, l types.Log) error {
+		mu.Lock()
+		defer mu.Unlock()
 		liveLogs = append(liveLogs, l)
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, logger, liveHandler, historicalHandler, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, confirmationDelay, logger, liveHandler, historicalHandler, eventGetter)
 
-	// Historical: 1 event at block 100.
-	histLog := types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaaa")}
-	historicalCh := make(chan types.Log, 1)
-	historicalCh <- histLog
+	// Old historical event (block timestamp 10 minutes ago) — should bypass the gate.
+	oldHash := common.HexToHash("0xa1")
+	oldLog := types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaaa"), BlockHash: oldHash}
+	oldHeader := &types.Header{Number: big.NewInt(100), Time: uint64(time.Now().Add(-10 * time.Minute).Unix())}
+	mockClient.On("HeaderByHash", mock.Anything, oldHash).Return(oldHeader, nil).Once()
+
+	// Recent historical event (block timestamp 5 seconds ago) — should flow through the gate.
+	recentHash := common.HexToHash("0xa2")
+	recentLog := types.Log{BlockNumber: 101, Index: 0, TxHash: common.HexToHash("0xbbb"), BlockHash: recentHash}
+	recentHeader := &types.Header{Number: big.NewInt(101), Time: uint64(time.Now().Add(-5 * time.Second).Unix())}
+	mockClient.On("HeaderByHash", mock.Anything, recentHash).Return(recentHeader, nil).Once()
+
+	// Historical event whose HeaderByHash fetch fails — should fall back to the gate.
+	failHash := common.HexToHash("0xa3")
+	failLog := types.Log{BlockNumber: 102, Index: 0, TxHash: common.HexToHash("0xccc"), BlockHash: failHash}
+	mockClient.On("HeaderByHash", mock.Anything, failHash).Return(nil, fmt.Errorf("rpc failure")).Once()
+
+	// Live event — always to liveHandler regardless of age.
+	currentLog := types.Log{BlockNumber: 200, Index: 0, TxHash: common.HexToHash("0xddd"), BlockHash: common.HexToHash("0xb1")}
+
+	historicalCh := make(chan types.Log, 3)
+	historicalCh <- oldLog
+	historicalCh <- recentLog
+	historicalCh <- failLog
 	close(historicalCh)
 
-	// Live: 1 event at block 200.
-	currentLog := types.Log{BlockNumber: 200, Index: 0, TxHash: common.HexToHash("0xbbb")}
 	currentCh := make(chan types.Log, 1)
 	currentCh <- currentLog
 
+	// Only the first historical event triggers IsContractEventPresent (then the check is dropped for the phase);
+	// the first live event triggers it again for Phase 2.
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil).Once()
 	eventGetter.On("IsContractEventPresent", uint64(1), uint64(200), mock.Anything, uint32(0)).Return(false, nil).Once()
 
@@ -356,10 +391,74 @@ func TestListener_PhaseHandlerRouting(t *testing.T) {
 	err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
 	require.NoError(t, err)
 
-	require.Len(t, historicalLogs, 1, "historical handler must see the Phase 1 event")
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, historicalLogs, 1, "only the old historical event should bypass the gate")
 	assert.Equal(t, uint64(100), historicalLogs[0].BlockNumber)
-	require.Len(t, liveLogs, 1, "live handler must see the Phase 2 event")
-	assert.Equal(t, uint64(200), liveLogs[0].BlockNumber)
+	require.Len(t, liveLogs, 3, "recent + fallback historical events plus the live event must reach the live handler")
+	assert.Equal(t, uint64(101), liveLogs[0].BlockNumber, "recent historical event routed through the gate")
+	assert.Equal(t, uint64(102), liveLogs[1].BlockNumber, "HeaderByHash-failed historical event routed through the gate (conservative fallback)")
+	assert.Equal(t, uint64(200), liveLogs[2].BlockNumber, "live event always routed to the gate")
+
+	mockClient.AssertExpectations(t)
+	eventGetter.AssertExpectations(t)
+}
+
+// TestListener_PhaseHandlerRouting_DelayZero verifies that when confirmationDelay is 0,
+// every historical event is routed to handleHistoricalEvent without any HeaderByHash
+// fetch — preserving the legacy bypass for gate-disabled chains.
+func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
+	t.Parallel()
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	mockClient := new(MockEVMClient)
+	eventGetter := new(MockContractEventGetter)
+
+	var (
+		mu             sync.Mutex
+		historicalLogs []types.Log
+	)
+	historicalHandler := func(_ context.Context, l types.Log) error {
+		mu.Lock()
+		defer mu.Unlock()
+		historicalLogs = append(historicalLogs, l)
+		return nil
+	}
+	liveHandler := func(_ context.Context, _ types.Log) error {
+		t.Fatal("live handler must not be called when delay is 0 and only Phase 1 events are present")
+		return nil
+	}
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter)
+
+	histLog := types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaaa"), BlockHash: common.HexToHash("0xa1")}
+	historicalCh := make(chan types.Log, 1)
+	historicalCh <- histLog
+	close(historicalCh)
+	currentCh := make(chan types.Log)
+
+	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil).Once()
+
+	sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	var lastBlock uint64
+	err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, historicalLogs, 1)
+	assert.Equal(t, uint64(100), historicalLogs[0].BlockNumber)
+
+	// HeaderByHash must NOT have been called when delay is 0.
+	mockClient.AssertNotCalled(t, "HeaderByHash")
 }
 
 func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
@@ -375,7 +474,7 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
 
 	// No historical events.
 	historicalCh := make(chan types.Log)
@@ -432,7 +531,7 @@ func TestReconcileBlockRange_ContextCancellation(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

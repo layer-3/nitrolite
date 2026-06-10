@@ -138,9 +138,11 @@ func main() {
 			gate := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, blockTimestampFetcher, logger)
 			gate.Start(blockchainCtx)
 
-			// Live events flow through the confirmation gate; historical events from eth_getLogs
-			// are already canonical and go directly to the reactor (see reorg-fix-spec.md §4.4 step 5).
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, gate.HandleEvent, reactor.HandleEvent, bb.DbStore)
+			// Live events flow through the confirmation gate. Historical events from eth_getLogs
+			// are routed per-event based on block age: events older than confirmationDelay go
+			// directly to the reactor (past the reorg window); recent events still flow through
+			// the gate because their blocks may still be reorged.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, gate.HandleEvent, reactor.HandleEvent, bb.DbStore)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

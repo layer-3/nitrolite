@@ -267,11 +267,17 @@ func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store 
 
 	asset, err := r.assetStore.GetTokenAsset(r.blockchainID, event.Token.String())
 	if err != nil {
+		if r.skipIfUnsupportedToken(ctx, err, event.Token, l) {
+			return nil
+		}
 		return errors.Wrap(err, "failed to get token asset")
 	}
 
 	decimals, err := r.assetStore.GetTokenDecimals(r.blockchainID, event.Token.String())
 	if err != nil {
+		if r.skipIfUnsupportedToken(ctx, err, event.Token, l) {
+			return nil
+		}
 		return errors.Wrap(err, "failed to get token decimals")
 	}
 
@@ -283,6 +289,26 @@ func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store 
 		Balance:      balance,
 	}
 	return r.eventHandler.HandleNodeBalanceUpdated(ctx, store, &ev)
+}
+
+// skipIfUnsupportedToken reports whether a NodeBalanceUpdated lookup error is an
+// unsupported-token error that should be skipped rather than treated as fatal.
+// Anyone can deposit an arbitrary ERC20 via depositToNode(), so an event for an
+// unconfigured token (or a chain with no configured tokens) must not stop the
+// listener. The caller returns nil so HandleEvent records the event and it is
+// not replayed.
+//
+// Note: this is a dedup record, not a replay queue. Once an event is recorded as
+// skipped, the balance change is NOT re-applied if the operator later configures
+// that token — a legitimate new asset requires a manual resync.
+func (r *ChannelHubReactor) skipIfUnsupportedToken(ctx context.Context, err error, token common.Address, l types.Log) bool {
+	if !errors.Is(err, core.ErrTokenNotSupported) {
+		return false
+	}
+	log.FromContext(ctx).Warn("skipping NodeBalanceUpdated for unsupported token",
+		"token", token.String(), "blockchainID", r.blockchainID,
+		"blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
+	return true
 }
 
 func (r *ChannelHubReactor) handleHomeChannelCreated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {

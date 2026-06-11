@@ -59,23 +59,54 @@ func (h *Handler) getChannelSigValidator(tx Store, asset string) *core.ChannelSi
 	})
 }
 
+// lockTransferBalances normalizes the receiver address, rejects self-transfers,
+// and locks the sender's and receiver's (wallet, asset) balance rows in a
+// deterministic order (ascending lowercase wallet) to avoid database deadlocks
+// when two opposite-direction transfers run concurrently. It returns the
+// normalized receiver wallet.
+//
+// Callers MUST call this before issueTransferReceiverState for a TransferSend
+// transition — issueTransferReceiverState assumes the receiver row is already
+// locked and does not take the lock itself.
+func (h *Handler) lockTransferBalances(tx Store, senderState core.State) (string, error) {
+	receiverWallet, err := core.NormalizeHexAddress(senderState.Transition.AccountID)
+	if err != nil {
+		return "", rpc.Errorf("invalid receiver wallet address: %v", err)
+	}
+	if strings.EqualFold(senderState.UserWallet, receiverWallet) {
+		return "", rpc.Errorf("sender and receiver wallets are the same")
+	}
+
+	// Lock both rows in ascending lowercase-wallet order so concurrent
+	// opposite-direction transfers acquire the same locks in the same sequence.
+	// LockUserState lowercases internally, so the sort key matches the lock key.
+	first, second := senderState.UserWallet, receiverWallet
+	if strings.ToLower(first) > strings.ToLower(second) {
+		first, second = second, first
+	}
+	if _, err := tx.LockUserState(first, senderState.Asset); err != nil {
+		return "", rpc.Errorf("failed to lock user state: %v", err)
+	}
+	if _, err := tx.LockUserState(second, senderState.Asset); err != nil {
+		return "", rpc.Errorf("failed to lock user state: %v", err)
+	}
+	return receiverWallet, nil
+}
+
 // issueTransferReceiverState creates and stores a new state for the receiver of a transfer.
 // It reads the receiver's current state, applies a transfer_receive transition with the same
 // amount and tx hash, signs it with the node's key, and persists it.
-func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, senderState core.State, applicationID string) (*core.State, error) {
+//
+// receiverWallet must be the normalized receiver address returned by
+// lockTransferBalances, which the caller MUST invoke first — that call also
+// locks the receiver's (wallet, asset) row and rejects self-transfers, so this
+// function does neither itself.
+func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, senderState core.State, receiverWallet, applicationID string) (*core.State, error) {
 	logger := log.FromContext(ctx)
 
 	incomingTransition := senderState.Transition
 	if incomingTransition.Type != core.TransitionTypeTransferSend {
 		return nil, rpc.Errorf("incoming state doesn't have 'transfer_send' transition")
-	}
-	receiverWallet, err := core.NormalizeHexAddress(incomingTransition.AccountID)
-	if err != nil {
-		return nil, rpc.Errorf("invalid receiver wallet address: %v", err)
-	}
-
-	if strings.EqualFold(senderState.UserWallet, receiverWallet) {
-		return nil, rpc.Errorf("sender and receiver wallets are the same")
 	}
 
 	logger = logger.
@@ -84,11 +115,6 @@ func (h *Handler) issueTransferReceiverState(ctx context.Context, tx Store, send
 		WithKV("asset", senderState.Asset)
 
 	logger.Debug("issuing transfer receiver state")
-
-	// Lock the receiver's state to prevent concurrent modifications
-	if _, err := tx.LockUserState(receiverWallet, senderState.Asset); err != nil {
-		return nil, rpc.Errorf("failed to lock receiver state: %v", err)
-	}
 
 	currentState, err := tx.GetLastUserState(receiverWallet, senderState.Asset, false)
 	if err != nil {

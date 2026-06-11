@@ -38,10 +38,19 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 	var nodeSig string
 	incomingTransition := incomingState.Transition
+	var receiverWallet string
 	err = h.useStoreInTx(func(tx Store) error {
-		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
-		if err != nil {
-			return rpc.Errorf("failed to lock user state: %v", err)
+		if incomingTransition.Type == core.TransitionTypeTransferSend {
+			// Lock both sender and receiver balance rows up front in deterministic
+			// order so concurrent opposite-direction transfers can't deadlock.
+			receiverWallet, err = h.lockTransferBalances(tx, incomingState)
+			if err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset); err != nil {
+				return rpc.Errorf("failed to lock user state: %v", err)
+			}
 		}
 
 		approvedSigValidators, channelStatus, err := tx.CheckActiveChannel(incomingState.UserWallet, incomingState.Asset)
@@ -164,7 +173,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				}
 
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, receiverWallet, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}

@@ -300,7 +300,7 @@ type DatabaseStore interface {
 	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
 	// has already been committed, regardless of which block it appeared in.
 	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
-	// re-mines with a different block-level log position (see reorg-fix-spec.md §6.6).
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
 	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 
 	// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of

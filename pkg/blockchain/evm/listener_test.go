@@ -321,8 +321,6 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 //   - Historical events younger than confirmationDelay → handleEvent (through gate; still in reorg window)
 //   - Live (Phase 2) events → handleEvent (always)
 //   - HeaderByHash fetch failures → handleEvent (conservative fallback)
-//
-// See reorg-fix-spec.md §4.4 step 5.
 func TestListener_PhaseHandlerRouting(t *testing.T) {
 	t.Parallel()
 	logger := log.NewNoopLogger()

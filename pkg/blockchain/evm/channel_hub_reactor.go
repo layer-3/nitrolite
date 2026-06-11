@@ -116,7 +116,7 @@ type ChannelHubReactorStore interface {
 	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
 	// has already been committed, regardless of which block it appeared in.
 	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
-	// re-mines with a different block-level log position (see reorg-fix-spec.md §6.6).
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
 	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 }
 
@@ -190,7 +190,7 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	// This converts the constraint-violation rollback path into a clean early exit and
 	// is required for the reconciliation walk (§4.4) to replay events without errors.
 	// Reorged events with a changed block-level logIndex pass through this check;
-	// they are handled by the reactor's business-logic idempotency (see reorg-fix-spec.md §6.6).
+	// they are handled by the reactor's business-logic idempotency (see nitronode/docs/reorg-fix.md §6.6).
 	processed, err := r.store.IsContractEventProcessed(l.TxHash.String(), uint32(l.Index), r.blockchainID)
 	if err != nil {
 		logger.Warn("failed to check if contract event was already processed, proceeding",

@@ -215,9 +215,14 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 
 // processEvents runs two sequential phases: historical (historicalCh until closed),
 // then live (currentCh until ctx or subscription death). In each phase the first
-// events are checked via IsContractEventPresent; once a non-present event is found
+// events are checked via IsContractEventProcessed; once a non-present event is found
 // the check is skipped for the rest of that phase (events are strictly ordered).
 // Returns nil on subscription loss (reconnect), non-nil on handler/check failure.
+//
+// Both the listener (here) and the reactor (channel_hub_reactor.go) call
+// IsContractEventProcessed, so both share a dependency on DB availability. A
+// transient Postgres hiccup at either call site surfaces the error, unsubscribes,
+// and restarts the process — consistent behavior across the pipeline.
 //
 // Listener ordering & idempotency invariant
 // -----------------------------------------
@@ -233,10 +238,13 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     reconcileBlockRange + live subscription preserve chain order within each
 //     phase.
 //
-//  2. Idempotent resume. On restart, IsContractEventPresent gates the first
+//  2. Idempotent resume. On restart, IsContractEventProcessed gates the first
 //     event of each phase: events already persisted in a prior run are skipped
 //     rather than reprocessed. Once a non-present event is seen the check is
 //     dropped for the remainder of the phase (safe because of guarantee 1).
+//     The dedup check identifies events by (txHash, logIndex, blockchainID);
+//     reorged events with a re-shuffled block-level log index are not detected
+//     here and rely on reactor business-logic idempotency.
 //
 //  3. Cursor advances only on handler success. lastBlock is updated on each
 //     live event, but a non-nil return from handleEvent unsubscribes and
@@ -249,7 +257,7 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     gate can cancel any pending confirmation timer for that event. The
 //     reactor never sees Removed=true logs directly; the gate filters them
 //     before forwarding confirmed events. The lastBlock cursor and
-//     IsContractEventPresent dedup check are skipped for Removed=true events
+//     IsContractEventProcessed dedup check are skipped for Removed=true events
 //     so neither the resume cursor nor the idempotency guard is corrupted
 //     by a reorg signal.
 //
@@ -282,7 +290,7 @@ func (l *Listener) processEvents(
 				break
 			}
 			if !historicalCheckDone {
-				present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
+				present, err := l.eventGetter.IsContractEventProcessed(eventLog.TxHash.Hex(), uint32(eventLog.Index), l.blockchainID)
 				if err != nil {
 					eventSubscription.Unsubscribe()
 					return fmt.Errorf("failed to check historical event presence: %w", err)
@@ -344,7 +352,7 @@ func (l *Listener) processEvents(
 			if !eventLog.Removed {
 				*lastBlock = eventLog.BlockNumber
 				if !currentCheckDone {
-					present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
+					present, err := l.eventGetter.IsContractEventProcessed(eventLog.TxHash.Hex(), uint32(eventLog.Index), l.blockchainID)
 					if err != nil {
 						eventSubscription.Unsubscribe()
 						return fmt.Errorf("failed to check current event presence: %w", err)

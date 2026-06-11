@@ -90,8 +90,8 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 		}).
 		Return(sub, nil)
 
-	// The first current event will trigger IsContractEventPresent check
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(10), mock.Anything, uint32(1)).Return(false, nil)
+	// The first current event will trigger IsContractEventProcessed check
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(1), uint64(1)).Return(false, nil)
 
 	go listener.Listen(ctx, func(err error) {})
 
@@ -163,9 +163,9 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	eventGetter := new(MockContractEventGetter)
 	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(100), blockHash100.Hex(), nil)
 	// Historical event at block 105 is not present
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(105), mock.Anything, uint32(0)).Return(false, nil)
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil)
 	// Current event at block 111 — after historical is done, first current event triggers check
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(111), mock.Anything, uint32(0)).Return(false, nil)
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -237,7 +237,7 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Historical: 3 events. First 2 are present (skipped), 3rd is not (handled).
-	// After the 3rd, the check should stop — no IsContractEventPresent call for events 4+.
+	// After the 3rd, the check should stop — no IsContractEventProcessed call for events 4+.
 	// BlockTimestamp is set so ensureBlockTimestamp short-circuits.
 	ts := uint64(time.Now().Unix())
 	historicalCh := make(chan types.Log, 5)
@@ -249,9 +249,9 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 	close(historicalCh)
 
 	// First two are present, third is not
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(true, nil).Once()
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(101), mock.Anything, uint32(0)).Return(true, nil).Once()
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(102), mock.Anything, uint32(0)).Return(false, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(true, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(true, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
 	// No mock for 103, 104 — if called, mock will panic, proving the check stopped
 
 	sub := &MockSubscription{errChan: make(chan error)}
@@ -294,7 +294,7 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 	historicalCh := make(chan types.Log, 2)
 	historicalCh <- types.Log{BlockNumber: 100, Index: 0, TxHash: common.HexToHash("0xaa"), BlockTimestamp: uint64(time.Now().Unix())}
 
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil)
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil)
 
 	// Subscription that will error shortly
 	subErrCh := make(chan error, 1)
@@ -321,6 +321,8 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 //   - Historical events younger than confirmationDelay → handleEvent (through gate; still in reorg window)
 //   - Live (Phase 2) events → handleEvent (always)
 //   - HeaderByHash fetch failures → handleEvent (conservative fallback)
+//
+// See nitronode/docs/reorg-fix.md §4.4 step 5.
 func TestListener_PhaseHandlerRouting(t *testing.T) {
 	t.Parallel()
 	logger := log.NewNoopLogger()
@@ -381,10 +383,10 @@ func TestListener_PhaseHandlerRouting(t *testing.T) {
 	currentCh := make(chan types.Log, 1)
 	currentCh <- currentLog
 
-	// Only the first historical event triggers IsContractEventPresent (then the check is dropped for the phase);
+	// Only the first historical event triggers IsContractEventProcessed (then the check is dropped for the phase);
 	// the first live event triggers it again for Phase 2.
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil).Once()
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(200), mock.Anything, uint32(0)).Return(false, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
 
 	sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
 
@@ -447,7 +449,7 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 	close(historicalCh)
 	currentCh := make(chan types.Log)
 
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(100), mock.Anything, uint32(0)).Return(false, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
 
 	sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
 
@@ -492,14 +494,14 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 
 	currentCh := make(chan types.Log, 2)
 
-	// Event 1: non-Removed at block 10 — triggers IsContractEventPresent check,
+	// Event 1: non-Removed at block 10 — triggers IsContractEventProcessed check,
 	// advances lastBlock, sets currentCheckDone = true. BlockTimestamp is set so
 	// ensureBlockTimestamp short-circuits.
 	normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc"), BlockTimestamp: uint64(time.Now().Unix())}
-	eventGetter.On("IsContractEventPresent", uint64(1), uint64(10), mock.Anything, uint32(0)).Return(false, nil).Once()
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
 
 	// Event 2: Removed=true at block 11 — must NOT advance lastBlock, must NOT call
-	// IsContractEventPresent, but MUST reach handleEvent.
+	// IsContractEventProcessed, but MUST reach handleEvent.
 	removedLog := types.Log{BlockNumber: 11, Index: 0, TxHash: common.HexToHash("0xdef"), Removed: true}
 
 	currentCh <- normalLog
@@ -530,8 +532,8 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 	// lastBlock must NOT have advanced past the normal event's block.
 	assert.Equal(t, uint64(10), lastBlock, "lastBlock must not be advanced by a Removed=true event")
 
-	// IsContractEventPresent must have been called exactly once (for the normal log only).
-	eventGetter.AssertNumberOfCalls(t, "IsContractEventPresent", 1)
+	// IsContractEventProcessed must have been called exactly once (for the normal log only).
+	eventGetter.AssertNumberOfCalls(t, "IsContractEventProcessed", 1)
 	eventGetter.AssertExpectations(t)
 }
 

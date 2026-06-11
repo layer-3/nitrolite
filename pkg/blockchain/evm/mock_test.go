@@ -138,8 +138,8 @@ func (m *MockContractEventGetter) GetLatestContractEventBlockNumber(contractAddr
 	return args.Get(0).(uint64), args.Error(1)
 }
 
-func (m *MockContractEventGetter) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
-	args := m.Called(blockchainID, blockNumber, txHash, logIndex)
+func (m *MockContractEventGetter) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
+	args := m.Called(txHash, logIndex, blockchainID)
 	return args.Bool(0), args.Error(1)
 }
 

@@ -106,18 +106,3 @@ func (s *DBStore) GetPreviousDistinctBlockHash(contractAddress string, blockchai
 	}
 	return ev.BlockNumber, ev.BlockHash, nil
 }
-
-// IsContractEventPresent checks whether a specific contract event has already been stored.
-func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
-	var ev ContractEvent
-	err := s.db.Where("blockchain_id = ? AND block_number = ? AND transaction_hash = ? AND log_index = ?",
-		blockchainID, blockNumber, strings.ToLower(txHash), logIndex).
-		Take(&ev).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}

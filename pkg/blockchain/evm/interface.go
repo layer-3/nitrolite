@@ -16,8 +16,9 @@ type HandleEvent func(ctx context.Context, eventLog types.Log) error
 type ContractEventGetter interface {
 	// GetLatestContractEventBlockNumber returns the block to resume from (0 = start fresh).
 	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
-	// IsContractEventPresent checks whether a specific event was already processed.
-	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 	// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of
 	// the highest stored event. Returns (0, "", nil) when no rows exist.
 	GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (blockNumber uint64, blockHash string, err error)

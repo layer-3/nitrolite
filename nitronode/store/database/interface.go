@@ -294,9 +294,6 @@ type DatabaseStore interface {
 	// GetLatestContractEventBlockNumber returns the highest block number for a given contract.
 	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
 
-	// IsContractEventPresent checks if a specific contract event has already been stored.
-	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
-
 	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
 	// has already been committed, regardless of which block it appeared in.
 	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx

@@ -1047,7 +1047,7 @@ func TestChannelHubReactor_HandleEscrowDepositsPurged(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
-func TestChannelHubReactor_HandleEvent_PreCheckError(t *testing.T) {
+func TestChannelHubReactor_HandleEvent_PreCheckError_ReturnsError(t *testing.T) {
 	blockchainID := uint64(1)
 	nodeAddr := "0x1111111111111111111111111111111111111111"
 	tokenAddr := common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
@@ -1068,22 +1068,19 @@ func TestChannelHubReactor_HandleEvent_PreCheckError(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	// Pre-check returns an error — reactor must fall through and process normally.
+	// Pre-check returns an error — reactor must return it immediately.
 	store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, assert.AnError)
-	assetStore.On("GetTokenAsset", blockchainID, tokenAddr.String()).Return("usdc", nil)
-	assetStore.On("GetTokenDecimals", blockchainID, tokenAddr.String()).Return(uint8(6), nil)
-	handler.On("HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	expectStoreContractEvent(store, "NodeBalanceUpdated", 100, blockchainID)
 
 	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
 	reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store)
 
 	err := reactor.HandleEvent(context.Background(), logEntry)
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "pre-check IsContractEventProcessed failed")
 
-	// Business logic and StoreContractEvent must still be called.
-	handler.AssertCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
-	store.AssertExpectations(t)
+	// Neither business logic nor StoreContractEvent should be called.
+	handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+	store.AssertNotCalled(t, "StoreContractEvent", mock.Anything)
 }
 
 func TestChannelHubReactor_HandleEvent_AlreadyProcessed(t *testing.T) {
@@ -1194,6 +1191,30 @@ func TestChannelHubReactor_OnEventProcessedCallback(t *testing.T) {
 
 		err := reactor.HandleEvent(context.Background(), logEntry)
 		require.Error(t, err)
+		assert.False(t, cbSuccess)
+	})
+
+	t.Run("callback receives false on pre-check error", func(t *testing.T) {
+		store := new(mockChannelHubStore)
+		handler := new(mockChannelHubEventHandler)
+		assetStore := new(MockAssetStore)
+
+		// Pre-check returns an error — deferred callback must still fire with success=false.
+		store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, assert.AnError)
+
+		useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+		reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store)
+
+		var cbCalled bool
+		var cbSuccess bool
+		reactor.SetOnEventProcessed(func(_ uint64, success bool) {
+			cbCalled = true
+			cbSuccess = success
+		})
+
+		err := reactor.HandleEvent(context.Background(), logEntry)
+		require.Error(t, err)
+		assert.True(t, cbCalled, "callback must be invoked on pre-check error")
 		assert.False(t, cbSuccess)
 	})
 }

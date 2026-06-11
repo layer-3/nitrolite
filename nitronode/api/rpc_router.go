@@ -23,9 +23,9 @@ type RPCRouter struct {
 }
 
 type RPCRouterConfig struct {
-	NodeVersion  string
-	MinChallenge uint32
-	MaxChallenge uint32
+	NodeVersion           string
+	MinChallenge          uint32
+	MaxChallenge          uint32
 	MaxParticipants       int
 	MaxSessionDataLen     int
 	MaxSessionKeyIDs      int

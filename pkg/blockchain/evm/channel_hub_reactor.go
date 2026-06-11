@@ -175,7 +175,13 @@ func (r *ChannelHubReactor) SetOnEventProcessed(fn func(blockchainID uint64, suc
 	r.onEventProcessed = fn
 }
 
-func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) (err error) {
+	defer func() {
+		if r.onEventProcessed != nil {
+			r.onEventProcessed(r.blockchainID, err == nil)
+		}
+	}()
+
 	logger := log.FromContext(ctx)
 
 	eventID := l.Topics[0]
@@ -193,14 +199,11 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	// they are handled by the reactor's business-logic idempotency (see nitronode/docs/reorg-fix.md §6.6).
 	processed, err := r.store.IsContractEventProcessed(l.TxHash.String(), uint32(l.Index), r.blockchainID)
 	if err != nil {
-		logger.Warn("failed to check if contract event was already processed, proceeding",
-			"error", err, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
-	} else if processed {
+		return errors.Wrap(err, "pre-check IsContractEventProcessed failed")
+	}
+	if processed {
 		logger.Info("skipping re-delivered event, already committed",
 			"event", eventName, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
-		if r.onEventProcessed != nil {
-			r.onEventProcessed(r.blockchainID, true)
-		}
 		return nil
 	}
 
@@ -280,9 +283,6 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 		return nil
 	})
-	if r.onEventProcessed != nil {
-		r.onEventProcessed(r.blockchainID, err == nil)
-	}
 	return err
 }
 

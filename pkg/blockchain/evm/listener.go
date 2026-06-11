@@ -33,6 +33,7 @@ type Listener struct {
 	handleEvent           HandleEvent // live events and recent historical events; typically the ConfirmationGate
 	handleHistoricalEvent HandleEvent // historical events older than confirmationDelay; typically the reactor directly
 	eventGetter           ContractEventGetter
+	handleEventFatalCh    <-chan error // gate fatal-error channel; nil when no gate is in use (nil channel never selects)
 
 	// Single-entry block-timestamp cache for ensureBlockTimestamp. The listener's
 	// processEvents loop is strictly serial (Phase 1 drains before Phase 2, each
@@ -57,7 +58,11 @@ type Listener struct {
 //
 // eventHandler is typically the ConfirmationGate; historicalEventHandler is typically
 // the reactor directly. The two handlers may be the same function when no gate is in use.
-func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, confirmationDelay time.Duration, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
+//
+// eventHandlerFatalCh is the read-only fatal-error channel from the ConfirmationGate
+// (gate.FatalErrors()). Pass nil when no gate is in use (confirmationDelay == 0);
+// a nil channel never selects, so the fatal-error case is a no-op on the no-gate path.
+func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, confirmationDelay time.Duration, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter, eventHandlerFatalCh <-chan error) *Listener {
 	return &Listener{
 		contractAddress:       contractAddress,
 		client:                client,
@@ -68,6 +73,7 @@ func NewListener(contractAddress common.Address, client EVMClient, blockchainID 
 		handleEvent:           eventHandler,
 		handleHistoricalEvent: historicalEventHandler,
 		eventGetter:           eventGetter,
+		handleEventFatalCh:    eventHandlerFatalCh,
 	}
 }
 
@@ -308,6 +314,13 @@ func (l *Listener) processEvents(
 				eventSubscription.Unsubscribe()
 				return err
 			}
+		case err := <-l.handleEventFatalCh:
+			l.logger.Error("downstream gate signalled fatal error, unsubscribing",
+				"error", err,
+				"blockchainID", l.blockchainID,
+				"contractAddress", l.contractAddress.String())
+			eventSubscription.Unsubscribe()
+			return err
 		case err := <-eventSubscription.Err():
 			if err != nil {
 				l.logger.Error("event subscription error", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
@@ -362,6 +375,13 @@ func (l *Listener) processEvents(
 				eventSubscription.Unsubscribe()
 				return err
 			}
+		case err := <-l.handleEventFatalCh:
+			l.logger.Error("downstream gate signalled fatal error, unsubscribing",
+				"error", err,
+				"blockchainID", l.blockchainID,
+				"contractAddress", l.contractAddress.String())
+			eventSubscription.Unsubscribe()
+			return err
 		case err := <-eventSubscription.Err():
 			if err != nil {
 				l.logger.Error("event subscription error", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())

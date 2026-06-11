@@ -402,3 +402,9 @@ The gate reads `eventLog.BlockTimestamp` directly from the `types.Log` it receiv
 
 Therefore the **listener** — not the gate — owns the fallback. Before forwarding a non-removed event to the gate (or to the reactor on the historical bypass), the listener calls `ensureBlockTimestamp`, which uses `eventLog.BlockTimestamp` when present and falls back to one `HeaderByHash(blockHash)` RPC otherwise. A single-entry cache keyed on `lastBlockHash` elides repeat fetches for consecutive events from the same block, which — because the listener delivers events in block order — is the only relevant case. `Removed: true` logs skip `ensureBlockTimestamp` entirely; the gate's cancel path never reads `BlockTimestamp`.
 On `HeaderByHash` failure the listener logs a WARN and forwards the event through the gate anyway, where the zero-defense fallback above degrades the entry to a wall-clock delay rather than dropping it silently.
+
+---
+
+### 6.8 Handler error semantics
+
+When a downstream handler invoked after the confirmation delay returns an error, the gate sends the error on a buffered (size 1) fatal channel exposed via `FatalErrors()` and the goroutine exits without draining further pending entries. The listener receives the error in its Phase 2 (and Phase 1) select, unsubscribes, and returns the error to `Listen`'s closure, which in `nitronode/main.go` calls `logger.Fatal` → process exit. The supervisor restarts the process; the next `Listen` invocation re-fetches the unstored event via the DB cursor in `findCommonAncestor` + Phase 1 reconciliation, restoring the pre-PR crash-restart-replay invariant. The gate does **not** retry handler errors in-process; this is intentional and matches pre-PR behavior. Events queued behind the failed event are dropped on teardown and re-fetched after restart.

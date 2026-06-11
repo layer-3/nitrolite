@@ -66,8 +66,10 @@ type ConfirmationGate struct {
 	forwardedSet   map[forwardedKey]time.Time // key -> forwardedAt
 	forwardedQueue []forwardedExpiry          // FIFO of (key, forwardedAt) for O(1) eviction
 
-	kick  chan struct{} // buffered 1; non-blocking sends
-	timer *time.Timer   // created in Start(ctx)
+	kick    chan struct{} // buffered 1; non-blocking sends
+	timer   *time.Timer   // created in Start(ctx)
+	fatalCh chan error    // buffered 1; first handler error wins; non-blocking send
+	done    chan struct{} // closed once on fatal; gates run's select so the goroutine exits
 }
 
 // NewConfirmationGate creates a ConfirmationGate that holds events for delay before
@@ -92,7 +94,18 @@ func NewConfirmationGate(
 		forwardedSet:   make(map[forwardedKey]time.Time),
 		forwardedQueue: nil,
 		kick:           make(chan struct{}, 1),
+		fatalCh:        make(chan error, 1),
+		done:           make(chan struct{}),
 	}, nil
+}
+
+// FatalErrors returns a read-only channel that receives the first handler error
+// encountered after the confirmation delay. The channel is buffered (size 1);
+// only the first error is delivered. When the channel fires, the gate's drain
+// goroutine has already stopped forwarding. The listener should unsubscribe and
+// return the error to trigger process restart and DB-cursor replay.
+func (g *ConfirmationGate) FatalErrors() <-chan error {
+	return g.fatalCh
 }
 
 // Start begins the background goroutine that forwards matured entries to the
@@ -186,6 +199,8 @@ func (g *ConfirmationGate) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-g.done:
+			return
 		case <-g.kick:
 		case <-g.timer.C:
 		}
@@ -233,10 +248,20 @@ func (g *ConfirmationGate) drainAndReschedule() {
 
 		evCtx := log.SetContextLogger(context.Background(), g.logger)
 		if err := g.handler(evCtx, entry.log); err != nil {
-			g.logger.Error("handler error after confirmation delay",
+			g.logger.Error("handler error after confirmation delay, signalling fatal",
 				"error", err,
 				"chainID", g.chainID,
 			)
+			select {
+			case g.fatalCh <- err:
+			default:
+			}
+			// Close done to signal the run goroutine to exit immediately.
+			// This is safe: only this fatal branch closes done, and it runs at most
+			// once — once done is closed the run loop exits and drainAndReschedule
+			// is no longer called.
+			close(g.done)
+			return
 		}
 
 		g.mu.Lock()

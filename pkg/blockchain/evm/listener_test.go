@@ -45,7 +45,7 @@ func TestNewListener(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	l := NewListener(addr, mockClient, 1, 100, 0, logger, nil, nil, eventGetter)
+	l := NewListener(addr, mockClient, 1, 100, 0, logger, nil, nil, eventGetter, nil)
 	require.NotNil(t, l)
 	assert.Equal(t, addr, l.contractAddress)
 	assert.Equal(t, uint64(1), l.blockchainID)
@@ -73,7 +73,7 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 100, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 100, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Mock SubscribeFilterLogs
 	sub := &MockSubscription{
@@ -110,7 +110,7 @@ func TestListener_ReconcileBlockRange(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	// Setup FilterLogs mock
 	// We expect a range fetch. start=100, step=10 -> end=110. current=120.
@@ -187,7 +187,7 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// findCommonAncestor: HeaderByNumber(100) returns the same header we hashed above,
 	// so the stored hash matches and block 100 is confirmed canonical.
@@ -234,7 +234,7 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Historical: 3 events. First 2 are present (skipped), 3rd is not (handled).
 	// After the 3rd, the check should stop — no IsContractEventPresent call for events 4+.
@@ -287,7 +287,7 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Historical channel with events that will block (not closed yet). BlockTimestamp
 	// is set so ensureBlockTimestamp short-circuits.
@@ -348,7 +348,7 @@ func TestListener_PhaseHandlerRouting(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, confirmationDelay, logger, liveHandler, historicalHandler, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, confirmationDelay, logger, liveHandler, historicalHandler, eventGetter, nil)
 
 	// Old historical event (block timestamp 10 minutes ago) — should bypass the gate.
 	oldHash := common.HexToHash("0xa1")
@@ -437,7 +437,7 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter, nil)
 
 	// BlockTimestamp populated by the upstream RPC — ensureBlockTimestamp short-circuits
 	// and routeHistoricalEvent routes directly to historicalHandler because delay == 0.
@@ -484,7 +484,7 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// No historical events.
 	historicalCh := make(chan types.Log)
@@ -542,7 +542,7 @@ func TestReconcileBlockRange_ContextCancellation(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -582,7 +582,7 @@ func TestEnsureBlockTimestamp_Populated(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	originalTs := uint64(1700000000)
 	eventLog := types.Log{
@@ -607,7 +607,7 @@ func TestEnsureBlockTimestamp_Fetch(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	headerTime := uint64(1700000000)
@@ -632,7 +632,7 @@ func TestEnsureBlockTimestamp_CacheHit(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	headerTime := uint64(1700000000)
@@ -666,7 +666,7 @@ func TestEnsureBlockTimestamp_FetchError(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	mockClient.On("HeaderByHash", mock.Anything, bh).Return(nil, fmt.Errorf("rpc failure")).Once()

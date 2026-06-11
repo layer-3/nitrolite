@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -784,5 +785,66 @@ func TestConfirmationGate_ShutdownWithNonEmptyQueue(t *testing.T) {
 	case <-handlerEntered:
 		t.Fatal("handler was invoked after shutdown")
 	default:
+	}
+}
+
+// TestConfirmationGate_HandlerErrorPropagatesFatal: when the downstream handler
+// returns an error after the confirmation delay, the gate signals the fatal channel
+// exactly once and the run goroutine exits. A second FatalErrors() receive must
+// block (buffer size == 1; only the first error is delivered). After the goroutine
+// exits, a second event that matures must NOT invoke the handler again.
+func TestConfirmationGate_HandlerErrorPropagatesFatal(t *testing.T) {
+	t.Parallel()
+
+	sentinelErr := errors.New("handler sentinel error")
+	var handlerCalls atomic.Int64
+	handler := func(_ context.Context, _ types.Log) error {
+		handlerCalls.Add(1)
+		return sentinelErr
+	}
+
+	delay := 50 * time.Millisecond
+	g := newGate(t, delay, handler)
+	g.Start(t.Context())
+
+	tx := common.HexToHash("0xF1")
+	bh := common.HexToHash("0xF1")
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, 0, false)))
+
+	// The fatal channel must receive the sentinel error within delay + generous timeout.
+	select {
+	case err := <-g.FatalErrors():
+		assert.Equal(t, sentinelErr, err, "fatal channel must carry the sentinel error")
+	case <-time.After(delay + 200*time.Millisecond):
+		t.Fatal("fatal channel did not receive an error within timeout")
+	}
+
+	// A second receive must block immediately — only one error per gate-lifetime.
+	select {
+	case extra := <-g.FatalErrors():
+		t.Fatalf("unexpected second value on fatal channel: %v", extra)
+	default:
+		// correct: channel is empty after the first drain
+	}
+
+	// Give the run goroutine a moment to exit via <-g.done.
+	time.Sleep(50 * time.Millisecond)
+
+	// Enqueue a second event after the failure. The goroutine has exited, so even
+	// if the kick is queued in the buffered channel it will never be drained.
+	tx2 := common.HexToHash("0xF2")
+	bh2 := common.HexToHash("0xF2")
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx2, bh2, 0, false)))
+
+	// Wait well past the delay; the handler must NOT be called a second time.
+	time.Sleep(delay + 100*time.Millisecond)
+
+	assert.Equal(t, int64(1), handlerCalls.Load(), "handler must be invoked exactly once across gate lifetime")
+
+	select {
+	case <-g.FatalErrors():
+		t.Fatal("unexpected second fatal send after goroutine exited")
+	default:
+		// correct: no second fatal
 	}
 }

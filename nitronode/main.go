@@ -124,6 +124,7 @@ func main() {
 
 			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
 			var liveHandler evm.HandleEvent
+			var fatalCh <-chan error
 			if confirmationDelay > 0 {
 				gate, err := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, logger)
 				if err != nil {
@@ -131,6 +132,7 @@ func main() {
 				}
 				gate.Start(blockchainCtx)
 				liveHandler = gate.HandleEvent
+				fatalCh = gate.FatalErrors()
 			} else {
 				liveHandler = reactor.HandleEvent
 			}
@@ -140,7 +142,8 @@ func main() {
 			// based on block age: events older than confirmationDelay go directly to the reactor
 			// (past the reorg window); recent events still flow through the live handler because
 			// their blocks may still be reorged.
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore)
+			// fatalCh is nil when confirmationDelay == 0; a nil channel never selects.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore, fatalCh)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

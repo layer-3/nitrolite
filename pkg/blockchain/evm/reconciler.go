@@ -68,6 +68,12 @@ func findCommonAncestor(
 		if prevHash == "" {
 			// No older stored block (prevNum=0) or pre-migration row (prevNum>0).
 			// Use prevNum as the safe canonical resume point.
+			//
+			// This branch conflates two distinct states: an empty store and a
+			// full-depth reorg where every stored block was reorged out. The latter
+			// requires a chain-level consensus failure that is outside the
+			// confirmation gate's scope, which is an incredibly unlikely scenario;
+			// both cases are treated identically here by proceeding as if the store were empty.
 			logger.Info("reconciliation: reached pre-migration or genesis boundary",
 				"blockchainID", blockchainID,
 				"blockNumber", prevNum,

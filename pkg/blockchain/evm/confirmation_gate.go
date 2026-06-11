@@ -73,7 +73,7 @@ type ConfirmationGate struct {
 // NewConfirmationGate creates a ConfirmationGate that holds events for delay before
 // forwarding them to handler. delay must be > 0; delay <= 0 returns an error
 // (the wiring layer is responsible for skipping gate construction when the operator
-// configured delay == 0; see nitronode/main.go).
+// configured delay == 0).
 func NewConfirmationGate(
 	delay time.Duration,
 	chainID uint64,

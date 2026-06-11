@@ -459,12 +459,6 @@ func (l *Listener) reconcileBlockRange(
 // from the same block — the only relevant case because the listener delivers events
 // in block order.
 //
-// Single-threaded use only: relies on the Listener's serial processEvents loop
-// (Phase 1 historical fully drains before Phase 2 live; each phase processes one
-// event at a time). No mutex on the cache fields. A future refactor that
-// parallelizes event handling must add synchronization or switch to a thread-safe
-// cache.
-//
 // On HeaderByHash failure, returns the original eventLog and the error. Callers
 // decide whether to fall back to the gate (which is the conservative behavior;
 // see live-path and routeHistoricalEvent below).

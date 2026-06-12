@@ -158,7 +158,7 @@ These changes are reflected only in cumulative net flows until enforced on-chain
 
 Closing an app session distributes locked allocations back to each participant by issuing a new release receive-state on every participant's home channel. The operation is **atomic across all participants** — if the Node cannot issue a release for any one participant, the entire close aborts.
 
-In particular, the Node refuses to issue a release to a recipient with an in-flight escrow operation on the affected asset (escrow lock, mutual lock, or escrow deposit/withdrawal awaiting on-chain finalization), so a single participant's pending escrow blocks cooperative closure for everyone else in the session until it resolves. See [`contracts/SECURITY.md`](contracts/SECURITY.md) for the full rationale and recovery paths.
+In particular, the Node refuses to issue a release to a recipient whose latest signed state encodes an escrow operation that the off-chain gate (`EnsureNoOngoingEscrowOperation`) does not yet treat as safely settled — covering any pending `escrow_lock`/`mutual_lock`, plus `escrow_deposit`/`escrow_withdraw` whose on-chain escrow-channel version has not caught up. A single such participant blocks cooperative closure for everyone else in the session until their escrow resolves. See [`contracts/SECURITY.md`](contracts/SECURITY.md) Behavior rule 8 for the full rationale and recovery paths.
 
 ---
 

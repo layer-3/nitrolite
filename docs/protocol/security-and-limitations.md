@@ -47,6 +47,18 @@ The blockchain layer provides the following guarantees:
 - After the challenge period, the enforced state becomes final
 - Final state allocations determine asset distribution
 
+## Off-Chain Convergence with On-Chain State
+
+The Node maintains a local view of each channel's state by subscribing to on-chain events emitted by the `ChannelHub` contract. To defend against out-of-order event delivery — which can be caused by contract-level reentrancy, indexer mis-ordering, or reorg replay — every event handler that mutates `channels.state_version` or `channels.status` enforces a strict version-monotonicity guard: an event whose `StateVersion` is lower than the row's current `StateVersion` is dropped with a structured warn log.
+
+For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers a chain-state refresh: the Node calls `getChannelData` on the home-chain `ChannelHub` contract via the `ChainStateRefresher` and overwrites the local row with the authoritative on-chain status, version, and challenge expiry. This ensures convergence with chain even when single-event delivery is insufficient — for example, when an outer `ChannelChallenged` is delivered after a higher-version inner `ChannelCheckpointed` emitted from the same transaction.
+
+The refresh runs synchronously inside the event-processing transaction. On RPC failure the transaction rolls back and the listener replays the event, so the convergence opportunity is never silently lost.
+
+Escrow event handlers ship the version guard without the refresh hook; the cross-chain RPC plumbing required for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
+
+The on-chain side complements this guard: every `ChannelHub` lifecycle entrypoint is protected by OpenZeppelin's `nonReentrant` modifier. This prevents inbound token hooks (ERC777 `tokensReceived`, non-standard `transferFrom` callbacks) from interleaving lifecycle operations and producing the out-of-order events that would otherwise force the Node's defense-in-depth path to fire.
+
 ## Node Liquidity and Cross-Chain Trust
 
 Each user channel is opened with a node. To maintain cross-chain functionality, the node MUST hold sufficient liquidity on each supported blockchain to satisfy off-chain state allocations.

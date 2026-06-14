@@ -246,14 +246,18 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     failed event; the next Listen invocation re-fetches from the same
 //     cursor. Transient handler failures retry instead of silently dropping.
 //
-//  4. Reorged-out logs are forwarded to the handler (ConfirmationGate).
-//     Live deliveries with Removed=true are passed to the handler so the
-//     gate can cancel any pending confirmation timer for that event. The
-//     reactor never sees Removed=true logs directly; the gate filters them
-//     before forwarding confirmed events. The lastBlock cursor and
-//     IsContractEventProcessed dedup check are skipped for Removed=true events
-//     so neither the resume cursor nor the idempotency guard is corrupted
-//     by a reorg signal.
+//  4. Reorged-out logs are routed by delay configuration.
+//     When confirmationDelay > 0, live deliveries with Removed=true are
+//     forwarded to the handler (ConfirmationGate) so the gate can cancel
+//     any pending confirmation timer for that event; the gate filters them
+//     before forwarding confirmed events to the reactor. When
+//     confirmationDelay == 0, there is no gate to consume the removal
+//     signal, so the listener drops Removed=true logs at the Phase 2
+//     boundary — matching pre-PR behavior. In both modes the reactor
+//     never sees Removed=true logs directly. The lastBlock cursor and
+//     IsContractEventProcessed dedup check are skipped for Removed=true
+//     events so neither the resume cursor nor the idempotency guard is
+//     corrupted by a reorg signal.
 //
 // A consequence used by the nitronode event handlers: for any channel that
 // closes via Path-1 (challenge-timeout, ChannelHub Closed-from-DISPUTED),
@@ -336,6 +340,17 @@ func (l *Listener) processEvents(
 			eventSubscription.Unsubscribe()
 			return nil
 		case eventLog := <-currentCh:
+			if eventLog.Removed && l.confirmationDelay == 0 {
+				l.logger.Warn("dropping Removed=true live event on no-gate path",
+					"blockchainID", l.blockchainID,
+					"contractAddress", l.contractAddress.String(),
+					"blockNumber", eventLog.BlockNumber,
+					"blockHash", eventLog.BlockHash.Hex(),
+					"txHash", eventLog.TxHash.Hex(),
+					"logIndex", eventLog.Index,
+				)
+				continue
+			}
 			if !eventLog.Removed {
 				*lastBlock = eventLog.BlockNumber
 				if !currentCheckDone {

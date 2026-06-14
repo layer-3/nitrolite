@@ -475,66 +475,140 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 
 func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 	t.Parallel()
-	logger := log.NewNoopLogger()
-	addr := common.HexToAddress("0x123")
-	eventGetter := new(MockContractEventGetter)
 
-	// Track which logs reached handleEvent.
-	var handledLogs []types.Log
-	handleEvent := func(ctx context.Context, eventLog types.Log) error {
-		handledLogs = append(handledLogs, eventLog)
-		return nil
-	}
+	t.Run("WithGate", func(t *testing.T) {
+		t.Parallel()
+		logger := log.NewNoopLogger()
+		addr := common.HexToAddress("0x123")
+		eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+		// Track which logs reached handleEvent.
+		var handledLogs []types.Log
+		handleEvent := func(ctx context.Context, eventLog types.Log) error {
+			handledLogs = append(handledLogs, eventLog)
+			return nil
+		}
 
-	// No historical events.
-	historicalCh := make(chan types.Log)
-	close(historicalCh)
+		// confirmationDelay > 0: the gate is active; Removed=true logs MUST be forwarded.
+		const delay = 30 * time.Second
+		listener := NewListener(addr, new(MockEVMClient), 1, 10, delay, logger, handleEvent, handleEvent, eventGetter)
 
-	currentCh := make(chan types.Log, 2)
+		// No historical events.
+		historicalCh := make(chan types.Log)
+		close(historicalCh)
 
-	// Event 1: non-Removed at block 10 — triggers IsContractEventProcessed check,
-	// advances lastBlock, sets currentCheckDone = true. BlockTimestamp is set so
-	// ensureBlockTimestamp short-circuits.
-	normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc"), BlockTimestamp: uint64(time.Now().Unix())}
-	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
+		currentCh := make(chan types.Log, 2)
 
-	// Event 2: Removed=true at block 11 — must NOT advance lastBlock, must NOT call
-	// IsContractEventProcessed, but MUST reach handleEvent.
-	removedLog := types.Log{BlockNumber: 11, Index: 0, TxHash: common.HexToHash("0xdef"), Removed: true}
+		// Event 1: non-Removed at block 10 — triggers IsContractEventProcessed check,
+		// advances lastBlock, sets currentCheckDone = true. BlockTimestamp is set so
+		// ensureBlockTimestamp short-circuits.
+		normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc"), BlockTimestamp: uint64(time.Now().Unix())}
+		eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
 
-	currentCh <- normalLog
-	currentCh <- removedLog
+		// Event 2: Removed=true at block 11 — must NOT advance lastBlock, must NOT call
+		// IsContractEventProcessed, but MUST reach handleEvent (gate needs the removal signal).
+		removedLog := types.Log{BlockNumber: 11, Index: 0, TxHash: common.HexToHash("0xdef"), Removed: true}
 
-	sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+		currentCh <- normalLog
+		currentCh <- removedLog
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		// Give processEvents enough time to drain both buffered events, then cancel.
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-	}()
+		sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
 
-	var lastBlock uint64
-	err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
-	require.NoError(t, err)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			// Give processEvents enough time to drain both buffered events, then cancel.
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
 
-	// Both events must have reached handleEvent.
-	require.Len(t, handledLogs, 2, "handleEvent must be called for both the normal and the Removed event")
+		var lastBlock uint64
+		err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
+		require.NoError(t, err)
 
-	// Verify first call was the normal log and second was the removed log.
-	assert.Equal(t, uint64(10), handledLogs[0].BlockNumber)
-	assert.False(t, handledLogs[0].Removed)
-	assert.Equal(t, uint64(11), handledLogs[1].BlockNumber)
-	assert.True(t, handledLogs[1].Removed)
+		// Both events must have reached handleEvent.
+		require.Len(t, handledLogs, 2, "handleEvent must be called for both the normal and the Removed event when gate is active")
 
-	// lastBlock must NOT have advanced past the normal event's block.
-	assert.Equal(t, uint64(10), lastBlock, "lastBlock must not be advanced by a Removed=true event")
+		// Verify first call was the normal log and second was the removed log.
+		assert.Equal(t, uint64(10), handledLogs[0].BlockNumber)
+		assert.False(t, handledLogs[0].Removed)
+		assert.Equal(t, uint64(11), handledLogs[1].BlockNumber)
+		assert.True(t, handledLogs[1].Removed)
 
-	// IsContractEventProcessed must have been called exactly once (for the normal log only).
-	eventGetter.AssertNumberOfCalls(t, "IsContractEventProcessed", 1)
-	eventGetter.AssertExpectations(t)
+		// lastBlock must NOT have advanced past the normal event's block.
+		assert.Equal(t, uint64(10), lastBlock, "lastBlock must not be advanced by a Removed=true event")
+
+		// IsContractEventProcessed must have been called exactly once (for the normal log only).
+		eventGetter.AssertNumberOfCalls(t, "IsContractEventProcessed", 1)
+		eventGetter.AssertExpectations(t)
+	})
+
+	t.Run("NoGate", func(t *testing.T) {
+		t.Parallel()
+		logger := log.NewNoopLogger()
+		addr := common.HexToAddress("0x123")
+		eventGetter := new(MockContractEventGetter)
+
+		// Track which logs reached handleEvent.
+		var handledLogs []types.Log
+		handleEvent := func(ctx context.Context, eventLog types.Log) error {
+			handledLogs = append(handledLogs, eventLog)
+			return nil
+		}
+
+		// confirmationDelay == 0: no gate; Removed=true logs must be dropped at Phase 2 boundary.
+		listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+
+		// No historical events.
+		historicalCh := make(chan types.Log)
+		close(historicalCh)
+
+		currentCh := make(chan types.Log, 3)
+
+		// Event 1: non-Removed at block 10 — advances lastBlock, triggers dedup check.
+		// BlockTimestamp is set so ensureBlockTimestamp short-circuits.
+		normalLog := types.Log{BlockNumber: 10, Index: 0, TxHash: common.HexToHash("0xabc"), BlockTimestamp: uint64(time.Now().Unix())}
+		eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Once()
+
+		// Event 2: Removed=true at block 11 — must be dropped; must NOT reach handleEvent,
+		// must NOT advance lastBlock.
+		removedLog := types.Log{BlockNumber: 11, Index: 0, TxHash: common.HexToHash("0xdef"), Removed: true}
+
+		// Event 3: another non-Removed at block 12 — must flow normally after the dropped removal.
+		// BlockTimestamp is set so ensureBlockTimestamp short-circuits.
+		followupLog := types.Log{BlockNumber: 12, Index: 1, TxHash: common.HexToHash("0xghi"), BlockTimestamp: uint64(time.Now().Unix())}
+
+		currentCh <- normalLog
+		currentCh <- removedLog
+		currentCh <- followupLog
+
+		sub := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			// Give processEvents enough time to drain all three buffered events, then cancel.
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+
+		var lastBlock uint64
+		err := listener.processEvents(ctx, sub, historicalCh, currentCh, &lastBlock)
+		require.NoError(t, err)
+
+		// Only the two non-Removed events must have reached handleEvent.
+		require.Len(t, handledLogs, 2, "handleEvent must NOT be called for Removed=true when no gate is active")
+		assert.Equal(t, uint64(10), handledLogs[0].BlockNumber)
+		assert.False(t, handledLogs[0].Removed)
+		assert.Equal(t, uint64(12), handledLogs[1].BlockNumber)
+		assert.False(t, handledLogs[1].Removed)
+
+		// lastBlock must reflect the last non-Removed event, not the removed one.
+		assert.Equal(t, uint64(12), lastBlock, "lastBlock must not be advanced by a Removed=true event")
+
+		// IsContractEventProcessed must have been called exactly once (for the first normal log only;
+		// the follow-up log skips the check because currentCheckDone is already true).
+		eventGetter.AssertNumberOfCalls(t, "IsContractEventProcessed", 1)
+		eventGetter.AssertExpectations(t)
+	})
 }
 
 func TestReconcileBlockRange_ContextCancellation(t *testing.T) {

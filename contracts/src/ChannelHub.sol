@@ -351,7 +351,7 @@ contract ChannelHub is ReentrancyGuard {
     // inflate _nodeBalances during ERC777/hook callbacks, enabling read-only reentrancy for
     // external protocols querying getNodeBalance(). Contrast with withdrawFromNode, which uses
     // CEI (decrement before push) to prevent re-entrancy drains.
-    function depositToNode(address token, uint256 amount) external payable {
+    function depositToNode(address token, uint256 amount) external payable nonReentrant {
         require(amount > 0, IncorrectAmount());
 
         _pullFunds(msg.sender, token, amount);
@@ -363,7 +363,7 @@ contract ChannelHub is ReentrancyGuard {
         emit NodeBalanceUpdated(token, updatedBalance);
     }
 
-    function withdrawFromNode(address to, address token, uint256 amount) external {
+    function withdrawFromNode(address to, address token, uint256 amount) external nonReentrant {
         require(to != address(0), InvalidAddress());
         require(amount > 0, IncorrectAmount());
         require(msg.sender == NODE, IncorrectMsgSender());
@@ -445,7 +445,7 @@ contract ChannelHub is ReentrancyGuard {
         }
     }
 
-    function purgeEscrowDeposits(uint256 maxSteps) external {
+    function purgeEscrowDeposits(uint256 maxSteps) external nonReentrant {
         _purgeEscrowDeposits(maxSteps);
     }
 
@@ -549,7 +549,7 @@ contract ChannelHub is ReentrancyGuard {
     // This enables users who already have off-chain virtual states with non-zero version
     // to create a channel and perform initial operation simultaneously
     // NOTE: For native ETH channels with DEPOSIT intent, msg.sender must supply msg.value == deposit amount.
-    function createChannel(ChannelDefinition calldata def, State calldata initState) external payable {
+    function createChannel(ChannelDefinition calldata def, State calldata initState) external payable nonReentrant {
         require(
             initState.intent == StateIntent.DEPOSIT || initState.intent == StateIntent.WITHDRAW
                 || initState.intent == StateIntent.OPERATE,
@@ -587,7 +587,7 @@ contract ChannelHub is ReentrancyGuard {
     }
 
     // NOTE: For native ETH channels, msg.sender must supply msg.value == deposit amount.
-    function depositToChannel(bytes32 channelId, State calldata candidate) public payable {
+    function depositToChannel(bytes32 channelId, State calldata candidate) public payable nonReentrant {
         require(candidate.intent == StateIntent.DEPOSIT, IncorrectStateIntent());
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -602,7 +602,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelDeposited(channelId, candidate);
     }
 
-    function withdrawFromChannel(bytes32 channelId, State calldata candidate) public {
+    function withdrawFromChannel(bytes32 channelId, State calldata candidate) public nonReentrant {
         require(candidate.intent == StateIntent.WITHDRAW, IncorrectStateIntent());
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -617,7 +617,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelWithdrawn(channelId, candidate);
     }
 
-    function checkpointChannel(bytes32 channelId, State calldata candidate) external {
+    function checkpointChannel(bytes32 channelId, State calldata candidate) external nonReentrant {
         require(candidate.intent == StateIntent.OPERATE, IncorrectStateIntent()); // Can only checkpoint operate states
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -637,7 +637,7 @@ contract ChannelHub is ReentrancyGuard {
         State calldata candidate,
         bytes calldata challengerSig,
         ParticipantIndex challengerIdx
-    ) external payable {
+    ) external payable nonReentrant {
         ChannelMeta storage meta = _channels[channelId];
         ChannelDefinition memory def = meta.definition;
         ChannelStatus status = meta.status;
@@ -686,7 +686,7 @@ contract ChannelHub is ReentrancyGuard {
         emit ChannelChallenged(channelId, candidate, challengeExpiry);
     }
 
-    function closeChannel(bytes32 channelId, State calldata candidate) external {
+    function closeChannel(bytes32 channelId, State calldata candidate) external nonReentrant {
         ChannelMeta storage meta = _channels[channelId];
         ChannelDefinition memory def = meta.definition;
         ChannelStatus status = meta.status;
@@ -726,7 +726,11 @@ contract ChannelHub is ReentrancyGuard {
     // ========= Cross-Chain Functions ==========
 
     // NOTE: On non-home chain, user funds are pulled. For native ETH, msg.sender must supply msg.value == deposit amount.
-    function initiateEscrowDeposit(ChannelDefinition calldata def, State calldata candidate) external payable {
+    function initiateEscrowDeposit(ChannelDefinition calldata def, State calldata candidate)
+        external
+        payable
+        nonReentrant
+    {
         require(candidate.intent == StateIntent.INITIATE_ESCROW_DEPOSIT, IncorrectStateIntent());
         _requireValidDefinition(def);
 
@@ -757,6 +761,7 @@ contract ChannelHub is ReentrancyGuard {
 
     function challengeEscrowDeposit(bytes32 escrowId, bytes calldata challengerSig, ParticipantIndex challengerIdx)
         external
+        nonReentrant
     {
         EscrowDepositMeta storage meta = _escrowDeposits[escrowId];
         bytes32 channelId = meta.channelId;
@@ -777,7 +782,10 @@ contract ChannelHub is ReentrancyGuard {
         emit EscrowDepositChallenged(escrowId, meta.initState, effects.newChallengeExpiry);
     }
 
-    function finalizeEscrowDeposit(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
+    function finalizeEscrowDeposit(bytes32 channelId, bytes32 escrowId, State calldata candidate)
+        external
+        nonReentrant
+    {
         if (_isEscrowDepositHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user from channel definition
             require(candidate.intent == StateIntent.FINALIZE_ESCROW_DEPOSIT, IncorrectStateIntent());
@@ -828,7 +836,7 @@ contract ChannelHub is ReentrancyGuard {
         emit EscrowDepositFinalized(escrowId, channelId, candidate);
     }
 
-    function initiateEscrowWithdrawal(ChannelDefinition calldata def, State calldata candidate) external {
+    function initiateEscrowWithdrawal(ChannelDefinition calldata def, State calldata candidate) external nonReentrant {
         require(candidate.intent == StateIntent.INITIATE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
         _requireValidDefinition(def);
 
@@ -858,6 +866,7 @@ contract ChannelHub is ReentrancyGuard {
 
     function challengeEscrowWithdrawal(bytes32 escrowId, bytes calldata challengerSig, ParticipantIndex challengerIdx)
         external
+        nonReentrant
     {
         EscrowWithdrawalMeta storage meta = _escrowWithdrawals[escrowId];
         bytes32 channelId = meta.channelId;
@@ -878,7 +887,10 @@ contract ChannelHub is ReentrancyGuard {
         emit EscrowWithdrawalChallenged(escrowId, meta.initState, effects.newChallengeExpiry);
     }
 
-    function finalizeEscrowWithdrawal(bytes32 channelId, bytes32 escrowId, State calldata candidate) external {
+    function finalizeEscrowWithdrawal(bytes32 channelId, bytes32 escrowId, State calldata candidate)
+        external
+        nonReentrant
+    {
         if (_isEscrowWithdrawalHomeChain(channelId, escrowId)) {
             // HOME CHAIN: Get user from channel definition
             require(candidate.intent == StateIntent.FINALIZE_ESCROW_WITHDRAWAL, IncorrectStateIntent());
@@ -933,7 +945,7 @@ contract ChannelHub is ReentrancyGuard {
         emit EscrowWithdrawalFinalized(escrowId, channelId, candidate);
     }
 
-    function initiateMigration(ChannelDefinition calldata def, State calldata candidate) external {
+    function initiateMigration(ChannelDefinition calldata def, State calldata candidate) external nonReentrant {
         require(candidate.intent == StateIntent.INITIATE_MIGRATION, IncorrectStateIntent());
 
         bytes32 channelId = Utils.getChannelId(def, VERSION);
@@ -968,7 +980,7 @@ contract ChannelHub is ReentrancyGuard {
         }
     }
 
-    function finalizeMigration(bytes32 channelId, State calldata candidate) external {
+    function finalizeMigration(bytes32 channelId, State calldata candidate) external nonReentrant {
         require(candidate.intent == StateIntent.FINALIZE_MIGRATION, IncorrectStateIntent());
 
         ChannelDefinition memory def = _channels[channelId].definition;
@@ -1429,7 +1441,7 @@ contract ChannelHub is ReentrancyGuard {
         }
     }
 
-    function _pullFunds(address from, address token, uint256 amount) internal nonReentrant {
+    function _pullFunds(address from, address token, uint256 amount) internal {
         if (amount == 0) return;
 
         _requireMsgValueForPull(token, amount);
@@ -1441,7 +1453,7 @@ contract ChannelHub is ReentrancyGuard {
 
     /// @dev Reverts if the transfer fails. Used in non-adversarial contexts where atomicity is required
     /// (e.g. voluntary vault withdrawals where the caller controls the destination).
-    function _pushFunds(address to, address token, uint256 amount) internal nonReentrant {
+    function _pushFunds(address to, address token, uint256 amount) internal {
         if (amount == 0) return;
 
         if (token == address(0)) {
@@ -1454,7 +1466,7 @@ contract ChannelHub is ReentrancyGuard {
 
     /// @dev Never reverts. On failure, accumulates funds in `_reclaims[to]` for later recovery via `claimFunds()`.
     /// Used in adversarial contexts (e.g. channel settlement) where a reverting recipient must not block progress.
-    function _nonRevertingPushFunds(address to, address token, uint256 amount) internal nonReentrant {
+    function _nonRevertingPushFunds(address to, address token, uint256 amount) internal {
         if (amount == 0) return;
 
         if (token == address(0)) {

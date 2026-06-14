@@ -2490,3 +2490,698 @@ func TestHandleEscrowDepositsPurged_StoreError_Propagates(t *testing.T) {
 	require.Contains(t, err.Error(), "db error")
 	mockStore.AssertExpectations(t)
 }
+
+// MF3-L19 §E.1 — RegressionDropped for HandleHomeChannelCheckpointed.
+// A lower-version Checkpointed event arriving after a higher-version event must not
+// regress channel.StateVersion, must not flip channel.Status, must not run sig backfill
+// at the older version, and must not trigger the wasChallenged/wasVoid balance refresh.
+func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 10, // N+M
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // N < N+M
+		UserSig:      "0xstaleusersig",
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	// Row must be untouched: version, status, and no side effects.
+	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress")
+	require.Equal(t, core.ChannelStatusOpen, channel.Status, "Status must be unchanged")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.2 — scenario-3 regression test (the critical one).
+// A lower-version Checkpointed must not silently clear an active challenge by entering
+// the wasChallenged branch and flipping Status back to Open / clearing ChallengeExpiresAt.
+func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       10, // N+M after a higher-version Challenged
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // N < N+M (stale Deposited/Checkpointed)
+		UserSig:      "0xstaleusersig",
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	// Critical assertions: challenge state preserved.
+	require.Equal(t, core.ChannelStatusChallenged, channel.Status, "Challenged status must be preserved")
+	require.NotNil(t, channel.ChallengeExpiresAt, "ChallengeExpiresAt must not be cleared by stale Checkpointed")
+	require.Equal(t, expiryTime.Unix(), channel.ChallengeExpiresAt.Unix(), "ChallengeExpiresAt must be unchanged")
+	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.3 — EqualVersionAccepted. The guard is `<`, not `<=`, so the legitimate
+// indexer-replay/reorg case where the same (channelID, stateVersion) is re-delivered
+// must still run the sig-backfill and balance-refresh idempotently.
+func TestHandleHomeChannelCheckpointed_EqualVersionAccepted(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 5,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // equal to current
+		UserSig:      "0xusersig",
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == 5
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xusersig", "").Return(nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+	// Not Challenged nor Void → backfill of head node sig is skipped.
+	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
+}
+
+// MF3-L19 §E.4 — HigherVersionAccepted. Sanity that the monotonic forward flow still
+// works after the guard is added: a higher-version Checkpointed against a Challenged
+// channel still clears the challenge and bumps the version.
+func TestHandleHomeChannelCheckpointed_HigherVersionAccepted(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       3,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // strictly greater
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == 5 &&
+			ch.ChallengeExpiresAt == nil
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
+	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
+	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	mockStore.AssertExpectations(t)
+}
+
+// MF3-L19 §E.5 — RegressionDropped for HandleHomeChannelClosed.
+// A lower-version Closed event must not regress StateVersion, must not flip Status to
+// Closed, and must not issue a challenge rescue. See the plan's §A.2 terminal-status
+// note: without §B chain-state refresh this leaves the Node row divergent from chain;
+// this test pins the §A guard behaviour only.
+func TestHandleHomeChannelClosed_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeHome,
+		Status:       core.ChannelStatusChallenged,
+		StateVersion: 10, // N+M
+	}
+
+	event := &core.HomeChannelClosedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // N < N+M
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+
+	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress")
+	require.Equal(t, core.ChannelStatusChallenged, channel.Status, "Status must not be flipped to Closed by stale event")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	// Critically, no rescue issuance — SumNetTransitionAmountAfterVersion / StoreUserState
+	// / RecordTransaction must all be skipped.
+	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "GetLastUserState", mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.6 — RegressionDropped for HandleEscrowDepositInitiated.
+// A lower-version EscrowDepositInitiated must not regress StateVersion, must not flip
+// Status, and must not call ScheduleInitiateEscrowDeposit.
+func TestHandleEscrowDepositInitiated_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xEscrowChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 10,
+	}
+
+	event := &core.EscrowDepositInitiatedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+	err := service.HandleEscrowDepositInitiated(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), channel.StateVersion)
+	require.Equal(t, core.ChannelStatusOpen, channel.Status)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "GetStateByChannelIDAndVersion", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "ScheduleInitiateEscrowDeposit", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.7 — RegressionDropped for HandleEscrowDepositFinalized.
+func TestHandleEscrowDepositFinalized_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xEscrowChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeEscrow,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       10,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.EscrowDepositFinalizedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+	err := service.HandleEscrowDepositFinalized(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), channel.StateVersion)
+	require.Equal(t, core.ChannelStatusChallenged, channel.Status, "Status must not flip to Closed via stale Finalized")
+	require.NotNil(t, channel.ChallengeExpiresAt, "Stale Finalized must not clear ChallengeExpiresAt")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.8 — RegressionDropped for HandleEscrowWithdrawalInitiated.
+func TestHandleEscrowWithdrawalInitiated_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xEscrowChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+
+	channel := &core.Channel{
+		ChannelID:    channelID,
+		UserWallet:   userWallet,
+		Asset:        "usdc",
+		Type:         core.ChannelTypeEscrow,
+		Status:       core.ChannelStatusOpen,
+		StateVersion: 10,
+	}
+
+	event := &core.EscrowWithdrawalInitiatedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+	err := service.HandleEscrowWithdrawalInitiated(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), channel.StateVersion)
+	require.Equal(t, core.ChannelStatusOpen, channel.Status)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.9 — RegressionDropped for HandleEscrowWithdrawalFinalized.
+func TestHandleEscrowWithdrawalFinalized_RegressionDropped(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service := &EventHandlerService{}
+
+	channelID := "0xEscrowChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeEscrow,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       10,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.EscrowWithdrawalFinalizedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5,
+	}
+
+	mockStore.On("GetChannelByID", channelID).Return(channel, nil)
+
+	err := service.HandleEscrowWithdrawalFinalized(ctx, mockStore, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), channel.StateVersion)
+	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
+	require.NotNil(t, channel.ChallengeExpiresAt)
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// MF3-L19 §E.10 — OnHomeEscrowPath.
+// The reactor's handleEscrowDepositInitiatedOnHome / *FinalizedOnHome / *WithdrawalInitiatedOnHome /
+// *WithdrawalFinalizedOnHome funnel into HandleHomeChannelCheckpointed (see
+// channel_hub_reactor.go:506-559). The §A.1 guard therefore covers all four *OnHome paths
+// automatically — there is no separate handler call path to exercise at the
+// EventHandlerService layer. Writing a direct unit test against the reactor would require
+// reactor fixtures (channelHubFilterer, types.Log) that don't exist for this test target,
+// so we skip with documentation per the spec's E.10 special note.
+func TestHandleHomeChannelCheckpointed_OnHomeEscrowPath(t *testing.T) {
+	t.Skip("reactor-level integration test; the *OnHome paths funnel into " +
+		"HandleHomeChannelCheckpointed (channel_hub_reactor.go:506-559) which is " +
+		"already covered by TestHandleHomeChannelCheckpointed_RegressionDropped and " +
+		"TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge. A " +
+		"reactor-level test would require channelHubFilterer + types.Log fixtures " +
+		"that aren't in scope here. See MF3-L19 plan §A.7 and the §E.10 special note.")
+}
+
+// MF3-L19 §E.13 — RescueIdempotentOnEqualVersionReplay.
+// Fire HandleHomeChannelClosed twice at the same version against a Challenged channel.
+// First call: wasChallenged=true → status flips to Closed and issueChallengeRescue
+// records exactly one rescue state + transaction. Second call (equal-version replay,
+// admitted by the `<` guard): wasChallenged=false because Status is now Closed →
+// rescue branch must NOT be re-entered. Total rescue count remains 1.
+//
+// This pins the invariant that the rescue idempotency is enforced by the channel's
+// status transition (Challenged → Closed), not by the version guard. A future refactor
+// moving the wasChallenged snapshot or persisting Challenged across handler invocations
+// would break this and should fail this test.
+func TestHandleHomeChannelClosed_RescueIdempotentOnEqualVersionReplay(t *testing.T) {
+	mockStore := new(MockStore)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	asset := "USDC"
+	tokenAddress := "0xtoken"
+	blockchainID := uint64(1)
+	closureVersion := uint64(7)
+	rescueAmount := decimal.NewFromInt(50)
+	homeChannelIDPtr := channelID
+	expiryTime := time.Now().Add(time.Hour)
+
+	// Start Challenged at version=closureVersion-2 < closureVersion (legitimate close
+	// at higher version). The lock returns the same pointer twice; the handler mutates
+	// channel.Status to Closed after the first call, so the second call observes Closed.
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              asset,
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       closureVersion - 2,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	prevState := &core.State{
+		ID:            core.GetStateID(userWallet, asset, 1, 9),
+		Asset:         asset,
+		UserWallet:    userWallet,
+		Epoch:         1,
+		Version:       9,
+		HomeChannelID: &homeChannelIDPtr,
+		HomeLedger: core.Ledger{
+			TokenAddress: tokenAddress,
+			BlockchainID: blockchainID,
+			UserBalance:  decimal.NewFromInt(50),
+			UserNetFlow:  decimal.NewFromInt(50),
+			NodeBalance:  decimal.Zero,
+			NodeNetFlow:  decimal.Zero,
+		},
+	}
+
+	event := &core.HomeChannelClosedEvent{
+		ChannelID:    channelID,
+		StateVersion: closureVersion,
+	}
+
+	// LockUserStateForHomeChannel is called twice (once per handler invocation) and returns
+	// the same mutated channel pointer both times.
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil).Times(2)
+	// UpdateChannel is called twice (the guard admits equal versions, so the second call
+	// also writes the row idempotently).
+	mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil).Times(2)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil).Times(2)
+
+	// Rescue side effects: must be called exactly ONCE across both handler invocations.
+	mockStore.On("SumNetTransitionAmountAfterVersion", channelID, closureVersion).Return(rescueAmount, nil).Once()
+	mockStore.On("GetLastUserState", userWallet, asset, false).Return(prevState, nil).Once()
+	mockStore.On("StoreUserState", mock.Anything, "").Return(nil).Once()
+	mockStore.On("RecordTransaction", mock.Anything, "").Return(nil).Once()
+
+	// First call: wasChallenged=true → rescue fires.
+	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	require.NoError(t, err)
+	require.Equal(t, core.ChannelStatusClosed, channel.Status, "Status must be Closed after first call")
+
+	// Second call: equal-version replay. Status is now Closed → wasChallenged=false →
+	// rescue branch must not re-enter. The `.Once()` constraints on the rescue mocks
+	// will fail if any are called a second time.
+	err = service.HandleHomeChannelClosed(ctx, mockStore, event)
+	require.NoError(t, err)
+	require.Equal(t, core.ChannelStatusClosed, channel.Status, "Status remains Closed after replay")
+
+	mockStore.AssertExpectations(t)
+	// Explicit double-check: AssertNumberOfCalls catches any drift even if mock matching
+	// somehow accepted an extra call against a more permissive expectation.
+	mockStore.AssertNumberOfCalls(t, "StoreUserState", 1)
+	mockStore.AssertNumberOfCalls(t, "RecordTransaction", 1)
+	mockStore.AssertNumberOfCalls(t, "SumNetTransitionAmountAfterVersion", 1)
+}
+
+// MF3-L19 §E.14 — EqualVersionReplay_NoSideEffects.
+// For every guarded handler other than HandleHomeChannelClosed (covered by §E.13), an
+// equal-version replay must be safe: no double-credit, no second balance-refresh side
+// effect, no duplicate RecordTransaction. The handler-level side effects are idempotent
+// because UpdateStateSigsIfMissing / RefreshUserEnforcedBalance / UpdateChannel are all
+// idempotent on the same input.
+//
+// CAVEAT per §C.1: HandleEscrowDepositInitiated calls ScheduleInitiateEscrowDeposit,
+// which is NOT idempotent — it unconditionally inserts a new blockchain_actions row. The
+// sub-test EscrowDepositInitiated_DuplicateScheduleOnReplay explicitly asserts the
+// double-call as a regression target for the §F.6 follow-up scheduler-dedup work.
+func TestHandleXxx_EqualVersionReplay_NoSideEffects(t *testing.T) {
+	t.Run("HomeChannelCheckpointed", func(t *testing.T) {
+		mockStore := new(MockStore)
+		ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+		service, _ := newTestEventHandlerService(t)
+
+		channelID := "0xHomeChannel123"
+		userWallet := "0x1234567890123456789012345678901234567890"
+
+		channel := &core.Channel{
+			ChannelID:    channelID,
+			UserWallet:   userWallet,
+			Asset:        "usdc",
+			Type:         core.ChannelTypeHome,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 5,
+		}
+
+		event := &core.HomeChannelCheckpointedEvent{
+			ChannelID:    channelID,
+			StateVersion: 5,
+			UserSig:      "0xusersig",
+		}
+
+		// Both calls hit the same mock; idempotent UpdateStateSigsIfMissing is the
+		// guarantor — but we still need to make sure the wasChallenged/wasVoid branch
+		// isn't re-armed on replay. Status stays Open across both calls, so the
+		// backfillOffChainHeadNodeSig path is never entered.
+		mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil).Times(2)
+		mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+		mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil).Times(2)
+		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xusersig", "").Return(nil).Times(2)
+
+		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, event))
+		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, event))
+
+		mockStore.AssertExpectations(t)
+		// No head-sig backfill on the Open→Open path, even on replay.
+		mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
+		mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
+	})
+
+	t.Run("EscrowDepositFinalized", func(t *testing.T) {
+		mockStore := new(MockStore)
+		ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+		service := &EventHandlerService{}
+
+		channelID := "0xEscrowChannel123"
+		channel := &core.Channel{
+			ChannelID:    channelID,
+			UserWallet:   "0x1234567890123456789012345678901234567890",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeEscrow,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 5,
+		}
+
+		event := &core.EscrowDepositFinalizedEvent{
+			ChannelID:    channelID,
+			StateVersion: 5,
+		}
+
+		mockStore.On("GetChannelByID", channelID).Return(channel, nil).Times(2)
+		mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil).Times(2)
+
+		require.NoError(t, service.HandleEscrowDepositFinalized(ctx, mockStore, event))
+		require.NoError(t, service.HandleEscrowDepositFinalized(ctx, mockStore, event))
+
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("EscrowWithdrawalInitiated", func(t *testing.T) {
+		mockStore := new(MockStore)
+		ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+		service := &EventHandlerService{}
+
+		channelID := "0xEscrowChannel123"
+		channel := &core.Channel{
+			ChannelID:    channelID,
+			UserWallet:   "0x1234567890123456789012345678901234567890",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeEscrow,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 5,
+		}
+
+		event := &core.EscrowWithdrawalInitiatedEvent{
+			ChannelID:    channelID,
+			StateVersion: 5,
+		}
+
+		mockStore.On("GetChannelByID", channelID).Return(channel, nil).Times(2)
+		mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil).Times(2)
+
+		require.NoError(t, service.HandleEscrowWithdrawalInitiated(ctx, mockStore, event))
+		require.NoError(t, service.HandleEscrowWithdrawalInitiated(ctx, mockStore, event))
+
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("EscrowWithdrawalFinalized", func(t *testing.T) {
+		mockStore := new(MockStore)
+		ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+		service := &EventHandlerService{}
+
+		channelID := "0xEscrowChannel123"
+		channel := &core.Channel{
+			ChannelID:    channelID,
+			UserWallet:   "0x1234567890123456789012345678901234567890",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeEscrow,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 5,
+		}
+
+		event := &core.EscrowWithdrawalFinalizedEvent{
+			ChannelID:    channelID,
+			StateVersion: 5,
+		}
+
+		mockStore.On("GetChannelByID", channelID).Return(channel, nil).Times(2)
+		mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil).Times(2)
+
+		require.NoError(t, service.HandleEscrowWithdrawalFinalized(ctx, mockStore, event))
+		require.NoError(t, service.HandleEscrowWithdrawalFinalized(ctx, mockStore, event))
+
+		mockStore.AssertExpectations(t)
+	})
+
+	// §C.1 caveat: ScheduleInitiateEscrowDeposit is NOT idempotent on same-version
+	// replay — scheduleStateEnforcement unconditionally INSERTs a new blockchain_actions
+	// row, so equal-version replay enqueues a duplicate action. This sub-test pins the
+	// CURRENT (buggy) behaviour as a regression target for §F.6's scheduler-dedup follow-up.
+	// When that follow-up lands, this assertion should be flipped from .Times(2) to .Once().
+	t.Run("EscrowDepositInitiated_DuplicateScheduleOnReplay", func(t *testing.T) {
+		mockStore := new(MockStore)
+		ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+		service := &EventHandlerService{}
+
+		channelID := "0xEscrowChannel123"
+		channel := &core.Channel{
+			ChannelID:    channelID,
+			UserWallet:   "0x1234567890123456789012345678901234567890",
+			Asset:        "usdc",
+			Type:         core.ChannelTypeEscrow,
+			Status:       core.ChannelStatusOpen,
+			StateVersion: 5,
+		}
+
+		state := &core.State{
+			ID:      "state123",
+			Version: 5,
+			HomeLedger: core.Ledger{
+				BlockchainID: 1,
+			},
+		}
+
+		event := &core.EscrowDepositInitiatedEvent{
+			ChannelID:    channelID,
+			StateVersion: 5,
+		}
+
+		mockStore.On("GetChannelByID", channelID).Return(channel, nil).Times(2)
+		mockStore.On("UpdateChannel", mock.Anything).Return(nil).Times(2)
+		mockStore.On("GetStateByChannelIDAndVersion", channelID, uint64(5)).Return(state, nil).Times(2)
+		// CAVEAT: schedule is called twice — this is the §C.1 / §F.6 latent issue
+		// (scheduler-dedup gap). The `<` guard admits the equal-version replay, and
+		// scheduleStateEnforcement does not dedup on (state_id, action_type). Flagged
+		// for follow-up; assert the duplicate so the regression target is explicit.
+		mockStore.On("ScheduleInitiateEscrowDeposit", "state123", uint64(1)).Return(nil).Times(2)
+		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil).Times(2)
+
+		require.NoError(t, service.HandleEscrowDepositInitiated(ctx, mockStore, event))
+		require.NoError(t, service.HandleEscrowDepositInitiated(ctx, mockStore, event))
+
+		mockStore.AssertExpectations(t)
+		mockStore.AssertNumberOfCalls(t, "ScheduleInitiateEscrowDeposit", 2)
+	})
+}

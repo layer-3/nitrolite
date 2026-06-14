@@ -30,6 +30,39 @@ func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker c
 	}
 }
 
+// guardEventVersionMonotonic returns true (drop=true) when the incoming event's
+// StateVersion is strictly less than the row's current StateVersion. The caller
+// must `return nil` immediately when drop is true; the helper logs a structured
+// warning identifying which event intent arrived stale.
+//
+// Intent is a short stable string describing the on-chain transition the dropped
+// event would have applied (e.g. "checkpointed", "closed", "escrow_deposit_initiated").
+// It surfaces in the warn log so operators can correlate drops with reentrancy
+// scenarios in MF3-L19 / nitronode-event-monotonicity.md.
+//
+// Once §B lands, this helper is the single chokepoint where the on-drop
+// chain-state refresh will be invoked: every dropped event triggers exactly one
+// RefreshChannelFromChain call before the function returns drop=true, so the
+// refresh policy stays consistent across all six handlers.
+func guardEventVersionMonotonic(
+	ctx context.Context,
+	logger log.Logger,
+	chanID string,
+	intent string,
+	eventVersion uint64,
+	currentVersion uint64,
+) (drop bool) {
+	if eventVersion >= currentVersion {
+		return false
+	}
+	logger.Warn("event state version is less than current channel state version, ignoring",
+		"channelId", chanID,
+		"intent", intent,
+		"currentStateVersion", currentVersion,
+		"eventStateVersion", eventVersion)
+	return true
+}
+
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when the node's
 // on-chain liquidity changes. It records the new node liquidity for the (blockchain, asset)
 // pair via SetNodeBalance; this is observability data only and does not affect user staking
@@ -148,6 +181,16 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	}
 	if channel.Type != core.ChannelTypeHome {
 		logger.Warn("channel type mismatch during HomeChannelCheckpointed event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
+		return nil
+	}
+
+	// Per protocol the checkpointed version cannot be lower than the last known on-chain
+	// version. This branch is reachable when contract reentrancy emits an inner
+	// higher-version event before the outer ChannelCheckpointed (see MF3-L19 /
+	// nitronode-event-monotonicity.md scenarios 1–3). Drop the event so we do not
+	// regress channel.StateVersion and, critically, so the wasChallenged branch below
+	// does not flip a live challenge back to Open based on a stale version.
+	if guardEventVersionMonotonic(ctx, logger, chanID, "checkpointed", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 
@@ -387,6 +430,11 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
+	// Drop stale Closed events that would regress state_version (MF3-L19).
+	if guardEventVersionMonotonic(ctx, logger, chanID, "closed", event.StateVersion, channel.StateVersion) {
+		return nil
+	}
+
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
 
 	channel.StateVersion = event.StateVersion
@@ -530,6 +578,10 @@ func (s *EventHandlerService) HandleEscrowDepositInitiated(ctx context.Context, 
 	}
 	if channel.Type != core.ChannelTypeEscrow {
 		logger.Warn("channel type mismatch during EscrowDepositInitiated event", "channelId", chanID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+		return nil
+	}
+
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_deposit_initiated", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 
@@ -701,6 +753,10 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 		return nil
 	}
 
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_deposit_finalized", event.StateVersion, channel.StateVersion) {
+		return nil
+	}
+
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
 	// Channel is terminal; any pending challenge deadline is no longer meaningful.
@@ -772,6 +828,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalInitiated(ctx context.Contex
 	}
 	if channel.Type != core.ChannelTypeEscrow {
 		logger.Warn("channel type mismatch during EscrowWithdrawalInitiated event", "channelId", chanID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+		return nil
+	}
+
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_withdrawal_initiated", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 
@@ -866,6 +926,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 	}
 	if channel.Type != core.ChannelTypeEscrow {
 		logger.Warn("channel type mismatch during EscrowWithdrawalFinalized event", "channelId", chanID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+		return nil
+	}
+
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_withdrawal_finalized", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 

@@ -15,7 +15,7 @@ This risk is meaningful on any chain where head-level reorgs occur naturally or 
 A **per-chain confirmation window** is introduced between raw event delivery and handler invocation. When the listener observes any event on chain C:
 
 - It does **not** invoke the handler immediately.
-- It waits for `confirmation_delay_sec` seconds (configured per chain in `blockchains.yaml`).
+- It waits for `confirmation_delay_secs` seconds (configured per chain in `blockchains.yaml`).
 - If no reorg of the event's block occurs during that window, the handler is invoked normally.
 - If the event's block is reorged out (`removed: true` log arrives), the pending invocation is cancelled with no side effects.
 - If the reorged transaction is re-included (the same event appears again), the confirmation window restarts from zero.
@@ -24,39 +24,39 @@ The delay applies uniformly to **all** events, not only deposit-class ones. Sele
 
 ### 2.1 Residual risk and the finality trade-off
 
-The confirmation window eliminates the reorg risk only when `confirmation_delay_sec` is set to or above the chain's cryptoeconomic finality time. For the representative values in §3:
+The confirmation window eliminates the reorg risk only when `confirmation_delay_secs` is set to or above the chain's cryptoeconomic finality time. For the representative values in §3:
 
 - **Ethereum at 780s (~13 min):** matches Casper FFG hard finality. Reorging past this point requires ≥1/3 of total stake to be slashed. No residual risk.
 - **Polygon at 10s, BNB at 5s:** exceeds the empirical reorg tail depth. Residual risk is negligible but not cryptoeconomically eliminated.
 - **Ethereum at 36s (3 blocks, "quick" finality):** P(reorg depth ≥ 4) ≈ 10⁻⁵–10⁻⁶ per event. Residual risk is real.
 
-When `confirmation_delay_sec` is set *below* the chain's finality time, **this specification acknowledges a residual risk**: it is possible — with low but non-zero probability — that an event passes the gate, the reactor commits it to the database, and the block containing that event is subsequently reorged out by a reorg deeper than the gate window.
+When `confirmation_delay_secs` is set *below* the chain's finality time, **this specification acknowledges a residual risk**: it is possible — with low but non-zero probability — that an event passes the gate, the reactor commits it to the database, and the block containing that event is subsequently reorged out by a reorg deeper than the gate window.
 
 When this occurs, the committed state (balance credit, channel open) has no corresponding on-chain event in the canonical chain. If the transaction is re-mined in the new canonical block, the reactor's idempotency guard (§6.6) handles the re-delivery cleanly. If it is not re-mined, the DB retains stale state that can only be partially corrected on the next node restart via the reconciliation walk (§4.4). There is no automated rollback; the exposure scales with the deposit value and is bounded by the probability of deep reorgs on the target chain.
 
-Operators who cannot accept this residual exposure should set `confirmation_delay_sec` to the chain's hard-finality time (Ethereum: 780s; Polygon: `finalized` tag resolves to ~5s; L2s: `finalized` maps to L1 Casper FFG at ~13 min). The gate's detection mechanisms (§6.5, §6.6) provide observability when the residual-risk scenario occurs.
+Operators who cannot accept this residual exposure should set `confirmation_delay_secs` to the chain's hard-finality time (Ethereum: 780s; Polygon: `finalized` tag resolves to ~5s; L2s: `finalized` maps to L1 Casper FFG at ~13 min). The gate's detection mechanisms (§6.5, §6.6) provide observability when the residual-risk scenario occurs.
 
 ---
 
 ## 3. Configuration
 
-A new `confirmation_delay_sec` field is added per chain in `blockchains.yaml`. Representative values:
+A new `confirmation_delay_secs` field is added per chain in `blockchains.yaml`. Representative values:
 
 ```yaml
 chains:
   - id: 1          # Ethereum mainnet
-    confirmation_delay_sec: 780   # ~13 min — Casper FFG hard finality
+    confirmation_delay_secs: 780   # ~13 min — Casper FFG hard finality
   - id: 137        # Polygon PoS (post-Heimdall v2 / Rio)
-    confirmation_delay_sec: 10    # 5 blocks × ~2s; empirical reorg tail is sub-10s
+    confirmation_delay_secs: 10    # 5 blocks × ~2s; empirical reorg tail is sub-10s
   - id: 56         # BNB Smart Chain
-    confirmation_delay_sec: 5     # fast-finality, ~3-4 blocks
+    confirmation_delay_secs: 5     # fast-finality, ~3-4 blocks
   - id: 42161      # Arbitrum One
-    confirmation_delay_sec: 120   # L2 `safe` tag (L1-posted batch), ~1-2 min
+    confirmation_delay_secs: 120   # L2 `safe` tag (L1-posted batch), ~1-2 min
   - id: 8453       # Base
-    confirmation_delay_sec: 120   # same L2 `safe` semantics
+    confirmation_delay_secs: 120   # same L2 `safe` semantics
 ```
 
-`confirmation_delay_sec: 0` disables the gate — events are processed immediately. Appropriate for BFT single-slot chains where the node operator accepts the negligible residual risk, or for chains using a finality-tag subscription rather than a block-count gate.
+`confirmation_delay_secs: 0` disables the gate — events are processed immediately. Appropriate for BFT single-slot chains where the node operator accepts the negligible residual risk, or for chains using a finality-tag subscription rather than a block-count gate.
 
 ---
 
@@ -67,7 +67,7 @@ chains:
 When a log `E` arrives (without `Removed: true`):
 
 1. Record the event in the live-entry map under `(txHash, logIndex)` with its `blockHash` as the tombstone discriminator, and append it to the FIFO drain queue with its block timestamp as `arrivedAt`.
-2. The gate's drain goroutine (single shared timer per gate; see §6.3) treats the entry as eligible once `arrivedAt + confirmation_delay_sec` has elapsed.
+2. The gate's drain goroutine (single shared timer per gate; see §6.3) treats the entry as eligible once `arrivedAt + confirmation_delay_secs` has elapsed.
 3. When the entry matures, invoke the event handler.
 
 ### 4.2 Reorg path
@@ -130,11 +130,11 @@ On startup, for each chain, after the `block_hash` migration has been applied:
 
 4. Set the scan start to `commonAncestorBlockNum`. Events between `commonAncestorBlockNum` and `latestBlockNum` that came from the reorged fork are still present in the DB. The reactor has no rollback mechanism for those rows — the re-scan below will re-apply canonical events over them where the transaction was re-mined (idempotent), and leave the orphaned DB state in place where the transaction was not re-mined (residual risk; see §2.1). State-setting operations (`UpdateChannel`, `RefreshUserEnforcedBalance`) will overwrite with canonical values for re-mined events; rows from dropped transactions remain as stale data with no automated cleanup.
 5. Start the event scan from `commonAncestorBlockNum` (or genesis if step 1 found no rows). Replayed events are routed **per-event by block age**:
-   - Events whose block timestamp is **older than `confirmation_delay_sec`** are routed directly to the reactor, bypassing the gate. Their block is past the reorg window — `eth_getLogs` returned them as canonical, and any reorg that could displace them would exceed the configured finality bound. There is no incremental reorg risk to guard against, and routing them through the gate would only add latency.
-   - Events whose block timestamp is **younger than `confirmation_delay_sec`** are routed through the gate, the same path live events take. The common-ancestor walk only confirms the *starting* block is canonical; replay can fetch logs from blocks all the way up to the current chain tip, some of which are still inside the reorg window. Forwarding those directly to the reactor would re-introduce the very double-spend window the gate was built to close.
+   - Events whose block timestamp is **older than `confirmation_delay_secs`** are routed directly to the reactor, bypassing the gate. Their block is past the reorg window — `eth_getLogs` returned them as canonical, and any reorg that could displace them would exceed the configured finality bound. There is no incremental reorg risk to guard against, and routing them through the gate would only add latency.
+   - Events whose block timestamp is **younger than `confirmation_delay_secs`** are routed through the gate, the same path live events take. The common-ancestor walk only confirms the *starting* block is canonical; replay can fetch logs from blocks all the way up to the current chain tip, some of which are still inside the reorg window. Forwarding those directly to the reactor would re-introduce the very double-spend window the gate was built to close.
 
    The `Listener` accepts two handlers (`eventHandler` for live events and recent historical events, `historicalEventHandler` for mature historical events) and makes the per-event routing decision from `eventLog.BlockTimestamp`. To guarantee that field is populated regardless of the RPC provider's behavior, the listener calls `ensureBlockTimestamp` once per event, which uses `eventLog.BlockTimestamp` when present and falls back to `HeaderByHash` otherwise (at most one fetch per block regardless of event count).
-   When `confirmation_delay_sec` is `0` the gate is disabled and every historical event is routed to `historicalEventHandler`. On an `ensureBlockTimestamp` failure the Listener falls back to `eventHandler` (the gate) — the conservative choice that preserves the reorg-protection invariant at the cost of a small delay.
+   When `confirmation_delay_secs` is `0` the gate is disabled and every historical event is routed to `historicalEventHandler`. On an `ensureBlockTimestamp` failure the Listener falls back to `eventHandler` (the gate) — the conservative choice that preserves the reorg-protection invariant at the cost of a small delay.
 6. The reactor is idempotent for replayed events: `HandleHomeChannelCreated` has an explicit early-return guard when the channel is already open; `HandleHomeChannelCheckpointed` and `RefreshUserEnforcedBalance` use set-semantics (not accumulation) and recompute from the latest DB state. Before opening a transaction, `HandleEvent` calls `IsContractEventProcessed`; if the event is already committed, it returns `nil` immediately with no DB transaction opened. If `IsContractEventProcessed` returns an error, `HandleEvent` returns the wrapped error; the listener unsubscribes and the process restarts (per the lifecycle closure in §6.8), re-fetching the same range via the DB cursor so the pre-check retries. For events that pass the pre-check, `StoreContractEvent` is called last inside the DB transaction and enforces a unique constraint on `(transaction_hash, log_index, blockchain_id)` as a final backstop.
 7. Historical log queries (`eth_getLogs`) return only canonical chain events — there are no `Removed: true` signals during replay, and replay does not flow through the gate (step 5). Removal signals from the live WebSocket subscription that arrive during the replay phase are buffered in the listener's `currentCh` and reach the gate only after the historical replay phase completes; if they cancel a re-mined event that has already been forwarded by the live path, the post-gate reorg detection in §6.5 logs them.
 8. When `confirmation_delay_secs == 0`, the listener drops `Removed:true` live logs at the Phase 2 boundary because there is no downstream gate to consume them; the reactor never receives `Removed:true` logs in either mode.
@@ -178,7 +178,7 @@ if confirmationDelay > 0 {
 l := evm.NewListener(..., liveHandler, reactor.HandleEvent, ...)
 ```
 
-The constructor returns an error for `delay <= 0`; the wiring layer is responsible for skipping gate construction when the operator configured `confirmation_delay_sec: 0` and routing live events straight to the reactor.
+The constructor returns an error for `delay <= 0`; the wiring layer is responsible for skipping gate construction when the operator configured `confirmation_delay_secs: 0` and routing live events straight to the reactor.
 
 The reactor itself does not change. All the listener's existing logic — subscription management, cursor tracking, reconnection, historical replay — is unaffected.
 
@@ -306,7 +306,7 @@ Files to update:
 
 - `pkg/rpc/types.go` — add `ConfirmationDelaySecs uint64` to `BlockchainInfoV1`.
 - `nitronode/api/node_v1/utils.go` — populate the new field in `mapBlockchainV1` from the chain's loaded config.
-- `pkg/core/types.go` (or wherever `core.Blockchain` is defined) — add `ConfirmationDelaySec uint64` so the value flows from `blockchains.yaml` through config loading into the API handler.
+- `pkg/core/types.go` (or wherever `core.Blockchain` is defined) — add `ConfirmationDelaySecs uint64` so the value flows from `blockchains.yaml` through config loading into the API handler.
 
 No new endpoint is needed. The field appears alongside existing per-chain fields (contract addresses, asset list, block time) and is read-only from the client's perspective.
 

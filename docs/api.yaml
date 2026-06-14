@@ -270,6 +270,9 @@ types:
         - name: contract_address
           type: string
           description: Address of the main contract on this blockchain
+        - name: confirmation_delay_secs
+          type: integer
+          description: Per-chain reorg-protection window in seconds; events are buffered for this duration before being committed. 0 disables the gate. See nitronode/docs/reorg-fix.md.
 
   - balance_entry:
       description: Balance for a specific asset

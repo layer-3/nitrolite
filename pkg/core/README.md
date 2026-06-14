@@ -52,7 +52,15 @@ The `Client` interface abstracts the communication with the `ChannelsHub` smart 
 
 ### Listener Interface
 
-The `Listener` allows applications to react to on-chain state changes by registering handlers for events like `HomeChannelCreatedEvent` or `EscrowDepositFinalizedEvent`.
+The `Listener` exposes events via a **two-handler model**. A `liveHandler` receives live events plus any historical events still within the reorg window, while a `historicalEventHandler` receives mature historical events past the configured `confirmationDelay`. Per-event routing is decided by the listener itself: it compares `eventLog.BlockTimestamp` against `confirmationDelay` to choose which handler an event flows into. This makes the listener delay-aware rather than pushing that decision down to consumers.
+
+The typical `liveHandler` is the **`ConfirmationGate`**, which implements the reorg-protection window. The gate buffers each event for `confirmation_delay_secs` before forwarding it to the reactor; if the event's block is reorged out within that window, the gate silently drops it instead of committing it downstream. With the gate in place, the reactor only ever sees events whose blocks have survived the configured confirmation window.
+
+To make this work, the listener owns timestamp population. **`ensureBlockTimestamp`** guarantees `BlockTimestamp` is set on every non-removed event before it is forwarded: it uses `eventLog.BlockTimestamp` directly when present, and otherwise falls back to a cached `HeaderByHash` lookup. The gate relies on this to compute each event's `arrivedAt` correctly. **`Removed: true`** logs are handled exclusively at the listener boundary: in the live (Phase 2) path with a gate, removed logs are forwarded so the gate can cancel a pending timer; with no gate configured (`confirmation_delay_secs == 0`), the listener drops removed logs at Phase 2 and the reactor never sees them. Historical (Phase 1) replays use `eth_getLogs`, which never emits removals, so that path is simpler by construction.
+
+On startup, the listener reconciles against possible reorgs that happened while the node was down. **`findCommonAncestor`** walks stored block hashes backward to locate a still-canonical resume point. If every stored block has been reorged out, it returns the orphaned-latest height so `eth_getLogs` re-fetches canonical replacements from that range; the orphan hash itself is discarded — only the height matters because `eth_getLogs` is a canonical-chain range query.
+
+See [`nitronode/docs/reorg-fix.md`](../../nitronode/docs/reorg-fix.md) for the full design.
 
 ### State Advancer
 

@@ -138,10 +138,11 @@ func TestFindCommonAncestor_NotFoundTreatedAsReorg(t *testing.T) {
 	assert.Equal(t, uint64(190), result)
 }
 
-// TestFindCommonAncestor_WalkToGenesis verifies that when all stored blocks have been
-// reorged out (canonical hashes differ at every stored height), findCommonAncestor returns
-// 0 (genesis fallback).
-func TestFindCommonAncestor_WalkToGenesis(t *testing.T) {
+// TestFindCommonAncestor_AllStoredReorged_ResumesFromOrphanedLatest verifies that when all
+// stored blocks have been reorged out (canonical hashes differ at every stored height) and
+// no older stored row exists, findCommonAncestor returns the original latestBlockNum so the
+// caller can replay canonical logs from that height via eth_getLogs.
+func TestFindCommonAncestor_AllStoredReorged_ResumesFromOrphanedLatest(t *testing.T) {
 	t.Parallel()
 
 	client := new(MockEVMClient)
@@ -163,7 +164,9 @@ func TestFindCommonAncestor_WalkToGenesis(t *testing.T) {
 
 	result, err := findCommonAncestor(context.Background(), client, getter, testContract, testBlockchainID, newTestLogger())
 	require.NoError(t, err)
-	assert.Equal(t, uint64(0), result)
+	// Returns the original latestBlockNum (300), not 0: the caller uses eth_getLogs from
+	// that height to re-fetch canonical replacement logs.
+	assert.Equal(t, uint64(300), result)
 }
 
 // TestFindCommonAncestor_PreMigrationLatestRow verifies that when the latest stored row has

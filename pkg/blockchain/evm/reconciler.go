@@ -16,8 +16,9 @@ import (
 // finds a stored hash that matches the canonical chain's hash at that height,
 // then returns that block number as the safe replay start point.
 //
-// Returns 0 when no stored events exist or when every stored block has been
-// reorged out — in both cases the caller should replay from genesis/start-block.
+// Returns 0 only when no stored events exist (empty store). When every stored
+// block has been reorged out but a latest row exists, returns that row's block
+// number so the caller can replay canonical logs from that height via eth_getLogs.
 func findCommonAncestor(
 	ctx context.Context,
 	client EVMClient,
@@ -26,15 +27,17 @@ func findCommonAncestor(
 	blockchainID uint64,
 	logger log.Logger,
 ) (uint64, error) {
-	blockNum, blockHash, err := getter.GetLatestContractEventBlockHashAndNumber(contractAddress, blockchainID)
+	latestNum, latestHash, err := getter.GetLatestContractEventBlockHashAndNumber(contractAddress, blockchainID)
 	if err != nil {
 		return 0, fmt.Errorf("get latest contract event block hash: %w", err)
 	}
-	if blockHash == "" {
-		// No stored events (blockNum=0) or pre-migration row with no hash (blockNum>0).
-		// Either way, treat blockNum as the safe canonical resume point.
-		return blockNum, nil
+	if latestHash == "" {
+		// No stored events (latestNum=0) or pre-migration row with no hash (latestNum>0).
+		// Either way, treat latestNum as the safe canonical resume point.
+		return latestNum, nil
 	}
+
+	blockNum, blockHash := latestNum, latestHash
 
 	for {
 		if ctx.Err() != nil {
@@ -66,15 +69,20 @@ func findCommonAncestor(
 			return 0, fmt.Errorf("get previous distinct block hash below %d: %w", blockNum, err)
 		}
 		if prevHash == "" {
-			// No older stored block (prevNum=0) or pre-migration row (prevNum>0).
-			// Use prevNum as the safe canonical resume point.
-			//
-			// This branch conflates two distinct states: an empty store and a
-			// full-depth reorg where every stored block was reorged out. The latter
-			// requires a chain-level consensus failure that is outside the
-			// confirmation gate's scope, which is an incredibly unlikely scenario;
-			// both cases are treated identically here by proceeding as if the store were empty.
-			logger.Info("reconciliation: reached pre-migration or genesis boundary",
+			if prevNum == 0 {
+				// All stored event blocks have been reorged out and no older stored
+				// row exists. Resume from the orphaned latest stored block: eth_getLogs
+				// is a canonical-chain range query, so the canonical replacement logs
+				// between latestNum and the current tip will be re-fetched. The orphaned
+				// hash is irrelevant — only the height drives the range query.
+				logger.Info("reconciliation: all stored blocks reorged, resuming from orphaned latest",
+					"blockchainID", blockchainID,
+					"blockNumber", latestNum,
+				)
+				return latestNum, nil
+			}
+			// Pre-migration row mid-walk (prevNum > 0, no hash recorded): trust it.
+			logger.Info("reconciliation: reached pre-migration boundary",
 				"blockchainID", blockchainID,
 				"blockNumber", prevNum,
 			)

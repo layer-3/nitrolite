@@ -91,7 +91,7 @@ func TestConfirmationGate_NormalPath(t *testing.T) {
 	}
 
 	g := newGate(t, 5*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x02")
 	bh := common.HexToHash("0xBB")
@@ -132,7 +132,7 @@ func TestConfirmationGate_ReorgCancel(t *testing.T) {
 	}
 
 	g := newGate(t, 10*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x03")
 	bh := common.HexToHash("0xCC")
@@ -157,7 +157,7 @@ func TestConfirmationGate_OutOfOrder(t *testing.T) {
 	}
 
 	g := newGate(t, 10*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x04")
 	bhOld := common.HexToHash("0xAA")
@@ -198,7 +198,7 @@ func TestConfirmationGate_PostGateReorg(t *testing.T) {
 	}
 
 	g := newGate(t, 2*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x05")
 	bh := common.HexToHash("0xDD")
@@ -238,7 +238,7 @@ func TestConfirmationGate_UnknownRemoval(t *testing.T) {
 	}
 
 	g := newGate(t, 10*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x06")
 	bh := common.HexToHash("0xEE")
@@ -261,7 +261,7 @@ func TestConfirmationGate_BlockTimestampBypass(t *testing.T) {
 	}
 
 	g := newGate(t, 10*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x07")
 	bh := common.HexToHash("0xFF")
@@ -299,7 +299,7 @@ func TestConfirmationGate_BlockTimestampPartialDelay(t *testing.T) {
 	}
 
 	g := newGate(t, 5*time.Second, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x08")
 	bh := common.HexToHash("0x08")
@@ -336,7 +336,7 @@ func TestConfirmationGate_BlockTimestampZeroFallback(t *testing.T) {
 	}
 
 	g := newGate(t, 10*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x09")
 	bh := common.HexToHash("0x09")
@@ -373,7 +373,7 @@ func TestConfirmationGate_Shutdown(t *testing.T) {
 
 	g := newGate(t, 50*time.Millisecond, handler)
 	ctx, cancel := context.WithCancel(t.Context())
-	g.Start(ctx)
+	g.Start(ctx, func(error) {})
 
 	for i := range 3 {
 		tx := common.HexToHash(string(rune(0x20 + i)))
@@ -402,7 +402,7 @@ func TestConfirmationGate_ForwardedSetEviction(t *testing.T) {
 
 	delay := 5 * time.Millisecond
 	g := newGate(t, delay, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x12")
 	bh := common.HexToHash("0x12")
@@ -470,7 +470,7 @@ func TestConfirmationGate_MultipleEvents_Ordering(t *testing.T) {
 	}
 
 	g := newGate(t, 5*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	txHashes := []common.Hash{
 		common.HexToHash("0xA1"),
@@ -527,7 +527,7 @@ func TestConfirmationGate_TombstoneSkip(t *testing.T) {
 
 	delay := 30 * time.Millisecond
 	g := newGate(t, delay, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x20")
 	bhA := common.HexToHash("0xAAA")
@@ -583,7 +583,7 @@ func TestConfirmationGate_FIFOEviction_ToleratesEarlyDelete(t *testing.T) {
 
 	delay := 5 * time.Millisecond
 	g := newGate(t, delay, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x30")
 	bh := common.HexToHash("0x30")
@@ -660,7 +660,7 @@ func TestConfirmationGate_TimerReschedule(t *testing.T) {
 	}
 
 	g := newGate(t, 20*time.Millisecond, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	tx := common.HexToHash("0x40")
 	bh := common.HexToHash("0x40")
@@ -706,7 +706,7 @@ func TestConfirmationGate_KickDuringPendingTimer(t *testing.T) {
 
 	delay := 100 * time.Millisecond
 	g := newGate(t, delay, handler)
-	g.Start(t.Context())
+	g.Start(t.Context(), func(error) {})
 
 	txA := common.HexToHash("0x50")
 	bhA := common.HexToHash("0x50")
@@ -762,7 +762,7 @@ func TestConfirmationGate_ShutdownWithNonEmptyQueue(t *testing.T) {
 
 	g := newGate(t, 200*time.Millisecond, handler)
 	ctx, cancel := context.WithCancel(t.Context())
-	g.Start(ctx)
+	g.Start(ctx, func(error) {})
 
 	// Enqueue multiple events far in the future.
 	for i := range 4 {
@@ -789,10 +789,9 @@ func TestConfirmationGate_ShutdownWithNonEmptyQueue(t *testing.T) {
 }
 
 // TestConfirmationGate_HandlerErrorPropagatesFatal: when the downstream handler
-// returns an error after the confirmation delay, the gate signals the fatal channel
-// exactly once and the run goroutine exits. A second FatalErrors() receive must
-// block (buffer size == 1; only the first error is delivered). After the goroutine
-// exits, a second event that matures must NOT invoke the handler again.
+// returns an error after the confirmation delay, the gate's lifecycle closure
+// receives the sentinel error exactly once and the run goroutine exits.
+// Subsequent events that mature must NOT invoke the handler again.
 func TestConfirmationGate_HandlerErrorPropagatesFatal(t *testing.T) {
 	t.Parallel()
 
@@ -805,46 +804,37 @@ func TestConfirmationGate_HandlerErrorPropagatesFatal(t *testing.T) {
 
 	delay := 50 * time.Millisecond
 	g := newGate(t, delay, handler)
-	g.Start(t.Context())
+
+	closureCh := make(chan error, 2) // size 2 to catch a buggy double-invocation
+	g.Start(t.Context(), func(err error) { closureCh <- err })
 
 	tx := common.HexToHash("0xF1")
 	bh := common.HexToHash("0xF1")
 	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, 0, false)))
 
-	// The fatal channel must receive the sentinel error within delay + generous timeout.
+	// The closure must be invoked once with the sentinel error.
 	select {
-	case err := <-g.FatalErrors():
-		assert.Equal(t, sentinelErr, err, "fatal channel must carry the sentinel error")
+	case err := <-closureCh:
+		assert.Equal(t, sentinelErr, err, "closure must receive the sentinel error")
 	case <-time.After(delay + 200*time.Millisecond):
-		t.Fatal("fatal channel did not receive an error within timeout")
+		t.Fatal("closure was not invoked within timeout")
 	}
 
-	// A second receive must block immediately — only one error per gate-lifetime.
+	// A second invocation must not occur — the run goroutine has exited.
 	select {
-	case extra := <-g.FatalErrors():
-		t.Fatalf("unexpected second value on fatal channel: %v", extra)
-	default:
-		// correct: channel is empty after the first drain
+	case extra := <-closureCh:
+		t.Fatalf("unexpected second closure invocation: %v", extra)
+	case <-time.After(50 * time.Millisecond):
+		// correct: no second invocation
 	}
 
-	// Give the run goroutine a moment to exit via <-g.done.
-	time.Sleep(50 * time.Millisecond)
-
-	// Enqueue a second event after the failure. The goroutine has exited, so even
+	// Enqueue a second event after the failure. The goroutine has exited; even
 	// if the kick is queued in the buffered channel it will never be drained.
 	tx2 := common.HexToHash("0xF2")
 	bh2 := common.HexToHash("0xF2")
 	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx2, bh2, 0, false)))
 
-	// Wait well past the delay; the handler must NOT be called a second time.
+	// Wait past the delay; the handler must NOT be called a second time.
 	time.Sleep(delay + 100*time.Millisecond)
-
 	assert.Equal(t, int64(1), handlerCalls.Load(), "handler must be invoked exactly once across gate lifetime")
-
-	select {
-	case <-g.FatalErrors():
-		t.Fatal("unexpected second fatal send after goroutine exited")
-	default:
-		// correct: no second fatal
-	}
 }

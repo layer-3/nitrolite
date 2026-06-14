@@ -66,10 +66,8 @@ type ConfirmationGate struct {
 	forwardedSet   map[forwardedKey]time.Time // key -> forwardedAt
 	forwardedQueue []forwardedExpiry          // FIFO of (key, forwardedAt) for O(1) eviction
 
-	kick    chan struct{} // buffered 1; non-blocking sends
-	timer   *time.Timer   // created in Start(ctx)
-	fatalCh chan error    // buffered 1; first handler error wins; non-blocking send
-	done    chan struct{} // closed once on fatal; gates run's select so the goroutine exits
+	kick  chan struct{} // buffered 1; non-blocking sends
+	timer *time.Timer   // created in Start(ctx)
 }
 
 // NewConfirmationGate creates a ConfirmationGate that holds events for delay before
@@ -94,29 +92,44 @@ func NewConfirmationGate(
 		forwardedSet:   make(map[forwardedKey]time.Time),
 		forwardedQueue: nil,
 		kick:           make(chan struct{}, 1),
-		fatalCh:        make(chan error, 1),
-		done:           make(chan struct{}),
 	}, nil
 }
 
-// FatalErrors returns a read-only channel that receives the first handler error
-// encountered after the confirmation delay. The channel is buffered (size 1);
-// only the first error is delivered. When the channel fires, the gate's drain
-// goroutine has already stopped forwarding. The listener should unsubscribe and
-// return the error to trigger process restart and DB-cursor replay.
-func (g *ConfirmationGate) FatalErrors() <-chan error {
-	return g.fatalCh
-}
-
 // Start begins the background goroutine that forwards matured entries to the
-// downstream handler. The timer is created here (tied to the goroutine's lifecycle)
-// and stopped on shutdown. The goroutine exits when ctx is cancelled.
-func (g *ConfirmationGate) Start(ctx context.Context) {
-	g.timer = time.NewTimer(time.Hour) // arbitrary long initial; will be reset on first drain
+// downstream handler. handleClosure is called exactly once after the goroutine
+// exits; err is non-nil only when the downstream handler returned an error
+// after the confirmation delay. The timer is created here (tied to the
+// goroutine's lifecycle) and stopped on shutdown.
+func (g *ConfirmationGate) Start(ctx context.Context, handleClosure func(err error)) {
+	g.timer = time.NewTimer(time.Hour) // arbitrary long initial; reset on first drain
 	if !g.timer.Stop() {
 		<-g.timer.C
 	}
-	go g.run(ctx)
+
+	childCtx, cancel := context.WithCancel(ctx)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	var closureErr error
+	var closureErrMu sync.Mutex
+	childHandleClosure := func(err error) {
+		closureErrMu.Lock()
+		defer closureErrMu.Unlock()
+		if err != nil && closureErr == nil {
+			closureErr = err
+		}
+		cancel()
+		wg.Done()
+	}
+
+	go func() { childHandleClosure(g.run(childCtx)) }()
+
+	go func() {
+		wg.Wait()
+		closureErrMu.Lock()
+		defer closureErrMu.Unlock()
+		handleClosure(closureErr)
+	}()
 }
 
 // HandleEvent is the entry point called by the upstream Listener for each event.
@@ -192,26 +205,28 @@ func (g *ConfirmationGate) HandleEvent(_ context.Context, eventLog types.Log) er
 
 // run is the background goroutine that wakes on a kick, on the timer firing, or on
 // ctx cancellation. It forwards matured entries, evicts stale forwardedSet entries,
-// and reschedules the timer for the next head deadline.
-func (g *ConfirmationGate) run(ctx context.Context) {
+// and reschedules the timer for the next head deadline. Returns a non-nil error if
+// the downstream handler failed; returns nil on clean shutdown.
+func (g *ConfirmationGate) run(ctx context.Context) error {
 	defer g.timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-g.done:
-			return
+			return nil
 		case <-g.kick:
 		case <-g.timer.C:
 		}
-		g.drainAndReschedule()
+		if err := g.drainAndReschedule(); err != nil {
+			return err
+		}
 	}
 }
 
 // drainAndReschedule forwards all queue entries whose confirmation delay has
 // elapsed, evicts forwardedSet entries older than (recentMultiplier × delay),
-// and resets the timer to the next head deadline.
-func (g *ConfirmationGate) drainAndReschedule() {
+// and resets the timer to the next head deadline. Returns a non-nil error if the
+// downstream handler failed; the caller (run) propagates it to the lifecycle closure.
+func (g *ConfirmationGate) drainAndReschedule() error {
 	g.mu.Lock()
 	now := time.Now()
 
@@ -248,20 +263,11 @@ func (g *ConfirmationGate) drainAndReschedule() {
 
 		evCtx := log.SetContextLogger(context.Background(), g.logger)
 		if err := g.handler(evCtx, entry.log); err != nil {
-			g.logger.Error("handler error after confirmation delay, signalling fatal",
+			g.logger.Error("handler error after confirmation delay, stopping gate",
 				"error", err,
 				"chainID", g.chainID,
 			)
-			select {
-			case g.fatalCh <- err:
-			default:
-			}
-			// Close done to signal the run goroutine to exit immediately.
-			// This is safe: only this fatal branch closes done, and it runs at most
-			// once — once done is closed the run loop exits and drainAndReschedule
-			// is no longer called.
-			close(g.done)
-			return
+			return err // mu already released before the handler call; no relock needed.
 		}
 
 		g.mu.Lock()
@@ -295,4 +301,5 @@ func (g *ConfirmationGate) drainAndReschedule() {
 	// else: leave the timer stopped; the next kick recomputes.
 
 	g.mu.Unlock()
+	return nil
 }

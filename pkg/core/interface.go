@@ -71,6 +71,20 @@ type AssetStore interface {
 	GetTokenDecimals(blockchainID uint64, tokenAddress string) (uint8, error)
 }
 
+// ChainStateRefresher reads the authoritative on-chain channel snapshot from
+// the ChannelHub contract on the channel's host chain. Used by event handlers
+// to converge the Node row with chain after a version-regression guard drops
+// an event whose outer transaction has nonetheless committed state on chain
+// (e.g. outer ChannelChallenged dropped when an inner higher-version
+// ChannelCheckpointed lands first).
+//
+// Implementations are responsible for resolving the channel's host chain
+// internally. The returned snapshot reflects on-chain state at RPC-read time,
+// not event-emit time.
+type ChainStateRefresher interface {
+	RefreshChannelFromChain(ctx context.Context, channelID string) (*RefreshedChannel, error)
+}
+
 // Channel lifecycle event handlers
 type ChannelHubEventHandler interface {
 	HandleNodeBalanceUpdated(context.Context, ChannelHubEventHandlerStore, *NodeBalanceUpdatedEvent) error

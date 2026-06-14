@@ -18,15 +18,24 @@ var _ core.ChannelHubEventHandler = &EventHandlerService{}
 type EventHandlerService struct {
 	nodeSigner  *core.ChannelDefaultSigner
 	statePacker core.StatePacker
+	refresher   core.ChainStateRefresher
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
 // nodeSigner and statePacker are used to backfill the node signature on the
 // checkpointed head state when it is missing from the local record.
-func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker) *EventHandlerService {
+// refresher is invoked from the home-channel guard-drop paths to fetch the
+// authoritative on-chain snapshot and converge the local row; it is mandatory
+// and a nil refresher panics here so a misconfigured wire-up fails loudly
+// instead of silently degrading to pre-§B warn-and-skip behaviour.
+func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker, refresher core.ChainStateRefresher) *EventHandlerService {
+	if refresher == nil {
+		panic("event_handlers: refresher not wired (§B requires a non-nil ChainStateRefresher)")
+	}
 	return &EventHandlerService{
 		nodeSigner:  nodeSigner,
 		statePacker: statePacker,
+		refresher:   refresher,
 	}
 }
 
@@ -38,7 +47,7 @@ func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker c
 // Intent is a short stable string describing the on-chain transition the dropped
 // event would have applied (e.g. "checkpointed", "closed", "escrow_deposit_initiated").
 // It surfaces in the warn log so operators can correlate drops with reentrancy
-// scenarios in MF3-L19 / nitronode-event-monotonicity.md.
+// scenarios.
 //
 // Once §B lands, this helper is the single chokepoint where the on-drop
 // chain-state refresh will be invoked: every dropped event triggers exactly one
@@ -61,6 +70,63 @@ func guardEventVersionMonotonic(
 		"currentStateVersion", currentVersion,
 		"eventStateVersion", eventVersion)
 	return true
+}
+
+// refreshAfterDroppedEvent fetches the authoritative on-chain channel snapshot
+// via the configured ChainStateRefresher and overwrites the local row's status,
+// state version, and challenge expiry, then backfills the user signature on the
+// chain-asserted version. Called from the home-channel guard-drop paths to
+// close the observability gap described in §B.
+//
+// Two-mode error contract:
+//   - refresher returns nil: row converged, returns nil so the dedup ledger advances.
+//   - refresher returns an error: returns non-nil so the reactor rolls back the
+//     tx and the listener replays the event on its next tick. See §B.2.
+//
+// The refresher is mandatory; NewEventHandlerService panics on a nil refresher
+// so this helper can rely on `s.refresher` being non-nil.
+func (s *EventHandlerService) refreshAfterDroppedEvent(
+	ctx context.Context,
+	tx core.ChannelHubEventHandlerStore,
+	channel *core.Channel,
+	droppedIntent string,
+) error {
+	logger := log.FromContext(ctx)
+	refreshed, err := s.refresher.RefreshChannelFromChain(ctx, channel.ChannelID)
+	if err != nil {
+		// Surface; if the on-chain read fails we cannot safely converge and must
+		// retry the event by returning a non-nil error so the listener replays.
+		return fmt.Errorf("refresh after dropped %s: %w", droppedIntent, err)
+	}
+
+	channel.Status = refreshed.Status
+	channel.StateVersion = refreshed.StateVersion
+	channel.ChallengeExpiresAt = refreshed.ChallengeExpiresAt
+
+	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+	// Skip the sig backfill when the chain payload carried no user signature
+	// (e.g. some terminal states do not echo the candidate sig back into
+	// ChannelMeta.lastState). UpdateStateSigsIfMissing would otherwise be a
+	// no-op with an empty userSig but the explicit guard documents intent.
+	if refreshed.LastStateUserSig != "" {
+		if err := tx.UpdateStateSigsIfMissing(channel.ChannelID, refreshed.StateVersion, refreshed.LastStateUserSig, ""); err != nil {
+			return err
+		}
+	}
+
+	logger.Info("refreshed channel from chain after dropped event",
+		"channelId", channel.ChannelID,
+		"droppedIntent", droppedIntent,
+		"refreshedStatus", refreshed.Status,
+		"refreshedStateVersion", refreshed.StateVersion,
+		"refreshedChallengeExpiresAt", refreshed.ChallengeExpiresAt,
+	)
+	return nil
 }
 
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when the node's
@@ -186,12 +252,11 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 
 	// Per protocol the checkpointed version cannot be lower than the last known on-chain
 	// version. This branch is reachable when contract reentrancy emits an inner
-	// higher-version event before the outer ChannelCheckpointed (see MF3-L19 /
-	// nitronode-event-monotonicity.md scenarios 1–3). Drop the event so we do not
-	// regress channel.StateVersion and, critically, so the wasChallenged branch below
+	// higher-version event before the outer ChannelCheckpointed. Drop the event so we do
+	// not regress channel.StateVersion and, critically, so the wasChallenged branch below
 	// does not flip a live challenge back to Open based on a stale version.
 	if guardEventVersionMonotonic(ctx, logger, chanID, "checkpointed", event.StateVersion, channel.StateVersion) {
-		return nil
+		return s.refreshAfterDroppedEvent(ctx, tx, channel, "checkpointed")
 	}
 
 	channel.StateVersion = event.StateVersion
@@ -343,11 +408,11 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return nil
 	}
 
-	if event.StateVersion < channel.StateVersion {
-		// Per protocol the challenged version cannot be lower than the last known on-chain version.
-		// Treat as an anomaly (replay, indexer mis-order, contract bug): warn and skip persistence.
-		logger.Warn("challenged state version is less than current channel state version, ignoring", "channelId", chanID, "currentStateVersion", channel.StateVersion, "challengedStateVersion", event.StateVersion)
-		return nil
+	// Per protocol the challenged version cannot be lower than the last known on-chain version.
+	// Treat as an anomaly (replay, indexer mis-order, contract reentrancy): drop the event and
+	// refresh from chain to converge the local row with the authoritative on-chain status.
+	if guardEventVersionMonotonic(ctx, logger, chanID, "challenged", event.StateVersion, channel.StateVersion) {
+		return s.refreshAfterDroppedEvent(ctx, tx, channel, "challenged")
 	}
 
 	channel.StateVersion = event.StateVersion
@@ -430,9 +495,9 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
-	// Drop stale Closed events that would regress state_version (MF3-L19).
+	// Drop stale Closed events that would regress state_version.
 	if guardEventVersionMonotonic(ctx, logger, chanID, "closed", event.StateVersion, channel.StateVersion) {
-		return nil
+		return s.refreshAfterDroppedEvent(ctx, tx, channel, "closed")
 	}
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged

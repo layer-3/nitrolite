@@ -78,7 +78,23 @@ func main() {
 	}
 
 	eventHandlerStatePacker := core.NewStatePackerV1(bb.MemoryStore)
-	eventHandlerService := event_handlers.NewEventHandlerService(nodeChannelSigner, eventHandlerStatePacker)
+	// Per-chain ChannelHub callers feed the chain-state refresher used by home-channel
+	// guard-drop paths. The map is populated below as each blockchain is wired up;
+	// the entry for chain X is always present before that chain's listener starts, so
+	// the refresher invariant (refresh runs on the same chain as the handler) holds.
+	channelHubCallers := make(map[uint64]*evm.ChannelHubCaller)
+	resolveChannelChain := func(channelID string) (uint64, error) {
+		ch, err := bb.DbStore.GetChannelByID(channelID)
+		if err != nil {
+			return 0, fmt.Errorf("lookup channel %s: %w", channelID, err)
+		}
+		if ch == nil {
+			return 0, fmt.Errorf("channel %s not found in DB", channelID)
+		}
+		return ch.BlockchainID, nil
+	}
+	chainStateRefresher := evm.NewEVMChainStateRefresher(channelHubCallers, resolveChannelChain)
+	eventHandlerService := event_handlers.NewEventHandlerService(nodeChannelSigner, eventHandlerStatePacker, chainStateRefresher)
 
 	for _, b := range blockchains {
 		rpcURL, ok := bb.BlockchainRPCs[b.ID]
@@ -105,6 +121,14 @@ func main() {
 			if err != nil {
 				logger.Fatal("failed to create EVM client")
 			}
+
+			// Register a read-only ChannelHub caller for this chain so the chain-state
+			// refresher can issue getChannelData reads from home-channel guard-drop paths.
+			channelHubCaller, err := evm.NewChannelHubCaller(common.HexToAddress(b.ChannelHubAddress), client)
+			if err != nil {
+				logger.Fatal("failed to create ChannelHub caller", "error", err, "blockchainID", b.ID)
+			}
+			channelHubCallers[b.ID] = channelHubCaller
 
 			sigValidators, err := bb.MemoryStore.GetChannelSigValidators(b.ID)
 			if err != nil {

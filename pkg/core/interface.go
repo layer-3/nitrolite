@@ -71,28 +71,33 @@ type AssetStore interface {
 	GetTokenDecimals(blockchainID uint64, tokenAddress string) (uint8, error)
 }
 
-// ChainStateRefresher reads the authoritative on-chain channel snapshot from
-// the ChannelHub contract on the channel's host chain. Used by event handlers
-// to converge the Node row with chain after a version-regression guard drops
-// an event whose outer transaction has nonetheless committed state on chain
-// (e.g. outer ChannelChallenged dropped when an inner higher-version
-// ChannelCheckpointed lands first).
-//
-// Implementations are responsible for resolving the channel's host chain
-// internally. The returned snapshot reflects on-chain state at RPC-read time,
-// not event-emit time.
-type ChainStateRefresher interface {
-	RefreshChannelFromChain(ctx context.Context, channelID string) (*RefreshedChannel, error)
+// ReadOnlyChannelHub is a read-only view of the on-chain ChannelHub contract,
+// used by event handlers to converge the Node row with chain after a guard
+// drops an event. Each reactor binds a ReadOnlyChannelHub for its own chain
+// and threads it into the handler methods that need an authoritative on-chain
+// snapshot; no global multi-chain dispatcher is required.
+type ReadOnlyChannelHub interface {
+	// FetchChannel reads the authoritative on-chain channel snapshot for channelID
+	// and returns a RefreshedChannel ready to overwrite the Node's local row. The
+	// snapshot reflects on-chain state at RPC-read time, not event-emit time.
+	FetchChannel(ctx context.Context, channelID string) (*RefreshedChannel, error)
 }
 
-// Channel lifecycle event handlers
+// ChannelHubEventHandler defines the off-chain reactions to ChannelHub
+// blockchain events. Only the three home-channel guard-drop handlers
+// (HandleHomeChannelChallenged, HandleHomeChannelCheckpointed,
+// HandleHomeChannelClosed) take a ReadOnlyChannelHub: they are the entrypoints
+// where a version-regression guard may drop an event whose outer transaction
+// has nonetheless committed state on chain, and the on-chain refresh is
+// required to converge the Node row with chain. Other handlers do not need
+// the hub and so do not accept the parameter, keeping the interface narrow.
 type ChannelHubEventHandler interface {
 	HandleNodeBalanceUpdated(context.Context, ChannelHubEventHandlerStore, *NodeBalanceUpdatedEvent) error
 	HandleHomeChannelCreated(context.Context, ChannelHubEventHandlerStore, *HomeChannelCreatedEvent) error
 	HandleHomeChannelMigrated(context.Context, ChannelHubEventHandlerStore, *HomeChannelMigratedEvent) error
-	HandleHomeChannelCheckpointed(context.Context, ChannelHubEventHandlerStore, *HomeChannelCheckpointedEvent) error
-	HandleHomeChannelChallenged(context.Context, ChannelHubEventHandlerStore, *HomeChannelChallengedEvent) error
-	HandleHomeChannelClosed(context.Context, ChannelHubEventHandlerStore, *HomeChannelClosedEvent) error
+	HandleHomeChannelCheckpointed(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelCheckpointedEvent) error
+	HandleHomeChannelChallenged(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelChallengedEvent) error
+	HandleHomeChannelClosed(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelClosedEvent) error
 	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
 	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
 	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error

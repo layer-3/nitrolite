@@ -141,7 +141,7 @@ func NewChannel(channelID, userWallet, asset string, ChType ChannelType, blockch
 }
 
 // RefreshedChannel carries the authoritative on-chain channel snapshot used by
-// ChainStateRefresher to converge a Node row that has diverged from chain.
+// ReadOnlyChannelHub to converge a Node row that has diverged from chain.
 //
 // The snapshot reflects on-chain state at RPC-read time, not event-emit time:
 // the contract may have advanced the channel through additional transitions

@@ -18,41 +18,31 @@ var _ core.ChannelHubEventHandler = &EventHandlerService{}
 type EventHandlerService struct {
 	nodeSigner  *core.ChannelDefaultSigner
 	statePacker core.StatePacker
-	refresher   core.ChainStateRefresher
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
 // nodeSigner and statePacker are used to backfill the node signature on the
-// checkpointed head state when it is missing from the local record.
-// refresher is invoked from the home-channel guard-drop paths to fetch the
-// authoritative on-chain snapshot and converge the local row; it is mandatory
-// and a nil refresher panics here so a misconfigured wire-up fails loudly
-// instead of silently degrading to pre-§B warn-and-skip behaviour.
-func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker, refresher core.ChainStateRefresher) *EventHandlerService {
-	if refresher == nil {
-		panic("event_handlers: refresher not wired (§B requires a non-nil ChainStateRefresher)")
-	}
+// checkpointed head state when it is missing from the local record. The
+// on-chain refresh used by home-channel guard-drop paths is supplied per-call
+// as a core.ReadOnlyChannelHub parameter by the reactor that owns the chain,
+// not stored on the service.
+func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker) *EventHandlerService {
 	return &EventHandlerService{
 		nodeSigner:  nodeSigner,
 		statePacker: statePacker,
-		refresher:   refresher,
 	}
 }
 
 // guardEventVersionMonotonic returns true (drop=true) when the incoming event's
 // StateVersion is strictly less than the row's current StateVersion. The caller
-// must `return nil` immediately when drop is true; the helper logs a structured
-// warning identifying which event intent arrived stale.
+// must `return nil` (or, for home-channel handlers, `return s.refreshAfterDroppedEvent(...)`)
+// immediately when drop is true; the helper logs a structured warning identifying
+// which event intent arrived stale.
 //
 // Intent is a short stable string describing the on-chain transition the dropped
 // event would have applied (e.g. "checkpointed", "closed", "escrow_deposit_initiated").
-// It surfaces in the warn log so operators can correlate drops with reentrancy
-// scenarios.
-//
-// Once §B lands, this helper is the single chokepoint where the on-drop
-// chain-state refresh will be invoked: every dropped event triggers exactly one
-// RefreshChannelFromChain call before the function returns drop=true, so the
-// refresh policy stays consistent across all six handlers.
+// It surfaces in the warn log so operators can correlate drops with reentrancy or
+// reorg-replay events.
 func guardEventVersionMonotonic(
 	ctx context.Context,
 	logger log.Logger,
@@ -73,26 +63,27 @@ func guardEventVersionMonotonic(
 }
 
 // refreshAfterDroppedEvent fetches the authoritative on-chain channel snapshot
-// via the configured ChainStateRefresher and overwrites the local row's status,
-// state version, and challenge expiry, then backfills the user signature on the
-// chain-asserted version. Called from the home-channel guard-drop paths to
+// via the supplied ReadOnlyChannelHub and overwrites the local row's status,
+// state version, and challenge expiry, then backfills the user signature on
+// the chain-asserted version. Called from the home-channel guard-drop paths to
 // close the observability gap described in §B.
 //
 // Two-mode error contract:
-//   - refresher returns nil: row converged, returns nil so the dedup ledger advances.
-//   - refresher returns an error: returns non-nil so the reactor rolls back the
-//     tx and the listener replays the event on its next tick. See §B.2.
+//   - hub returns nil: row converged, returns nil so the dedup ledger advances.
+//   - hub returns an error: returns non-nil so the reactor rolls back the tx
+//     and the listener replays the event on its next tick. See §B.2.
 //
-// The refresher is mandatory; NewEventHandlerService panics on a nil refresher
-// so this helper can rely on `s.refresher` being non-nil.
+// hub is supplied by the reactor that owns this channel's chain; it must be
+// non-nil on the guard-drop paths.
 func (s *EventHandlerService) refreshAfterDroppedEvent(
 	ctx context.Context,
 	tx core.ChannelHubEventHandlerStore,
+	hub core.ReadOnlyChannelHub,
 	channel *core.Channel,
 	droppedIntent string,
 ) error {
 	logger := log.FromContext(ctx)
-	refreshed, err := s.refresher.RefreshChannelFromChain(ctx, channel.ChannelID)
+	refreshed, err := hub.FetchChannel(ctx, channel.ChannelID)
 	if err != nil {
 		// Surface; if the on-chain read fails we cannot safely converge and must
 		// retry the event by returning a non-nil error so the listener replays.
@@ -224,7 +215,7 @@ func (s *EventHandlerService) HandleHomeChannelMigrated(ctx context.Context, tx 
 // is restored instead. Without that restore, a Closing → Challenged → Open sequence driven by
 // on-chain events would erase the fact that the node has already signed a finalized state, and
 // CheckActiveChannel would let the user submit further transitions past the finalized state.
-func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCheckpointedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelCheckpointedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
 	// Acquire the user's balance-row lock and read the channel under it before mutating
@@ -256,7 +247,7 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	// not regress channel.StateVersion and, critically, so the wasChallenged branch below
 	// does not flip a live challenge back to Open based on a stale version.
 	if guardEventVersionMonotonic(ctx, logger, chanID, "checkpointed", event.StateVersion, channel.StateVersion) {
-		return s.refreshAfterDroppedEvent(ctx, tx, channel, "checkpointed")
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "checkpointed")
 	}
 
 	channel.StateVersion = event.StateVersion
@@ -384,7 +375,7 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 // be resolved via ScheduleCheckpoint, and silently queueing an impossible transaction risks
 // letting the challenge expire on a stale state. A warning is emitted so operators submit the
 // appropriate on-chain action manually before expiry.
-func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelChallengedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelChallengedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
 	// Acquire the user's balance-row lock and read the channel under it before mutating
@@ -412,7 +403,7 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 	// Treat as an anomaly (replay, indexer mis-order, contract reentrancy): drop the event and
 	// refresh from chain to converge the local row with the authoritative on-chain status.
 	if guardEventVersionMonotonic(ctx, logger, chanID, "challenged", event.StateVersion, channel.StateVersion) {
-		return s.refreshAfterDroppedEvent(ctx, tx, channel, "challenged")
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "challenged")
 	}
 
 	channel.StateVersion = event.StateVersion
@@ -472,7 +463,7 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // Subsequent receiver-credit issuance reads the rescue row as currentState and no
 // longer carries the closed channel reference, so request_creation can reopen on the
 // same (wallet, asset) through the normal flow.
-func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
 	// Acquire the user's balance-row lock and read the channel under it before mutating
@@ -497,7 +488,7 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 
 	// Drop stale Closed events that would regress state_version.
 	if guardEventVersionMonotonic(ctx, logger, chanID, "closed", event.StateVersion, channel.StateVersion) {
-		return s.refreshAfterDroppedEvent(ctx, tx, channel, "closed")
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "closed")
 	}
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged

@@ -20,62 +20,36 @@ const (
 	onchainChannelStatusMigratedOut uint8 = 5
 )
 
-// ChannelChainResolver returns the host chain ID for a given channelID.
-// The EVM refresher uses it to dispatch the on-chain read to the right
-// ChannelHubCaller when more than one chain hosts ChannelHub deployments.
-type ChannelChainResolver func(channelID string) (uint64, error)
-
-// EVMChainStateRefresher implements core.ChainStateRefresher by dispatching
-// getChannelData reads to a per-chain ChannelHubCaller. The caller map is
-// populated at startup with one entry per blockchain that has a ChannelHub
-// contract deployed; see nitronode/main.go for wire-up.
+// EVMChannelHubReader implements core.ReadOnlyChannelHub by reading from a
+// single chain's bound ChannelHub contract. Each ChannelHubReactor binds its
+// own reader for the chain it listens on, so no chain-resolution dispatcher
+// is required.
 //
-// The refresher is read-only and stateless beyond the caller map; it is safe
-// for concurrent use from multiple reactor handler goroutines.
-type EVMChainStateRefresher struct {
-	callers     map[uint64]*ChannelHubCaller
-	resolveHome ChannelChainResolver
+// The reader is read-only and stateless beyond the caller; it is safe for
+// concurrent use from multiple reactor handler goroutines.
+type EVMChannelHubReader struct {
+	caller *ChannelHubCaller
 }
 
-// NewEVMChainStateRefresher constructs a refresher backed by the supplied
-// per-chain ChannelHubCaller map and chain resolver. The map is taken by
-// reference; callers must not mutate it after construction. resolveHome must
-// not be nil — the refresher relies on it to pick the right caller for the
-// channel under refresh.
-func NewEVMChainStateRefresher(callers map[uint64]*ChannelHubCaller, resolveHome ChannelChainResolver) *EVMChainStateRefresher {
-	return &EVMChainStateRefresher{
-		callers:     callers,
-		resolveHome: resolveHome,
-	}
+// NewChannelHubReader constructs a reader backed by the supplied bound
+// ChannelHub caller. The caller must be non-nil; passing nil panics on the
+// first FetchChannel invocation rather than at construction.
+func NewChannelHubReader(caller *ChannelHubCaller) *EVMChannelHubReader {
+	return &EVMChannelHubReader{caller: caller}
 }
 
-// RefreshChannelFromChain reads the authoritative on-chain snapshot for
-// channelID from the ChannelHub on the channel's host chain and returns it
-// for the caller to overwrite the local row. See core.ChainStateRefresher
-// for semantics.
-func (r *EVMChainStateRefresher) RefreshChannelFromChain(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
-	if r.resolveHome == nil {
-		return nil, fmt.Errorf("no channel chain resolver configured")
-	}
-
-	chainID, err := r.resolveHome(channelID)
-	if err != nil {
-		return nil, fmt.Errorf("resolve home chain for channel %s: %w", channelID, err)
-	}
-
-	caller, ok := r.callers[chainID]
-	if !ok || caller == nil {
-		return nil, fmt.Errorf("no ChannelHub caller registered for chain %d (channel %s)", chainID, channelID)
-	}
-
+// FetchChannel reads the authoritative on-chain snapshot for channelID from
+// the ChannelHub contract bound to this reader and returns it for the caller
+// to overwrite the local row. See core.ReadOnlyChannelHub for semantics.
+func (r *EVMChannelHubReader) FetchChannel(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
 	channelIDBytes, err := hexToBytes32(channelID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid channel ID %q: %w", channelID, err)
 	}
 
-	data, err := caller.GetChannelData(&bind.CallOpts{Context: ctx}, channelIDBytes)
+	data, err := r.caller.GetChannelData(&bind.CallOpts{Context: ctx}, channelIDBytes)
 	if err != nil {
-		return nil, fmt.Errorf("getChannelData(%s) on chain %d: %w", channelID, chainID, err)
+		return nil, fmt.Errorf("getChannelData(%s): %w", channelID, err)
 	}
 
 	status, err := mapOnchainChannelStatus(data.Status)

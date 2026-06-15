@@ -368,7 +368,7 @@ func TestHandleHomeChannelCheckpointed_Success(t *testing.T) {
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
 	// Execute
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	// Assert
 	require.NoError(t, err)
@@ -414,7 +414,7 @@ func TestHandleHomeChannelCheckpointed_FromVoidPromotesToOpen(t *testing.T) {
 	// Challenged path and must not be reached here.
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -503,7 +503,7 @@ func TestHandleHomeChannelCheckpointed_FromVoidBackfillsUnsignedReceiverHead(t *
 					capturedNodeSig = args.String(3)
 				}).Return(nil)
 
-			err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+			err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 			require.NoError(t, err)
 			require.NotEmpty(t, capturedNodeSig, "node signature must be populated on backfill")
 
@@ -564,7 +564,7 @@ func TestHandleHomeChannelCheckpointed_DoesNotReopenFinalizedChannel(t *testing.
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "", "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
 	// Not challenged → no Finalize lookup and no head-sig backfill on this path.
@@ -612,7 +612,7 @@ func TestHandleHomeChannelChallenged_PersistsChallenge(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(4), "", "").Return(nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -627,10 +627,10 @@ func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
 	// returns the authoritative snapshot and the row converges to the chain view, NEVER to the
 	// stale event payload.
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -659,7 +659,7 @@ func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		// Row must converge to the refreshed (== current) chain view, NOT to the stale event payload.
 		return ch.ChannelID == channelID &&
@@ -669,14 +669,14 @@ func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
 	})).Return(nil)
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, mockHub, event)
 
 	require.NoError(t, err)
 	// Row state must reflect the refreshed chain snapshot, NOT the stale event payload.
 	require.Equal(t, uint64(5), channel.StateVersion, "StateVersion must not regress to the stale event version")
 	require.Equal(t, core.ChannelStatusOpen, channel.Status, "Status must come from refresh, not the stale event")
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// LastStateUserSig is empty, so UpdateStateSigsIfMissing must be skipped (documented intent).
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
@@ -697,7 +697,7 @@ func TestHandleHomeChannelChallenged_ChannelNotFound(t *testing.T) {
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(nil, nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -725,7 +725,7 @@ func TestHandleHomeChannelChallenged_TypeMismatch(t *testing.T) {
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -773,7 +773,7 @@ func TestHandleHomeChannelChallenged_FromClosingState(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(4), "", "").Return(nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -820,7 +820,7 @@ func TestHandleHomeChannelChallenged_AcquiresUserLockBeforeMutation(t *testing.T
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(4), "", "").Return(nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
 }
@@ -861,7 +861,7 @@ func TestHandleHomeChannelClosed_Success(t *testing.T) {
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(10), "", "").Return(nil)
 
 	// Execute
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	// Assert
 	require.NoError(t, err)
@@ -1592,7 +1592,7 @@ func TestHandleHomeChannelCheckpointed_BackfillsUserSig(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), userSig, "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -1630,7 +1630,7 @@ func TestHandleHomeChannelCheckpointed_BackfillError(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xdeadbeef", "").Return(errors.New("db error"))
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "db error")
@@ -1654,38 +1654,25 @@ func newTestEventHandlerService(t *testing.T) (*EventHandlerService, string) {
 	nodeSigner, err := core.NewChannelDefaultSigner(signer)
 	require.NoError(t, err)
 	packer := core.NewStatePackerV1(mockEventHandlerAssetStore{})
-	// Default refresher: a MockChainStateRefresher with no expectations set.
-	// Tests that don't exercise the §B refresh path get a non-nil refresher so
-	// NewEventHandlerService's wire-up check passes; if a test inadvertently
-	// triggers RefreshChannelFromChain, testify/mock panics loudly with an
-	// unexpected-call assertion — the desired loud-failure behaviour.
-	// Tests asserting refresh interactions use newTestEventHandlerServiceWithRefresher.
-	return NewEventHandlerService(nodeSigner, packer, new(MockChainStateRefresher)), signer.PublicKey().Address().String()
+	return NewEventHandlerService(nodeSigner, packer), signer.PublicKey().Address().String()
 }
 
-// MockChainStateRefresher is a testify/mock implementation of core.ChainStateRefresher
-// used by §B tests (E.11, E.12, and the §A1/§A2 guard-drop tests that now invoke
-// the refresher).
-type MockChainStateRefresher struct {
+// MockReadOnlyChannelHub is a testify/mock implementation of core.ReadOnlyChannelHub
+// used by §B tests (E.11, E.12, and the §A1/§A2 guard-drop tests that invoke the
+// on-chain refresh). Tests that do not exercise the refresh path can pass a fresh
+// MockReadOnlyChannelHub with no expectations set: testify/mock panics loudly with
+// an unexpected-call assertion if FetchChannel is invoked inadvertently.
+type MockReadOnlyChannelHub struct {
 	mock.Mock
 }
 
-// RefreshChannelFromChain mocks the on-drop chain-state refresh hook.
-func (m *MockChainStateRefresher) RefreshChannelFromChain(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
+// FetchChannel mocks the on-drop chain-state refresh hook.
+func (m *MockReadOnlyChannelHub) FetchChannel(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
 	args := m.Called(ctx, channelID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*core.RefreshedChannel), args.Error(1)
-}
-
-// newTestEventHandlerServiceWithRefresher constructs an EventHandlerService with a
-// caller-provided ChainStateRefresher for tests that exercise the refresh path.
-func newTestEventHandlerServiceWithRefresher(t *testing.T, refresher core.ChainStateRefresher) (*EventHandlerService, string) {
-	t.Helper()
-	svc, addr := newTestEventHandlerService(t)
-	svc.refresher = refresher
-	return svc, addr
 }
 
 // TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig covers the case where a
@@ -1764,7 +1751,7 @@ func TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig(t *testing.T) {
 			capturedNodeSig = args.String(3)
 		}).Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	require.NotEmpty(t, capturedNodeSig, "node signature must be populated on backfill")
 
@@ -1845,7 +1832,7 @@ func TestHandleHomeChannelCheckpointed_HeadAlreadySigned_NoBackfill(t *testing.T
 	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(headState, nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	mockStore.AssertExpectations(t)
@@ -1922,7 +1909,7 @@ func TestHandleHomeChannelCheckpointed_FromChallengedWithSignedFinalize(t *testi
 	// Backfill path: off-chain head is the same already-signed Finalize state — no-op.
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(finalizeState, nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -1973,7 +1960,7 @@ func TestHandleHomeChannelCheckpointed_AcquiresUserLockBeforeMutation(t *testing
 	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
 }
@@ -2050,7 +2037,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_Squash(t *testing.T) {
 		return true
 	}), "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
@@ -2148,7 +2135,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NoCredits(t *testing.T) {
 	}), "").Return(nil)
 	mockStore.On("RecordTransaction", mock.Anything, "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
@@ -2226,7 +2213,7 @@ func TestHandleHomeChannelClosed_ChallengeRescue_NegativeNet_ClampsToZero(t *tes
 	}), "").Return(nil)
 	mockStore.On("RecordTransaction", mock.Anything, "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
@@ -2318,7 +2305,7 @@ func TestHandleHomeChannelClosed_TimeoutAfterFinalize_AppendsRescue(t *testing.T
 		return true
 	}), "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
@@ -2428,7 +2415,7 @@ func TestHandleHomeChannelClosed_CooperativeCloseAfterChallenge_ZeroRescue(t *te
 		return true
 	}), "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.TransitionTypeChallengeRescue, capturedState.Transition.Type)
@@ -2486,7 +2473,7 @@ func TestHandleHomeChannelClosed_OpenChannel_NoRescue(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "USDC").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, closureVersion, "", "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 
 	mockStore.AssertExpectations(t)
@@ -2556,10 +2543,10 @@ func TestHandleEscrowDepositsPurged_StoreError_Propagates(t *testing.T) {
 // payload is NOT what drives the write — the chain view is.
 func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -2589,7 +2576,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		// Row must converge to the refreshed (== current) chain view, NOT to the stale event payload.
 		return ch.ChannelID == channelID &&
@@ -2600,14 +2587,14 @@ func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(10), refreshedSig, "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 
 	require.NoError(t, err)
 	// Row state must reflect the refreshed chain snapshot, NOT the stale event payload.
 	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress to the stale event version")
 	require.Equal(t, core.ChannelStatusOpen, channel.Status, "Status must come from refresh, not the stale event")
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// The stale event's UserSig at the regressed version must never be written.
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", channelID, uint64(5), mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
@@ -2623,10 +2610,10 @@ func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
 // cleared the challenge.
 func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -2658,7 +2645,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testin
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	// Critical: UpdateChannel must persist the Challenged snapshot from chain, NOT the cleared
 	// snapshot the stale event's wasChallenged branch would have produced.
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
@@ -2671,7 +2658,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testin
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(10), refreshedSig, "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 
 	require.NoError(t, err)
 	// Challenge state preserved via chain refresh, not via the stale event's payload.
@@ -2680,7 +2667,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testin
 	require.Equal(t, expiryTime.Unix(), channel.ChallengeExpiresAt.Unix(), "ChallengeExpiresAt must be unchanged")
 	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress")
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// The stale wasChallenged branch must NOT run: no HasSignedFinalize lookup, no sig backfill
 	// at the stale version, no head-sig backfill via GetLastStateByChannelID.
 	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
@@ -2724,7 +2711,7 @@ func TestHandleHomeChannelCheckpointed_EqualVersionAccepted(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xusersig", "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -2773,7 +2760,7 @@ func TestHandleHomeChannelCheckpointed_HigherVersionAccepted(t *testing.T) {
 	mockStore.On("HasSignedFinalize", channelID).Return(false, nil)
 	mockStore.On("GetLastStateByChannelID", channelID, false).Return(nil, nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 
 	require.NoError(t, err)
 	mockStore.AssertExpectations(t)
@@ -2789,10 +2776,10 @@ func TestHandleHomeChannelCheckpointed_HigherVersionAccepted(t *testing.T) {
 // rescue is issued.
 func TestHandleHomeChannelClosed_RegressionDropped(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -2823,7 +2810,7 @@ func TestHandleHomeChannelClosed_RegressionDropped(t *testing.T) {
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusChallenged &&
@@ -2833,13 +2820,13 @@ func TestHandleHomeChannelClosed_RegressionDropped(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(10), refreshedSig, "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, mockHub, event)
 
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), channel.StateVersion, "StateVersion must not regress")
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status, "Status must not be flipped to Closed by stale event")
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// Critically, no rescue issuance — the rescue branch belongs to the happy-path close,
 	// not to the refresh path. SumNetTransitionAmountAfterVersion / StoreUserState /
 	// RecordTransaction must all be skipped.
@@ -3098,14 +3085,14 @@ func TestHandleHomeChannelClosed_RescueIdempotentOnEqualVersionReplay(t *testing
 	mockStore.On("RecordTransaction", mock.Anything, "").Return(nil).Once()
 
 	// First call: wasChallenged=true → rescue fires.
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	require.Equal(t, core.ChannelStatusClosed, channel.Status, "Status must be Closed after first call")
 
 	// Second call: equal-version replay. Status is now Closed → wasChallenged=false →
 	// rescue branch must not re-enter. The `.Once()` constraints on the rescue mocks
 	// will fail if any are called a second time.
-	err = service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err = service.HandleHomeChannelClosed(ctx, mockStore, new(MockReadOnlyChannelHub), event)
 	require.NoError(t, err)
 	require.Equal(t, core.ChannelStatusClosed, channel.Status, "Status remains Closed after replay")
 
@@ -3162,8 +3149,8 @@ func TestHandleXxx_EqualVersionReplay_NoSideEffects(t *testing.T) {
 		mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil).Times(2)
 		mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), "0xusersig", "").Return(nil).Times(2)
 
-		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, event))
-		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, event))
+		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event))
+		require.NoError(t, service.HandleHomeChannelCheckpointed(ctx, mockStore, new(MockReadOnlyChannelHub), event))
 
 		mockStore.AssertExpectations(t)
 		// No head-sig backfill on the Open→Open path, even on replay.
@@ -3328,10 +3315,10 @@ func TestHandleXxx_EqualVersionReplay_NoSideEffects(t *testing.T) {
 // the refreshed sig at the refreshed version. See spec §B.2.
 func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3366,7 +3353,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.ChannelID == channelID &&
 			ch.Status == core.ChannelStatusChallenged &&
@@ -3377,7 +3364,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(5), chainSig, "").Return(nil)
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, mockHub, event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status, "row must converge to chain Challenged")
@@ -3386,8 +3373,8 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 	require.Equal(t, chainExpiry.Unix(), channel.ChallengeExpiresAt.Unix())
 
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
-	mockRefresher.AssertNumberOfCalls(t, "RefreshChannelFromChain", 1)
+	mockHub.AssertExpectations(t)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
 }
 
 // §E.11 (Checkpointed-guard-path variant). Fires HandleHomeChannelCheckpointed
@@ -3396,10 +3383,10 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 // converges. This catches A.1's refresh hook independently from the Challenged handler.
 func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3430,7 +3417,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t 
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusChallenged &&
 			ch.StateVersion == 8 &&
@@ -3440,7 +3427,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t 
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(8), chainSig, "").Return(nil)
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
@@ -3448,7 +3435,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t 
 	require.NotNil(t, channel.ChallengeExpiresAt)
 
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// The wasChallenged branch's stale work must not run.
 	mockStore.AssertNotCalled(t, "HasSignedFinalize", mock.Anything)
 	mockStore.AssertNotCalled(t, "GetLastStateByChannelID", mock.Anything, mock.Anything)
@@ -3461,10 +3448,10 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t 
 // version; the refresh path picks up that authoritative view.
 func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3493,7 +3480,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	}
 
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
 	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
 		return ch.Status == core.ChannelStatusClosed &&
 			ch.StateVersion == 12 &&
@@ -3502,7 +3489,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	mockStore.On("RefreshUserEnforcedBalance", userWallet, asset).Return(nil)
 	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(12), chainSig, "").Return(nil)
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, mockHub, event)
 	require.NoError(t, err)
 
 	require.Equal(t, core.ChannelStatusClosed, channel.Status)
@@ -3510,7 +3497,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	require.Nil(t, channel.ChallengeExpiresAt)
 
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// Rescue branch belongs to the happy-path close, not the refresh path.
 	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
@@ -3518,16 +3505,16 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 }
 
 // §E.12 — Refresher-error replay test (Challenged guard path).
-// Per spec §B.2's two-mode error contract: when RefreshChannelFromChain fails, the
+// Per spec §B.2's two-mode error contract: when ReadOnlyChannelHub.FetchChannel fails, the
 // handler must return a non-nil error wrapping the RPC failure so the outer reactor
 // transaction rolls back. The dedup ledger does NOT advance and the event will be
 // re-delivered on the next listener tick. No partial write to the channel row.
 func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3549,9 +3536,9 @@ func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
 
-	err := service.HandleHomeChannelChallenged(ctx, mockStore, event)
+	err := service.HandleHomeChannelChallenged(ctx, mockStore, mockHub, event)
 
 	require.Error(t, err, "refresher error must bubble up so the reactor tx rolls back")
 	require.ErrorIs(t, err, rpcErr, "wrapped error must preserve the underlying RPC failure")
@@ -3559,7 +3546,7 @@ func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
 	require.Equal(t, uint64(5), channel.StateVersion, "row must not be mutated on refresh failure")
 	require.Equal(t, core.ChannelStatusOpen, channel.Status, "row must not be mutated on refresh failure")
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	// No partial write.
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
@@ -3569,10 +3556,10 @@ func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
 // §E.12 (Checkpointed guard path variant).
 func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3596,9 +3583,9 @@ func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
 
-	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, event)
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, rpcErr)
@@ -3606,7 +3593,7 @@ func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
@@ -3615,10 +3602,10 @@ func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
 // §E.12 (Closed guard path variant).
 func TestGuardDrop_RefresherErrorBubblesUp_ClosedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
-	mockRefresher := new(MockChainStateRefresher)
+	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
-	service, _ := newTestEventHandlerServiceWithRefresher(t, mockRefresher)
+	service, _ := newTestEventHandlerService(t)
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3641,9 +3628,9 @@ func TestGuardDrop_RefresherErrorBubblesUp_ClosedGuardPath(t *testing.T) {
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockRefresher.On("RefreshChannelFromChain", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
 
-	err := service.HandleHomeChannelClosed(ctx, mockStore, event)
+	err := service.HandleHomeChannelClosed(ctx, mockStore, mockHub, event)
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, rpcErr)
@@ -3651,7 +3638,7 @@ func TestGuardDrop_RefresherErrorBubblesUp_ClosedGuardPath(t *testing.T) {
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
-	mockRefresher.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)

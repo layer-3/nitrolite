@@ -3,6 +3,10 @@
 # these token inventories. Group only economically equivalent (1:1 redeemable)
 # tokens under one symbol. Equivalence cannot be verified programmatically and is an
 # operator responsibility. See docs/protocol/security-and-limitations.md.
+#
+# WARNING: hook-enabled tokens (ERC777, ERC1363, non-standard ERC20 with re-entrant
+# transferFrom) are NOT supported on some currently-deployed ChannelHub instances.
+# Per-deployment status: contracts/deployments/HOOK-TOKEN-COMPATIBILITY.md.
 assets:
 # Alphabetically sorted by symbol (case insensitive)
   - name: "Ether"

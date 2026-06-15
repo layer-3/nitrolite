@@ -51,6 +51,29 @@ Invariant:
 Invariant:
 > Credits accrued while a channel was in `CHALLENGED` status are preserved — either reintegrated into the channel on challenge clearance, or carried into the next epoch on closure — and cannot be shadowed by a concurrently-opened replacement channel.
 
+---
+
+8. App session closure is **atomic across all participants**. The Node issues a new release receive-state on every participant's home channel as part of a single close transaction; a failure on any single participant aborts the entire close, leaving the session open and no release credits issued to anyone.
+
+The Node refuses to issue a release state when the recipient's most recent signed state encodes an **escrow operation that `EnsureNoOngoingEscrowOperation` does not yet treat as safely settled**. In practice this covers:
+
+* any pending `escrow_lock` or `mutual_lock` (always considered unresolved until superseded);
+* `escrow_deposit` or `escrow_withdraw` whose on-chain escrow-channel version has not caught up with the signed state version — with a narrow one-version-behind allowance for `escrow_deposit` while the escrow channel is `Open` or `Closed` (the steady state during a normal finalize/purge cycle).
+
+The release receive-state is stacked on top of the recipient's most recent signed state. If that state encodes an unfinalized escrow, signing a release on top risks state-chain invariant violations should the escrow ultimately revert or settle to a different version than was assumed when the release was issued. The Node therefore blocks until the escrow resolves rather than risking a co-signed credit that cannot be enforced on-chain.
+
+Consequence: a single participant whose escrow has not yet completed — whether due to slow on-chain confirmation, an active challenge, or deliberate non-finalization — blocks the cooperative close for **all** other participants in the session. Remaining participants have two recovery paths:
+
+* wait for the blocking participant's escrow to resolve and retry the close,
+* if the session's state machine permits intermediate updates, individually unwind their share via off-chain transfers out of the session and re-attempt closure with the remaining (non-blocked) members.
+
+This is an accepted trade-off for now, which may be lifted in the future: protocol safety (no release state co-signed against a potentially-reverting escrow chain) takes precedence over close-time liveness. Sessions whose participants require independent exit guarantees should be designed with state machines that support partial settlement rather than relying solely on cooperative close.
+
+Unlike the `CHALLENGED` channel path (rule 6) — where the release issuer **does** store unsigned releases for non-`Open` home channels so the rescue squash can pick them up at close — the close path does **not** extend that unsigned-fallback pattern to the escrow-rejected case. When `EnsureNoOngoingEscrowOperation` rejects a participant, the entire close aborts rather than queueing an unsigned release on top of an in-flight escrow. Extending the fallback here is a possible future improvement but is non-trivial: the safety of stacking an unsigned release on an unfinalized escrow depends on later reconciling the eventual escrow outcome with the queued credit, and the current implementation prefers refusal over partial trust.
+
+Invariant:
+> A single participant with a pending escrow operation can block cooperative closure of an app session for all other participants until the escrow resolves; no participant receives a release credit while the close is blocked.
+
 ## Invariants
 
 ---

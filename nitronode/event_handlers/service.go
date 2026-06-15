@@ -68,10 +68,16 @@ func guardEventVersionMonotonic(
 // the chain-asserted version. Called from the home-channel guard-drop paths to
 // close the observability gap described in §B.
 //
-// Two-mode error contract:
+// Log-and-continue error contract:
 //   - hub returns nil: row converged, returns nil so the dedup ledger advances.
-//   - hub returns an error: returns non-nil so the reactor rolls back the tx
-//     and the listener replays the event on its next tick. See §B.2.
+//   - hub returns an error: logs at Error level and returns nil. The outer tx
+//     still commits — the dedup row is recorded and the listener moves on,
+//     but the local channel row stays at whatever the inner higher-version
+//     event already set it to. No retry, no replay. The row may stay divergent
+//     from chain (especially for terminal Closed states where no future event
+//     will arrive). This is an accepted trade-off: strictly better than
+//     `logger.Fatal`-ing the node on a transient RPC blip, and the failure
+//     mode requires a guard drop coinciding with a sustained RPC outage.
 //
 // hub is supplied by the reactor that owns this channel's chain; it must be
 // non-nil on the guard-drop paths.
@@ -85,9 +91,11 @@ func (s *EventHandlerService) refreshAfterDroppedEvent(
 	logger := log.FromContext(ctx)
 	refreshed, err := hub.FetchChannel(ctx, channel.ChannelID)
 	if err != nil {
-		// Surface; if the on-chain read fails we cannot safely converge and must
-		// retry the event by returning a non-nil error so the listener replays.
-		return fmt.Errorf("refresh after dropped %s: %w", droppedIntent, err)
+		logger.Error("refresh after dropped event failed, leaving row possibly divergent from chain",
+			"channelId", channel.ChannelID,
+			"droppedIntent", droppedIntent,
+			"error", err)
+		return nil
 	}
 
 	channel.Status = refreshed.Status

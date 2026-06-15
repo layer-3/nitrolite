@@ -3504,12 +3504,14 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
 
-// §E.12 — Refresher-error replay test (Challenged guard path).
-// Per spec §B.2's two-mode error contract: when ReadOnlyChannelHub.FetchChannel fails, the
-// handler must return a non-nil error wrapping the RPC failure so the outer reactor
-// transaction rolls back. The dedup ledger does NOT advance and the event will be
-// re-delivered on the next listener tick. No partial write to the channel row.
-func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
+// §E.12 — Refresher-error log-and-continue test (Challenged guard path).
+// Per the Hybrid log-and-continue error contract: when ReadOnlyChannelHub.FetchChannel
+// fails, the handler logs at Error level and returns nil so the outer reactor
+// transaction commits (dedup row recorded, listener advances). The local channel
+// row stays at whatever the inner higher-version event already set it to — no
+// convergence happens. There is no retry; this trades transient divergence for
+// not killing the node on a transient RPC blip.
+func TestGuardDrop_RefresherErrorLoggedAndIgnored(t *testing.T) {
 	mockStore := new(MockStore)
 	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
@@ -3540,21 +3542,22 @@ func TestGuardDrop_RefresherErrorBubblesUp(t *testing.T) {
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, mockHub, event)
 
-	require.Error(t, err, "refresher error must bubble up so the reactor tx rolls back")
-	require.ErrorIs(t, err, rpcErr, "wrapped error must preserve the underlying RPC failure")
-	// Channel row must be unchanged — no partial write.
+	require.NoError(t, err, "refresher error must be logged and swallowed so the reactor tx commits")
+	// Channel row must be unchanged — no convergence happened.
 	require.Equal(t, uint64(5), channel.StateVersion, "row must not be mutated on refresh failure")
 	require.Equal(t, core.ChannelStatusOpen, channel.Status, "row must not be mutated on refresh failure")
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
-	// No partial write.
+	// No retry: FetchChannel called exactly once.
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
+	// No convergence write.
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // §E.12 (Checkpointed guard path variant).
-func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
+func TestGuardDrop_RefresherErrorLoggedAndIgnored_CheckpointedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
 	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
@@ -3587,20 +3590,20 @@ func TestGuardDrop_RefresherErrorBubblesUp_CheckpointedGuardPath(t *testing.T) {
 
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 
-	require.Error(t, err)
-	require.ErrorIs(t, err, rpcErr)
+	require.NoError(t, err)
 	require.Equal(t, uint64(10), channel.StateVersion)
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // §E.12 (Closed guard path variant).
-func TestGuardDrop_RefresherErrorBubblesUp_ClosedGuardPath(t *testing.T) {
+func TestGuardDrop_RefresherErrorLoggedAndIgnored_ClosedGuardPath(t *testing.T) {
 	mockStore := new(MockStore)
 	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
@@ -3632,13 +3635,13 @@ func TestGuardDrop_RefresherErrorBubblesUp_ClosedGuardPath(t *testing.T) {
 
 	err := service.HandleHomeChannelClosed(ctx, mockStore, mockHub, event)
 
-	require.Error(t, err)
-	require.ErrorIs(t, err, rpcErr)
+	require.NoError(t, err)
 	require.Equal(t, uint64(10), channel.StateVersion)
 	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)

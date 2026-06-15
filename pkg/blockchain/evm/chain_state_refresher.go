@@ -20,6 +20,12 @@ const (
 	onchainChannelStatusMigratedOut uint8 = 5
 )
 
+// refreshRPCTimeout bounds the time `FetchChannel` will wait for a
+// `getChannelData` RPC response. Set to 5s to match other per-operation RPC
+// timeouts in the codebase (`nitronode/main.go`, `nitronode/runtime.go`) and to
+// stay well above realistic call latency on slow public RPCs.
+const refreshRPCTimeout = 5 * time.Second
+
 // EVMChannelHubReader implements core.ReadOnlyChannelHub by reading from a
 // single chain's bound ChannelHub contract. Each ChannelHubReactor binds its
 // own reader for the chain it listens on, so no chain-resolution dispatcher
@@ -46,6 +52,9 @@ func (r *EVMChannelHubReader) FetchChannel(ctx context.Context, channelID string
 	if err != nil {
 		return nil, fmt.Errorf("invalid channel ID %q: %w", channelID, err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, refreshRPCTimeout)
+	defer cancel()
 
 	data, err := r.caller.GetChannelData(&bind.CallOpts{Context: ctx}, channelIDBytes)
 	if err != nil {

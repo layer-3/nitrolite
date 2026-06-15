@@ -28,7 +28,9 @@ Last reviewed: 2026-06-15.
 | 59144 | Linea | `0x1a2f750170474d4c54f8d318d9d4343588b4c4d1` | `e07ad9c2` | prod v1.3.0 |
 | 80002 | Polygon Amoy | `0x5dba8515af063db0c243c15ece7b99f91459c7c3` | `b88d511c` | sandbox v1.3.0 |
 | 84532 | Base Sepolia | `0x5dba8515af063db0c243c15ece7b99f91459c7c3` | `b88d511c` | sandbox v1.3.0 |
+| 84532 | Base Sepolia | `0x61b9e0767f2eca7e33802e82f9c64b1ebe72ba31` | `9110ba06` | stress v1.3.0 |
 | 59141 | Linea Sepolia | `0x5dba8515af063db0c243c15ece7b99f91459c7c3` | `b88d511c` | sandbox v1.3.0 |
 | 1440000 | XRPL EVM | `0x1a2f750170474d4c54f8d318d9d4343588b4c4d1` | `e07ad9c2` | prod v1.3.0 |
 | 1449000 | XRPL EVM Testnet | `0x5dba8515af063db0c243c15ece7b99f91459c7c3` | `b88d511c` | sandbox v1.3.0 |
 | 11155111 | Sepolia | `0x5dba8515af063db0c243c15ece7b99f91459c7c3` | `b88d511c` | sandbox v1.3.0 |
+| 11155111 | Sepolia | `0x7d61ec428cfae560f43647af567ea7c6e2cc5527` | `104c13df` | stress v1.3.0 |

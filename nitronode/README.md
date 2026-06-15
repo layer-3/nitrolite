@@ -43,7 +43,7 @@ Channel-lifecycle events from the blockchain listener are applied with per-chann
 
 For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers a chain-state refresh: the Node fetches the authoritative on-chain channel state via `getChannelData` on the bound `ChannelHub` contract and overwrites the row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. The refresher implementation is [`pkg/blockchain/evm/chain_state_refresher.go`](../pkg/blockchain/evm/chain_state_refresher.go), bound through the [`core.ChainStateRefresher`](../pkg/core/interface.go) interface.
 
-The refresh runs inside the event-processing transaction. On RPC failure the transaction rolls back and the listener replays the event, so convergence is never silently lost. Escrow event handlers enforce the guard without the refresh hook — cross-chain RPC plumbing for escrow refresh is a follow-up item.
+The refresh runs inside the event-processing transaction. On RPC failure the transaction rolls back and the listener replays the event, so convergence is never silently lost. Escrow event handlers enforce the guard without the refresh hook — cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
 
 Operators may see `"event state version is less than current channel state version, ignoring"` warn logs during channel-lifecycle events; these indicate the defense-in-depth path fired and the Node converged with chain.
 

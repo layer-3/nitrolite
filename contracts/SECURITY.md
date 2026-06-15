@@ -53,7 +53,30 @@ Invariant:
 
 ---
 
-8. The Node processes on-chain channel-lifecycle events with per-channel version monotonicity. An event whose `StateVersion` is strictly less than the row's current `StateVersion` is dropped with a structured warn log (see `nitronode/event_handlers/service.go`). For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers an on-chain `getChannelData` read via the `ChainStateRefresher` (`pkg/blockchain/evm/chain_state_refresher.go`, interface in `pkg/core/interface.go`) that overwrites the local row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. This is defense-in-depth against out-of-order event delivery from indexer mis-order, reorg replay, or any future contract change that re-introduces a same-transaction event-order quirk. Escrow event handlers enforce the guard without the refresh hook; cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
+8. App session closure is **atomic across all participants**. The Node issues a new release receive-state on every participant's home channel as part of a single close transaction; a failure on any single participant aborts the entire close, leaving the session open and no release credits issued to anyone.
+
+The Node refuses to issue a release state when the recipient's most recent signed state encodes an **escrow operation that `EnsureNoOngoingEscrowOperation` does not yet treat as safely settled**. In practice this covers:
+
+* any pending `escrow_lock` or `mutual_lock` (always considered unresolved until superseded);
+* `escrow_deposit` or `escrow_withdraw` whose on-chain escrow-channel version has not caught up with the signed state version — with a narrow one-version-behind allowance for `escrow_deposit` while the escrow channel is `Open` or `Closed` (the steady state during a normal finalize/purge cycle).
+
+The release receive-state is stacked on top of the recipient's most recent signed state. If that state encodes an unfinalized escrow, signing a release on top risks state-chain invariant violations should the escrow ultimately revert or settle to a different version than was assumed when the release was issued. The Node therefore blocks until the escrow resolves rather than risking a co-signed credit that cannot be enforced on-chain.
+
+Consequence: a single participant whose escrow has not yet completed — whether due to slow on-chain confirmation, an active challenge, or deliberate non-finalization — blocks the cooperative close for **all** other participants in the session. Remaining participants have two recovery paths:
+
+* wait for the blocking participant's escrow to resolve and retry the close,
+* if the session's state machine permits intermediate updates, individually unwind their share via off-chain transfers out of the session and re-attempt closure with the remaining (non-blocked) members.
+
+This is an accepted trade-off for now, which may be lifted in the future: protocol safety (no release state co-signed against a potentially-reverting escrow chain) takes precedence over close-time liveness. Sessions whose participants require independent exit guarantees should be designed with state machines that support partial settlement rather than relying solely on cooperative close.
+
+Unlike the `CHALLENGED` channel path (rule 6) — where the release issuer **does** store unsigned releases for non-`Open` home channels so the rescue squash can pick them up at close — the close path does **not** extend that unsigned-fallback pattern to the escrow-rejected case. When `EnsureNoOngoingEscrowOperation` rejects a participant, the entire close aborts rather than queueing an unsigned release on top of an in-flight escrow. Extending the fallback here is a possible future improvement but is non-trivial: the safety of stacking an unsigned release on an unfinalized escrow depends on later reconciling the eventual escrow outcome with the queued credit, and the current implementation prefers refusal over partial trust.
+
+Invariant:
+> A single participant with a pending escrow operation can block cooperative closure of an app session for all other participants until the escrow resolves; no participant receives a release credit while the close is blocked.
+
+---
+
+9. The Node processes on-chain channel-lifecycle events with per-channel version monotonicity. An event whose `StateVersion` is strictly less than the row's current `StateVersion` is dropped with a structured warn log (see `nitronode/event_handlers/service.go`). For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers an on-chain `getChannelData` read via the `ChainStateRefresher` (`pkg/blockchain/evm/chain_state_refresher.go`, interface in `pkg/core/interface.go`) that overwrites the local row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. This is defense-in-depth against out-of-order event delivery from indexer mis-order, reorg replay, or any future contract change that re-introduces a same-transaction event-order quirk. Escrow event handlers enforce the guard without the refresh hook; cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
 
 Invariant:
 > The Node's local `channels.state_version` is monotonic per `channelId`. After any dropped lifecycle event for a home channel, the Node row converges with on-chain authoritative state without manual intervention.

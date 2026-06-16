@@ -140,15 +140,16 @@ func NewChannel(channelID, userWallet, asset string, ChType ChannelType, blockch
 	}
 }
 
-// RefreshedChannel carries the authoritative on-chain channel snapshot used by
-// ReadOnlyChannelHub to converge a Node row that has diverged from chain.
+// OnChainChannelSnapshot carries the authoritative on-chain channel snapshot
+// returned by ReadOnlyChannelHub.FetchChannel and used to converge a Node row
+// that has diverged from chain.
 //
 // The snapshot reflects on-chain state at RPC-read time, not event-emit time:
 // the contract may have advanced the channel through additional transitions
 // between when the dropped event was emitted and when the refresh RPC ran. The
 // Node row may therefore briefly skip an intermediate status it never observed,
 // but it will always converge to a status the chain currently asserts.
-type RefreshedChannel struct {
+type OnChainChannelSnapshot struct {
 	Status             ChannelStatus // mapped from on-chain ChannelStatus enum
 	StateVersion       uint64        // from ChannelMeta.lastState.version
 	ChallengeExpiresAt *time.Time    // nil if no active challenge (on-chain expiry is zero)

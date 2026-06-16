@@ -47,7 +47,7 @@ func NewChannelHubReader(caller *ChannelHubCaller) *EVMChannelHubReader {
 // FetchChannel reads the authoritative on-chain snapshot for channelID from
 // the ChannelHub contract bound to this reader and returns it for the caller
 // to overwrite the local row. See core.ReadOnlyChannelHub for semantics.
-func (r *EVMChannelHubReader) FetchChannel(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
+func (r *EVMChannelHubReader) FetchChannel(ctx context.Context, channelID string) (*core.OnChainChannelSnapshot, error) {
 	channelIDBytes, err := hexToBytes32(channelID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid channel ID %q: %w", channelID, err)
@@ -72,7 +72,7 @@ func (r *EVMChannelHubReader) FetchChannel(ctx context.Context, channelID string
 		expiry = &t
 	}
 
-	return &core.RefreshedChannel{
+	return &core.OnChainChannelSnapshot{
 		Status:             status,
 		StateVersion:       data.LastState.Version,
 		ChallengeExpiresAt: expiry,

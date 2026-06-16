@@ -78,9 +78,10 @@ type AssetStore interface {
 // snapshot; no global multi-chain dispatcher is required.
 type ReadOnlyChannelHub interface {
 	// FetchChannel reads the authoritative on-chain channel snapshot for channelID
-	// and returns a RefreshedChannel ready to overwrite the Node's local row. The
-	// snapshot reflects on-chain state at RPC-read time, not event-emit time.
-	FetchChannel(ctx context.Context, channelID string) (*RefreshedChannel, error)
+	// and returns an OnChainChannelSnapshot ready to overwrite the Node's local
+	// row. The snapshot reflects on-chain state at RPC-read time, not
+	// event-emit time.
+	FetchChannel(ctx context.Context, channelID string) (*OnChainChannelSnapshot, error)
 }
 
 // ChannelHubEventHandler defines the off-chain reactions to ChannelHub

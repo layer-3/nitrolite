@@ -651,7 +651,7 @@ func TestHandleHomeChannelChallenged_StaleVersionIgnored(t *testing.T) {
 	}
 
 	// Refresher returns a snapshot consistent with the current row (chain hasn't moved).
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusOpen,
 		StateVersion:       5,
 		ChallengeExpiresAt: nil,
@@ -1667,12 +1667,12 @@ type MockReadOnlyChannelHub struct {
 }
 
 // FetchChannel mocks the on-drop chain-state refresh hook.
-func (m *MockReadOnlyChannelHub) FetchChannel(ctx context.Context, channelID string) (*core.RefreshedChannel, error) {
+func (m *MockReadOnlyChannelHub) FetchChannel(ctx context.Context, channelID string) (*core.OnChainChannelSnapshot, error) {
 	args := m.Called(ctx, channelID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*core.RefreshedChannel), args.Error(1)
+	return args.Get(0).(*core.OnChainChannelSnapshot), args.Error(1)
 }
 
 // TestHandleHomeChannelCheckpointed_BackfillsHeadNodeSig covers the case where a
@@ -2568,7 +2568,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDropped(t *testing.T) {
 
 	// Refresher returns a snapshot consistent with the current row (chain hasn't moved).
 	refreshedSig := "0xchainusersig"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusOpen,
 		StateVersion:       10,
 		ChallengeExpiresAt: nil,
@@ -2637,7 +2637,7 @@ func TestHandleHomeChannelCheckpointed_RegressionDoesNotClearChallenge(t *testin
 
 	// Chain still asserts Challenged at version 10 with the same expiry — refresh agrees with row.
 	refreshedSig := "0xchainusersig"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusChallenged,
 		StateVersion:       10,
 		ChallengeExpiresAt: &expiryTime,
@@ -2802,7 +2802,7 @@ func TestHandleHomeChannelClosed_RegressionDropped(t *testing.T) {
 
 	// Chain confirms: still Challenged at version 10. The older Closed event must not drive a close.
 	refreshedSig := "0xchainusersig"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusChallenged,
 		StateVersion:       10,
 		ChallengeExpiresAt: &expiryTime,
@@ -3345,7 +3345,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh(t *testing.T) {
 	// Authoritative on-chain view: Challenged at version 5, with a real expiry.
 	chainExpiry := time.Now().Add(2 * time.Hour)
 	chainSig := "0xab1234567890"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusChallenged,
 		StateVersion:       5,
 		ChallengeExpiresAt: &chainExpiry,
@@ -3409,7 +3409,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_CheckpointedGuardPath(t 
 
 	chainExpiry := time.Now().Add(time.Hour)
 	chainSig := "0xab1234567890"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusChallenged,
 		StateVersion:       8,
 		ChallengeExpiresAt: &chainExpiry,
@@ -3472,7 +3472,7 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	}
 
 	chainSig := "0xab1234567890"
-	refreshed := &core.RefreshedChannel{
+	refreshed := &core.OnChainChannelSnapshot{
 		Status:             core.ChannelStatusClosed,
 		StateVersion:       12,
 		ChallengeExpiresAt: nil,

@@ -124,6 +124,7 @@ func main() {
 
 			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
 			var liveHandler evm.HandleEvent
+			var flushDownstream func()
 			if confirmationDelay > 0 {
 				gate, err := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, logger)
 				if err != nil {
@@ -135,8 +136,10 @@ func main() {
 					}
 				})
 				liveHandler = gate.HandleEvent
+				flushDownstream = gate.FlushPending
 			} else {
 				liveHandler = reactor.HandleEvent
+				// flushDownstream stays nil: no gate to flush on the no-delay path.
 			}
 
 			// Live events flow through the confirmation gate (when delay > 0) or directly to the
@@ -144,7 +147,9 @@ func main() {
 			// based on block age: events older than confirmationDelay go directly to the reactor
 			// (past the reorg window); recent events still flow through the live handler because
 			// their blocks may still be reorged.
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore)
+			// flushDownstream is nil when confirmationDelay == 0; NewListener skips the flush call
+			// when it is nil, preserving no-gate behavior bit-for-bit.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore, flushDownstream)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

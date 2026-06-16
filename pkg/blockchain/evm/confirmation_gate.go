@@ -203,6 +203,32 @@ func (g *ConfirmationGate) HandleEvent(_ context.Context, eventLog types.Log) er
 	return nil
 }
 
+// FlushPending clears all pending queue entries and the pending tombstone map.
+// It does NOT clear forwardedSet — post-gate WARN observability is preserved across
+// reconnects. Retaining forwardedSet is intentional and load-bearing: the
+// storedAt.Equal(popped.forwardedAt) guard at confirmation_gate.go:281-288 relies
+// on forwardedSet membership to safely skip stale FIFO eviction entries after a
+// re-forward. Clearing forwardedSet here would break that guard for entries that
+// were forwarded before the flush.
+//
+// The drain goroutine continues to run after FlushPending returns. If it is
+// mid-handler when FlushPending is called, the flush blocks on g.mu until the
+// handler returns — the in-flight event is already committed to the DB (or will be
+// on the reactor's success path) before the flush observes the cleared state.
+//
+// Safe to call at any time after NewConfirmationGate (zero-value-safe even before
+// Start, since pending and queue are both nil/empty maps/slices by construction).
+func (g *ConfirmationGate) FlushPending() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queue = nil
+	g.pending = make(map[eventKey]common.Hash)
+	// forwardedSet and forwardedQueue intentionally retained.
+	// timer is left alone; drainAndReschedule's next pass will see len(queue)==0
+	// and leave the timer stopped (the "leave the timer stopped; the next kick
+	// recomputes" branch at the end of Step 3 in drainAndReschedule).
+}
+
 // run is the background goroutine that wakes on a kick, on the timer firing, or on
 // ctx cancellation. It forwards matured entries, evicts stale forwardedSet entries,
 // and reschedules the timer for the next head deadline. Returns a non-nil error if

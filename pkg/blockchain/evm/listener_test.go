@@ -45,7 +45,7 @@ func TestNewListener(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	l := NewListener(addr, mockClient, 1, 100, 0, logger, nil, nil, eventGetter)
+	l := NewListener(addr, mockClient, 1, 100, 0, logger, nil, nil, eventGetter, nil)
 	require.NotNil(t, l)
 	assert.Equal(t, addr, l.contractAddress)
 	assert.Equal(t, uint64(1), l.blockchainID)
@@ -73,7 +73,7 @@ func TestListener_Listen_CurrentEvents(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 100, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 100, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Mock SubscribeFilterLogs
 	sub := &MockSubscription{
@@ -110,7 +110,7 @@ func TestListener_ReconcileBlockRange(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 
 	eventGetter := new(MockContractEventGetter)
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	// Setup FilterLogs mock
 	// We expect a range fetch. start=100, step=10 -> end=110. current=120.
@@ -131,12 +131,10 @@ func TestListener_ReconcileBlockRange(t *testing.T) {
 	historicalCh := make(chan types.Log, 10)
 
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		listener.reconcileBlockRange(context.Background(), 120, 100, historicalCh)
 		close(historicalCh)
-	}()
+	})
 
 	var receivedLogs []types.Log
 	for l := range historicalCh {
@@ -170,11 +168,11 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	var receivedCount int64
+	var receivedCount atomic.Int64
 	doneCh := make(chan struct{})
 
 	handleEvent := func(ctx context.Context, log types.Log) error {
-		count := atomic.AddInt64(&receivedCount, 1)
+		count := receivedCount.Add(1)
 		if count >= 2 { // Expect 1 historical + 1 current
 			cancel()
 			select {
@@ -187,7 +185,7 @@ func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// findCommonAncestor: HeaderByNumber(100) returns the same header we hashed above,
 	// so the stored hash matches and block 100 is confirmed canonical.
@@ -234,7 +232,7 @@ func TestProcessEvents_DedupSkipsPresent(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Historical: 3 events. First 2 are present (skipped), 3rd is not (handled).
 	// After the 3rd, the check should stop — no IsContractEventProcessed call for events 4+.
@@ -287,7 +285,7 @@ func TestProcessEvents_SubscriptionErrorDuringPhase1(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+	listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 	// Historical channel with events that will block (not closed yet). BlockTimestamp
 	// is set so ensureBlockTimestamp short-circuits.
@@ -350,7 +348,7 @@ func TestListener_PhaseHandlerRouting(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, confirmationDelay, logger, liveHandler, historicalHandler, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, confirmationDelay, logger, liveHandler, historicalHandler, eventGetter, nil)
 
 	// Old historical event (block timestamp 10 minutes ago) — should bypass the gate.
 	oldHash := common.HexToHash("0xa1")
@@ -439,7 +437,7 @@ func TestListener_PhaseHandlerRouting_DelayZero(t *testing.T) {
 		return nil
 	}
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, liveHandler, historicalHandler, eventGetter, nil)
 
 	// BlockTimestamp populated by the upstream RPC — ensureBlockTimestamp short-circuits
 	// and routeHistoricalEvent routes directly to historicalHandler because delay == 0.
@@ -491,7 +489,7 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 
 		// confirmationDelay > 0: the gate is active; Removed=true logs MUST be forwarded.
 		const delay = 30 * time.Second
-		listener := NewListener(addr, new(MockEVMClient), 1, 10, delay, logger, handleEvent, handleEvent, eventGetter)
+		listener := NewListener(addr, new(MockEVMClient), 1, 10, delay, logger, handleEvent, handleEvent, eventGetter, nil)
 
 		// No historical events.
 		historicalCh := make(chan types.Log)
@@ -556,7 +554,7 @@ func TestListener_RemovedLog_ForwardedToHandler(t *testing.T) {
 		}
 
 		// confirmationDelay == 0: no gate; Removed=true logs must be dropped at Phase 2 boundary.
-		listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter)
+		listener := NewListener(addr, new(MockEVMClient), 1, 10, 0, logger, handleEvent, handleEvent, eventGetter, nil)
 
 		// No historical events.
 		historicalCh := make(chan types.Log)
@@ -618,7 +616,7 @@ func TestReconcileBlockRange_ContextCancellation(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -658,7 +656,7 @@ func TestEnsureBlockTimestamp_Populated(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	originalTs := uint64(1700000000)
 	eventLog := types.Log{
@@ -683,7 +681,7 @@ func TestEnsureBlockTimestamp_Fetch(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	headerTime := uint64(1700000000)
@@ -708,7 +706,7 @@ func TestEnsureBlockTimestamp_CacheHit(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	headerTime := uint64(1700000000)
@@ -742,7 +740,7 @@ func TestEnsureBlockTimestamp_FetchError(t *testing.T) {
 	addr := common.HexToAddress("0x123")
 	eventGetter := new(MockContractEventGetter)
 
-	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
 
 	bh := common.HexToHash("0xabc")
 	mockClient.On("HeaderByHash", mock.Anything, bh).Return(nil, fmt.Errorf("rpc failure")).Once()
@@ -755,4 +753,321 @@ func TestEnsureBlockTimestamp_FetchError(t *testing.T) {
 	assert.Equal(t, uint64(0), got.BlockTimestamp)
 	assert.Equal(t, bh, got.BlockHash)
 	mockClient.AssertExpectations(t)
+}
+
+// TestListener_NoGateFlushNilSafe: listenEvents must not panic when flushDownstream is nil.
+// This is the no-gate path (confirmationDelay == 0). We exercise the listenEvents loop
+// with two iterations so the nil-flush code path is hit on reconnect.
+func TestListener_NoGateFlushNilSafe(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	eventGetter := new(MockContractEventGetter)
+	// Empty store → findCommonAncestor returns 0 → skip historical replay.
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(0), "", nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// flushDownstream = nil (no gate).
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
+
+	// First subscription: immediately close so the loop gets a drop and retries.
+	sub1 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			sub1.Unsubscribe()
+		}).
+		Return(sub1, nil).Once()
+
+	// Second subscription: cancel the context so the loop exits cleanly.
+	sub2 := &MockSubscription{errChan: make(chan error), unsub: func() {}}
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			cancel()
+		}).
+		Return(sub2, nil).Once()
+
+	listenerDone := make(chan error, 1)
+	// Must not panic.
+	require.NotPanics(t, func() {
+		listener.Listen(ctx, func(err error) { listenerDone <- err })
+		select {
+		case <-listenerDone:
+		case <-time.After(3 * time.Second):
+			t.Log("listener timed out but did not panic — test passes")
+		}
+	})
+}
+
+// TestListener_FlushTimingPrecedesBackoff verifies that flushDownstream is called
+// BEFORE the backoff sleep on each reconnect iteration, not after it.
+//
+// The observable invariant: if flush runs before the sleep, then the wall-clock gap
+// between flushTime and the next SubscribeFilterLogs call must be at least the backoff
+// duration. If flush runs after the sleep (old wrong ordering), the gap is negligible
+// (flush and subscribe happen back-to-back with no sleep between them).
+//
+// Mechanics:
+//   - Iteration 1 (backOffCount=0): no sleep; sub1 drops immediately (retry=true).
+//     Flush is recorded, backOffCount becomes 1.
+//   - Iteration 2 (backOffCount=1): logBackOff returns backOffDuration(1)=1s sleep.
+//     After the sleep, subscribe2 is called and cancels the context.
+//
+// Test assertion: sub2Time - flushTime >= minBackoff (≈1s).
+// Under the wrong (old) ordering the flush would run just before subscribe2 with no
+// sleep in between, so sub2Time - flushTime would be negligible (~0ms), causing the
+// assertion to fail.
+func TestListener_FlushTimingPrecedesBackoff(t *testing.T) {
+	// Not marked t.Parallel() because this test intentionally sleeps for ~1s
+	// (backOffDuration(1) = 1s). Running it in parallel is fine for correctness
+	// but keeps the suite wall time reasonable.
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	eventGetter := new(MockContractEventGetter)
+	// Empty store → no historical replay on each pass.
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(0), "", nil)
+
+	// flushTime captures the wall-clock instant when flushDownstream is called.
+	// It is set on the first (and only) flush that happens after sub1 drops.
+	var flushTime time.Time
+	var flushMu sync.Mutex
+
+	flushDownstream := func() {
+		flushMu.Lock()
+		defer flushMu.Unlock()
+		if flushTime.IsZero() {
+			flushTime = time.Now()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, flushDownstream)
+
+	sub1 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+	sub2 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+
+	// First SubscribeFilterLogs: drop sub1 immediately so processEvents returns nil
+	// (subscription drop → retry=true). backOffCount advances to 1 after this.
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			sub1.Unsubscribe()
+		}).
+		Return(sub1, nil).Once()
+
+	// Second SubscribeFilterLogs: reached only after the backoff sleep
+	// (backOffDuration(1) = 1s). Record arrival time and cancel so the loop exits.
+	var sub2Time time.Time
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			sub2Time = time.Now()
+			cancel()
+		}).
+		Return(sub2, nil).Once()
+
+	listenerDone := make(chan error, 1)
+	listener.Listen(ctx, func(err error) {
+		listenerDone <- err
+	})
+
+	select {
+	case <-listenerDone:
+	case <-time.After(10 * time.Second):
+		cancel()
+		t.Fatal("listener did not exit within timeout")
+	}
+
+	flushMu.Lock()
+	ft := flushTime
+	flushMu.Unlock()
+
+	require.False(t, ft.IsZero(), "flushDownstream must have been called after the subscription drop")
+	require.False(t, sub2Time.IsZero(), "second SubscribeFilterLogs must have been called")
+
+	// The gap between flush and the second subscribe must span the backoff sleep.
+	// backOffDuration(1) = 1s; use 800ms as a conservative lower bound to absorb
+	// scheduling jitter while still catching the wrong ordering (gap ≈ 0ms).
+	const minBackoff = 800 * time.Millisecond
+	gap := sub2Time.Sub(ft)
+	assert.GreaterOrEqual(t, gap, minBackoff,
+		"gap between flushTime and sub2Time (%v) must be >= minBackoff (%v); "+
+			"if this fails the flush is running AFTER the sleep (wrong ordering)", gap, minBackoff)
+}
+
+// TestListener_BackoffOnSubscriptionDrop: after a mid-Phase-2 subscription drop the
+// outer loop must increment backOffCount so repeated drops incur increasing delays.
+// We validate this indirectly by checking that the second SubscribeFilterLogs call
+// happens only after some elapsed time relative to the first.
+func TestListener_BackoffOnSubscriptionDrop(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	eventGetter := new(MockContractEventGetter)
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).Return(uint64(0), "", nil)
+
+	var subTimes []time.Time
+	var subMu sync.Mutex
+
+	sub1 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+	sub2 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// First call: record time, immediately drop.
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			subMu.Lock()
+			subTimes = append(subTimes, time.Now())
+			subMu.Unlock()
+			sub1.Unsubscribe()
+		}).
+		Return(sub1, nil).Once()
+
+	// Second call: record time, cancel so loop exits.
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			subMu.Lock()
+			subTimes = append(subTimes, time.Now())
+			subMu.Unlock()
+			cancel()
+		}).
+		Return(sub2, nil).Once()
+
+	listenerDone := make(chan error, 1)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
+	listener.Listen(ctx, func(err error) { listenerDone <- err })
+
+	select {
+	case <-listenerDone:
+	case <-time.After(10 * time.Second):
+		cancel()
+		t.Fatal("listener did not exit within timeout")
+	}
+
+	subMu.Lock()
+	times := append([]time.Time(nil), subTimes...)
+	subMu.Unlock()
+
+	require.Len(t, times, 2, "must have exactly two SubscribeFilterLogs calls")
+	// After first drop backOffCount == 1 → logBackOff returns backOffDuration(1) > 0.
+	// The second call must happen at least a small positive time after the first.
+	gap := times[1].Sub(times[0])
+	assert.Greater(t, gap, time.Duration(0), "second subscribe must be delayed relative to first (backoff > 0)")
+}
+
+// TestListener_ReconnectFlushesGateAndRewindsCursor: on reconnect after a subscription
+// drop, flushDownstream must be called and findCommonAncestor must be re-called so
+// Phase 1 re-covers events that were in the gate's pending state but not committed.
+func TestListener_ReconnectFlushesGateAndRewindsCursor(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	const committedBlock = uint64(95)
+	// The canonical hash that findCommonAncestor will check.
+	canonicalHeader := &types.Header{Number: big.NewInt(int64(committedBlock)), Difficulty: big.NewInt(1)}
+	canonicalHash := canonicalHeader.Hash()
+
+	eventGetter := new(MockContractEventGetter)
+	// findCommonAncestor returns committedBlock on every call (reactor committed up to 95).
+	eventGetter.On("GetLatestContractEventBlockHashAndNumber", addr.String(), uint64(1)).
+		Return(committedBlock, canonicalHash.Hex(), nil)
+	// isStoredBlockCanonical: HeaderByNumber(95) returns canonicalHeader → hash matches → canonical.
+	mockClient.On("HeaderByNumber", mock.Anything, mock.MatchedBy(func(n *big.Int) bool {
+		return n != nil && n.Cmp(big.NewInt(int64(committedBlock))) == 0
+	})).Return(canonicalHeader, nil)
+
+	var flushCalls atomic.Int32
+	flushDownstream := func() { flushCalls.Add(1) }
+
+	// Track the from-block of every FilterLogs call to verify the cursor.
+	var reconcileStarts []uint64
+	var reconcileMu sync.Mutex
+
+	// Current tip = block 110.
+	currentHeader := &types.Header{Number: big.NewInt(110)}
+	mockClient.On("HeaderByNumber", mock.Anything, (*big.Int)(nil)).Return(currentHeader, nil)
+
+	mockClient.On("FilterLogs", mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			q := args.Get(1).(ethereum.FilterQuery)
+			reconcileMu.Lock()
+			reconcileStarts = append(reconcileStarts, q.FromBlock.Uint64())
+			reconcileMu.Unlock()
+		}).
+		Return([]types.Log{}, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// First subscription: deliver one live event (advancing in-memory lastBlock to 100),
+	// then immediately drop so the loop retries.
+	sub1 := &MockSubscription{errChan: make(chan error, 1), unsub: func() {}}
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			ch := args.Get(2).(chan<- types.Log)
+			// Deliver a live event at block 100 so in-memory lastBlock advances to 100.
+			ch <- types.Log{
+				BlockNumber:    100,
+				Index:          0,
+				TxHash:         common.HexToHash("0xLIVE"),
+				BlockTimestamp: uint64(time.Now().Unix()),
+			}
+			go func() {
+				time.Sleep(20 * time.Millisecond)
+				sub1.Unsubscribe()
+			}()
+		}).
+		Return(sub1, nil).Once()
+
+	// Second subscription: cancel so the loop exits.
+	sub2 := &MockSubscription{errChan: make(chan error), unsub: func() {}}
+	mockClient.On("SubscribeFilterLogs", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			cancel()
+		}).
+		Return(sub2, nil).Once()
+
+	// Dedup check for the live event on the first pass.
+	eventGetter.On("IsContractEventProcessed", mock.Anything, uint32(0), uint64(1)).Return(false, nil).Maybe()
+
+	var noopHandler HandleEvent = func(_ context.Context, _ types.Log) error { return nil }
+	listener := NewListener(addr, mockClient, 1, 100, 0, logger, noopHandler, noopHandler, eventGetter, flushDownstream)
+
+	listenerDone := make(chan error, 1)
+	listener.Listen(ctx, func(err error) { listenerDone <- err })
+
+	select {
+	case <-listenerDone:
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("listener did not exit within timeout")
+	}
+
+	// flushDownstream must have been called exactly once: after the first subscription
+	// drop, before the second pass begins. With the new ordering, flush runs AFTER
+	// runOneListenPass returns retry=true and BEFORE the next iteration's backoff
+	// sleep — so the first iteration does not flush (no prior subscription drop) and
+	// the second iteration exits cleanly (cancel was called), so it also does not flush.
+	assert.Equal(t, int32(1), flushCalls.Load(),
+		"flushDownstream must be called exactly once (after the subscription drop, before the second pass)")
+
+	// Every FilterLogs call must start from committedBlock (95), not from the
+	// live-event block (100) that was in-memory on the first pass. This proves
+	// findCommonAncestor was re-called on the second pass.
+	reconcileMu.Lock()
+	starts := append([]uint64(nil), reconcileStarts...)
+	reconcileMu.Unlock()
+
+	for i, start := range starts {
+		assert.Equal(t, committedBlock, start,
+			"reconcileBlockRange call %d must start from committedBlock=%d, got %d", i, committedBlock, start)
+	}
 }

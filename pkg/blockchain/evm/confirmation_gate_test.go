@@ -838,3 +838,174 @@ func TestConfirmationGate_HandlerErrorPropagatesFatal(t *testing.T) {
 	time.Sleep(delay + 100*time.Millisecond)
 	assert.Equal(t, int64(1), handlerCalls.Load(), "handler must be invoked exactly once across gate lifetime")
 }
+
+// TestGate_FlushPending_ClearsPendingAndQueue: FlushPending zeros queue and pending
+// but intentionally retains forwardedSet so the post-gate WARN window survives reconnects.
+// The storedAt.Equal(popped.forwardedAt) eviction guard at confirmation_gate.go:281-288
+// is load-bearing for re-forward correctness and depends on forwardedSet membership; see
+// FlushPending doc comment.
+func TestGate_FlushPending_ClearsPendingAndQueue(t *testing.T) {
+	t.Parallel()
+
+	var forwardCount atomic.Int32
+	handler := func(_ context.Context, _ types.Log) error {
+		forwardCount.Add(1)
+		return nil
+	}
+
+	delay := 1 * time.Second // large enough so events don't mature during the test
+	g := newGate(t, delay, handler)
+	g.Start(t.Context(), func(error) {})
+
+	// Push 3 non-removed events; they must sit in pending and queue.
+	txHashes := []common.Hash{
+		common.HexToHash("0xA1"),
+		common.HexToHash("0xA2"),
+		common.HexToHash("0xA3"),
+	}
+	bh := common.HexToHash("0xBLOCK")
+	for i, tx := range txHashes {
+		require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, uint(i), false)))
+	}
+
+	g.mu.Lock()
+	assert.Equal(t, 3, len(g.queue), "queue must have 3 entries before flush")
+	assert.Equal(t, 3, len(g.pending), "pending must have 3 entries before flush")
+	g.mu.Unlock()
+
+	g.FlushPending()
+
+	g.mu.Lock()
+	assert.Nil(t, g.queue, "queue must be nil after flush")
+	assert.Equal(t, 0, len(g.pending), "pending must be empty after flush")
+	g.mu.Unlock()
+
+	// Handler must not have been called (entries were flushed before maturing).
+	assert.Equal(t, int32(0), forwardCount.Load(), "handler must not be called for flushed entries")
+}
+
+// TestGate_FlushPending_RetainsForwardedSet: forwardedSet must survive a FlushPending call.
+func TestGate_FlushPending_RetainsForwardedSet(t *testing.T) {
+	t.Parallel()
+
+	var forwardCount atomic.Int32
+	handler := func(_ context.Context, _ types.Log) error {
+		forwardCount.Add(1)
+		return nil
+	}
+
+	delay := 5 * time.Millisecond
+	g := newGate(t, delay, handler)
+	g.Start(t.Context(), func(error) {})
+
+	// Enqueue and wait for one event to be forwarded (so forwardedSet has an entry).
+	tx := common.HexToHash("0xF1")
+	bh := common.HexToHash("0xF1")
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, 0, false)))
+
+	deadline := time.After(500 * time.Millisecond)
+	for forwardCount.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("handler not called within timeout")
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	// forwardedSet must contain the entry.
+	fk := forwardedKey{txHash: tx, blockHash: bh, logIndex: 0}
+	g.mu.Lock()
+	_, presentBefore := g.forwardedSet[fk]
+	g.mu.Unlock()
+	require.True(t, presentBefore, "forwardedSet must contain the entry before flush")
+
+	// Enqueue two more events so flush has something to clear.
+	tx2 := common.HexToHash("0xF2")
+	bh2 := common.HexToHash("0xF2")
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx2, bh2, 0, false)))
+
+	g.FlushPending()
+
+	// forwardedSet must still contain the originally forwarded entry.
+	g.mu.Lock()
+	_, presentAfter := g.forwardedSet[fk]
+	queueLen := len(g.queue)
+	pendingLen := len(g.pending)
+	g.mu.Unlock()
+
+	assert.True(t, presentAfter, "forwardedSet must be retained across FlushPending")
+	assert.Nil(t, g.queue, "queue must be nil after flush")
+	assert.Equal(t, 0, pendingLen, "pending must be empty after flush")
+	assert.Equal(t, 0, queueLen, "queue must be empty after flush")
+}
+
+// TestGate_ReForwardAfterFlush_EvictionGuardCorrect: verifies that the
+// storedAt.Equal(popped.forwardedAt) guard at confirmation_gate.go:281-288 handles
+// the case where an entry that was in forwardedSet before the flush is re-forwarded
+// after the flush. The older FIFO entry must NOT evict the newer set membership.
+func TestGate_ReForwardAfterFlush_EvictionGuardCorrect(t *testing.T) {
+	t.Parallel()
+
+	var forwardCount atomic.Int32
+	handler := func(_ context.Context, _ types.Log) error {
+		forwardCount.Add(1)
+		return nil
+	}
+
+	delay := 5 * time.Millisecond
+	g := newGate(t, delay, handler)
+	g.Start(t.Context(), func(error) {})
+
+	tx := common.HexToHash("0xEG1")
+	bh := common.HexToHash("0xEG1")
+
+	// First forward.
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, 0, false)))
+	deadline := time.After(500 * time.Millisecond)
+	for forwardCount.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("first forward timed out")
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+	assert.Equal(t, int32(1), forwardCount.Load())
+
+	// Flush: queue and pending are cleared; forwardedSet retains the entry.
+	g.FlushPending()
+
+	// Re-enqueue the same (tx, logIndex) with same blockHash — simulates re-forward after flush.
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx, bh, 0, false)))
+
+	// Wait for the re-forward.
+	deadline = time.After(500 * time.Millisecond)
+	for forwardCount.Load() < 2 {
+		select {
+		case <-deadline:
+			t.Fatal("re-forward timed out")
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+	assert.Equal(t, int32(2), forwardCount.Load())
+
+	// Wait past recentMultiplier × delay so the eviction loop runs.
+	time.Sleep(time.Duration(recentMultiplier+1) * delay)
+
+	// Kick the eviction loop by enqueuing a third event.
+	tx2 := common.HexToHash("0xEG2")
+	bh2 := common.HexToHash("0xEG2")
+	require.NoError(t, g.HandleEvent(context.Background(), makeLog(tx2, bh2, 0, false)))
+	deadline = time.After(500 * time.Millisecond)
+	for forwardCount.Load() < 3 {
+		select {
+		case <-deadline:
+			t.Fatal("third forward timed out")
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+	assert.Equal(t, int32(3), forwardCount.Load())
+}

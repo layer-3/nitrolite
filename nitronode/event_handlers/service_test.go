@@ -3504,19 +3504,22 @@ func TestScenario4_OuterChallengeDroppedTriggersRefresh_ClosedGuardPath(t *testi
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
 }
 
-// §E.12 — Refresher-error log-and-continue test (Challenged guard path).
-// Per the Hybrid log-and-continue error contract: when ReadOnlyChannelHub.FetchChannel
-// fails, the handler logs at Error level and returns nil so the outer reactor
+// §E.12 — Refresher-error retry-and-continue test (Challenged guard path).
+// Per the Hybrid retry-and-continue error contract: when ReadOnlyChannelHub.FetchChannel
+// fails, the handler retries up to refreshMaxAttempts with bounded backoff,
+// then logs at Error level and returns nil so the outer reactor
 // transaction commits (dedup row recorded, listener advances). The local channel
 // row stays at whatever the inner higher-version event already set it to — no
-// convergence happens. There is no retry; this trades transient divergence for
-// not killing the node on a transient RPC blip.
+// convergence happens. This trades transient divergence for not killing the
+// node on a sustained RPC outage.
 func TestGuardDrop_RefresherErrorLoggedAndIgnored(t *testing.T) {
 	mockStore := new(MockStore)
 	mockHub := new(MockReadOnlyChannelHub)
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
 	service, _ := newTestEventHandlerService(t)
+	// Disable sleeps between retries so the test does not actually wait.
+	service.refreshBackoff = []time.Duration{0, 0}
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3538,7 +3541,9 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored(t *testing.T) {
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	// All refreshMaxAttempts attempts fail; the handler must exhaust them and
+	// then fall back to log-and-continue.
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Times(refreshMaxAttempts)
 
 	err := service.HandleHomeChannelChallenged(ctx, mockStore, mockHub, event)
 
@@ -3548,8 +3553,8 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored(t *testing.T) {
 	require.Equal(t, core.ChannelStatusOpen, channel.Status, "row must not be mutated on refresh failure")
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
-	// No retry: FetchChannel called exactly once.
-	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
+	// Bounded retry: FetchChannel called exactly refreshMaxAttempts times.
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", refreshMaxAttempts)
 	// No convergence write.
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
@@ -3563,6 +3568,7 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_CheckpointedGuardPath(t *testi
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
 	service, _ := newTestEventHandlerService(t)
+	service.refreshBackoff = []time.Duration{0, 0}
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3586,7 +3592,7 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_CheckpointedGuardPath(t *testi
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Times(refreshMaxAttempts)
 
 	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
 
@@ -3596,7 +3602,7 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_CheckpointedGuardPath(t *testi
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
-	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", refreshMaxAttempts)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
@@ -3609,6 +3615,7 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_ClosedGuardPath(t *testing.T) 
 	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
 
 	service, _ := newTestEventHandlerService(t)
+	service.refreshBackoff = []time.Duration{0, 0}
 
 	channelID := "0xHomeChannel123"
 	userWallet := "0x1234567890123456789012345678901234567890"
@@ -3631,7 +3638,7 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_ClosedGuardPath(t *testing.T) 
 
 	rpcErr := errors.New("rpc unavailable")
 	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
-	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Times(refreshMaxAttempts)
 
 	err := service.HandleHomeChannelClosed(ctx, mockStore, mockHub, event)
 
@@ -3641,11 +3648,141 @@ func TestGuardDrop_RefresherErrorLoggedAndIgnored_ClosedGuardPath(t *testing.T) 
 	require.NotNil(t, channel.ChallengeExpiresAt)
 	mockStore.AssertExpectations(t)
 	mockHub.AssertExpectations(t)
-	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", refreshMaxAttempts)
 	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
 	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "SumNetTransitionAmountAfterVersion", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
 	mockStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
+}
+
+// TestGuardDrop_RefresherSucceedsOnSecondAttempt verifies the retry mechanism:
+// when the first FetchChannel attempt fails but a subsequent attempt returns a
+// valid snapshot, the handler converges the row to that snapshot and the dedup
+// ledger advances. Pinned on the Checkpointed guard path — the most common
+// reentrancy reorder source in production.
+func TestGuardDrop_RefresherSucceedsOnSecondAttempt(t *testing.T) {
+	mockStore := new(MockStore)
+	mockHub := new(MockReadOnlyChannelHub)
+	ctx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+
+	service, _ := newTestEventHandlerService(t)
+	service.refreshBackoff = []time.Duration{0, 0}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       10,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // regression — triggers guard-drop refresh
+		UserSig:      "0xstaleusersig",
+	}
+
+	// First FetchChannel attempt fails, second returns the authoritative snapshot.
+	rpcErr := errors.New("rpc transient")
+	refreshed := &core.OnChainChannelSnapshot{
+		Status:             core.ChannelStatusOpen,
+		StateVersion:       12,
+		ChallengeExpiresAt: nil,
+		LastStateUserSig:   "0xchainusersig",
+	}
+
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(nil, rpcErr).Once()
+	mockHub.On("FetchChannel", mock.Anything, channelID).Return(refreshed, nil).Once()
+	mockStore.On("UpdateChannel", mock.MatchedBy(func(ch core.Channel) bool {
+		// Row must converge to the refreshed chain snapshot, not the stale event payload.
+		return ch.ChannelID == channelID &&
+			ch.Status == core.ChannelStatusOpen &&
+			ch.StateVersion == 12 &&
+			ch.ChallengeExpiresAt == nil
+	})).Return(nil)
+	mockStore.On("RefreshUserEnforcedBalance", userWallet, "usdc").Return(nil)
+	mockStore.On("UpdateStateSigsIfMissing", channelID, uint64(12), "0xchainusersig", "").Return(nil)
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(12), channel.StateVersion, "row must converge to chain snapshot")
+	require.Equal(t, core.ChannelStatusOpen, channel.Status, "status must converge to chain snapshot")
+	require.Nil(t, channel.ChallengeExpiresAt)
+	mockStore.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 2)
+}
+
+// TestGuardDrop_RefresherContextCancelledDuringBackoff verifies that
+// ctx cancellation during a retry backoff returns nil immediately and does NOT
+// propagate cancellation upward. Propagating ctx.Err() would surface as a
+// non-nil handler return and the listener would escalate to logger.Fatal, so
+// this invariant pins the cancellation-safety guarantee promised in the helper
+// doc-comment. Mocks confirm only the first FetchChannel attempt fired and the
+// row stays untouched.
+func TestGuardDrop_RefresherContextCancelledDuringBackoff(t *testing.T) {
+	mockStore := new(MockStore)
+	mockHub := new(MockReadOnlyChannelHub)
+	baseCtx := log.SetContextLogger(context.Background(), log.NewNoopLogger())
+	ctx, cancel := context.WithCancel(baseCtx)
+
+	service, _ := newTestEventHandlerService(t)
+	// Long backoff so the cancellation lands inside the sleep before attempt #2.
+	service.refreshBackoff = []time.Duration{1 * time.Hour, 1 * time.Hour}
+
+	channelID := "0xHomeChannel123"
+	userWallet := "0x1234567890123456789012345678901234567890"
+	expiryTime := time.Now().Add(time.Hour)
+
+	channel := &core.Channel{
+		ChannelID:          channelID,
+		UserWallet:         userWallet,
+		Asset:              "usdc",
+		Type:               core.ChannelTypeHome,
+		Status:             core.ChannelStatusChallenged,
+		StateVersion:       10,
+		ChallengeExpiresAt: &expiryTime,
+	}
+
+	event := &core.HomeChannelCheckpointedEvent{
+		ChannelID:    channelID,
+		StateVersion: 5, // regression
+		UserSig:      "0xstaleusersig",
+	}
+
+	rpcErr := errors.New("rpc unavailable")
+	mockStore.On("LockUserStateForHomeChannel", channelID).Return(channel, nil)
+	// First attempt fails; the handler enters backoff and observes the cancellation.
+	mockHub.On("FetchChannel", mock.Anything, channelID).
+		Run(func(mock.Arguments) {
+			// Cancel right after the first attempt completes so the next select
+			// hits ctx.Done before time.After.
+			cancel()
+		}).
+		Return(nil, rpcErr).Once()
+
+	err := service.HandleHomeChannelCheckpointed(ctx, mockStore, mockHub, event)
+
+	require.NoError(t, err, "ctx cancellation must NOT propagate — listener would escalate to logger.Fatal")
+	// Row must remain untouched — no convergence on cancellation.
+	require.Equal(t, uint64(10), channel.StateVersion)
+	require.Equal(t, core.ChannelStatusChallenged, channel.Status)
+	require.NotNil(t, channel.ChallengeExpiresAt)
+	mockStore.AssertExpectations(t)
+	mockHub.AssertExpectations(t)
+	// Only the first attempt fired; the cancellation aborted the backoff before attempt #2.
+	mockHub.AssertNumberOfCalls(t, "FetchChannel", 1)
+	mockStore.AssertNotCalled(t, "UpdateChannel", mock.Anything)
+	mockStore.AssertNotCalled(t, "RefreshUserEnforcedBalance", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "UpdateStateSigsIfMissing", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }

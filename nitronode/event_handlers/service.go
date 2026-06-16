@@ -13,11 +13,31 @@ import (
 
 var _ core.ChannelHubEventHandler = &EventHandlerService{}
 
+// refreshMaxAttempts bounds the number of FetchChannel attempts the home-channel
+// guard-drop path will make before giving up. Worst-case wall-clock is the sum
+// of refreshDefaultBackoffSchedule plus per-attempt RPC timeouts inside
+// FetchChannel (currently 5s each).
+const refreshMaxAttempts = 3
+
+// refreshDefaultBackoffSchedule is the package-default backoff between
+// consecutive FetchChannel attempts. The number of entries must be
+// refreshMaxAttempts - 1. Tests can override per-service via
+// EventHandlerService.refreshBackoff.
+var refreshDefaultBackoffSchedule = []time.Duration{
+	100 * time.Millisecond,
+	200 * time.Millisecond,
+}
+
 // EventHandlerService processes blockchain events and updates the local database state accordingly.
 // It handles events from both home channels (user state channels) and escrow channels (temporary lock channels).
 type EventHandlerService struct {
 	nodeSigner  *core.ChannelDefaultSigner
 	statePacker core.StatePacker
+	// refreshBackoff overrides the default backoff schedule used between
+	// FetchChannel retries in refreshAfterDroppedEvent. When nil the package
+	// default (refreshDefaultBackoffSchedule) is used. Tests set this to a
+	// zero-valued slice to avoid actually sleeping.
+	refreshBackoff []time.Duration
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
@@ -68,19 +88,76 @@ func guardEventVersionMonotonic(
 // the chain-asserted version. Called from the home-channel guard-drop paths to
 // close the observability gap described in §B.
 //
-// Log-and-continue error contract:
-//   - hub returns nil: row converged, returns nil so the dedup ledger advances.
-//   - hub returns an error: logs at Error level and returns nil. The outer tx
-//     still commits — the dedup row is recorded and the listener moves on,
-//     but the local channel row stays at whatever the inner higher-version
-//     event already set it to. No retry, no replay. The row may stay divergent
-//     from chain (especially for terminal Closed states where no future event
-//     will arrive). This is an accepted trade-off: strictly better than
-//     `logger.Fatal`-ing the node on a transient RPC blip, and the failure
-//     mode requires a guard drop coinciding with a sustained RPC outage.
+// Retry-and-continue error contract:
+//   - hub returns nil snapshot on any attempt: row converged, returns nil so
+//     the dedup ledger advances.
+//   - hub returns an error: retries with bounded exponential backoff
+//     (refreshMaxAttempts total attempts, sleeps from refreshBackoff or
+//     refreshDefaultBackoffSchedule between attempts — by default 100ms+200ms
+//     gaps, ~700ms worst-case before giving up; per-attempt RPC timeout is
+//     enforced inside FetchChannel). If every attempt fails, logs at Error
+//     level and returns nil. The outer tx still commits — the dedup row is
+//     recorded and the listener moves on, but the local channel row stays at
+//     whatever the inner higher-version event already set it to. The row may
+//     stay divergent from chain — for terminal Closed states this may be
+//     indefinite because no future event for the channel will arrive — but
+//     this is strictly better than `logger.Fatal`-ing the node on a sustained
+//     RPC outage. ctx cancellation during a backoff returns nil immediately
+//     and does NOT propagate up (which would trigger logger.Fatal in the
+//     listener).
 //
 // hub is supplied by the reactor that owns this channel's chain; it must be
 // non-nil on the guard-drop paths.
+// fetchSnapshotWithRetry calls hub.FetchChannel up to refreshMaxAttempts times,
+// sleeping s.refreshBackoff (or refreshDefaultBackoffSchedule when nil) between
+// consecutive attempts. droppedIntent is included in per-attempt warning logs
+// so operators can correlate retries with the originating guard-drop.
+//
+// Returns:
+//   - (snapshot, nil) on the first successful FetchChannel.
+//   - (nil, ctx.Err()) if ctx is cancelled during a backoff sleep.
+//   - (nil, lastErr) if every attempt failed.
+//
+// The caller decides what to do with the error; this helper never logs at
+// Error level and never returns a wrapped error.
+func (s *EventHandlerService) fetchSnapshotWithRetry(
+	ctx context.Context,
+	hub core.ReadOnlyChannelHub,
+	channelID string,
+	droppedIntent string,
+) (*core.OnChainChannelSnapshot, error) {
+	logger := log.FromContext(ctx)
+
+	backoff := s.refreshBackoff
+	if backoff == nil {
+		backoff = refreshDefaultBackoffSchedule
+	}
+
+	var lastErr error
+	for attempt := range refreshMaxAttempts {
+		snapshot, err := hub.FetchChannel(ctx, channelID)
+		if err == nil {
+			return snapshot, nil
+		}
+		lastErr = err
+		logger.Warn("refresh after dropped event attempt failed, will retry",
+			"channelId", channelID,
+			"droppedIntent", droppedIntent,
+			"attempt", attempt+1,
+			"maxAttempts", refreshMaxAttempts,
+			"error", err)
+		if attempt == refreshMaxAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff[attempt]):
+		}
+	}
+	return nil, lastErr
+}
+
 func (s *EventHandlerService) refreshAfterDroppedEvent(
 	ctx context.Context,
 	tx core.ChannelHubEventHandlerStore,
@@ -89,11 +166,19 @@ func (s *EventHandlerService) refreshAfterDroppedEvent(
 	droppedIntent string,
 ) error {
 	logger := log.FromContext(ctx)
-	refreshed, err := hub.FetchChannel(ctx, channel.ChannelID)
+
+	refreshed, err := s.fetchSnapshotWithRetry(ctx, hub, channel.ChannelID, droppedIntent)
 	if err != nil {
-		logger.Error("refresh after dropped event failed, leaving row possibly divergent from chain",
+		if ctx.Err() != nil {
+			// Ctx cancelled mid-retry. Do NOT propagate ctx.Err() upward — the
+			// listener escalates non-nil returns from event handlers to
+			// logger.Fatal.
+			return nil
+		}
+		logger.Error("refresh after dropped event failed after retries, leaving row possibly divergent from chain",
 			"channelId", channel.ChannelID,
 			"droppedIntent", droppedIntent,
+			"attempts", refreshMaxAttempts,
 			"error", err)
 		return nil
 	}

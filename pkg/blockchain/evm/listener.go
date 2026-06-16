@@ -463,9 +463,9 @@ func (l *Listener) processEvents(
 	}
 }
 
-// reconcileBlockRange fetches logs from lastBlock to currentBlock in blockStep-sized
-// windows, sending each log to historicalCh. Caller closes historicalCh after return.
-// Uses a dedicated context so it can be cancelled when the subscription drops.
+// reconcileBlockRange fetches logs in [lastBlock, currentBlock] (inclusive both bounds)
+// in blockStep-sized windows, sending each log to historicalCh. Caller closes historicalCh
+// after return. Uses a dedicated context so it can be cancelled when the subscription drops.
 func (l *Listener) reconcileBlockRange(
 	ctx context.Context,
 	currentBlock uint64,
@@ -476,7 +476,10 @@ func (l *Listener) reconcileBlockRange(
 	startBlock := lastBlock
 	endBlock := startBlock + l.blockStep
 
-	for currentBlock > startBlock {
+	// Inclusive at the lower bound so the all-reorged orphan-height case
+	// (lastBlock == currentBlock) still fetches the canonical replacement;
+	// downstream dedup absorbs the inevitable re-fetch on restart-at-exact-tip.
+	for currentBlock >= startBlock {
 		d, ok := l.logBackOff(backOffCount.Load(), "reconcile block range")
 		if !ok {
 			return

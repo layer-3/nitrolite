@@ -147,6 +147,51 @@ func TestListener_ReconcileBlockRange(t *testing.T) {
 	assert.Equal(t, uint64(115), receivedLogs[1].BlockNumber)
 }
 
+// TestListener_ReconcileBlockRange_EqualBounds verifies that when lastBlock ==
+// currentBlock, reconcileBlockRange issues exactly one FilterLogs call with
+// FromBlock == ToBlock == N and forwards the returned log. This is the
+// all-reorged resume-from-orphaned-latest case: findCommonAncestor returns
+// latestNum and the live tip is also latestNum, so the canonical replacement
+// at height N must still be fetched.
+//
+// Under the old `for currentBlock > startBlock` guard this test would fail
+// because the loop body is never entered when both are equal.
+func TestListener_ReconcileBlockRange_EqualBounds(t *testing.T) {
+	t.Parallel()
+	mockClient := new(MockEVMClient)
+	logger := log.NewNoopLogger()
+	addr := common.HexToAddress("0x123")
+
+	eventGetter := new(MockContractEventGetter)
+	listener := NewListener(addr, mockClient, 1, 10, 0, logger, nil, nil, eventGetter, nil)
+
+	const N = uint64(100)
+	canonicalReplacement := types.Log{BlockNumber: N, Index: 0}
+
+	// Expect exactly one FilterLogs(from=N, to=N).
+	mockClient.On("FilterLogs", mock.Anything, mock.MatchedBy(func(q ethereum.FilterQuery) bool {
+		return q.FromBlock.Uint64() == N && q.ToBlock.Uint64() == N
+	})).Return([]types.Log{canonicalReplacement}, nil).Once()
+
+	historicalCh := make(chan types.Log, 10)
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		listener.reconcileBlockRange(context.Background(), N, N, historicalCh)
+		close(historicalCh)
+	})
+
+	var receivedLogs []types.Log
+	for l := range historicalCh {
+		receivedLogs = append(receivedLogs, l)
+	}
+	wg.Wait()
+
+	assert.Len(t, receivedLogs, 1, "equal-bounds call must yield exactly one batch")
+	assert.Equal(t, N, receivedLogs[0].BlockNumber)
+	mockClient.AssertExpectations(t)
+}
+
 func TestListener_Listen_HistoricalAndCurrent(t *testing.T) {
 	t.Parallel()
 	mockClient := new(MockEVMClient)

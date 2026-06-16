@@ -40,23 +40,21 @@ Operators who cannot accept this residual exposure should set `confirmation_dela
 
 ## 3. Configuration
 
-A new `confirmation_delay_secs` field is added per chain in `blockchains.yaml`. Representative values:
+A new `confirmation_delay_secs` field is added per chain in `blockchains.yaml`. The values target ~99.9% reorg-safety on each chain — i.e. the probability that a reorg displaces an event after the gate elapses is empirically below 0.1% — rather than hard cryptoeconomic finality. This trades a small residual exposure (§2.1) for substantially better UX. Production values:
 
 ```yaml
 chains:
   - id: 1          # Ethereum mainnet
-    confirmation_delay_secs: 780   # ~13 min — Casper FFG hard finality
-  - id: 137        # Polygon PoS (post-Heimdall v2 / Rio)
-    confirmation_delay_secs: 10    # 5 blocks × ~2s; empirical reorg tail is sub-10s
+    confirmation_delay_secs: 36    # 3 blocks × 12s. Post-Merge Etherscan sample (1500 rows, Sep 2022 – Jun 2026) found zero depth-2+ reorgs.
   - id: 56         # BNB Smart Chain
-    confirmation_delay_secs: 5     # fast-finality, ~3-4 blocks
-  - id: 42161      # Arbitrum One
-    confirmation_delay_secs: 120   # L2 `safe` tag (L1-posted batch), ~1-2 min
-  - id: 8453       # Base
-    confirmation_delay_secs: 120   # same L2 `safe` semantics
+    confirmation_delay_secs: 2     # ~3 blocks at 0.75s (post-Maxwell). Covers BEP-126 fast-finality vote window (~1.5s).
+  - id: 137        # Polygon PoS (post-Heimdall v2 / Rio)
+    confirmation_delay_secs: 5     # Matches post-Rio finality (~5s, reorg depth capped at 2 blocks).
 ```
 
-`confirmation_delay_secs: 0` disables the gate — events are processed immediately. Appropriate for BFT single-slot chains where the node operator accepts the negligible residual risk, or for chains using a finality-tag subscription rather than a block-count gate.
+`confirmation_delay_secs: 0` disables the gate — events are processed immediately. Appropriate for BFT single-slot chains (XRPL EVM, other CometBFT/Tendermint chains) where blocks are irreversible the moment they're committed, or for chains using a finality-tag subscription rather than a block-count gate.
+
+Operators who cannot accept the residual exposure described in §2.1 should raise these values toward each chain's hard-finality time (Ethereum: 780s; Polygon: `finalized` tag ≈5s; OP Stack L2s: `finalized` maps to L1 Casper FFG ≈13 min).
 
 ---
 

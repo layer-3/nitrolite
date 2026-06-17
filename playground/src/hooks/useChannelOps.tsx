@@ -29,6 +29,8 @@ export interface UseChannelOpsResult {
   needsApproval: boolean | null;
   checkDepositAllowance: (blockchainId: bigint, asset: string, amount: Decimal) => Promise<void>;
   closingAsset: string | null;
+  /** Asset currently in the post-receipt confirmation-window wait after a close tx. */
+  awaitingCloseAsset: string | null;
   homechainModalAsset: string | null;
   onHomechainSelected: (asset: string, chainId: bigint) => Promise<void>;
   onHomechainModalDismiss: () => void;
@@ -47,6 +49,7 @@ export function useChannelOps(
   const [transferPhase, setTransferPhase] = useState<TransferPhase>('idle');
   const [needsApproval, setNeedsApproval] = useState<boolean | null>(null);
   const [closingAsset, setClosingAsset] = useState<string | null>(null);
+  const [awaitingCloseAsset, setAwaitingCloseAsset] = useState<string | null>(null);
   const [homechainModalAsset, setHomechainModalAsset] = useState<string | null>(null);
   const pendingTransferRef = useRef<PendingTransfer | null>(null);
 
@@ -364,6 +367,9 @@ export function useChannelOps(
         }
         if (delaySecs > 0) {
           toast(`Channel close mined — finalizing after node confirmation (~${delaySecs}s)…`);
+          // Transition: tx mined, waiting for node confirmation window.
+          setClosingAsset(null);
+          setAwaitingCloseAsset(asset);
           const credited = await waitForCredit(asset, delaySecs, baselineEnforced, 'down', gen);
           if (generationRef.current !== gen) return;
           if (credited) {
@@ -380,6 +386,7 @@ export function useChannelOps(
         handleError(err, 'Close');
       } finally {
         setClosingAsset(null);
+        setAwaitingCloseAsset(null);
       }
     },
     [client, address, supportedChains, waitForCredit, onAfterOp, onAfterTxMined],
@@ -396,6 +403,7 @@ export function useChannelOps(
     needsApproval,
     checkDepositAllowance,
     closingAsset,
+    awaitingCloseAsset,
     homechainModalAsset,
     onHomechainSelected,
     onHomechainModalDismiss,

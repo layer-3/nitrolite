@@ -141,6 +141,7 @@ export default function App() {
                     balances={nitro.balances}
                     isLoading={channels.isLoading}
                     closingAsset={ops.closingAsset}
+                    awaitingCloseAsset={ops.awaitingCloseAsset}
                     onRefresh={refreshAll}
                     onClose={ops.closeChannel}
                     onSwitchToHomeChain={wallet.switchChain}

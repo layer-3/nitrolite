@@ -436,3 +436,56 @@ When the live WebSocket subscription drops, the listener treats this as a recove
 **`FlushPending` is safe at any time after `NewConfirmationGate`.** It is zero-value-safe even before `Start` is called: `queue` is nil (nil append is a no-op, `queue = nil` is a no-op), and `pending` is re-initialized with `make(map[eventKey]common.Hash)` which is always safe. The drain goroutine need not be running for `FlushPending` to be called.
 
 **Comparison with Approach S (process restart).** Handler errors continue to take the Fatal + supervisor-restart path (§6.8); only subscription drops use this in-process recovery. The single observable difference between in-process recovery and restart is `forwardedSet` retention: on restart, `forwardedSet` is wiped; on in-process recovery, it is preserved. In the subscription-drop scenario, geth's per-subscription `Removed:true` contract means the WARN cannot fire anyway (the subscription that delivered the forward already died), so the delta is unobservable in the target scenario. For adjacent scenarios (still-live subscription torn down), the WARN is preserved only by the in-process approach.
+
+---
+
+## 7. Client-side implications
+
+The confirmation gate changes one observable contract for every client of the node: **an on-chain event
+is not reflected in off-chain state until the gate window elapses.** A transaction receipt (`checkpoint`,
+deposit, withdrawal) no longer means the off-chain balance has been credited — it means the countdown has
+started.
+
+### 7.1 What clients should display
+
+- After an on-chain operation, treat the mined receipt as an intermediate state ("transaction mined,
+  awaiting node confirmation (~Ns)"), not as success.
+- Surface the per-chain delay to the user so the wait is expected rather than perceived as a hang. On
+  chains where the gate is enabled this is a few seconds; at hard-finality settings it can reach ~13 min
+  on Ethereum L1.
+- Defer the "credited" / success signal until the off-chain balance actually reflects the change, or split
+  it into two signals: "transaction mined" and "credit confirmed".
+- Off-chain transfers are **not** gated (they never touch the chain) and remain instant — do not apply the
+  delay to them.
+
+### 7.2 Where the delay comes from
+
+The per-chain delay is exposed through **`node.v1.GetConfig`**: each `BlockchainInfoV1` entry carries
+`confirmation_delay_secs` (`uint32`). A value of `0` means the gate is disabled and credit is immediate.
+
+| Surface | Field |
+| --- | --- |
+| Wire (JSON, `node.v1.GetConfig`) | `confirmation_delay_secs` |
+| Go SDK (`core.Blockchain`) | `ConfirmationDelaySecs` |
+| TS SDK (`core.Blockchain`) | `confirmationDelaySecs` |
+| Config (`blockchains.yaml`) | `confirmation_delay_secs` |
+
+### 7.3 Polling for the credit
+
+A client confirms the credit by polling balance/state after submitting the tx, waiting at least
+`confirmation_delay_secs` before treating the absence of a credit as final:
+
+- **TS/Go SDK:** the SDKs provide `getConfirmationDelay(chainId)` (returns the configured delay) and
+  `waitForCheckpoint(asset, txHash)` (polls `getBalances`/`getLatestState` with a lower-bound wait of the
+  chain's `confirmation_delay_secs`). Prefer these over hand-rolled polling.
+- **Compat layer (`@yellow-org/sdk-compat`):** the `EventPoller` (5s polling) already tolerates an
+  arbitrary delay; no code change is needed, only awareness that the event fires later than the receipt.
+- **Manual clients:** poll `getBalances` no more than once per few seconds; do not poll faster than the
+  delay, and do not interpret a still-uncredited balance before the window elapses as a failure.
+
+### 7.4 Residual-risk note
+
+When `confirmation_delay_secs` is set below the chain's hard-finality time (§2.1), a credited event can in
+rare cases still be reorged out after the gate passes. Clients that surface "confirmed" to end users should
+be aware this is a probabilistic guarantee at the configured setting, not absolute finality, unless the
+operator has set the delay to the chain's hard-finality time.

@@ -103,7 +103,9 @@ func TestSubmitState_ActiveChannelMissingState_Rejected(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reports an active channel, but no stored state exists for the (wallet, asset) slot.
+	// Both sender and receiver balances are locked in deterministic order (MF3-L18).
 	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
 	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
 	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(nil, nil)
 

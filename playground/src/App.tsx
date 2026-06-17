@@ -30,7 +30,7 @@ export default function App() {
   const [channelStatesKey, setChannelStatesKey] = useState(0);
   const bumpChannelStates = useCallback(() => setChannelStatesKey(k => k + 1), []);
 
-  const ops = useChannelOps(nitro.client, wallet.address, nitro.supportedAssets, refreshAll, bumpChannelStates);
+  const ops = useChannelOps(nitro.client, wallet.address, nitro.supportedAssets, nitro.supportedChains, refreshAll, bumpChannelStates);
 
   const [selectedAsset, setSelectedAsset] = useState('');
 

@@ -163,10 +163,12 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 
 ### useChannelOps
 **Owns**: High-level channel operations triggered from ActionPanel.
-- Deposit: token allowance check → approve if needed → deposit → checkpoint
-- Withdraw: withdraw → checkpoint
+- Deposit: token allowance check → approve if needed → deposit → checkpoint → wait for receipt (`confirming`) → if `confirmationDelaySecs > 0`, enter `awaiting_node` phase and poll `getBalances` until enforced balance rises (bounded by `min(confirmationDelaySecs, 60) + 15s`), then emit success or soft-fallback toast
+- Withdraw: withdraw → checkpoint → wait for receipt (`confirming`) → if `confirmationDelaySecs > 0`, enter `awaiting_node` and poll enforced balance down; same cap and fallback as deposit
 - Transfer: transfer → if home chain missing, shows modal → retries after chain is set
-- Close: close channel → checkpoint
+- Close: close channel → checkpoint → wait for receipt → if `confirmationDelaySecs > 0`, poll enforced balance down; same bounded wait
+- `DepositPhase` and `WithdrawPhase` include `'awaiting_node'` after `'confirming'`; gate-disabled (`delaySecs === 0`) flows skip `'awaiting_node'` and emit the immediate success toast
+- Accepts `supportedChains: Blockchain[]` to look up per-chain `confirmationDelaySecs`
 - Tracks operation loading states per action; cancels stale ops on address/wallet change
 - Distinguishes user rejections (MetaMask code 4001) from real errors for toast messaging
 
@@ -225,10 +227,10 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 1. "Connect MetaMask" prompt in body → connect → node probes and client builds → channels load
 
 **Deposit**
-1. Select asset + amount → Deposit → MetaMask: approve token spend (once) → MetaMask: deposit transaction → checkpoint written on-chain
+1. Select asset + amount → Deposit → MetaMask: approve token spend (once) → MetaMask: deposit transaction → checkpoint written on-chain → wait for tx receipt → if `confirmationDelaySecs > 0`, poll for enforced balance credit (up to `min(delaySecs, 60) + 15s`) → success toast (or soft-fallback if poll times out)
 
 **Withdraw**
-1. Select asset + amount → Withdraw → MetaMask: withdraw transaction → checkpoint written on-chain
+1. Select asset + amount → Withdraw → MetaMask: withdraw transaction → checkpoint written on-chain → wait for tx receipt → if `confirmationDelaySecs > 0`, poll for enforced balance decrease → success toast (or soft-fallback)
 
 **Transfer**
 1. Select asset + amount + recipient address → Transfer → if no home chain set, modal appears → confirm chain → transfer proceeds

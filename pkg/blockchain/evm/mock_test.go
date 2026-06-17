@@ -120,6 +120,14 @@ func (m *MockEVMClient) SubscribeFilterLogs(ctx context.Context, query ethereum.
 	return args.Get(0).(ethereum.Subscription), args.Error(1)
 }
 
+func (m *MockEVMClient) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	args := m.Called(ctx, hash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*types.Header), args.Error(1)
+}
+
 // MockContractEventGetter implements ContractEventGetter interface
 type MockContractEventGetter struct {
 	mock.Mock
@@ -130,9 +138,19 @@ func (m *MockContractEventGetter) GetLatestContractEventBlockNumber(contractAddr
 	return args.Get(0).(uint64), args.Error(1)
 }
 
-func (m *MockContractEventGetter) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
-	args := m.Called(blockchainID, blockNumber, txHash, logIndex)
+func (m *MockContractEventGetter) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
+	args := m.Called(txHash, logIndex, blockchainID)
 	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockContractEventGetter) GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (uint64, string, error) {
+	args := m.Called(contractAddress, blockchainID)
+	return args.Get(0).(uint64), args.String(1), args.Error(2)
+}
+
+func (m *MockContractEventGetter) GetPreviousDistinctBlockHash(contractAddress string, blockchainID uint64, belowBlockNumber uint64) (uint64, string, error) {
+	args := m.Called(contractAddress, blockchainID, belowBlockNumber)
+	return args.Get(0).(uint64), args.String(1), args.Error(2)
 }
 
 // MockAssetStore implements AssetStore interface

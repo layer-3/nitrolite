@@ -17,6 +17,7 @@ type ContractEvent struct {
 	BlockchainID    uint64    `gorm:"column:blockchain_id"`
 	Name            string    `gorm:"column:name"`
 	BlockNumber     uint64    `gorm:"column:block_number"`
+	BlockHash       string    `gorm:"column:block_hash"`
 	TransactionHash string    `gorm:"column:transaction_hash"`
 	LogIndex        uint32    `gorm:"column:log_index"`
 	CreatedAt       time.Time `gorm:"column:created_at"`
@@ -34,6 +35,7 @@ func (s *DBStore) StoreContractEvent(ev core.BlockchainEvent) error {
 		BlockchainID:    ev.BlockchainID,
 		Name:            ev.Name,
 		BlockNumber:     ev.BlockNumber,
+		BlockHash:       ev.BlockHash,
 		TransactionHash: strings.ToLower(ev.TransactionHash),
 		LogIndex:        ev.LogIndex,
 		CreatedAt:       time.Now(),
@@ -55,11 +57,12 @@ func (s *DBStore) GetLatestContractEventBlockNumber(contractAddress string, bloc
 	return blockNumber, nil
 }
 
-// IsContractEventPresent checks whether a specific contract event has already been stored.
-func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (bool, error) {
+// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+// has already been committed, regardless of which block it appeared in.
+func (s *DBStore) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
 	var ev ContractEvent
-	err := s.db.Where("blockchain_id = ? AND block_number = ? AND transaction_hash = ? AND log_index = ?",
-		blockchainID, blockNumber, strings.ToLower(txHash), logIndex).
+	err := s.db.Where("transaction_hash = ? AND log_index = ? AND blockchain_id = ?",
+		strings.ToLower(txHash), logIndex, blockchainID).
 		Take(&ev).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -68,4 +71,38 @@ func (s *DBStore) IsContractEventPresent(blockchainID, blockNumber uint64, txHas
 		return false, err
 	}
 	return true, nil
+}
+
+// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of the
+// highest stored event for the given contract. Returns (0, "", nil) when no rows exist.
+func (s *DBStore) GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (uint64, string, error) {
+	var ev ContractEvent
+	err := s.db.Where("blockchain_id = ? AND contract_address = ?", blockchainID, strings.ToLower(contractAddress)).
+		Order("block_number DESC").
+		First(&ev).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, "", nil
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	return ev.BlockNumber, ev.BlockHash, nil
+}
+
+// GetPreviousDistinctBlockHash returns the block_number and block_hash of the highest
+// stored event whose block_number is strictly below belowBlockNumber. Returns (0, "", nil)
+// when no such row exists (signals genesis fallback).
+func (s *DBStore) GetPreviousDistinctBlockHash(contractAddress string, blockchainID uint64, belowBlockNumber uint64) (uint64, string, error) {
+	var ev ContractEvent
+	err := s.db.Where("blockchain_id = ? AND contract_address = ? AND block_number < ?",
+		blockchainID, strings.ToLower(contractAddress), belowBlockNumber).
+		Order("block_number DESC").
+		First(&ev).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, "", nil
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	return ev.BlockNumber, ev.BlockHash, nil
 }

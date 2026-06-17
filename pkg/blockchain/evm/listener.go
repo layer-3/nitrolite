@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -25,26 +24,57 @@ const (
 // deduplicated delivery even across restarts. Cancel the context passed to Listen
 // for graceful shutdown.
 type Listener struct {
-	contractAddress common.Address
-	client          bind.ContractBackend
-	blockchainID    uint64
-	blockStep       uint64 // max blocks per FilterLogs call during reconciliation
-	logger          log.Logger
-	handleEvent     HandleEvent
-	eventGetter     ContractEventGetter
+	contractAddress       common.Address
+	client                EVMClient
+	blockchainID          uint64
+	blockStep             uint64        // max blocks per FilterLogs call during reconciliation
+	confirmationDelay     time.Duration // routing threshold for Phase 1 events; 0 disables age-based routing
+	logger                log.Logger
+	handleEvent           HandleEvent // live events and recent historical events; typically the ConfirmationGate
+	handleHistoricalEvent HandleEvent // historical events older than confirmationDelay; typically the reactor directly
+	eventGetter           ContractEventGetter
+	flushDownstream       func() // optional: called between reconnect iterations to flush gate pending state; nil = no-op
+
+	// Single-entry block-timestamp cache for ensureBlockTimestamp. The listener's
+	// processEvents loop is strictly serial (Phase 1 drains before Phase 2, each
+	// phase processes one event at a time), so these fields require no mutex.
+	lastBlockHash      common.Hash
+	lastBlockTimestamp time.Time
 }
 
 // NewListener creates a Listener. blockStep controls how many blocks are fetched
 // per RPC call during historical reconciliation.
-func NewListener(contractAddress common.Address, client bind.ContractBackend, blockchainID uint64, blockStep uint64, logger log.Logger, eventHandler HandleEvent, eventGetter ContractEventGetter) *Listener {
+//
+// confirmationDelay controls per-event routing for Phase 1 (historical) events:
+//   - When 0: every historical event is routed to historicalEventHandler.
+//   - When > 0: each event's block timestamp is fetched via HeaderByHash. Events older
+//     than confirmationDelay are routed to historicalEventHandler (their block is past
+//     the reorg window, so they are safe to forward directly). Events younger than
+//     confirmationDelay are routed to eventHandler so they pass through the gate —
+//     historical replay reaching very recent blocks is no safer than live delivery
+//     and the gate must still protect against reorgs of those blocks.
+//
+// Live (Phase 2) events always flow to eventHandler.
+//
+// eventHandler is typically the ConfirmationGate; historicalEventHandler is typically
+// the reactor directly. The two handlers may be the same function when no gate is in use.
+//
+// flushDownstream is an optional callback called between reconnect iterations to flush
+// in-flight gate pending state before re-reading the committed cursor via
+// findCommonAncestor. When nil (the no-gate path, confirmationDelay == 0), the call
+// is skipped. See ConfirmationGate.FlushPending and nitronode/docs/reorg-fix.md §6.9.
+func NewListener(contractAddress common.Address, client EVMClient, blockchainID uint64, blockStep uint64, confirmationDelay time.Duration, logger log.Logger, eventHandler HandleEvent, historicalEventHandler HandleEvent, eventGetter ContractEventGetter, flushDownstream func()) *Listener {
 	return &Listener{
-		contractAddress: contractAddress,
-		client:          client,
-		blockchainID:    blockchainID,
-		blockStep:       blockStep,
-		logger:          logger.WithName("evm"),
-		handleEvent:     eventHandler,
-		eventGetter:     eventGetter,
+		contractAddress:       contractAddress,
+		client:                client,
+		blockchainID:          blockchainID,
+		blockStep:             blockStep,
+		confirmationDelay:     confirmationDelay,
+		logger:                logger.WithName("evm"),
+		handleEvent:           eventHandler,
+		handleHistoricalEvent: historicalEventHandler,
+		eventGetter:           eventGetter,
+		flushDownstream:       flushDownstream,
 	}
 }
 
@@ -97,20 +127,29 @@ func (l *Listener) logBackOff(count uint64, originator string) (time.Duration, b
 	return d, true
 }
 
-// listenEvents is the main loop. Each iteration:
-//  1. Subscribes to live events (buffered in currentCh).
-//  2. Fetches the chain tip — done after subscribing so no events fall through the gap.
-//  3. Launches reconcileBlockRange in a goroutine (lastBlock → chain tip → historicalCh).
-//  4. Calls processEvents: drains historicalCh first, then switches to currentCh.
+// listenEvents is the main reconnect loop. Each iteration:
+//  1. Delegates to runOneListenPass, which resolves the committed cursor, subscribes,
+//     reconciles historical, and processes live events.
+//  2. On subscription drop (retry=true, err=nil): flushes downstream gate pending
+//     state immediately (see §6.9 of reorg-fix.md), increments backoff, then loops.
+//  3. On fatal handler/check failure (err != nil): returns the error immediately.
 //
-// On subscription failure it retries with exponential backoff. Returns non-nil only
-// when the handler or the event-presence check fails.
+// The flush runs immediately after runOneListenPass returns retry=true, BEFORE the
+// next iteration's backoff sleep. This ordering is deliberate: the gate's drain
+// goroutine runs on an independent timer and can mature a pending orphan during the
+// backoff sleep. Flushing first ensures no orphaned entry escapes before
+// findCommonAncestor re-reads the committed-only cursor on the next pass.
+// The first iteration naturally skips the flush: no retry path has executed yet
+// and the gate is empty on initial entry.
+//
+// findCommonAncestor is called inside each runOneListenPass so the committed-only
+// DB cursor is always re-read after a reconnect. The in-memory lastBlock from the
+// previous pass is discarded — the per-pass local variable never escapes.
+// Any future code that adds cross-iteration state to listenEvents must be aware
+// that runOneListenPass is the iteration unit and per-pass state must be re-derived.
+//
+// Returns non-nil only when the handler or the event-presence check fails.
 func (l *Listener) listenEvents(ctx context.Context) error {
-	lastBlock, err := l.eventGetter.GetLatestContractEventBlockNumber(l.contractAddress.String(), l.blockchainID)
-	if err != nil {
-		return fmt.Errorf("failed to get latest processed block: %w", err)
-	}
-
 	var backOffCount atomic.Uint64
 
 	l.logger.Info("starting listening events", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
@@ -130,65 +169,120 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 			return nil
 		}
 
-		historicalCh := make(chan types.Log, 1)
-		currentCh := make(chan types.Log, 100)
-
-		// Subscribe to live events first so nothing is missed while reconciling.
-		watchFQ := ethereum.FilterQuery{
-			Addresses: []common.Address{l.contractAddress},
-		}
-		eventSubscription, err := l.client.SubscribeFilterLogs(context.Background(), watchFQ, currentCh)
-		if err != nil {
-			l.logger.Error("failed to subscribe on events", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
-			backOffCount.Add(1)
-			continue
-		}
-
-		// Fetch current block height after subscribing to avoid a gap.
-		var cancelReconcile context.CancelFunc
-		if lastBlock == 0 {
-			l.logger.Info("skipping historical logs fetching",
-				"blockchainID", l.blockchainID,
-				"contractAddress", l.contractAddress.String())
-			close(historicalCh)
-		} else {
-			headerCtx, headerCancel := context.WithTimeout(context.Background(), rpcRequestTimeout)
-			header, err := l.client.HeaderByNumber(headerCtx, nil)
-			headerCancel()
-			if err != nil {
-				l.logger.Error("failed to get latest block", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
-				eventSubscription.Unsubscribe()
-				backOffCount.Add(1)
-				continue
-			}
-
-			var reconcileCtx context.Context
-			reconcileCtx, cancelReconcile = context.WithCancel(ctx)
-			currentBlock := header.Number.Uint64()
-			go func() {
-				l.reconcileBlockRange(reconcileCtx, currentBlock, lastBlock, historicalCh)
-				close(historicalCh)
-			}()
-		}
-
-		l.logger.Info("watching events", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
-		backOffCount.Store(0)
-
-		err = l.processEvents(ctx, eventSubscription, historicalCh, currentCh, &lastBlock)
-		if cancelReconcile != nil {
-			cancelReconcile()
-		}
+		retry, err := l.runOneListenPass(ctx, &backOffCount)
 		if err != nil {
 			return err
 		}
+		if !retry {
+			return nil // graceful shutdown inside the pass
+		}
+
+		// Subscription drop — flush gate pending state BEFORE the next iteration's
+		// backoff sleep so the gate's drain goroutine cannot mature an orphan during
+		// the sleep and forward it to the reactor before findCommonAncestor re-reads
+		// the committed cursor. Flushing here ensures Phase 1 on the next pass
+		// re-covers the entire [committedCursor, tip] range, which by construction
+		// includes every block the gate was holding (uncommitted events sit above
+		// the committed cursor). See nitronode/docs/reorg-fix.md §6.9.
+		if l.flushDownstream != nil {
+			l.flushDownstream()
+		}
+		backOffCount.Add(1)
 	}
+}
+
+// runOneListenPass executes one full startup-style pass:
+//  1. findCommonAncestor — reads the committed-only DB cursor (fresh each pass).
+//  2. SubscribeFilterLogs — opens the live subscription.
+//  3. HeaderByNumber(nil) — fetches the chain tip.
+//  4. reconcileBlockRange goroutine — Phase 1 historical replay.
+//  5. processEvents — drains Phase 1 then processes Phase 2 live events.
+//
+// Returns (true, nil) on subscription drop (caller retries after flushing the gate
+// and applying backoff). Returns (false, nil) on graceful context shutdown.
+// Returns (_, err) on fatal handler/check failure.
+//
+// findCommonAncestor MUST live inside this function for cursor-lifecycle correctness:
+// if it were called once in the outer loop, the in-memory lastBlock advanced by
+// Phase 2 (listener.go ← processEvents) would persist across reconnects and Phase 1
+// on the retry would scan only (lastLiveBlock, tip] — missing every uncommitted event
+// that was flushed from the gate. See "Cursor-lifecycle defect" in pr-832-open-comments.md.
+func (l *Listener) runOneListenPass(ctx context.Context, backOffCount *atomic.Uint64) (retry bool, err error) {
+	lastBlock, err := findCommonAncestor(ctx, l.client, l.eventGetter, l.contractAddress.String(), l.blockchainID, l.logger)
+	if err != nil {
+		return false, fmt.Errorf("failed to find common ancestor: %w", err)
+	}
+
+	historicalCh := make(chan types.Log, 1)
+	currentCh := make(chan types.Log, 100)
+
+	// Subscribe to live events first so nothing is missed while reconciling.
+	watchFQ := ethereum.FilterQuery{
+		Addresses: []common.Address{l.contractAddress},
+	}
+	eventSubscription, err := l.client.SubscribeFilterLogs(context.Background(), watchFQ, currentCh)
+	if err != nil {
+		l.logger.Error("failed to subscribe on events", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
+		backOffCount.Add(1)
+		return true, nil
+	}
+
+	// Fetch current block height after subscribing to avoid a gap.
+	var cancelReconcile context.CancelFunc
+	if lastBlock == 0 {
+		l.logger.Info("skipping historical logs fetching",
+			"blockchainID", l.blockchainID,
+			"contractAddress", l.contractAddress.String())
+		close(historicalCh)
+	} else {
+		headerCtx, headerCancel := context.WithTimeout(context.Background(), rpcRequestTimeout)
+		header, err := l.client.HeaderByNumber(headerCtx, nil)
+		headerCancel()
+		if err != nil {
+			l.logger.Error("failed to get latest block", "error", err, "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
+			eventSubscription.Unsubscribe()
+			backOffCount.Add(1)
+			return true, nil
+		}
+
+		var reconcileCtx context.Context
+		reconcileCtx, cancelReconcile = context.WithCancel(ctx)
+		currentBlock := header.Number.Uint64()
+		go func() {
+			l.reconcileBlockRange(reconcileCtx, currentBlock, lastBlock, historicalCh)
+			close(historicalCh)
+		}()
+	}
+
+	l.logger.Info("watching events", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String())
+	backOffCount.Store(0)
+
+	err = l.processEvents(ctx, eventSubscription, historicalCh, currentCh, &lastBlock)
+	if cancelReconcile != nil {
+		cancelReconcile()
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// processEvents returned nil — subscription drop or graceful ctx shutdown.
+	// Distinguish via ctx to allow the caller to skip backoff on clean shutdown.
+	if ctx.Err() != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 // processEvents runs two sequential phases: historical (historicalCh until closed),
 // then live (currentCh until ctx or subscription death). In each phase the first
-// events are checked via IsContractEventPresent; once a non-present event is found
+// events are checked via IsContractEventProcessed; once a non-present event is found
 // the check is skipped for the rest of that phase (events are strictly ordered).
 // Returns nil on subscription loss (reconnect), non-nil on handler/check failure.
+//
+// Both the listener (here) and the reactor (channel_hub_reactor.go) call
+// IsContractEventProcessed, so both share a dependency on DB availability. A
+// transient Postgres hiccup at either call site surfaces the error, unsubscribes,
+// and restarts the process — consistent behavior across the pipeline.
 //
 // Listener ordering & idempotency invariant
 // -----------------------------------------
@@ -204,10 +298,13 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     reconcileBlockRange + live subscription preserve chain order within each
 //     phase.
 //
-//  2. Idempotent resume. On restart, IsContractEventPresent gates the first
+//  2. Idempotent resume. On restart, IsContractEventProcessed gates the first
 //     event of each phase: events already persisted in a prior run are skipped
 //     rather than reprocessed. Once a non-present event is seen the check is
 //     dropped for the remainder of the phase (safe because of guarantee 1).
+//     The dedup check identifies events by (txHash, logIndex, blockchainID);
+//     reorged events with a re-shuffled block-level log index are not detected
+//     here and rely on reactor business-logic idempotency.
 //
 //  3. Cursor advances only on handler success. lastBlock is updated on each
 //     live event, but a non-nil return from handleEvent unsubscribes and
@@ -215,11 +312,18 @@ func (l *Listener) listenEvents(ctx context.Context) error {
 //     failed event; the next Listen invocation re-fetches from the same
 //     cursor. Transient handler failures retry instead of silently dropping.
 //
-//  4. Reorged-out logs are discarded. Live deliveries with Removed=true are
-//     dropped. A reorg that fully removes a ChannelChallenged log also
-//     removes the matching on-chain status transition to DISPUTED, so the
-//     contract's Path-1 (challenge-timeout) close cannot subsequently fire
-//     for the same channel.
+//  4. Reorged-out logs are routed by delay configuration.
+//     When confirmationDelay > 0, live deliveries with Removed=true are
+//     forwarded to the handler (ConfirmationGate) so the gate can cancel
+//     any pending confirmation timer for that event; the gate filters them
+//     before forwarding confirmed events to the reactor. When
+//     confirmationDelay == 0, there is no gate to consume the removal
+//     signal, so the listener drops Removed=true logs at the Phase 2
+//     boundary — matching pre-PR behavior. In both modes the reactor
+//     never sees Removed=true logs directly. The lastBlock cursor and
+//     IsContractEventProcessed dedup check are skipped for Removed=true
+//     events so neither the resume cursor nor the idempotency guard is
+//     corrupted by a reorg signal.
 //
 // A consequence used by the nitronode event handlers: for any channel that
 // closes via Path-1 (challenge-timeout, ChannelHub Closed-from-DISPUTED),
@@ -250,7 +354,7 @@ func (l *Listener) processEvents(
 				break
 			}
 			if !historicalCheckDone {
-				present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
+				present, err := l.eventGetter.IsContractEventProcessed(eventLog.TxHash.Hex(), uint32(eventLog.Index), l.blockchainID)
 				if err != nil {
 					eventSubscription.Unsubscribe()
 					return fmt.Errorf("failed to check historical event presence: %w", err)
@@ -263,7 +367,22 @@ func (l *Listener) processEvents(
 			}
 			l.logger.Debug("received historical event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
-			if err := l.handleEvent(evCtx, eventLog); err != nil {
+			eventLog, err := l.ensureBlockTimestamp(ctx, eventLog)
+			if err != nil {
+				l.logger.Warn("failed to ensure block timestamp for historical event, routing through gate",
+					"error", err,
+					"blockchainID", l.blockchainID,
+					"blockNumber", eventLog.BlockNumber,
+					"blockHash", eventLog.BlockHash.Hex(),
+				)
+				if err := l.handleEvent(evCtx, eventLog); err != nil {
+					eventSubscription.Unsubscribe()
+					return err
+				}
+				continue
+			}
+			handler := l.routeHistoricalEvent(eventLog)
+			if err := handler(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
 			}
@@ -287,27 +406,47 @@ func (l *Listener) processEvents(
 			eventSubscription.Unsubscribe()
 			return nil
 		case eventLog := <-currentCh:
-			// During a chain reorganization geth re-delivers orphaned logs with
-			// Removed: true. Skip them to avoid applying phantom state changes.
-			if eventLog.Removed {
-				l.logger.Warn("skipping removed log from reorg", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index, "txHash", eventLog.TxHash.Hex())
+			if eventLog.Removed && l.confirmationDelay == 0 {
+				l.logger.Warn("dropping Removed=true live event on no-gate path",
+					"blockchainID", l.blockchainID,
+					"contractAddress", l.contractAddress.String(),
+					"blockNumber", eventLog.BlockNumber,
+					"blockHash", eventLog.BlockHash.Hex(),
+					"txHash", eventLog.TxHash.Hex(),
+					"logIndex", eventLog.Index,
+				)
 				continue
 			}
-			*lastBlock = eventLog.BlockNumber
-			if !currentCheckDone {
-				present, err := l.eventGetter.IsContractEventPresent(l.blockchainID, eventLog.BlockNumber, eventLog.TxHash.Hex(), uint32(eventLog.Index))
-				if err != nil {
-					eventSubscription.Unsubscribe()
-					return fmt.Errorf("failed to check current event presence: %w", err)
+			if !eventLog.Removed {
+				*lastBlock = eventLog.BlockNumber
+				if !currentCheckDone {
+					present, err := l.eventGetter.IsContractEventProcessed(eventLog.TxHash.Hex(), uint32(eventLog.Index), l.blockchainID)
+					if err != nil {
+						eventSubscription.Unsubscribe()
+						return fmt.Errorf("failed to check current event presence: %w", err)
+					}
+					if present {
+						l.logger.Debug("skipping already present current event", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
+						continue
+					}
+					currentCheckDone = true
 				}
-				if present {
-					l.logger.Debug("skipping already present current event", "blockchainID", l.blockchainID, "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
-					continue
-				}
-				currentCheckDone = true
+				l.logger.Debug("received current event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			}
-			l.logger.Debug("received current event", "blockchainID", l.blockchainID, "contractAddress", l.contractAddress.String(), "blockNumber", eventLog.BlockNumber, "logIndex", eventLog.Index)
 			evCtx := log.SetContextLogger(context.Background(), l.logger)
+			if !eventLog.Removed {
+				ensured, err := l.ensureBlockTimestamp(ctx, eventLog)
+				if err != nil {
+					l.logger.Warn("failed to ensure block timestamp for current event, routing through gate",
+						"error", err,
+						"blockchainID", l.blockchainID,
+						"blockNumber", eventLog.BlockNumber,
+						"blockHash", eventLog.BlockHash.Hex(),
+					)
+				} else {
+					eventLog = ensured
+				}
+			}
 			if err := l.handleEvent(evCtx, eventLog); err != nil {
 				eventSubscription.Unsubscribe()
 				return err
@@ -324,9 +463,9 @@ func (l *Listener) processEvents(
 	}
 }
 
-// reconcileBlockRange fetches logs from lastBlock to currentBlock in blockStep-sized
-// windows, sending each log to historicalCh. Caller closes historicalCh after return.
-// Uses a dedicated context so it can be cancelled when the subscription drops.
+// reconcileBlockRange fetches logs in [lastBlock, currentBlock] (inclusive both bounds)
+// in blockStep-sized windows, sending each log to historicalCh. Caller closes historicalCh
+// after return. Uses a dedicated context so it can be cancelled when the subscription drops.
 func (l *Listener) reconcileBlockRange(
 	ctx context.Context,
 	currentBlock uint64,
@@ -337,7 +476,10 @@ func (l *Listener) reconcileBlockRange(
 	startBlock := lastBlock
 	endBlock := startBlock + l.blockStep
 
-	for currentBlock > startBlock {
+	// Inclusive at the lower bound so the all-reorged orphan-height case
+	// (lastBlock == currentBlock) still fetches the canonical replacement;
+	// downstream dedup absorbs the inevitable re-fetch on restart-at-exact-tip.
+	for currentBlock >= startBlock {
 		d, ok := l.logBackOff(backOffCount.Load(), "reconcile block range")
 		if !ok {
 			return
@@ -397,11 +539,68 @@ func (l *Listener) reconcileBlockRange(
 	}
 }
 
-// TODO: the current reorg handling (skipping Removed logs) prevents new damage but
-// does not undo side effects from the original delivery if it was already processed.
-// A more robust approach is a confirmation buffer: hold live logs in memory keyed by
-// block number, only apply them after N confirmations (new blocks on top), and discard
-// any log that arrives with Removed: true while still in the buffer. This adds N blocks
-// of latency (~12s × N on mainnet) but guarantees that only finalized events reach the
-// handler. On L2s where reorgs are near-zero, the latency trade-off may not be worth it,
-// so this should be configurable per chain.
+// ensureBlockTimestamp returns eventLog with BlockTimestamp guaranteed non-zero.
+//
+// Most EVM chains and providers populate BlockTimestamp in the JSON-RPC response,
+// in which case eventLog is returned unchanged. For chains/providers that do NOT
+// populate it (notably Avalanche C-Chain via ava-labs/libevm, and older BSC
+// dataseed nodes), this method fetches the block header via HeaderByHash and
+// populates the field on the local-stack copy of types.Log.
+//
+// Single-entry cache (lastBlockHash) elides repeat fetches for consecutive events
+// from the same block — the only relevant case because the listener delivers events
+// in block order.
+//
+// On HeaderByHash failure, returns the original eventLog and the error. Callers
+// decide whether to fall back to the gate (which is the conservative behavior;
+// see live-path and routeHistoricalEvent below).
+func (l *Listener) ensureBlockTimestamp(ctx context.Context, eventLog types.Log) (types.Log, error) {
+	if eventLog.BlockTimestamp != 0 {
+		return eventLog, nil
+	}
+
+	if eventLog.BlockHash == l.lastBlockHash && !l.lastBlockTimestamp.IsZero() {
+		eventLog.BlockTimestamp = uint64(l.lastBlockTimestamp.Unix())
+		return eventLog, nil
+	}
+
+	headerCtx, cancel := context.WithTimeout(ctx, rpcRequestTimeout)
+	defer cancel()
+	header, err := l.client.HeaderByHash(headerCtx, eventLog.BlockHash)
+	if err != nil {
+		return eventLog, err
+	}
+
+	blockTime := time.Unix(int64(header.Time), 0)
+	l.lastBlockHash = eventLog.BlockHash
+	l.lastBlockTimestamp = blockTime
+	eventLog.BlockTimestamp = header.Time
+	return eventLog, nil
+}
+
+// routeHistoricalEvent chooses the handler for a Phase 1 event based on the age of
+// its block. Events whose block timestamp is older than confirmationDelay are routed
+// to handleHistoricalEvent (they are past the reorg window and safe to forward
+// directly). Recent events — whose blocks may still be reorged — are routed to
+// handleEvent so they pass through the gate. When confirmationDelay is zero, every
+// event is routed to handleHistoricalEvent.
+//
+// Reads eventLog.BlockTimestamp directly — callers are expected to have invoked
+// ensureBlockTimestamp first. Defense-in-depth: if BlockTimestamp is zero (caller
+// failed to ensure it), route through handleEvent (the gate) as the conservative
+// choice.
+func (l *Listener) routeHistoricalEvent(eventLog types.Log) HandleEvent {
+	if l.confirmationDelay == 0 {
+		return l.handleHistoricalEvent
+	}
+
+	if eventLog.BlockTimestamp == 0 {
+		return l.handleEvent
+	}
+
+	blockTime := time.Unix(int64(eventLog.BlockTimestamp), 0)
+	if time.Since(blockTime) < l.confirmationDelay {
+		return l.handleEvent
+	}
+	return l.handleHistoricalEvent
+}

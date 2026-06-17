@@ -68,12 +68,12 @@ config session-key app-keys                                  List active app ses
 ```text
 token-balance <chain_id> <asset>             Check on-chain token balance
 approve <chain_id> <asset> <amount>          Approve token spending for deposits
-deposit <chain_id> <asset> <amount>          Deposit to channel (auto-create if needed)
+deposit <chain_id> <asset> <amount>          Deposit to channel (auto-create if needed; off-chain credit lags by the chain's confirmation delay)
 withdraw <chain_id> <asset> <amount>         Withdraw from channel
-transfer <recipient> <asset> <amount>        Transfer to another wallet
+transfer <recipient> <asset> <amount>        Transfer to another wallet (off-chain, instant)
 acknowledge <asset>                          Acknowledge transfer or channel creation
 close-channel <asset>                        Close home channel on-chain
-checkpoint <asset>                           Submit latest state on-chain
+checkpoint <asset>                           Submit latest state on-chain (off-chain credit lags by the chain's confirmation delay)
 ```
 
 ### Queries
@@ -203,6 +203,17 @@ cerebro> chains
 cerebro> assets
 cerebro> config node
 ```
+
+### Confirmation delay
+
+On-chain operations (`deposit`, `withdraw`, `checkpoint`, `close-channel`) submit a transaction and
+return once it is **mined**. The node then waits a per-chain **confirmation delay** before crediting the
+result to your off-chain balance — a safety gate against chain reorganizations. Until it elapses,
+`balances` will not reflect a fresh deposit.
+
+`chains` and `config node` print each chain's delay (`confirmation_delay_secs`; `0` means the gate is
+disabled and credit is immediate). Off-chain `transfer` is never gated. After a `deposit`/`checkpoint`,
+re-run `balances` once the printed delay has passed to see the credit.
 
 ### Inspect State
 

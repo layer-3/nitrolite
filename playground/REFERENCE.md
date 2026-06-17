@@ -68,7 +68,8 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 - Status badges: "wrong chain" (wallet is on a different chain), "closed"
 - Expand/collapse to see channel state detail (StateViewer) or a closed notice
 - Inline prompt to switch wallet chain when it doesn't match the channel's home chain
-- Close channel button
+- Close channel button: disabled with spinner during both `isClosing` (tx signing/mining) and `isAwaitingClose` (confirmation-window wait); if `isAwaitingClose` and `delaySecs > 0`, shows tooltip "Waiting for confirmation (~Xs)…"
+- Resolves `delaySecs: number` from `channel.blockchainId` + `chains` and passes it to `StateViewer`; also passes `isLocked={isClosing || isAwaitingClose}` so StateViewer locks all actions during close
 - Does **not** show a session-key selector — the active SK is wallet-global (not per-channel); manage it via WalletBar chip + Session Keys tab
 
 ### StateViewer
@@ -78,7 +79,7 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 - **Issued** — node has proposed; needs acknowledgement before it becomes signed
 - Each layer shows version number and balance
 - **Acknowledge** button: accepts issued state (moves to signed)
-- **Checkpoint** button: commits signed state on-chain
+- **Checkpoint** button: commits signed state on-chain; while `isAwaitingConfirmation` is true (confirmation-window poll), the button is disabled with a spinner and a tooltip showing "Waiting for confirmation (~Xs)…"; accepts `delaySecs: number` from ChannelRow
 
 ### IncomingChannelRow
 **For**: An asset that has an issued (node-proposed) state but no acknowledged channel yet.
@@ -159,14 +160,20 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 **Owns**: The three-layer state (enforced / signed / issued) for one channel.
 - Determines whether Acknowledge and Checkpoint actions are available
 - Runs acknowledge (sign + upload) and checkpoint (on-chain transaction) operations
+- Checkpoint flow: submits tx → waits for receipt → if `delaySecs > 0`, polls `getHomeChannel` until `stateVersion >= targetVersion` (bounded by `min(delaySecs, 60) + 15s`), then refreshes; on timeout shows a soft fallback toast
+- Exposes `isAwaitingConfirmation: boolean` (true during the post-receipt confirmation-window poll) and `confirmationDelaySecs: number` for UI labeling
+- Accepts `delaySecs: number` (resolved by caller from `channel.blockchainId` + `supportedChains`); guards in-flight polls against wallet/asset change via a generation counter (`checkpointGenRef`)
 - Refreshes balances after each successful operation
 
 ### useChannelOps
 **Owns**: High-level channel operations triggered from ActionPanel.
-- Deposit: token allowance check → approve if needed → deposit → checkpoint
-- Withdraw: withdraw → checkpoint
+- Deposit: token allowance check → approve if needed → deposit → checkpoint → wait for receipt (`confirming`) → if `confirmationDelaySecs > 0`, enter `awaiting_node` phase and poll `getBalances` until enforced balance rises (bounded by `min(confirmationDelaySecs, 60) + 15s`), then emit success or soft-fallback toast
+- Withdraw: withdraw → checkpoint → wait for receipt (`confirming`) → if `confirmationDelaySecs > 0`, enter `awaiting_node` and poll enforced balance down; same cap and fallback as deposit
 - Transfer: transfer → if home chain missing, shows modal → retries after chain is set
-- Close: close channel → checkpoint
+- Close: close channel → checkpoint → wait for receipt → if `confirmationDelaySecs > 0`, sets `awaitingCloseAsset` and polls enforced balance down (same bounded wait as deposit/withdraw); clears `awaitingCloseAsset` before calling `onAfterOp`/`onAfterTxMined` so the channel-list refresh happens only after the window
+- `DepositPhase` and `WithdrawPhase` include `'awaiting_node'` after `'confirming'`; gate-disabled (`delaySecs === 0`) flows skip `'awaiting_node'` and emit the immediate success toast
+- Accepts `supportedChains: Blockchain[]` to look up per-chain `confirmationDelaySecs`
+- Exposes `awaitingCloseAsset: string | null` (the asset whose close is in the confirmation-window wait); distinct from `closingAsset` (which covers the tx-signing and mining phases)
 - Tracks operation loading states per action; cancels stale ops on address/wallet change
 - Distinguishes user rejections (MetaMask code 4001) from real errors for toast messaging
 
@@ -225,16 +232,16 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 1. "Connect MetaMask" prompt in body → connect → node probes and client builds → channels load
 
 **Deposit**
-1. Select asset + amount → Deposit → MetaMask: approve token spend (once) → MetaMask: deposit transaction → checkpoint written on-chain
+1. Select asset + amount → Deposit → MetaMask: approve token spend (once) → MetaMask: deposit transaction → checkpoint written on-chain → wait for tx receipt → if `confirmationDelaySecs > 0`, poll for enforced balance credit (up to `min(delaySecs, 60) + 15s`) → success toast (or soft-fallback if poll times out)
 
 **Withdraw**
-1. Select asset + amount → Withdraw → MetaMask: withdraw transaction → checkpoint written on-chain
+1. Select asset + amount → Withdraw → MetaMask: withdraw transaction → checkpoint written on-chain → wait for tx receipt → if `confirmationDelaySecs > 0`, poll for enforced balance decrease → success toast (or soft-fallback)
 
 **Transfer**
 1. Select asset + amount + recipient address → Transfer → if no home chain set, modal appears → confirm chain → transfer proceeds
 
 **Close channel**
-1. In ActionPanel or ChannelRow → Close → MetaMask: close transaction → checkpoint
+1. In ChannelRow → Close channel → MetaMask: close transaction → checkpoint → wait for tx receipt → if `delaySecs > 0`, button shows spinner with "Waiting for confirmation (~Xs)…" tooltip (`isAwaitingClose` phase) while polling enforced balance → channel list and status refresh once node reflects the close (or soft fallback toast on timeout)
 
 **Session key setup**
 1. Banner appears → "Set up" → navigates to Session Keys tab → "Register New" → `SessionKeyRegisterForm` → confirm → one MetaMask signature → key stored locally + submitted to node → future state ops (acknowledge, checkpoint) skip MetaMask
@@ -249,7 +256,7 @@ Tab selector only appears when a wallet is connected. Switching tabs preserves s
 1. Expand channel → StateViewer → Acknowledge button (issued row) → signs with session key or wallet → issued becomes signed
 
 **Checkpoint signed state**
-1. Expand channel → StateViewer → Checkpoint button (signed row) → MetaMask: on-chain transaction → signed becomes enforced
+1. Expand channel → StateViewer → Checkpoint button (signed row) → MetaMask: on-chain transaction → wait for tx receipt → if `delaySecs > 0`, button shows spinner with "Waiting for confirmation (~Xs)…" tooltip while polling the node → enforced row updates and Checkpoint button disappears once the node reflects the new stateVersion (or after timeout, with a soft fallback toast)
 
 **Accept incoming channel**
 1. Channels section → expand IncomingChannelRow → Acknowledge → `setHomeBlockchain` sets wallet chain as home → `acknowledge` co-signs the issued state → channel appears as a regular ChannelRow

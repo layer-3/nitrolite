@@ -294,6 +294,18 @@ type DatabaseStore interface {
 	// GetLatestContractEventBlockNumber returns the highest block number for a given contract.
 	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
 
-	// IsContractEventPresent checks if a specific contract event has already been stored.
-	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
+
+	// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of
+	// the highest stored event for the given contract. Returns (0, "", nil) when no rows exist.
+	GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (blockNumber uint64, blockHash string, err error)
+
+	// GetPreviousDistinctBlockHash returns the block_number and block_hash of the highest
+	// stored event with block_number strictly below belowBlockNumber. Returns (0, "", nil)
+	// when no such row exists.
+	GetPreviousDistinctBlockHash(contractAddress string, blockchainID uint64, belowBlockNumber uint64) (blockNumber uint64, blockHash string, err error)
 }

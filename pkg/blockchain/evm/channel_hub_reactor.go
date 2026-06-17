@@ -112,6 +112,12 @@ type ChannelHubReactorStore interface {
 
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
+
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 }
 
 var channelHubAbi *abi.ABI
@@ -148,16 +154,18 @@ type ChannelHubReactor struct {
 	nodeAddress      string
 	eventHandler     core.ChannelHubEventHandler
 	assetStore       AssetStore
+	store            ChannelHubReactorStore // non-transactional; used for the pre-check in HandleEvent
 	useStoreInTx     ChannelHubReactorStoreTxProvider
 	onEventProcessed func(blockchainID uint64, success bool)
 }
 
-func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider) *ChannelHubReactor {
+func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider, store ChannelHubReactorStore) *ChannelHubReactor {
 	return &ChannelHubReactor{
 		blockchainID: blockchainID,
 		nodeAddress:  nodeAddress,
 		eventHandler: eventHandler,
 		assetStore:   assetStore,
+		store:        store,
 		useStoreInTx: useStoreInTx,
 	}
 }
@@ -167,7 +175,13 @@ func (r *ChannelHubReactor) SetOnEventProcessed(fn func(blockchainID uint64, suc
 	r.onEventProcessed = fn
 }
 
-func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) (err error) {
+	defer func() {
+		if r.onEventProcessed != nil {
+			r.onEventProcessed(r.blockchainID, err == nil)
+		}
+	}()
+
 	logger := log.FromContext(ctx)
 
 	eventID := l.Topics[0]
@@ -178,7 +192,22 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	err := r.useStoreInTx(func(store ChannelHubReactorStore) error {
+	// Pre-check: skip already-committed events without opening a transaction.
+	// This converts the constraint-violation rollback path into a clean early exit and
+	// is required for the reconciliation walk (§4.4) to replay events without errors.
+	// Reorged events with a changed block-level logIndex pass through this check;
+	// they are handled by the reactor's business-logic idempotency (see nitronode/docs/reorg-fix.md §6.6).
+	processed, err := r.store.IsContractEventProcessed(l.TxHash.String(), uint32(l.Index), r.blockchainID)
+	if err != nil {
+		return errors.Wrap(err, "pre-check IsContractEventProcessed failed")
+	}
+	if processed {
+		logger.Info("skipping re-delivered event, already committed",
+			"event", eventName, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
+		return nil
+	}
+
+	err = r.useStoreInTx(func(store ChannelHubReactorStore) error {
 		var err error
 		switch eventID {
 		case channelHubAbi.Events["NodeBalanceUpdated"].ID:
@@ -245,6 +274,7 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 			ContractAddress: l.Address.Hex(),
 			TransactionHash: l.TxHash.String(),
 			LogIndex:        uint32(l.Index),
+			BlockHash:       l.BlockHash.Hex(),
 		}); err != nil {
 			logger.Warn("error storing contract event", "error", err, "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 			return errors.Wrap(err, "error storing contract event")
@@ -253,9 +283,6 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 		return nil
 	})
-	if r.onEventProcessed != nil {
-		r.onEventProcessed(r.blockchainID, err == nil)
-	}
 	return err
 }
 

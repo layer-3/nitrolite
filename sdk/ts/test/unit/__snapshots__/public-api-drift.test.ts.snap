@@ -506,6 +506,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "properties": [
       "blockStep: bigint",
       "channelHubAddress: Address",
+      "confirmationDelaySecs: number",
       "id: bigint",
       "name: string",
     ],
@@ -548,6 +549,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "properties": [
       "blockchain_id: string",
       "channel_hub_address: Address",
+      "confirmation_delay_secs: number",
       "name: string",
     ],
     "signatures": [],
@@ -924,6 +926,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "getBlockchains: (): Promise<core.Blockchain[]>",
       "getChannels: (wallet: Address, options?: { status?: string; asset?: string; channelType?: string; pagination?: core.PaginationParams; }): Promise<{ channels: core.Channel[]; metadata: core.PaginationMetadata; }>",
       "getConfig: (): Promise<core.NodeConfig>",
+      "getConfirmationDelay: (chainId: bigint): Promise<number>",
       "getEscrowChannel: (escrowChannelId: string): Promise<core.Channel | null>",
       "getHomeChannel: (wallet: Address, asset: string): Promise<core.Channel | null>",
       "getLastAppKeyStates: (userAddress: string, sessionKey?: string, options?: { includeInactive?: boolean; }): Promise<app.AppSessionKeyStateV1[]>",
@@ -947,6 +950,7 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
       "submitSessionKeyState: (state: app.AppSessionKeyStateV1): Promise<void>",
       "transfer: (recipientWallet: string, asset: string, amount: Decimal): Promise<core.State>",
       "validateAndSignState: (currentState: core.State, proposedState: core.State): Promise<Hex>",
+      "waitForCheckpoint: (asset: string, txHash: string, opts?: WaitForCheckpointOptions): Promise<core.BalanceEntry>",
       "waitForClose: (): Promise<void>",
       "watchValidatorRegistered: (chainId: bigint, fromBlock?: bigint, signal?: AbortSignal): AsyncGenerator<core.ValidatorRegisteredEvent>",
       "withdraw: (blockchainId: bigint, asset: string, amount: Decimal): Promise<core.State>",
@@ -1002,6 +1006,11 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "kind": "const",
     "name": "DEFAULT_CHALLENGE_PERIOD",
     "type": "86400",
+  },
+  {
+    "kind": "const",
+    "name": "DEFAULT_CHECKPOINT_POLL_INTERVAL_MS",
+    "type": "3000",
   },
   {
     "kind": "const",
@@ -2265,6 +2274,17 @@ exports[`SDK public runtime API drift guard keeps root TypeScript public API sig
     "signatures": [],
   },
   {
+    "kind": "interface",
+    "name": "WaitForCheckpointOptions",
+    "properties": [
+      "chainId: bigint",
+      "expectedBalance: Decimal",
+      "pollIntervalMs: number",
+      "timeoutMs: number",
+    ],
+    "signatures": [],
+  },
+  {
     "constructors": [
       "(config?: WebsocketDialerConfig): WebsocketDialer",
     ],
@@ -2353,6 +2373,7 @@ exports[`SDK public runtime API drift guard keeps root runtime exports intention
   "Client",
   "ClientAssetStore",
   "DEFAULT_CHALLENGE_PERIOD",
+  "DEFAULT_CHECKPOINT_POLL_INTERVAL_MS",
   "DefaultConfig",
   "DefaultWebsocketDialerConfig",
   "ERROR_PARAM_KEY",

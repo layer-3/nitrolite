@@ -89,8 +89,11 @@ export function useChannelOps(
   const MAX_ACTIVE_WAIT_SECS = 60;
 
   const waitForCredit = useCallback(
-    async (asset: string, delaySecs: number, baselineEnforced: Decimal, direction: 'up' | 'down', gen: number): Promise<boolean> => {
+    async (asset: string, delaySecs: number, baselineEnforced: Decimal | null, direction: 'up' | 'down', gen: number): Promise<boolean> => {
       if (!client || !address || delaySecs <= 0) return true; // gate disabled → nothing to wait for
+      // No reliable baseline (the pre-op read failed): we cannot tell a pre-existing balance
+      // from a freshly-credited one, so don't guess. Fall back to the soft toast.
+      if (baselineEnforced === null) return false;
       const activeWaitSecs = Math.min(delaySecs, MAX_ACTIVE_WAIT_SECS);
       const deadline = Date.now() + (activeWaitSecs + 15) * 1000; // capped delay + buffer for block time / RPC lag
       const intervalMs = 2000;
@@ -158,12 +161,12 @@ export function useChannelOps(
           }
         }
 
-        let baselineEnforced = new Decimal(0);
+        let baselineEnforced: Decimal | null = new Decimal(0);
         if (delaySecs > 0) {
           try {
             const entries = await client.getBalances(address);
             baselineEnforced = entries.find(e => e.asset === asset)?.enforced ?? new Decimal(0);
-          } catch { /* baseline 0 on failure; poll still works for a fresh deposit */ }
+          } catch { baselineEnforced = null; /* unknown baseline → waitForCredit falls back to soft toast */ }
         }
 
         setDepositPhase('signing_state');
@@ -215,12 +218,12 @@ export function useChannelOps(
         const chain = supportedChains.find(c => c.id === blockchainId);
         const delaySecs = chain?.confirmationDelaySecs ?? 0;
 
-        let baselineEnforced = new Decimal(0);
+        let baselineEnforced: Decimal | null = new Decimal(0);
         if (delaySecs > 0) {
           try {
             const entries = await client.getBalances(address);
             baselineEnforced = entries.find(e => e.asset === asset)?.enforced ?? new Decimal(0);
-          } catch { /* baseline 0 on failure */ }
+          } catch { baselineEnforced = null; /* unknown baseline → waitForCredit falls back to soft toast */ }
         }
 
         await client.withdraw(blockchainId, asset, amount);
@@ -333,12 +336,12 @@ export function useChannelOps(
         const chain = supportedChains.find(c => c.id === blockchainId);
         const delaySecs = chain?.confirmationDelaySecs ?? 0;
 
-        let baselineEnforced = new Decimal(0);
+        let baselineEnforced: Decimal | null = new Decimal(0);
         if (delaySecs > 0) {
           try {
             const entries = await client.getBalances(address);
             baselineEnforced = entries.find(e => e.asset === asset)?.enforced ?? new Decimal(0);
-          } catch { /* baseline 0 on failure */ }
+          } catch { baselineEnforced = null; /* unknown baseline → waitForCredit falls back to soft toast */ }
         }
 
         // If a Finalize state is already signed (e.g. a previous checkpoint tx failed or

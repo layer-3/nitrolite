@@ -21,6 +21,7 @@ interface Props {
   onSelectAsset: (asset: string) => void;
   onAfterOp?: () => void;
   isClosing: boolean;
+  isAwaitingClose?: boolean;
   channelStatesKey?: number;
   defaultExpanded?: boolean;
 }
@@ -37,6 +38,7 @@ export default function ChannelRow({
   onSelectAsset,
   onAfterOp,
   isClosing,
+  isAwaitingClose,
   channelStatesKey,
   defaultExpanded,
 }: Props) {
@@ -45,6 +47,9 @@ export default function ChannelRow({
 
   const homeChainObj = chains.find(c => c.id === channel.blockchainId);
   const homeChainName = chainDisplayName(channel.blockchainId, homeChainObj?.name);
+  // Resolve the per-chain confirmation delay so StateViewer and the close button
+  // can surface the confirmation-window wait state.
+  const delaySecs = homeChainObj?.confirmationDelaySecs ?? 0;
   const wrongChain = !closed && currentChainId != null && currentChainId !== channel.blockchainId;
 
   return (
@@ -126,14 +131,19 @@ export default function ChannelRow({
           )}
 
           {!closed && (
-            <div className="flex gap-2">
-              <button
-                className="btn btn-danger btn-sm"
-                onClick={() => onClose(channel.asset, channel.blockchainId)}
-                disabled={isClosing || wrongChain}
-              >
-                {isClosing ? <span className="spinner" /> : 'Close channel'}
-              </button>
+            <div className="flex gap-2 items-center">
+              <div className="tooltip-wrap">
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => onClose(channel.asset, channel.blockchainId)}
+                  disabled={isClosing || isAwaitingClose || wrongChain}
+                >
+                  {isClosing || isAwaitingClose ? <span className="spinner" /> : 'Close channel'}
+                </button>
+                {isAwaitingClose && delaySecs > 0 && (
+                  <span className="tip">{`Waiting for confirmation (~${delaySecs}s)…`}</span>
+                )}
+              </div>
             </div>
           )}
 
@@ -145,8 +155,9 @@ export default function ChannelRow({
               address={address}
               asset={channel.asset}
               enforcedBalance={enforcedBalance}
+              delaySecs={delaySecs}
               onAfterOp={onAfterOp}
-              isLocked={isClosing}
+              isLocked={isClosing || isAwaitingClose}
               refreshKey={channelStatesKey}
             />
           )}

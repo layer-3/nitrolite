@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { jest } from '@jest/globals';
-import { Client } from '../../src/client.js';
+import { Client, DEFAULT_CHECKPOINT_POLL_INTERVAL_MS } from '../../src/client.js';
 import * as core from '../../src/core/index.js';
 
 const USER_WALLET = '0x1234567890123456789012345678901234567890' as const;
@@ -390,5 +390,149 @@ describe('Client.withdraw cross-chain guard', () => {
         await client.withdraw(8453n, 'usdc', new Decimal(1));
         expect(client.signAndSubmitState).toHaveBeenCalledTimes(1);
         expect(client.requestChannelCreation).not.toHaveBeenCalled();
+    });
+});
+
+// Helper: create a stub BalanceEntry array for a given asset + enforced amount.
+function makeBalances(asset: string, enforced: string, balance = '0'): core.BalanceEntry[] {
+    return [{ asset, balance: new Decimal(balance), enforced: new Decimal(enforced) }];
+}
+
+describe('Client.getConfirmationDelay', () => {
+    it('returns confirmationDelaySecs for a matching chain', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getBlockchains = jest.fn().mockResolvedValue([
+            { id: 1n, name: 'Ethereum', confirmationDelaySecs: 36, channelHubAddress: '0x0', blockStep: 10n },
+            { id: 137n, name: 'Polygon', confirmationDelaySecs: 5, channelHubAddress: '0x0', blockStep: 5n },
+        ]);
+
+        const delay = await client.getConfirmationDelay(1n);
+        expect(delay).toBe(36);
+    });
+
+    it('returns 0 when the gate is disabled for the matched chain', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getBlockchains = jest.fn().mockResolvedValue([
+            { id: 137n, name: 'Polygon', confirmationDelaySecs: 0, channelHubAddress: '0x0', blockStep: 5n },
+        ]);
+
+        const delay = await client.getConfirmationDelay(137n);
+        expect(delay).toBe(0);
+    });
+
+    it('throws when the chainId is not in the returned blockchains list', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getBlockchains = jest.fn().mockResolvedValue([
+            { id: 1n, name: 'Ethereum', confirmationDelaySecs: 36, channelHubAddress: '0x0', blockStep: 10n },
+        ]);
+
+        await expect(client.getConfirmationDelay(999n)).rejects.toThrow(
+            'blockchain 999 not found in node config'
+        );
+    });
+});
+
+describe('Client.waitForCheckpoint', () => {
+    beforeEach(() => {
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('resolves immediately when enforced balance satisfies expectedBalance', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getUserAddress = jest.fn().mockReturnValue(USER_WALLET);
+        client.getBalances = jest.fn().mockResolvedValue(makeBalances('usdc', '100'));
+        client.getConfirmationDelay = jest.fn();
+
+        const result = await client.waitForCheckpoint('usdc', '0xTxHash', {
+            expectedBalance: new Decimal(100),
+            timeoutMs: 5000,
+            pollIntervalMs: 100,
+        });
+        expect(result.asset).toBe('usdc');
+        expect(result.enforced.gte(new Decimal(100))).toBe(true);
+    });
+
+    it('resolves in changed mode when enforced balance changes on second poll', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getUserAddress = jest.fn().mockReturnValue(USER_WALLET);
+        // First call (snapshot): enforced = 0. Subsequent calls: enforced = 50.
+        const getBalances = jest.fn()
+            .mockResolvedValueOnce(makeBalances('usdc', '0'))
+            .mockResolvedValue(makeBalances('usdc', '50'));
+        client.getBalances = getBalances;
+        client.getConfirmationDelay = jest.fn().mockResolvedValue(5);
+
+        const promise = client.waitForCheckpoint('usdc', '0xTxHash', {
+            chainId: 1n,
+            timeoutMs: 30_000,
+            pollIntervalMs: 100,
+        });
+
+        // Advance past the lower-bound delay (5s) and one poll interval.
+        await jest.advanceTimersByTimeAsync(5_000);
+        await jest.advanceTimersByTimeAsync(100);
+
+        const result = await promise;
+        expect(result.enforced.eq(new Decimal(50))).toBe(true);
+    });
+
+    it('does not poll getBalances before lower-bound wait elapses', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getUserAddress = jest.fn().mockReturnValue(USER_WALLET);
+        // Always return enforced = 0 so condition never satisfies during this test.
+        const getBalances = jest.fn().mockResolvedValue(makeBalances('usdc', '0'));
+        client.getBalances = getBalances;
+        client.getConfirmationDelay = jest.fn().mockResolvedValue(5);
+
+        const promise = client.waitForCheckpoint('usdc', '0xTxHash', {
+            chainId: 1n,
+            timeoutMs: 30_000,
+            pollIntervalMs: 1000,
+        });
+        // Suppress unhandled-rejection warnings.
+        promise.catch(() => {});
+
+        // Let the snapshot call (before the lower-bound wait) resolve.
+        await Promise.resolve();
+
+        // Advance only 3s (less than the 5s lower-bound).
+        await jest.advanceTimersByTimeAsync(3_000);
+        // Only the snapshot call (before the lower-bound wait) should have happened.
+        // The snapshot is call #1; the first actual poll happens after 5s.
+        expect(getBalances).toHaveBeenCalledTimes(1);
+
+        // Clean up: advance past deadline to avoid hanging promise.
+        await jest.advanceTimersByTimeAsync(35_000);
+        await expect(promise).rejects.toThrow('timed out');
+    }, 15_000);
+
+    it('times out and error message contains txHash', async () => {
+        const client = Object.create(Client.prototype) as Client & Record<string, any>;
+        client.getUserAddress = jest.fn().mockReturnValue(USER_WALLET);
+        // Always return enforced = 0.
+        client.getBalances = jest.fn().mockResolvedValue(makeBalances('usdc', '0'));
+        client.getConfirmationDelay = jest.fn();
+
+        const timeoutMs = 500;
+        // Attach .catch before advancing timers to avoid unhandled rejection.
+        const promise = client.waitForCheckpoint('usdc', '0xDeadBeef', {
+            expectedBalance: new Decimal(50),
+            timeoutMs,
+            pollIntervalMs: 50,
+        });
+        // Suppress unhandled-rejection warnings during timer advancement.
+        promise.catch(() => {});
+
+        await jest.advanceTimersByTimeAsync(timeoutMs + 100);
+
+        await expect(promise).rejects.toThrow('0xDeadBeef');
+    });
+
+    it('DEFAULT_CHECKPOINT_POLL_INTERVAL_MS is 3000', () => {
+        expect(DEFAULT_CHECKPOINT_POLL_INTERVAL_MS).toBe(3000);
     });
 });

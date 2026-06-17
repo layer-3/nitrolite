@@ -3,7 +3,7 @@
 // ============================================================================
 
 // Export SDK Client (main entry point)
-export { Client, DEFAULT_CHALLENGE_PERIOD, type StateSigner, type TransactionSigner } from './client.js';
+export { Client, DEFAULT_CHALLENGE_PERIOD, DEFAULT_CHECKPOINT_POLL_INTERVAL_MS, type WaitForCheckpointOptions, type StateSigner, type TransactionSigner } from './client.js';
 
 // Export signers
 export {

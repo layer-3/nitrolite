@@ -1515,9 +1515,13 @@ How to use Nitrolite for AI agent payments and agent-to-agent interactions.
 ## Why State Channels for AI Agents?
 
 AI agents need to make frequent, small payments — often thousands per session. On-chain transactions are too slow and expensive. State channels provide:
-- **Instant finality** — no waiting for block confirmations
+- **Instant off-chain transfers** — agent-to-agent payments settle the moment both parties co-sign; no waiting for block confirmations
 - **Near-zero cost** — gas only on channel open/close, not per-transfer
 - **Programmable** — agents manage channels autonomously via the SDK
+
+> **On-chain steps lag.** Funding (deposit) and withdrawal still touch the chain. After the transaction is
+> mined, the node waits \`confirmationDelaySecs\` (per chain, from \`node.v1.GetConfig\`) before crediting
+> the off-chain balance — a reorg-safety gate. Only the **transfers between agents** are instant.
 
 ## Agent Wallet Setup
 

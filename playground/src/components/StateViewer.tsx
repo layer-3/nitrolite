@@ -9,12 +9,13 @@ interface Props {
   address: Address | null;
   asset: string;
   enforcedBalance: Decimal | null | undefined;
+  delaySecs: number;
   onAfterOp?: () => void;
   isLocked?: boolean;
   refreshKey?: number;
 }
 
-export default function StateViewer({ client, address, asset, enforcedBalance, onAfterOp, isLocked, refreshKey }: Props) {
+export default function StateViewer({ client, address, asset, enforcedBalance, delaySecs, onAfterOp, isLocked, refreshKey }: Props) {
   const {
     enforced,
     signed,
@@ -27,7 +28,9 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
     checkpoint,
     isAcknowledging,
     isCheckpointing,
-  } = useChannelStates(client, address, asset, enforcedBalance, onAfterOp, refreshKey);
+    isAwaitingConfirmation,
+    confirmationDelaySecs,
+  } = useChannelStates(client, address, asset, enforcedBalance, delaySecs, onAfterOp, refreshKey);
 
   if (isLoading && !enforced && !signed && !issued) {
     return <div className="text-text-muted text-xs px-4 py-3">Loading states…</div>;
@@ -64,10 +67,19 @@ export default function StateViewer({ client, address, asset, enforcedBalance, o
         amount={signed?.homeLedger.userBalance}
         asset={asset}
         action={
-          canCheckpoint ? (
-            <button className="btn btn-sm" onClick={checkpoint} disabled={isCheckpointing || isLocked}>
-              {isCheckpointing || isLocked ? <span className="spinner" /> : 'Checkpoint'}
-            </button>
+          canCheckpoint || isAwaitingConfirmation ? (
+            <div className="tooltip-wrap">
+              <button
+                className="btn btn-sm"
+                onClick={checkpoint}
+                disabled={isCheckpointing || isAwaitingConfirmation || isLocked}
+              >
+                {isCheckpointing || isAwaitingConfirmation || isLocked ? <span className="spinner" /> : 'Checkpoint'}
+              </button>
+              {isAwaitingConfirmation && (
+                <span className="tip">{`Waiting for confirmation (~${confirmationDelaySecs}s)…`}</span>
+              )}
+            </div>
           ) : null
         }
       />

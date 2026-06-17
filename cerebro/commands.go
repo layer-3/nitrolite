@@ -16,6 +16,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
 	sdk "github.com/layer-3/nitrolite/sdk/go"
+	"github.com/shopspring/decimal"
 	"golang.org/x/term"
 )
 
@@ -66,6 +67,7 @@ OPERATIONS
   acknowledge <asset>                          Acknowledge transfer or channel creation
   close-channel <asset>                        Close home channel on-chain
   checkpoint <asset>                           Submit latest state on-chain
+  wait-credit <asset>                          Wait for off-chain credit after checkpoint
 
 QUERIES
   ping                          Test node connection
@@ -449,8 +451,21 @@ func (o *Operator) checkpoint(ctx context.Context, asset string) {
 		return
 	}
 
-	fmt.Printf("SUCCESS: Checkpoint completed\n")
+	fmt.Printf("SUCCESS: Checkpoint submitted on-chain\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
+
+	// Best-effort: tell the user when the off-chain credit will actually land.
+	// The node runs a confirmation gate (PR #832): the off-chain balance only
+	// updates confirmation_delay_secs after the tx is mined. Any failure here is
+	// non-fatal — the checkpoint already succeeded.
+	if delay, ok := o.confirmationDelayForAsset(ctx, asset); ok {
+		if delay == 0 {
+			fmt.Println("INFO: Off-chain credit is immediate on this chain (no confirmation gate).")
+		} else {
+			fmt.Printf("INFO: Off-chain credit expected in ~%ds (node confirmation window).\n", delay)
+			fmt.Printf("INFO: Run 'balances' after that, or 'wait-credit %s' to wait automatically.\n", asset)
+		}
+	}
 }
 
 // ============================================================================
@@ -499,6 +514,7 @@ func (o *Operator) nodeInfo(ctx context.Context) {
 	for _, bc := range config.Blockchains {
 		fmt.Printf("  - %s (ID: %d)\n", bc.Name, bc.ID)
 		fmt.Printf("    Channel Hub: %s\n", bc.ChannelHubAddress)
+		fmt.Printf("    Confirmation Delay: %s\n", formatConfirmationDelay(bc.ConfirmationDelaySecs))
 	}
 }
 
@@ -532,6 +548,7 @@ func (o *Operator) listChains(ctx context.Context) {
 		fmt.Printf("- %s\n", chain.Name)
 		fmt.Printf("  Chain ID:  %d\n", chain.ID)
 		fmt.Printf("  Contract:  %s\n", chain.ChannelHubAddress)
+		fmt.Printf("  Confirm:   %s\n", formatConfirmationDelay(chain.ConfirmationDelaySecs))
 
 		// Check if RPC is configured
 		_, err := o.store.GetRPC(chain.ID)
@@ -1184,6 +1201,103 @@ func (o *Operator) listAppSessionKeys(ctx context.Context, wallet string) {
 // ============================================================================
 // Helper Methods
 // ============================================================================
+
+// formatConfirmationDelay renders a chain's confirmation_delay_secs for display.
+// Zero means the gate is disabled (BFT / single-slot chains) — off-chain credit is
+// effectively immediate.
+func formatConfirmationDelay(secs uint32) string {
+	if secs == 0 {
+		return "instant (no confirmation gate)"
+	}
+	return fmt.Sprintf("~%ds", secs)
+}
+
+// waitCredit waits for the off-chain enforced balance of the given asset to change
+// after a checkpoint/deposit. It builds its own context (not the shared 30s command
+// context) so the confirmation-window sleep isn't killed prematurely.
+func (o *Operator) waitCredit(asset string) {
+	wallet := o.getImportedWalletAddress()
+	if wallet == "" {
+		fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first.")
+		return
+	}
+
+	// Resolve confirmation delay (advisory — best effort).
+	delay, delayKnown := o.confirmationDelayForAsset(context.Background(), asset)
+
+	// Build a generous context: delay*2 + 60s (min 60s).
+	timeout := time.Duration(delay)*2*time.Second + 60*time.Second
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), timeout)
+	defer waitCancel()
+
+	// Read baseline enforced balance.
+	baseEnforced := decimal.Zero
+	{
+		shortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		balances, err := o.client.GetBalances(shortCtx, wallet)
+		cancel()
+		if err != nil {
+			// Without a reliable baseline a pre-existing balance would be misread as a
+			// freshly-landed credit. Abort rather than report a false SUCCESS.
+			fmt.Printf("ERROR: Could not read baseline balance: %v\n", err)
+			fmt.Println("Cannot reliably detect a credit without a baseline; run 'wait-credit' again or check 'balances'.")
+			return
+		}
+		for _, b := range balances {
+			if strings.EqualFold(b.Asset, asset) {
+				baseEnforced = b.Enforced
+				break
+			}
+		}
+	}
+
+	fmt.Printf("Watching enforced balance for %s (wallet: %s)\n", asset, wallet)
+	fmt.Printf("Baseline enforced: %s\n", baseEnforced.String())
+
+	if delay > 0 {
+		fmt.Printf("INFO: Waiting ~%ds for the confirmation window before polling...\n", delay)
+		select {
+		case <-time.After(time.Duration(delay) * time.Second):
+		case <-waitCtx.Done():
+			fmt.Println("WARNING: Context expired during confirmation window wait.")
+			return
+		}
+	} else {
+		if !delayKnown {
+			fmt.Println("INFO: confirmation gate disabled (or delay unknown); polling immediately.")
+		} else {
+			fmt.Println("INFO: Off-chain credit is immediate on this chain (no confirmation gate); polling immediately.")
+		}
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			fmt.Printf("WARNING: enforced balance unchanged after %s; run 'balances' to re-check.\n", timeout)
+			return
+		case <-ticker.C:
+			shortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			balances, err := o.client.GetBalances(shortCtx, wallet)
+			cancel()
+			if err != nil {
+				fmt.Printf("WARNING: Failed to poll balances: %v\n", err)
+				continue
+			}
+			for _, b := range balances {
+				if strings.EqualFold(b.Asset, asset) {
+					if !b.Enforced.Equal(baseEnforced) {
+						fmt.Printf("SUCCESS: Off-chain credit landed. New enforced balance: %s\n", b.Enforced.String())
+						return
+					}
+					break
+				}
+			}
+		}
+	}
+}
 
 // generatePrivateKey generates a new Ethereum private key
 func generatePrivateKey() (string, error) {

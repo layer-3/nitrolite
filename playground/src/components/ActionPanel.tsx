@@ -77,6 +77,7 @@ export default function ActionPanel({
       ? currentChainId
       : asset?.suggestedBlockchainId ?? null;
   const operatingChain = chains.find(c => c.id === operatingChainId);
+  const confirmationDelaySecs = operatingChain?.confirmationDelaySecs ?? 0;
   const operatingChainName = operatingChain
     ? chainDisplayName(operatingChain.id, operatingChain.name)
     : undefined;
@@ -228,16 +229,18 @@ export default function ActionPanel({
         case 'approving':   return 'Approving…';
         case 'signing_state': return channelExists ? 'Signing deposit state…' : 'Signing creation state…';
         case 'signing_tx':  return 'Signing deposit transaction…';
-        case 'confirming':  return 'Depositing…';
-        default:            return needsApproval ? 'Approve' : 'Deposit';
+        case 'confirming':     return 'Tx mined, confirming…';
+        case 'awaiting_node':  return `Awaiting node (~${confirmationDelaySecs}s)…`;
+        default:               return needsApproval ? 'Approve' : 'Deposit';
       }
     }
     if (tab === 'withdraw') {
       switch (withdrawPhase) {
         case 'signing_state': return 'Signing withdrawal state…';
         case 'signing_tx':    return 'Sending withdrawal transaction…';
-        case 'confirming':    return 'Withdrawing…';
-        default:              return 'Withdraw';
+        case 'confirming':     return 'Tx mined, confirming…';
+        case 'awaiting_node':  return `Awaiting node (~${confirmationDelaySecs}s)…`;
+        default:               return 'Withdraw';
       }
     }
     // transfer
@@ -347,6 +350,12 @@ export default function ActionPanel({
             {operatingChainName && tab === 'withdraw' && (
               <p className="text-text-muted text-xs mt-2">
                 Will withdraw to <span className="text-text-primary">"{operatingChainName}"</span>
+              </p>
+            )}
+
+            {confirmationDelaySecs > 0 && (tab === 'deposit' || tab === 'withdraw') && (
+              <p className="text-text-muted text-xs mt-1">
+                Off-chain balance updates ~{confirmationDelaySecs}s after the transaction is mined.
               </p>
             )}
 

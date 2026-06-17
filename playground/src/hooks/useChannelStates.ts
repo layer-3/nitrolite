@@ -25,6 +25,8 @@ export interface UseChannelStatesResult {
   checkpoint: () => Promise<void>;
   isAcknowledging: boolean;
   isCheckpointing: boolean;
+  isAwaitingConfirmation: boolean;
+  confirmationDelaySecs: number;
 }
 
 export function useChannelStates(
@@ -32,6 +34,7 @@ export function useChannelStates(
   address: Address | null,
   asset: string,
   enforcedBalance: Decimal | null | undefined,
+  delaySecs: number,
   onAfterOp?: () => void,
   refreshKey?: number,
 ): UseChannelStatesResult {
@@ -42,6 +45,11 @@ export function useChannelStates(
   const [error, setError] = useState<string | null>(null);
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [isCheckpointing, setIsCheckpointing] = useState(false);
+  const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
+
+  // Generation guard: incremented whenever address changes so in-flight polls
+  // that outlive the current wallet are silently dropped.
+  const checkpointGenRef = useRef(0);
 
   // Track the last on-chain version we recorded so the enforced balance only
   // updates when a new checkpoint lands, not on every off-chain state change.
@@ -125,9 +133,15 @@ export function useChannelStates(
     }
   }, [client, asset, refresh, onAfterOp]);
 
+  // Cap active polling to match the useChannelOps pattern.
+  const MAX_ACTIVE_WAIT_SECS = 60;
+
   const checkpoint = useCallback(async () => {
-    if (!client) return;
+    if (!client || !address) return;
     setIsCheckpointing(true);
+    // Capture the version we are committing so the poll knows what to wait for.
+    const targetVersion = signed?.version ?? 0n;
+    const gen = ++checkpointGenRef.current;
     try {
       const txHash = await client.checkpoint(asset);
       // Wait for the tx to be mined so the enforced state and on-chain balance
@@ -140,14 +154,49 @@ export function useChannelStates(
           await publicClient.waitForTransactionReceipt({ hash: txHash as Hash });
         }
       }
-      await refresh();
-      onAfterOp?.();
+      if (checkpointGenRef.current !== gen) return;
+
+      if (delaySecs <= 0) {
+        // Gate disabled — immediate refresh (original behaviour).
+        await refresh();
+        onAfterOp?.();
+      } else {
+        // Poll getHomeChannel until the Node reflects the new stateVersion,
+        // bounded by min(delaySecs, MAX_ACTIVE_WAIT_SECS) + 15s buffer.
+        setIsCheckpointing(false);
+        setIsAwaitingConfirmation(true);
+        const activeWait = Math.min(delaySecs, MAX_ACTIVE_WAIT_SECS);
+        const deadline = Date.now() + (activeWait + 15) * 1000;
+        const intervalMs = 2000;
+        let reflected = false;
+        while (Date.now() < deadline) {
+          if (checkpointGenRef.current !== gen) return; // wallet/asset changed mid-wait
+          await new Promise<void>(r => setTimeout(r, intervalMs));
+          if (checkpointGenRef.current !== gen) return;
+          try {
+            const ch = await client.getHomeChannel(address, asset) as Channel | null;
+            if (ch && ch.stateVersion >= targetVersion) {
+              reflected = true;
+              break;
+            }
+          } catch { /* transient RPC; keep polling */ }
+        }
+        if (checkpointGenRef.current !== gen) return;
+        await refresh();
+        onAfterOp?.();
+        if (!reflected) {
+          toast(`Checkpoint submitted — will reflect after node confirmation (~${delaySecs}s)`);
+        }
+      }
     } catch (err) {
       handleOpError(err, 'Checkpoint');
     } finally {
-      setIsCheckpointing(false);
+      if (checkpointGenRef.current === gen) {
+        setIsCheckpointing(false);
+        setIsAwaitingConfirmation(false);
+      }
     }
-  }, [client, asset, signed, refresh, onAfterOp]);
+  }, [client, address, asset, delaySecs, signed, refresh, onAfterOp]);
 
   return {
     enforced,
@@ -162,5 +211,7 @@ export function useChannelStates(
     checkpoint,
     isAcknowledging,
     isCheckpointing,
+    isAwaitingConfirmation,
+    confirmationDelaySecs: delaySecs,
   };
 }

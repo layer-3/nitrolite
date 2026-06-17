@@ -283,6 +283,16 @@ Settles the latest co-signed state on-chain. This is the single entry point for 
 txHash, err := client.Checkpoint(ctx, "usdc")
 ```
 
+> **Confirmation delay.** `Checkpoint` returns when the transaction is **mined**, not when the node has
+> credited the result to your off-chain balance. The node applies a per-chain confirmation gate before
+> committing any on-chain event: it waits `ConfirmationDelaySecs` seconds (from the matching
+> `core.Blockchain` in `GetConfig`/`GetBlockchains`) after the event is observed, to guard against chain
+> reorganizations. Until that window elapses, `GetBalances` will not reflect a freshly deposited amount.
+> This is typically a few seconds where the gate is enabled, and may be set as high as the chain's
+> hard-finality time (~13 min on Ethereum L1). A `ConfirmationDelaySecs` of `0` means the gate is disabled
+> and credit is immediate. Off-chain `Transfer` is never gated. To wait for the credit, use
+> `client.WaitForCheckpoint(ctx, asset, txHash, nil)` or poll `GetBalances`.
+
 **Requirements:**
 - Blockchain RPC configured via `WithBlockchainRPC`
 - A co-signed state must exist (call Deposit, Withdraw, etc. first)
@@ -337,6 +347,10 @@ config, err := client.GetConfig(ctx)
 blockchains, err := client.GetBlockchains(ctx)
 assets, err := client.GetAssets(ctx, &blockchainID) // or nil for all
 ```
+
+Each `core.Blockchain` returned by `GetConfig`/`GetBlockchains` carries `ConfirmationDelaySecs` — the
+number of seconds the node waits after observing an on-chain event before crediting it to off-chain
+balances (`0` = gate disabled). Use it to show users the expected wait after `Checkpoint`.
 
 ### User Data
 

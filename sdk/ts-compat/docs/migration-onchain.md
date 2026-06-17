@@ -92,3 +92,44 @@ const addresses = {
 ```
 
 **After (compat):** Fetched from nitronode `get_config` — no manual setup. The `addresses` field in config is deprecated and ignored.
+
+## 6. On-Chain Credit Timing (Confirmation Delay)
+
+**Before (v0.5.3):** The node pushed a `BalanceUpdate` (and credited the off-chain
+balance) as soon as it observed the on-chain deposit event — effectively the moment the
+deposit transaction was mined.
+
+**After (compat / v1 node):** The node now applies a per-chain **confirmation delay**
+before crediting an on-chain deposit (or reflecting a withdrawal) off-chain. After your
+deposit transaction is mined, the off-chain balance only updates once the node's
+confirmation window for that chain has elapsed. This window is configured per chain on the
+node (`confirmation_delay_secs`) and can be significant on slow-finality chains — up to
+several minutes on Ethereum mainnet. It exists to protect against chain reorganizations
+re-crediting balances that no longer exist on-chain.
+
+You can read the active delay per chain from the node config:
+
+```typescript
+const config = await client.getConfig();
+// Each blockchain entry exposes `confirmationDelaySecs` (seconds).
+// Display "off-chain credit in ~Ns" to users after a deposit.
+```
+
+**What this means for you:**
+
+- **Using `EventPoller`? No change required.** `EventPoller` polls the node every 5
+  seconds (`new EventPoller(client, callbacks)`), so the credit simply arrives in a later
+  `onBalanceUpdate` callback — a few polls after the transaction receipt. The delay is fully
+  transparent; you do not need to do anything.
+
+- **Migrating a v0.5.3 consumer that assumed instant credit on tx receipt?** This is the one
+  behavior that changes. Any code that treated `await client.deposit(...)` resolving (or the
+  tx receipt landing) as "the off-chain balance is now updated" will read a stale balance if
+  it checks immediately. Replace that assumption with one of:
+  - Subscribe via `EventPoller` and react to `onBalanceUpdate` (recommended), or
+  - Poll `client.getBalances()` until the expected credit appears, waiting at least
+    `confirmationDelaySecs` for the relevant chain before treating absence as failure.
+
+  Do not display "Confirmed" / "Credited" to the user the instant the deposit transaction is
+  mined. The transaction is confirmed; the off-chain credit is still pending the node's
+  confirmation window.

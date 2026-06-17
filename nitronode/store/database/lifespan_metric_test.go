@@ -274,9 +274,9 @@ func TestGetUserBalanceSummary(t *testing.T) {
 		r := results[0]
 		assert.Equal(t, "1", r.BlockchainID)
 		assert.Equal(t, "usdc", r.Asset)
-		assert.True(t, decimal.NewFromInt(350).Equal(r.Total))        // 100+50+200
-		assert.True(t, decimal.NewFromInt(40).Equal(r.Underfunded))   // only user1: 100-60
-		assert.True(t, decimal.NewFromInt(30).Equal(r.Releasable))    // only user2: 80-50
+		assert.True(t, decimal.NewFromInt(350).Equal(r.Total))      // 100+50+200
+		assert.True(t, decimal.NewFromInt(40).Equal(r.Underfunded)) // only user1: 100-60
+		assert.True(t, decimal.NewFromInt(30).Equal(r.Releasable))  // only user2: 80-50
 	})
 
 	t.Run("groups by blockchain and asset", func(t *testing.T) {

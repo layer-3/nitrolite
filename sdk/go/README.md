@@ -49,12 +49,6 @@ client.GetEscrowChannel(ctx, escrowChannelID)   // Escrow channel info
 client.GetLatestState(ctx, wallet, asset, onlySigned) // Latest state
 ```
 
-### App Registry
-```go
-client.GetApps(ctx, opts)                              // List registered apps
-client.RegisterApp(ctx, appID, metadata, approvalNotRequired) // Register new app
-```
-
 ### App Sessions
 ```go
 client.GetAppSessions(ctx, opts)                              // List sessions
@@ -63,7 +57,6 @@ client.CreateAppSession(ctx, definition, sessionData, sigs)   // Create session
 client.CreateAppSession(ctx, def, data, sigs, opts)           // Create with owner approval
 client.SubmitAppSessionDeposit(ctx, update, sigs, asset, amount) // Deposit to session
 client.SubmitAppState(ctx, update, sigs)                      // Update session
-client.RebalanceAppSessions(ctx, signedUpdates)               // Atomic rebalance
 ```
 
 ### Session Keys — App Sessions
@@ -148,7 +141,6 @@ sdk/go/
 ├── node.go           # Node information methods
 ├── user.go           # User query methods
 ├── channel.go        # Channel and state management
-├── app_registry.go   # App registry methods
 ├── app_session.go    # App session methods
 ├── asset_cache.go    # Asset lookup and caching
 ├── config.go         # Configuration options
@@ -291,6 +283,16 @@ Settles the latest co-signed state on-chain. This is the single entry point for 
 txHash, err := client.Checkpoint(ctx, "usdc")
 ```
 
+> **Confirmation delay.** `Checkpoint` returns when the transaction is **mined**, not when the node has
+> credited the result to your off-chain balance. The node applies a per-chain confirmation gate before
+> committing any on-chain event: it waits `ConfirmationDelaySecs` seconds (from the matching
+> `core.Blockchain` in `GetConfig`/`GetBlockchains`) after the event is observed, to guard against chain
+> reorganizations. Until that window elapses, `GetBalances` will not reflect a freshly deposited amount.
+> This is typically a few seconds where the gate is enabled, and may be set as high as the chain's
+> hard-finality time (~13 min on Ethereum L1). A `ConfirmationDelaySecs` of `0` means the gate is disabled
+> and credit is immediate. Off-chain `Transfer` is never gated. To wait for the credit, use
+> `client.WaitForCheckpoint(ctx, asset, txHash, nil)` or poll `GetBalances`.
+
 **Requirements:**
 - Blockchain RPC configured via `WithBlockchainRPC`
 - A co-signed state must exist (call Deposit, Withdraw, etc. first)
@@ -346,6 +348,10 @@ blockchains, err := client.GetBlockchains(ctx)
 assets, err := client.GetAssets(ctx, &blockchainID) // or nil for all
 ```
 
+Each `core.Blockchain` returned by `GetConfig`/`GetBlockchains` carries `ConfirmationDelaySecs` — the
+number of seconds the node waits after observing an on-chain event before crediting it to off-chain
+balances (`0` = gate disabled). Use it to show users the expected wait after `Checkpoint`.
+
 ### User Data
 
 ```go
@@ -363,19 +369,6 @@ state, err := client.GetLatestState(ctx, wallet, asset, onlySigned)
 
 **Note:** State submission and channel creation are handled internally by state operations (Deposit, Withdraw, Transfer). On-chain settlement is handled by Checkpoint.
 
-### App Registry
-
-```go
-// List registered applications with optional filtering
-apps, meta, err := client.GetApps(ctx, &sdk.GetAppsOptions{
-    AppID:       &appID,
-    OwnerWallet: &wallet,
-})
-
-// Register a new application
-err := client.RegisterApp(ctx, "my-app", `{"name": "My App"}`, false)
-```
-
 ### App Sessions (Low-Level)
 
 ```go
@@ -384,7 +377,6 @@ def, err := client.GetAppDefinition(ctx, appSessionID)
 sessionID, version, status, err := client.CreateAppSession(ctx, def, data, sigs)
 nodeSig, err := client.SubmitAppSessionDeposit(ctx, update, sigs, asset, amount)
 err := client.SubmitAppState(ctx, update, sigs)
-batchID, err := client.RebalanceAppSessions(ctx, signedUpdates)
 ```
 
 #### Owner Approval for App Session Creation
@@ -638,7 +630,6 @@ go run lifecycle.go
 ```
 
 This example demonstrates:
-- Registering apps in the app registry (with and without owner approval)
 - Creating app sessions with single and multiple participants
 - Owner approval for app session creation
 - Session key delegation for app session participants
@@ -646,7 +637,6 @@ This example demonstrates:
 - Operating on app session state (redistributing allocations)
 - Withdrawing from app sessions
 - Closing app sessions
-- Fail case: attempting to create a session for an unregistered app
 
 The example walks through a complete multi-party app session scenario with three wallets.
 
@@ -668,10 +658,6 @@ core.Blockchain      // Blockchain info
 core.ChannelSessionKeyStateV1  // Channel session key state
 // Fields: UserAddress, SessionKey, Version (uint64), Assets []string,
 //         ExpiresAt (time.Time), UserSig string
-
-// App registry types
-app.AppV1                 // Application definition
-app.AppInfoV1             // Application info with timestamps
 
 // App session types
 app.AppSessionInfoV1      // Session info

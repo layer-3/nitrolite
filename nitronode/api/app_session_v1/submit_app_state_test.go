@@ -31,14 +31,12 @@ func TestSubmitAppState_OperateIntent_NoRedistribution_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -100,9 +98,6 @@ func TestSubmitAppState_OperateIntent_NoRedistribution_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -147,14 +142,12 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -218,9 +211,6 @@ func TestSubmitAppState_OperateIntent_WithRedistribution_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -270,14 +260,12 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		nodeAddress,
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -328,9 +316,6 @@ func TestSubmitAppState_WithdrawIntent_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
@@ -411,14 +396,12 @@ func TestSubmitAppState_WithdrawIntent_ReceiverHomeChannelChallenged_NoNodeSig(t
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		nodeAddress,
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -465,9 +448,6 @@ func TestSubmitAppState_WithdrawIntent_ReceiverHomeChannelChallenged_NoNodeSig(t
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
@@ -537,14 +517,12 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		false, // appRegistryEnabled=false
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -595,9 +573,6 @@ func TestSubmitAppState_WithdrawIntent_ReceiverWithEscrowLock_Rejected(t *testin
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
@@ -658,14 +633,12 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		nodeAddress,
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -723,9 +696,6 @@ func TestSubmitAppState_CloseIntent_Success(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
@@ -825,14 +795,12 @@ func TestSubmitAppState_CloseIntent_AllocationMismatch_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -883,9 +851,6 @@ func TestSubmitAppState_CloseIntent_AllocationMismatch_Rejected(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil).Maybe()
@@ -925,14 +890,12 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -992,9 +955,6 @@ func TestSubmitAppState_OperateIntent_MissingAllocation_Rejected(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -1039,14 +999,12 @@ func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) 
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1098,9 +1056,6 @@ func TestSubmitAppState_WithdrawIntent_MissingAllocation_Rejected(t *testing.T) 
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil).Maybe()
@@ -1151,14 +1106,12 @@ func TestSubmitAppState_DepositIntent_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1207,14 +1160,12 @@ func TestSubmitAppState_ClosedSession_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1237,9 +1188,6 @@ func TestSubmitAppState_ClosedSession_Rejected(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 
 	// Create RPC context
@@ -1278,14 +1226,12 @@ func TestSubmitAppState_InvalidVersion_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1313,9 +1259,6 @@ func TestSubmitAppState_InvalidVersion_Rejected(t *testing.T) {
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 
 	// Create RPC context
@@ -1354,14 +1297,12 @@ func TestSubmitAppState_SessionNotFound_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1415,14 +1356,12 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1479,9 +1418,6 @@ func TestSubmitAppState_OperateIntent_InvalidDecimalPrecision_Rejected(t *testin
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -1524,14 +1460,12 @@ func TestSubmitAppState_WithdrawIntent_InvalidDecimalPrecision_Rejected(t *testi
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1584,9 +1518,6 @@ func TestSubmitAppState_WithdrawIntent_InvalidDecimalPrecision_Rejected(t *testi
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
@@ -1629,14 +1560,12 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1698,9 +1627,6 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 	}
 
 	// Mock expectations
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -1736,114 +1662,6 @@ func TestSubmitAppState_OperateIntent_RedistributeToNewParticipant_Success(t *te
 	mockAssetStore.AssertExpectations(t)
 }
 
-// TestSubmitAppState_AppRegistryDisabled verifies that when appRegistryEnabled=false,
-// app lookup and AllowAction are skipped but the operate intent still succeeds.
-func TestSubmitAppState_AppRegistryDisabled(t *testing.T) {
-	mockStore := new(MockStore)
-	storeTxProvider := func(fn StoreTxHandler) error {
-		return fn(mockStore)
-	}
-
-	mockSigner := NewMockChannelSigner()
-	mockAssetStore := new(MockAssetStore)
-	mockStatePacker := new(MockStatePacker)
-
-	handler := NewHandler(
-		storeTxProvider,
-		mockAssetStore,
-		&MockActionGateway{Err: errors.New("should not be called")},
-		mockSigner,
-		core.NewStateAdvancerV1(mockAssetStore),
-		mockStatePacker,
-		"0xNode",
-		false, // appRegistryEnabled=false
-		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
-	)
-
-	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-	wallet1 := NewTestAppSessionWallet(t)
-	participant1 := wallet1.Address
-	participant2 := "0x2222222222222222222222222222222222222222"
-
-	existingSession := &app.AppSessionV1{
-		SessionID:     appSessionID,
-		ApplicationID: "test-app",
-		Participants: []app.AppParticipantV1{
-			{WalletAddress: participant1, SignatureWeight: 5},
-			{WalletAddress: participant2, SignatureWeight: 5},
-		},
-		Quorum:      5,
-		Status:      app.AppSessionStatusOpen,
-		Version:     1,
-		SessionData: `{"state":"initial"}`,
-	}
-
-	currentAllocations := map[string]map[string]decimal.Decimal{
-		participant1: {"USDC": decimal.NewFromInt(100)},
-		participant2: {"USDC": decimal.NewFromInt(50)},
-	}
-
-	sessionBalances := map[string]decimal.Decimal{
-		"USDC": decimal.NewFromInt(150),
-	}
-
-	appStateUpdateCore := app.AppStateUpdateV1{
-		AppSessionID: appSessionID,
-		Intent:       app.AppStateUpdateIntentOperate,
-		Version:      2,
-		Allocations: []app.AppAllocationV1{
-			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(100)},
-			{Participant: participant2, Asset: "USDC", Amount: decimal.NewFromInt(50)},
-		},
-		SessionData: `{"state":"updated"}`,
-	}
-	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdateCore)
-
-	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
-		AppStateUpdate: rpc.AppStateUpdateV1{
-			AppSessionID: appSessionID,
-			Intent:       app.AppStateUpdateIntentOperate,
-			Version:      "2",
-			Allocations: []rpc.AppAllocationV1{
-				{Participant: participant1, Asset: "USDC", Amount: "100"},
-				{Participant: participant2, Asset: "USDC", Amount: "50"},
-			},
-			SessionData: `{"state":"updated"}`,
-		},
-		QuorumSigs: []string{sig1},
-	}
-
-	// NO GetApp mock — it should not be called
-	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
-	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
-	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
-	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
-	mockStore.On("UpdateAppSession", mock.MatchedBy(func(session app.AppSessionV1) bool {
-		return session.Version == 2 && session.SessionData == `{"state":"updated"}`
-	})).Return(nil)
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
-	}
-
-	handler.SubmitAppState(ctx)
-
-	require.NotNil(t, ctx.Response)
-	if respErr := ctx.Response.Error(); respErr != nil {
-		t.Fatalf("Unexpected error response: %v", respErr)
-	}
-	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
-
-	// Strict: GetApp must NOT have been called
-	mockStore.AssertNotCalled(t, "GetApp", mock.Anything)
-	mockStore.AssertExpectations(t)
-}
-
 func TestSubmitAppState_WithdrawIntent_DuplicateAllocation_Rejected(t *testing.T) {
 	mockStore := new(MockStore)
 	storeTxProvider := func(fn StoreTxHandler) error {
@@ -1857,14 +1675,12 @@ func TestSubmitAppState_WithdrawIntent_DuplicateAllocation_Rejected(t *testing.T
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -1911,9 +1727,6 @@ func TestSubmitAppState_WithdrawIntent_DuplicateAllocation_Rejected(t *testing.T
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 
@@ -1948,14 +1761,12 @@ func TestSubmitAppState_CloseIntent_DuplicateAllocation_Rejected(t *testing.T) {
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2002,9 +1813,6 @@ func TestSubmitAppState_CloseIntent_DuplicateAllocation_Rejected(t *testing.T) {
 		QuorumSigs: []string{sig1},
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil).Maybe()
@@ -2041,14 +1849,12 @@ func TestSubmitAppState_OperateIntent_DuplicateAllocation_Rejected(t *testing.T)
 	handler := NewHandler(
 		storeTxProvider,
 		mockAssetStore,
-		&MockActionGateway{},
 		mockSigner,
 		core.NewStateAdvancerV1(mockAssetStore),
 		mockStatePacker,
 		"0xNode",
-		true,
 		metrics.NewNoopRuntimeMetricExporter(),
-		32, 1024, 256, 16, 100,
+		32, 1024, 256, 100,
 	)
 
 	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -2106,9 +1912,6 @@ func TestSubmitAppState_OperateIntent_DuplicateAllocation_Rejected(t *testing.T)
 		"USDC": decimal.NewFromInt(100),
 	}
 
-	mockStore.On("GetApp", "test-app").Return(&app.AppInfoV1{
-		App: app.AppV1{ID: "test-app", OwnerWallet: "0x0000000000000000000000000000000000000001"},
-	}, nil).Maybe()
 	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
 	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
 	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
@@ -2131,4 +1934,219 @@ func TestSubmitAppState_OperateIntent_DuplicateAllocation_Rejected(t *testing.T)
 
 	// RecordLedgerEntry must never be called — the request should be rejected before ledger writes
 	mockStore.AssertNotCalled(t, "RecordLedgerEntry", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// TestSubmitAppState_VerifyQuorumWeightOver255 checks that verifyQuorum correctly accepts a
+// signing coalition whose combined weight exceeds 255. With a uint8 accumulator the sum wraps
+// modulo 256 (e.g. 200+200=400 becomes 144), causing a valid coalition to be spuriously
+// rejected. The accumulator must be at least uint16.
+func TestSubmitAppState_VerifyQuorumWeightOver255(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xNode",
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 100,
+	)
+
+	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+
+	// Two participants each with weight 200; together 400 > 255, wraps to 144 in uint8.
+	// Quorum = 200: a valid coalition of both signers must be accepted.
+	wallet1 := NewTestAppSessionWallet(t)
+	wallet2 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := wallet2.Address
+
+	existingSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 200},
+			{WalletAddress: participant2, SignatureWeight: 200},
+		},
+		Quorum:      200,
+		Status:      app.AppSessionStatusOpen,
+		Version:     1,
+		SessionData: "",
+	}
+
+	currentAllocations := map[string]map[string]decimal.Decimal{
+		participant1: {"USDC": decimal.NewFromInt(100)},
+		participant2: {"USDC": decimal.NewFromInt(50)},
+	}
+	sessionBalances := map[string]decimal.Decimal{
+		"USDC": decimal.NewFromInt(150),
+	}
+
+	appStateUpdate := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentOperate,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(100)},
+			{Participant: participant2, Asset: "USDC", Amount: decimal.NewFromInt(50)},
+		},
+		SessionData: "",
+	}
+	// Both participants sign — combined weight 400, wraps to 144 in uint8.
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdate)
+	sig2 := wallet2.SignAppStateUpdate(t, appStateUpdate)
+
+	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: appSessionID,
+			Intent:       app.AppStateUpdateIntentOperate,
+			Version:      "2",
+			Allocations: []rpc.AppAllocationV1{
+				{Participant: participant1, Asset: "USDC", Amount: "100"},
+				{Participant: participant2, Asset: "USDC", Amount: "50"},
+			},
+			SessionData: "",
+		},
+		QuorumSigs: []string{sig1, sig2},
+	}
+
+	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
+	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
+	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
+	mockStore.On("UpdateAppSession", mock.MatchedBy(func(s app.AppSessionV1) bool {
+		return s.Version == 2
+	})).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
+	}
+
+	handler.SubmitAppState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("combined weight 400 with quorum 200 must pass verifyQuorum, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
+}
+
+// TestSubmitAppState_VerifyQuorumWrapToZero tests the 128+128=256 boundary case in
+// verifyQuorum: uint8 wraps to 0, making any quorum > 0 appear unreachable.
+func TestSubmitAppState_VerifyQuorumWrapToZero(t *testing.T) {
+	mockStore := new(MockStore)
+	storeTxProvider := func(fn StoreTxHandler) error {
+		return fn(mockStore)
+	}
+
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := NewHandler(
+		storeTxProvider,
+		mockAssetStore,
+		mockSigner,
+		core.NewStateAdvancerV1(mockAssetStore),
+		mockStatePacker,
+		"0xNode",
+		metrics.NewNoopRuntimeMetricExporter(),
+		32, 1024, 256, 100,
+	)
+
+	appSessionID := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+
+	// 128+128=256 wraps to 0 in uint8; quorum=128 would be considered unreachable in old code.
+	wallet1 := NewTestAppSessionWallet(t)
+	wallet2 := NewTestAppSessionWallet(t)
+	participant1 := wallet1.Address
+	participant2 := wallet2.Address
+
+	existingSession := &app.AppSessionV1{
+		SessionID:     appSessionID,
+		ApplicationID: "test-app",
+		Participants: []app.AppParticipantV1{
+			{WalletAddress: participant1, SignatureWeight: 128},
+			{WalletAddress: participant2, SignatureWeight: 128},
+		},
+		Quorum:      128,
+		Status:      app.AppSessionStatusOpen,
+		Version:     1,
+		SessionData: "",
+	}
+
+	currentAllocations := map[string]map[string]decimal.Decimal{
+		participant1: {"USDC": decimal.NewFromInt(100)},
+		participant2: {"USDC": decimal.NewFromInt(50)},
+	}
+	sessionBalances := map[string]decimal.Decimal{
+		"USDC": decimal.NewFromInt(150),
+	}
+
+	appStateUpdate := app.AppStateUpdateV1{
+		AppSessionID: appSessionID,
+		Intent:       app.AppStateUpdateIntentOperate,
+		Version:      2,
+		Allocations: []app.AppAllocationV1{
+			{Participant: participant1, Asset: "USDC", Amount: decimal.NewFromInt(100)},
+			{Participant: participant2, Asset: "USDC", Amount: decimal.NewFromInt(50)},
+		},
+		SessionData: "",
+	}
+	// Both sign — combined weight 256, wraps to 0 in uint8.
+	sig1 := wallet1.SignAppStateUpdate(t, appStateUpdate)
+	sig2 := wallet2.SignAppStateUpdate(t, appStateUpdate)
+
+	reqPayload := rpc.AppSessionsV1SubmitAppStateRequest{
+		AppStateUpdate: rpc.AppStateUpdateV1{
+			AppSessionID: appSessionID,
+			Intent:       app.AppStateUpdateIntentOperate,
+			Version:      "2",
+			Allocations: []rpc.AppAllocationV1{
+				{Participant: participant1, Asset: "USDC", Amount: "100"},
+				{Participant: participant2, Asset: "USDC", Amount: "50"},
+			},
+			SessionData: "",
+		},
+		QuorumSigs: []string{sig1, sig2},
+	}
+
+	mockStore.On("GetAppSession", appSessionID).Return(existingSession, nil)
+	mockStore.On("GetParticipantAllocations", appSessionID).Return(currentAllocations, nil)
+	mockStore.On("GetAppSessionBalances", appSessionID).Return(sessionBalances, nil)
+	mockAssetStore.On("GetAssetDecimals", "USDC").Return(uint8(6), nil)
+	mockStore.On("UpdateAppSession", mock.MatchedBy(func(s app.AppSessionV1) bool {
+		return s.Version == 2
+	})).Return(nil)
+
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.NewRequest(1, string(rpc.AppSessionsV1SubmitAppStateMethod), payload),
+	}
+
+	handler.SubmitAppState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	if respErr := ctx.Response.Error(); respErr != nil {
+		t.Fatalf("combined weight 256 (128+128) with quorum 128 must pass verifyQuorum, got: %v", respErr)
+	}
+	assert.Equal(t, rpc.MsgTypeResp, ctx.Response.Type)
+	mockStore.AssertExpectations(t)
 }

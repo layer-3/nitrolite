@@ -12,23 +12,205 @@ import (
 )
 
 var _ core.ChannelHubEventHandler = &EventHandlerService{}
-var _ core.LockingContractEventHandler = &EventHandlerService{}
+
+// refreshMaxAttempts bounds the number of FetchChannel attempts the home-channel
+// guard-drop path will make before giving up. Worst-case wall-clock is the sum
+// of refreshDefaultBackoffSchedule plus per-attempt RPC timeouts inside
+// FetchChannel (currently 5s each).
+const refreshMaxAttempts = 3
+
+// refreshDefaultBackoffSchedule is the package-default backoff between
+// consecutive FetchChannel attempts. The number of entries must be
+// refreshMaxAttempts - 1. Tests can override per-service via
+// EventHandlerService.refreshBackoff.
+var refreshDefaultBackoffSchedule = []time.Duration{
+	100 * time.Millisecond,
+	200 * time.Millisecond,
+}
 
 // EventHandlerService processes blockchain events and updates the local database state accordingly.
 // It handles events from both home channels (user state channels) and escrow channels (temporary lock channels).
 type EventHandlerService struct {
 	nodeSigner  *core.ChannelDefaultSigner
 	statePacker core.StatePacker
+	// refreshBackoff overrides the default backoff schedule used between
+	// FetchChannel retries in refreshAfterDroppedEvent. When nil the package
+	// default (refreshDefaultBackoffSchedule) is used. Tests set this to a
+	// zero-valued slice to avoid actually sleeping.
+	refreshBackoff []time.Duration
 }
 
 // NewEventHandlerService creates a new EventHandlerService instance.
 // nodeSigner and statePacker are used to backfill the node signature on the
-// checkpointed head state when it is missing from the local record.
+// checkpointed head state when it is missing from the local record. The
+// on-chain refresh used by home-channel guard-drop paths is supplied per-call
+// as a core.ReadOnlyChannelHub parameter by the reactor that owns the chain,
+// not stored on the service.
 func NewEventHandlerService(nodeSigner *core.ChannelDefaultSigner, statePacker core.StatePacker) *EventHandlerService {
 	return &EventHandlerService{
 		nodeSigner:  nodeSigner,
 		statePacker: statePacker,
 	}
+}
+
+// guardEventVersionMonotonic returns true (drop=true) when the incoming event's
+// StateVersion is strictly less than the row's current StateVersion. The caller
+// must `return nil` (or, for home-channel handlers, `return s.refreshAfterDroppedEvent(...)`)
+// immediately when drop is true; the helper logs a structured warning identifying
+// which event intent arrived stale.
+//
+// Intent is a short stable string describing the on-chain transition the dropped
+// event would have applied (e.g. "checkpointed", "closed", "escrow_deposit_initiated").
+// It surfaces in the warn log so operators can correlate drops with reentrancy or
+// reorg-replay events.
+func guardEventVersionMonotonic(
+	ctx context.Context,
+	logger log.Logger,
+	chanID string,
+	intent string,
+	eventVersion uint64,
+	currentVersion uint64,
+) (drop bool) {
+	if eventVersion >= currentVersion {
+		return false
+	}
+	logger.Warn("event state version is less than current channel state version, ignoring",
+		"channelId", chanID,
+		"intent", intent,
+		"currentStateVersion", currentVersion,
+		"eventStateVersion", eventVersion)
+	return true
+}
+
+// refreshAfterDroppedEvent fetches the authoritative on-chain channel snapshot
+// via the supplied ReadOnlyChannelHub and overwrites the local row's status,
+// state version, and challenge expiry, then backfills the user signature on
+// the chain-asserted version. Called from the home-channel guard-drop paths to
+// close the observability gap described in §B.
+//
+// Retry-and-continue error contract:
+//   - hub returns nil snapshot on any attempt: row converged, returns nil so
+//     the dedup ledger advances.
+//   - hub returns an error: retries with bounded exponential backoff
+//     (refreshMaxAttempts total attempts, sleeps from refreshBackoff or
+//     refreshDefaultBackoffSchedule between attempts — by default 100ms+200ms
+//     gaps, ~700ms worst-case before giving up; per-attempt RPC timeout is
+//     enforced inside FetchChannel). If every attempt fails, logs at Error
+//     level and returns nil. The outer tx still commits — the dedup row is
+//     recorded and the listener moves on, but the local channel row stays at
+//     whatever the inner higher-version event already set it to. The row may
+//     stay divergent from chain — for terminal Closed states this may be
+//     indefinite because no future event for the channel will arrive — but
+//     this is strictly better than `logger.Fatal`-ing the node on a sustained
+//     RPC outage. ctx cancellation during a backoff returns nil immediately
+//     and does NOT propagate up (which would trigger logger.Fatal in the
+//     listener).
+//
+// hub is supplied by the reactor that owns this channel's chain; it must be
+// non-nil on the guard-drop paths.
+// fetchSnapshotWithRetry calls hub.FetchChannel up to refreshMaxAttempts times,
+// sleeping s.refreshBackoff (or refreshDefaultBackoffSchedule when nil) between
+// consecutive attempts. droppedIntent is included in per-attempt warning logs
+// so operators can correlate retries with the originating guard-drop.
+//
+// Returns:
+//   - (snapshot, nil) on the first successful FetchChannel.
+//   - (nil, ctx.Err()) if ctx is cancelled during a backoff sleep.
+//   - (nil, lastErr) if every attempt failed.
+//
+// The caller decides what to do with the error; this helper never logs at
+// Error level and never returns a wrapped error.
+func (s *EventHandlerService) fetchSnapshotWithRetry(
+	ctx context.Context,
+	hub core.ReadOnlyChannelHub,
+	channelID string,
+	droppedIntent string,
+) (*core.OnChainChannelSnapshot, error) {
+	logger := log.FromContext(ctx)
+
+	backoff := s.refreshBackoff
+	if backoff == nil {
+		backoff = refreshDefaultBackoffSchedule
+	}
+
+	var lastErr error
+	for attempt := range refreshMaxAttempts {
+		snapshot, err := hub.FetchChannel(ctx, channelID)
+		if err == nil {
+			return snapshot, nil
+		}
+		lastErr = err
+		logger.Warn("refresh after dropped event attempt failed, will retry",
+			"channelId", channelID,
+			"droppedIntent", droppedIntent,
+			"attempt", attempt+1,
+			"maxAttempts", refreshMaxAttempts,
+			"error", err)
+		if attempt == refreshMaxAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff[attempt]):
+		}
+	}
+	return nil, lastErr
+}
+
+func (s *EventHandlerService) refreshAfterDroppedEvent(
+	ctx context.Context,
+	tx core.ChannelHubEventHandlerStore,
+	hub core.ReadOnlyChannelHub,
+	channel *core.Channel,
+	droppedIntent string,
+) error {
+	logger := log.FromContext(ctx)
+
+	refreshed, err := s.fetchSnapshotWithRetry(ctx, hub, channel.ChannelID, droppedIntent)
+	if err != nil {
+		if ctx.Err() != nil {
+			// Ctx cancelled mid-retry. Do NOT propagate ctx.Err() upward — the
+			// listener escalates non-nil returns from event handlers to
+			// logger.Fatal.
+			return nil
+		}
+		logger.Error("refresh after dropped event failed after retries, leaving row possibly divergent from chain",
+			"channelId", channel.ChannelID,
+			"droppedIntent", droppedIntent,
+			"attempts", refreshMaxAttempts,
+			"error", err)
+		return nil
+	}
+
+	channel.Status = refreshed.Status
+	channel.StateVersion = refreshed.StateVersion
+	channel.ChallengeExpiresAt = refreshed.ChallengeExpiresAt
+
+	if err := tx.UpdateChannel(*channel); err != nil {
+		return err
+	}
+	if err := tx.RefreshUserEnforcedBalance(channel.UserWallet, channel.Asset); err != nil {
+		return err
+	}
+	// Skip the sig backfill when the chain payload carried no user signature
+	// (e.g. some terminal states do not echo the candidate sig back into
+	// ChannelMeta.lastState). UpdateStateSigsIfMissing would otherwise be a
+	// no-op with an empty userSig but the explicit guard documents intent.
+	if refreshed.LastStateUserSig != "" {
+		if err := tx.UpdateStateSigsIfMissing(channel.ChannelID, refreshed.StateVersion, refreshed.LastStateUserSig, ""); err != nil {
+			return err
+		}
+	}
+
+	logger.Info("refreshed channel from chain after dropped event",
+		"channelId", channel.ChannelID,
+		"droppedIntent", droppedIntent,
+		"refreshedStatus", refreshed.Status,
+		"refreshedStateVersion", refreshed.StateVersion,
+		"refreshedChallengeExpiresAt", refreshed.ChallengeExpiresAt,
+	)
+	return nil
 }
 
 // HandleNodeBalanceUpdated processes the NodeBalanceUpdated event emitted when the node's
@@ -57,7 +239,11 @@ func (s *EventHandlerService) HandleNodeBalanceUpdated(ctx context.Context, tx c
 func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCreatedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
-	channel, err := tx.GetChannelByID(chanID)
+	// Acquire the user's balance-row lock and read the channel under it before mutating status:
+	// the lock guards against a concurrent submit_state flipping channel status (e.g. Void→Open
+	// receiver issuance) between the read and our write. See HandleHomeChannelCheckpointed and
+	// HandleHomeChannelClosed for the same pattern.
+	channel, err := tx.LockUserStateForHomeChannel(chanID)
 	if err != nil {
 		return err
 	}
@@ -69,6 +255,7 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 		logger.Warn("channel type mismatch during HomeChannelCreated event", "channelId", chanID, "expectedType", core.ChannelTypeHome, "actualType", channel.Type)
 		return nil
 	}
+
 	if channel.Status >= core.ChannelStatusOpen {
 		logger.Warn("ignoring replayed HomeChannelCreated event on already-initialized channel",
 			"channelId", chanID, "currentStatus", channel.Status, "currentStateVersion", channel.StateVersion, "eventStateVersion", event.StateVersion)
@@ -87,6 +274,17 @@ func (s *EventHandlerService) HandleHomeChannelCreated(ctx context.Context, tx c
 	}
 
 	if err := tx.UpdateStateSigsIfMissing(event.ChannelID, event.StateVersion, event.UserSig, ""); err != nil {
+		return err
+	}
+
+	// Backfill the node signature on any unsigned receiver-credit state that
+	// landed while the channel was still Void. An unsigned head is possible when
+	// an incoming transfer or release was stored by a concurrent RPC before this
+	// Created event arrived and flipped the channel to Open. The guard inside
+	// backfillOffChainHeadNodeSig ensures only transfer_receive / release heads
+	// are signed, so this is a no-op for the normal case where the head is the
+	// CREATE state itself (already node-signed via the RPC path).
+	if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
 		return err
 	}
 
@@ -110,10 +308,20 @@ func (s *EventHandlerService) HandleHomeChannelMigrated(ctx context.Context, tx 
 // is restored instead. Without that restore, a Closing → Challenged → Open sequence driven by
 // on-chain events would erase the fact that the node has already signed a finalized state, and
 // CheckActiveChannel would let the user submit further transitions past the finalized state.
-func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelCheckpointedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelCheckpointedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
-	channel, err := tx.GetChannelByID(chanID)
+	// Acquire the user's balance-row lock and read the channel under it before mutating
+	// channel status or backfilling the off-chain head. Reading the channel before the
+	// lock would race: a concurrent submit_state can co-sign a Finalize and flip the
+	// channel Open→Closing between the read and the lock, and the non-challenged path
+	// below persists the channel snapshot verbatim — a pre-lock Open snapshot would
+	// silently reopen the finalized channel. Receiver issuance paths lock the same row
+	// and then re-check Status; without this lock an RPC can read Status=Challenged,
+	// decide to store an unsigned receiver row, but commit after we flip to Open and
+	// backfill the prior head — leaving the latest head unsigned on an Open channel. See
+	// HandleHomeChannelClosed for the same pattern.
+	channel, err := tx.LockUserStateForHomeChannel(chanID)
 	if err != nil {
 		return err
 	}
@@ -126,19 +334,35 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 		return nil
 	}
 
-	// Acquire the user's balance-row lock before mutating channel status or
-	// backfilling the off-chain head. Receiver issuance paths lock the same row
-	// and then re-check Status; without this lock an RPC can read Status=Challenged,
-	// decide to store an unsigned receiver row, but commit after we flip to Open
-	// and backfill the prior head — leaving the latest head unsigned on an Open
-	// channel. See HandleHomeChannelClosed for the same pattern.
-	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
-		return err
+	// Per protocol the checkpointed version cannot be lower than the last known on-chain
+	// version. This branch is reachable when contract reentrancy emits an inner
+	// higher-version event before the outer ChannelCheckpointed. Drop the event so we do
+	// not regress channel.StateVersion and, critically, so the wasChallenged branch below
+	// does not flip a live challenge back to Open based on a stale version.
+	if guardEventVersionMonotonic(ctx, logger, chanID, "checkpointed", event.StateVersion, channel.StateVersion) {
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "checkpointed")
 	}
 
 	channel.StateVersion = event.StateVersion
 
-	wasChallenged := channel.Status == core.ChannelStatusChallenged
+	// Snapshot the pre-checkpoint status once and derive both transition flags from it, so the
+	// Void and Challenged branches below are independent of each other's mutation order: either
+	// branch may reassign channel.Status without silently making the other unreachable.
+	prevStatus := channel.Status
+	wasVoid := prevStatus == core.ChannelStatusVoid
+	wasChallenged := prevStatus == core.ChannelStatusChallenged
+
+	// ChannelHub.createChannel can emit ChannelCheckpointed before ChannelCreated for an
+	// initial non-deposit/non-withdraw state. If this checkpoint is processed while the
+	// local row is still the Void seed from CreateChannel, the on-chain checkpoint is
+	// sufficient evidence that the channel has been materialized: promote Void to Open
+	// here instead of leaving a bumped state_version on a Void channel until the later
+	// ChannelCreated event replays. That replay then no-ops via the Status >= Open guard
+	// in HandleHomeChannelCreated.
+	if wasVoid {
+		channel.Status = core.ChannelStatusOpen
+	}
+
 	if wasChallenged {
 		// Reconstruct the post-Finalize Closing marker from channel_states: if the node
 		// has already signed a Finalize state for this channel, the off-chain close is
@@ -176,9 +400,11 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 	// When a challenge is cleared, the off-chain head may sit above event.StateVersion:
 	// any receiver state issued during the challenge was stored unsigned and is now the
 	// channel's actual latest state. Backfill the node signature on that head so future
-	// flows treat it as fully co-signed. On normal Open→Open checkpoints the head row
-	// is already node-signed via the RPC path and this is a no-op.
-	if wasChallenged {
+	// flows treat it as fully co-signed. The same applies to a Void→Open promotion: a
+	// concurrent RPC may have stored an unsigned receiver head while the channel was
+	// still Void (mirrors HandleHomeChannelCreated). On normal Open→Open checkpoints the
+	// head row is already node-signed via the RPC path and this is a no-op.
+	if wasChallenged || wasVoid {
 		if err := s.backfillOffChainHeadNodeSig(ctx, tx, event.ChannelID); err != nil {
 			return err
 		}
@@ -191,8 +417,13 @@ func (s *EventHandlerService) HandleHomeChannelCheckpointed(ctx context.Context,
 // backfillOffChainHeadNodeSig loads the off-chain head state for channelID (the highest
 // stored version, regardless of signature status) and node-signs it when the row is
 // present and the node signature is missing. The user signature is intentionally left
-// untouched: when the head was created during a challenge it carries no user signature,
-// and the user must countersign and acknowledge it via the regular RPC flow.
+// untouched: the user must countersign and acknowledge it via the regular RPC flow.
+//
+// Called from two contexts:
+//   - challenge clearance (HandleHomeChannelCheckpointed): the head is an unsigned
+//     receiver credit accumulated during the dispute window.
+//   - channel open (HandleHomeChannelCreated): the head is an unsigned receiver credit
+//     stored by a concurrent RPC while the channel was still Void.
 func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, tx core.ChannelHubEventHandlerStore, channelID string) error {
 	head, err := tx.GetLastStateByChannelID(channelID, false)
 	if err != nil {
@@ -201,14 +432,12 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 	if head == nil || head.NodeSig != nil {
 		return nil
 	}
-	// Per the challenge-clearance spec the only states accumulated during the dispute
-	// window are receiver credits (transfer_receive, release) — user-initiated ops are
-	// rejected upstream while the channel is Challenged. If the head is some other
-	// transition kind, the invariant has broken upstream and we must not silently
-	// node-sign it. Log it and bail so the caller surfaces the inconsistency.
+	// Only receiver credits (transfer_receive, release) should appear as unsigned heads
+	// in either call context. Any other transition kind means an invariant broke upstream;
+	// do not silently node-sign it — log and bail so the caller surfaces the inconsistency.
 	if head.Transition.Type != core.TransitionTypeTransferReceive &&
 		head.Transition.Type != core.TransitionTypeRelease {
-		log.FromContext(ctx).Warn("off-chain head after challenge clearance is not a receiver state, skipping node-sig backfill",
+		log.FromContext(ctx).Warn("off-chain head is not a receiver state, skipping node-sig backfill",
 			"channelId", channelID,
 			"transitionType", head.Transition.Type,
 			"version", head.Version,
@@ -239,10 +468,18 @@ func (s *EventHandlerService) backfillOffChainHeadNodeSig(ctx context.Context, t
 // be resolved via ScheduleCheckpoint, and silently queueing an impossible transaction risks
 // letting the challenge expire on a stale state. A warning is emitted so operators submit the
 // appropriate on-chain action manually before expiry.
-func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelChallengedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelChallengedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
-	channel, err := tx.GetChannelByID(chanID)
+	// Acquire the user's balance-row lock and read the channel under it before mutating
+	// channel status. Receiver issuance paths (issueTransferReceiverState /
+	// issueReleaseReceiverState) lock the same row up front and then re-check Status via
+	// CheckActiveChannel; without this lock an in-flight RPC can read Status=Open,
+	// node-sign a receiver state, and commit after we flip to Challenged — leaving a
+	// node-signed higher-version receiver state on a disputed channel. The lock+read is a
+	// single store call so the channel snapshot is consistent with the lock. See
+	// HandleHomeChannelClosed for the same pattern.
+	channel, err := tx.LockUserStateForHomeChannel(chanID)
 	if err != nil {
 		return err
 	}
@@ -255,22 +492,11 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 		return nil
 	}
 
-	// Acquire the user's balance-row lock before mutating channel status. Receiver
-	// issuance paths (issueTransferReceiverState / issueReleaseReceiverState) lock
-	// the same row up front and then re-check Status via CheckActiveChannel; without
-	// this lock an in-flight RPC can read Status=Open, node-sign a receiver state,
-	// and commit after we flip to Challenged — leaving a node-signed higher-version
-	// receiver state on a disputed channel. See HandleHomeChannelClosed for the same
-	// pattern.
-	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
-		return err
-	}
-
-	if event.StateVersion < channel.StateVersion {
-		// Per protocol the challenged version cannot be lower than the last known on-chain version.
-		// Treat as an anomaly (replay, indexer mis-order, contract bug): warn and skip persistence.
-		logger.Warn("challenged state version is less than current channel state version, ignoring", "channelId", chanID, "currentStateVersion", channel.StateVersion, "challengedStateVersion", event.StateVersion)
-		return nil
+	// Per protocol the challenged version cannot be lower than the last known on-chain version.
+	// Treat as an anomaly (replay, indexer mis-order, contract reentrancy): drop the event and
+	// refresh from chain to converge the local row with the authoritative on-chain status.
+	if guardEventVersionMonotonic(ctx, logger, chanID, "challenged", event.StateVersion, channel.StateVersion) {
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "challenged")
 	}
 
 	channel.StateVersion = event.StateVersion
@@ -330,10 +556,17 @@ func (s *EventHandlerService) HandleHomeChannelChallenged(ctx context.Context, t
 // Subsequent receiver-credit issuance reads the rescue row as currentState and no
 // longer carries the closed channel reference, so request_creation can reopen on the
 // same (wallet, asset) through the normal flow.
-func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, event *core.HomeChannelClosedEvent) error {
+func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, event *core.HomeChannelClosedEvent) error {
 	logger := log.FromContext(ctx)
 	chanID := event.ChannelID
-	channel, err := tx.GetChannelByID(chanID)
+	// Acquire the user's balance-row lock and read the channel under it before mutating
+	// channel status or summing receiver credits. issueTransferReceiverState /
+	// issueReleaseReceiverState lock the same row up front, so this serializes the close
+	// against any in-flight RPC receiver-issuance for the same user: either the RPC commits
+	// its unsigned row before we sum (it lands in the rescue), or it blocks until we set the
+	// channel to Closed and then sees that via its own re-check. The lock+read is a single
+	// store call so the channel snapshot is consistent with the lock.
+	channel, err := tx.LockUserStateForHomeChannel(chanID)
 	if err != nil {
 		return err
 	}
@@ -346,14 +579,9 @@ func (s *EventHandlerService) HandleHomeChannelClosed(ctx context.Context, tx co
 		return nil
 	}
 
-	// Acquire the user's balance-row lock before mutating channel status or summing
-	// receiver credits. issueTransferReceiverState / issueReleaseReceiverState lock
-	// the same row up front, so this serializes the close against any in-flight RPC
-	// receiver-issuance for the same user: either the RPC commits its unsigned row
-	// before we sum (it lands in the rescue), or it blocks until we set the channel
-	// to Closed and then sees that via its own re-check.
-	if _, err := tx.LockUserState(channel.UserWallet, channel.Asset); err != nil {
-		return err
+	// Drop stale Closed events that would regress state_version.
+	if guardEventVersionMonotonic(ctx, logger, chanID, "closed", event.StateVersion, channel.StateVersion) {
+		return s.refreshAfterDroppedEvent(ctx, tx, hub, channel, "closed")
 	}
 
 	wasChallenged := channel.Status == core.ChannelStatusChallenged
@@ -499,6 +727,10 @@ func (s *EventHandlerService) HandleEscrowDepositInitiated(ctx context.Context, 
 	}
 	if channel.Type != core.ChannelTypeEscrow {
 		logger.Warn("channel type mismatch during EscrowDepositInitiated event", "channelId", chanID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+		return nil
+	}
+
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_deposit_initiated", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 
@@ -670,6 +902,10 @@ func (s *EventHandlerService) HandleEscrowDepositFinalized(ctx context.Context, 
 		return nil
 	}
 
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_deposit_finalized", event.StateVersion, channel.StateVersion) {
+		return nil
+	}
+
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
 	// Channel is terminal; any pending challenge deadline is no longer meaningful.
@@ -741,6 +977,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalInitiated(ctx context.Contex
 	}
 	if channel.Type != core.ChannelTypeEscrow {
 		logger.Warn("channel type mismatch during EscrowWithdrawalInitiated event", "channelId", chanID, "expectedType", core.ChannelTypeEscrow, "actualType", channel.Type)
+		return nil
+	}
+
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_withdrawal_initiated", event.StateVersion, channel.StateVersion) {
 		return nil
 	}
 
@@ -838,6 +1078,10 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 		return nil
 	}
 
+	if guardEventVersionMonotonic(ctx, logger, chanID, "escrow_withdrawal_finalized", event.StateVersion, channel.StateVersion) {
+		return nil
+	}
+
 	channel.StateVersion = event.StateVersion
 	channel.Status = core.ChannelStatusClosed
 	// Channel is terminal; any pending challenge deadline is no longer meaningful.
@@ -852,16 +1096,5 @@ func (s *EventHandlerService) HandleEscrowWithdrawalFinalized(ctx context.Contex
 	}
 
 	logger.Info("handled EscrowWithdrawalFinalized event", "channelId", event.ChannelID, "stateVersion", event.StateVersion, "userWallet", channel.UserWallet)
-	return nil
-}
-
-func (s *EventHandlerService) HandleUserLockedBalanceUpdated(ctx context.Context, tx core.LockingContractEventHandlerStore, event *core.UserLockedBalanceUpdatedEvent) error {
-	logger := log.FromContext(ctx)
-	err := tx.UpdateUserStaked(event.UserAddress, event.BlockchainID, event.Balance)
-	if err != nil {
-		return err
-	}
-
-	logger.Info("handled UserLockedBalanceUpdatedEvent event", "userWallet", event.UserAddress, "blockchainID", event.BlockchainID, "balance", event.Balance)
 	return nil
 }

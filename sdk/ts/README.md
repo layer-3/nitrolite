@@ -59,12 +59,6 @@ client.getEscrowChannel(escrowChannelId)           // Escrow channel info
 client.getLatestState(wallet, asset, onlySigned)   // Latest state
 ```
 
-### App Registry
-```typescript
-client.getApps(opts)                                            // List registered apps
-client.registerApp(appID, metadata, approvalNotRequired)         // Register new app
-```
-
 ### App Sessions
 ```typescript
 client.getAppSessions(opts)                                     // List sessions
@@ -73,7 +67,6 @@ client.createAppSession(definition, sessionData, sigs)          // Create sessio
 client.createAppSession(def, data, sigs, { ownerSig })          // Create with owner approval
 client.submitAppSessionDeposit(update, sigs, asset, amount)     // Deposit to session
 client.submitAppState(update, sigs)                             // Update session
-client.rebalanceAppSessions(signedUpdates)                      // Atomic rebalance
 ```
 
 ### App Session Keys
@@ -340,6 +333,16 @@ Settles the latest co-signed state on-chain. This is the single entry point for 
 const txHash = await client.checkpoint('usdc');
 ```
 
+> **Confirmation delay.** `checkpoint()` resolves when the transaction is **mined**, not when the node has
+> credited the result to your off-chain balance. The node applies a per-chain confirmation gate before
+> committing any on-chain event: it waits `confirmationDelaySecs` seconds (from `getConfig()`) after the
+> event is observed to protect against chain reorganizations. Until that window elapses, `getBalances()`
+> will not reflect a freshly deposited amount. On chains where the gate is enabled this is typically a few
+> seconds; operators may configure it as high as the chain's hard-finality time (~13 min on Ethereum L1).
+> A `confirmationDelaySecs` of `0` means the gate is disabled and credit is immediate. Off-chain
+> `transfer()` is never gated — it does not touch the chain. To wait for the credit, use
+> `client.waitForCheckpoint(asset, txHash)` or poll `getBalances()`.
+
 **Requirements:**
 - Blockchain RPC configured via `withBlockchainRPC()`
 - A co-signed state must exist (call `deposit()`, `withdraw()`, etc. first)
@@ -386,6 +389,11 @@ const blockchains = await client.getBlockchains();
 const assets = await client.getAssets(); // or client.getAssets(blockchainId)
 ```
 
+Each entry in `config.blockchains` (and each item from `getBlockchains()`) includes
+`confirmationDelaySecs` — the number of seconds the node waits after observing an on-chain event before
+crediting it to off-chain balances. `0` means the gate is disabled. Use this to show users the expected
+wait after a `checkpoint()`. See [`checkpoint()`](#checkpointasset-promisestring) above.
+
 ### User Data
 
 ```typescript
@@ -406,21 +414,6 @@ const state = await client.getLatestState(wallet, asset, onlySigned);
 ```
 
 **Note:** State submission and channel creation are handled internally by state operations (`deposit()`, `withdraw()`, `transfer()`). On-chain settlement is handled by `checkpoint()`.
-
-### App Registry
-
-```typescript
-// List registered applications with optional filtering
-const { apps, metadata } = await client.getApps({
-  appId: 'my-app',
-  ownerWallet: '0x1234...',
-  page: 1,
-  pageSize: 10,
-});
-
-// Register a new application
-await client.registerApp('my-app', '{"name": "My App"}', false);
-```
 
 ### App Sessions (Low-Level)
 
@@ -444,8 +437,6 @@ const nodeSig = await client.submitAppSessionDeposit(
 );
 
 await client.submitAppState(appUpdate, quorumSigs);
-
-const batchId = await client.rebalanceAppSessions(signedUpdates);
 ```
 
 #### Owner Approval for App Session Creation
@@ -839,9 +830,6 @@ async function appSessionExample() {
   );
 
   try {
-    // Register app (required before creating sessions)
-    await client.registerApp('chess-v1', '{}', true);
-
     // Create app session signer
     const msgSigner = new EthereumMsgSigner(process.env.PRIVATE_KEY!);
     const appSessionSigner = new AppSessionWalletSignerV1(msgSigner);
@@ -969,9 +957,6 @@ import {
   AppSessionKeySignerV1,
   createSigners,
 } from '@yellow-org/sdk';
-
-// App Registry types (from rpc/types)
-import type { AppV1, AppInfoV1 } from '@yellow-org/sdk';
 ```
 
 ### BigInt for Chain IDs

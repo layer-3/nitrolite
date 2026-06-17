@@ -54,17 +54,14 @@ func GenerateSessionKeyStateIDV1(userAddress, sessionKey string, version uint64)
 	return crypto.Keccak256Hash(packed).Hex(), nil
 }
 
-// ValidateAppSessionKeyStateV1 verifies both signatures over the registration payload:
-// UserSig must recover to state.UserAddress (wallet authorizes the delegation) and
-// SessionKeySig must recover to state.SessionKey (session-key holder proves possession).
-// Both signatures sign the same PackAppSessionKeyStateV1(state) payload, which already binds
-// user_address and session_key — so a signature minted for one (wallet, session_key) pair
-// cannot be replayed for another.
-func ValidateAppSessionKeyStateV1(state AppSessionKeyStateV1) error {
-	if state.SessionKeySig == "" {
-		return fmt.Errorf("session_key_sig is required")
-	}
-
+// ValidateAppSessionKeyStateUserSigV1 verifies only UserSig over the registration payload:
+// UserSig must recover to state.UserAddress (wallet authorizes the change). This is the
+// revocation path (submitted expires_at <= now): the session-key holder's SessionKeySig is
+// intentionally not required so a lost, unavailable, or malicious delegate cannot veto the
+// wallet's revocation of its own delegation. The packed payload binds user_address,
+// session_key, version and expires_at, so the signature authorizes exactly this revocation and
+// cannot be replayed for another key, wallet, or version.
+func ValidateAppSessionKeyStateUserSigV1(state AppSessionKeyStateV1) error {
 	packed, err := PackAppSessionKeyStateV1(state)
 	if err != nil {
 		return fmt.Errorf("failed to pack session key state: %w", err)
@@ -85,6 +82,35 @@ func ValidateAppSessionKeyStateV1(state AppSessionKeyStateV1) error {
 	}
 	if !strings.EqualFold(recoveredUser.String(), state.UserAddress) {
 		return fmt.Errorf("user_sig does not match user_address")
+	}
+
+	return nil
+}
+
+// ValidateAppSessionKeyStateV1 verifies both signatures over the registration payload:
+// UserSig must recover to state.UserAddress (wallet authorizes the delegation) and
+// SessionKeySig must recover to state.SessionKey (session-key holder proves possession).
+// Both signatures sign the same PackAppSessionKeyStateV1(state) payload, which already binds
+// user_address and session_key — so a signature minted for one (wallet, session_key) pair
+// cannot be replayed for another. Used for activation, extension, and rotation (submitted
+// expires_at > now); revocation uses ValidateAppSessionKeyStateUserSigV1.
+func ValidateAppSessionKeyStateV1(state AppSessionKeyStateV1) error {
+	if state.SessionKeySig == "" {
+		return fmt.Errorf("session_key_sig is required")
+	}
+
+	if err := ValidateAppSessionKeyStateUserSigV1(state); err != nil {
+		return err
+	}
+
+	packed, err := PackAppSessionKeyStateV1(state)
+	if err != nil {
+		return fmt.Errorf("failed to pack session key state: %w", err)
+	}
+
+	recoverer, err := sign.NewAddressRecoverer(sign.TypeEthereumMsg)
+	if err != nil {
+		return fmt.Errorf("failed to create address recoverer: %w", err)
 	}
 
 	sessionKeySigBytes, err := hexutil.Decode(state.SessionKeySig)

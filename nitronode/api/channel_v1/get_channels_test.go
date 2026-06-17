@@ -31,7 +31,6 @@ func newGetChannelsHandler(mockTxStore *MockStore) *Handler {
 		minChallenge:     uint32(3600),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 }
 

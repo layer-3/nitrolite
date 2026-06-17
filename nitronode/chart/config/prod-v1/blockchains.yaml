@@ -4,38 +4,54 @@ blockchains:
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # 3 blocks × 12s. Post-Merge Etherscan sample (1500 rows, Sep 2022 – Jun 2026) found zero depth-2+ reorgs.
+  confirmation_delay_secs: 36
 - name: "flare"
   id: 14
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # ~1 block. Snowman++ probabilistic instant finality.
+  confirmation_delay_secs: 2
 - name: "bsc"
   id: 56
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # ~3 blocks at 0.75s (post-Maxwell). Covers BEP-126 fast-finality vote window (~1.5s).
+  confirmation_delay_secs: 2
 - name: "polygon"
   id: 137
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # Matches post-Rio finality (~5s, reorg depth capped at 2 blocks).
+  confirmation_delay_secs: 5
 - name: "world_chain"
   id: 480
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # ~1 block. OP Stack single sequencer; no consensus reorgs in normal operation.
+  confirmation_delay_secs: 2
 - name: "base"
   id: 8453
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # ~1 block. OP Stack single sequencer; Flashblocks reorg <0.001% after preconf.
+  confirmation_delay_secs: 2
 - name: "linea"
   id: 59144
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # ~2 blocks. Single Consensys sequencer; slightly more margin than other OP-style L2s.
+  confirmation_delay_secs: 4
 - name: "xrpl_evm"
   id: 1440000
   channel_hub_address: "0x1a2f750170474d4c54f8d318d9d4343588b4c4d1"
   channel_hub_sig_validators:
     1: "0x8C00e739B9D22103774Cb32B21A203F6De31A2cC"
+  # CometBFT BFT-deterministic instant finality — blocks irreversible once committed. Gate disabled.
+  confirmation_delay_secs: 0

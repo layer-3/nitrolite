@@ -19,9 +19,10 @@ func TestTransformNodeConfig(t *testing.T) {
 		SupportedSigValidators: []core.ChannelSignerType{core.ChannelSignerType_SessionKey},
 		Blockchains: []rpc.BlockchainInfoV1{
 			{
-				Name:              "Polygon",
-				BlockchainID:      "137",
-				ChannelHubAddress: "0xHubAddress",
+				Name:                  "Polygon",
+				BlockchainID:          "137",
+				ChannelHubAddress:     "0xHubAddress",
+				ConfirmationDelaySecs: 10,
 			},
 		},
 	}
@@ -35,6 +36,7 @@ func TestTransformNodeConfig(t *testing.T) {
 	assert.Len(t, config.Blockchains, 1)
 	assert.Equal(t, uint64(137), config.Blockchains[0].ID)
 	assert.Equal(t, "Polygon", config.Blockchains[0].Name)
+	assert.Equal(t, uint32(10), config.Blockchains[0].ConfirmationDelaySecs)
 
 	// Test error case
 	rpcResp.Blockchains[0].BlockchainID = "invalid"

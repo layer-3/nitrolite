@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -113,11 +114,18 @@ func (m *mockChannelHubStore) LockUserState(wallet, asset string) (decimal.Decim
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+func (m *mockChannelHubStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	args := m.Called(channelID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
 func (m *mockChannelHubStore) HasSignedFinalize(channelID string) (bool, error) {
 	args := m.Called(channelID)
 	return args.Bool(0), args.Error(1)
 }
-
 
 func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID string) error {
 	args := m.Called(state, applicationID)
@@ -127,6 +135,11 @@ func (m *mockChannelHubStore) StoreUserState(state core.State, applicationID str
 func (m *mockChannelHubStore) RecordTransaction(tx core.Transaction, applicationID string) error {
 	args := m.Called(tx, applicationID)
 	return args.Error(0)
+}
+
+func (m *mockChannelHubStore) IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error) {
+	args := m.Called(txHash, logIndex, blockchainID)
+	return args.Bool(0), args.Error(1)
 }
 
 // mockChannelHubEventHandler captures events dispatched by the reactor.
@@ -149,18 +162,18 @@ func (m *mockChannelHubEventHandler) HandleHomeChannelMigrated(ctx context.Conte
 	return args.Error(0)
 }
 
-func (m *mockChannelHubEventHandler) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.HomeChannelCheckpointedEvent) error {
-	args := m.Called(ctx, tx, ev)
+func (m *mockChannelHubEventHandler) HandleHomeChannelCheckpointed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, ev *core.HomeChannelCheckpointedEvent) error {
+	args := m.Called(ctx, tx, hub, ev)
 	return args.Error(0)
 }
 
-func (m *mockChannelHubEventHandler) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.HomeChannelChallengedEvent) error {
-	args := m.Called(ctx, tx, ev)
+func (m *mockChannelHubEventHandler) HandleHomeChannelChallenged(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, ev *core.HomeChannelChallengedEvent) error {
+	args := m.Called(ctx, tx, hub, ev)
 	return args.Error(0)
 }
 
-func (m *mockChannelHubEventHandler) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, ev *core.HomeChannelClosedEvent) error {
-	args := m.Called(ctx, tx, ev)
+func (m *mockChannelHubEventHandler) HandleHomeChannelClosed(ctx context.Context, tx core.ChannelHubEventHandlerStore, hub core.ReadOnlyChannelHub, ev *core.HomeChannelClosedEvent) error {
+	args := m.Called(ctx, tx, hub, ev)
 	return args.Error(0)
 }
 
@@ -240,12 +253,17 @@ func packNonIndexed(t *testing.T, eventName string, args ...interface{}) []byte 
 	return data
 }
 
-// newReactor creates a ChannelHubReactor wired to the provided mocks.
+// newReactor creates a ChannelHubReactor wired to the provided mocks. Sets up
+// a default IsContractEventProcessed expectation that returns (false, nil) so
+// existing tests don't need to set it up individually. The reactor's read-only
+// ChannelHub view is nil here because the mock event handler never reads it —
+// the unit tests in this file assert dispatch only.
 func newReactor(blockchainID uint64, nodeAddress string, handler *mockChannelHubEventHandler, assetStore *MockAssetStore, store *mockChannelHubStore) *ChannelHubReactor {
+	store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error {
 		return fn(store)
 	}
-	return NewChannelHubReactor(blockchainID, nodeAddress, handler, assetStore, useStoreInTx)
+	return NewChannelHubReactor(blockchainID, nodeAddress, handler, assetStore, useStoreInTx, store, nil)
 }
 
 // expectStoreContractEvent sets up the mock expectation for StoreContractEvent.
@@ -317,6 +335,63 @@ func TestChannelHubReactor_HandleNodeBalanceUpdated(t *testing.T) {
 		err := reactor.HandleEvent(context.Background(), logEntry)
 		require.Error(t, err)
 		assert.False(t, processedSuccess)
+	})
+
+	t.Run("unsupported token is skipped and recorded", func(t *testing.T) {
+		store := new(mockChannelHubStore)
+		handler := new(mockChannelHubEventHandler)
+		assetStore := new(MockAssetStore)
+
+		// Unconfigured token: anyone can deposit an arbitrary ERC20 via
+		// depositToNode(). The event must not be fatal and must be recorded so
+		// it is not replayed on restart (MF3-H03).
+		assetStore.On("GetTokenAsset", blockchainID, tokenAddr.String()).
+			Return("", fmt.Errorf("token %s is not supported: %w", tokenAddr.String(), core.ErrTokenNotSupported))
+
+		// StoreContractEvent must still be called so the event is not replayed.
+		expectStoreContractEvent(store, "NodeBalanceUpdated", 200, blockchainID)
+
+		reactor := newReactor(blockchainID, nodeAddr.String(), handler, assetStore, store)
+
+		var processedSuccess bool
+		reactor.SetOnEventProcessed(func(_ uint64, success bool) {
+			processedSuccess = success
+		})
+
+		err := reactor.HandleEvent(context.Background(), logEntry)
+		require.NoError(t, err)
+		assert.True(t, processedSuccess)
+		// Balance update must not be applied for an unsupported token.
+		handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
+
+	// Mirror of the case above, but the unsupported-token error surfaces from the
+	// second lookup (GetTokenDecimals) rather than the first. Both guards must
+	// behave identically (MF3-H03), so cover them independently.
+	t.Run("unsupported token from decimals lookup is skipped and recorded", func(t *testing.T) {
+		store := new(mockChannelHubStore)
+		handler := new(mockChannelHubEventHandler)
+		assetStore := new(MockAssetStore)
+
+		assetStore.On("GetTokenAsset", blockchainID, tokenAddr.String()).Return("usdc", nil)
+		assetStore.On("GetTokenDecimals", blockchainID, tokenAddr.String()).
+			Return(uint8(0), fmt.Errorf("token %s is not supported: %w", tokenAddr.String(), core.ErrTokenNotSupported))
+
+		expectStoreContractEvent(store, "NodeBalanceUpdated", 200, blockchainID)
+
+		reactor := newReactor(blockchainID, nodeAddr.String(), handler, assetStore, store)
+
+		var processedSuccess bool
+		reactor.SetOnEventProcessed(func(_ uint64, success bool) {
+			processedSuccess = success
+		})
+
+		err := reactor.HandleEvent(context.Background(), logEntry)
+		require.NoError(t, err)
+		assert.True(t, processedSuccess)
+		handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
 	})
 }
 
@@ -407,7 +482,7 @@ func TestChannelHubReactor_HandleHomeChannelCheckpointed(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 5
 	})).Return(nil)
 
@@ -447,7 +522,7 @@ func TestChannelHubReactor_HandleHomeChannelCheckpointed_ForwardsUserSig(t *test
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.UserSig == hexutil.Encode([]byte{0xde, 0xad, 0xbe, 0xef})
 	})).Return(nil)
 
@@ -484,7 +559,7 @@ func TestChannelHubReactor_HandleHomeChannelChallenged(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelChallenged", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelChallengedEvent) bool {
+	handler.On("HandleHomeChannelChallenged", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelChallengedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) &&
 			ev.StateVersion == 4 &&
 			ev.ChallengeExpiry == challengeExpiry
@@ -522,7 +597,7 @@ func TestChannelHubReactor_HandleHomeChannelClosed(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelClosed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelClosedEvent) bool {
+	handler.On("HandleHomeChannelClosed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelClosedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 10
 	})).Return(nil)
 
@@ -559,7 +634,7 @@ func TestChannelHubReactor_HandleChannelDeposited(t *testing.T) {
 	assetStore := new(MockAssetStore)
 
 	// ChannelDeposited dispatches HandleHomeChannelCheckpointed
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 7
 	})).Return(nil)
 
@@ -596,7 +671,7 @@ func TestChannelHubReactor_HandleChannelWithdrawn(t *testing.T) {
 	assetStore := new(MockAssetStore)
 
 	// ChannelWithdrawn dispatches HandleHomeChannelCheckpointed
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 8
 	})).Return(nil)
 
@@ -865,7 +940,7 @@ func TestChannelHubReactor_HandleEscrowDepositInitiatedOnHome(t *testing.T) {
 	assetStore := new(MockAssetStore)
 
 	// Dispatches HandleHomeChannelCheckpointed with the channelId topic
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 3
 	})).Return(nil)
 
@@ -903,7 +978,7 @@ func TestChannelHubReactor_HandleEscrowDepositFinalizedOnHome(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 6
 	})).Return(nil)
 
@@ -941,7 +1016,7 @@ func TestChannelHubReactor_HandleEscrowWithdrawalInitiatedOnHome(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 4
 	})).Return(nil)
 
@@ -979,7 +1054,7 @@ func TestChannelHubReactor_HandleEscrowWithdrawalFinalizedOnHome(t *testing.T) {
 	handler := new(mockChannelHubEventHandler)
 	assetStore := new(MockAssetStore)
 
-	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
+	handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(ev *core.HomeChannelCheckpointedEvent) bool {
 		return ev.ChannelID == hexutil.Encode(channelID[:]) && ev.StateVersion == 9
 	})).Return(nil)
 
@@ -1032,6 +1107,72 @@ func TestChannelHubReactor_HandleEscrowDepositsPurged(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
+func TestChannelHubReactor_HandleEvent_PreCheckError_ReturnsError(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	tokenAddr := common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+	amount := big.NewInt(1_000_000)
+
+	logEntry := types.Log{
+		Topics: []common.Hash{
+			channelHubAbi.Events["NodeBalanceUpdated"].ID,
+			common.BytesToHash(tokenAddr.Bytes()),
+		},
+		Data:        packNonIndexed(t, "NodeBalanceUpdated", amount),
+		BlockNumber: 100,
+		TxHash:      common.HexToHash("0xaabbcc"),
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	// Pre-check returns an error — reactor must return it immediately.
+	store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, assert.AnError)
+
+	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+	reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store, nil)
+
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "pre-check IsContractEventProcessed failed")
+
+	// Neither business logic nor StoreContractEvent should be called.
+	handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+	store.AssertNotCalled(t, "StoreContractEvent", mock.Anything)
+}
+
+func TestChannelHubReactor_HandleEvent_AlreadyProcessed(t *testing.T) {
+	blockchainID := uint64(1)
+	nodeAddr := "0x1111111111111111111111111111111111111111"
+	txHash := common.HexToHash("0xaabbcc")
+
+	logEntry := types.Log{
+		Topics:      []common.Hash{channelHubAbi.Events["NodeBalanceUpdated"].ID},
+		BlockNumber: 100,
+		TxHash:      txHash,
+		Index:       0,
+	}
+
+	store := new(mockChannelHubStore)
+	handler := new(mockChannelHubEventHandler)
+	assetStore := new(MockAssetStore)
+
+	// Pre-check returns true — event already committed.
+	store.On("IsContractEventProcessed", txHash.String(), uint32(0), blockchainID).Return(true, nil)
+
+	useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+	reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store, nil)
+
+	err := reactor.HandleEvent(context.Background(), logEntry)
+	require.NoError(t, err)
+
+	// Neither business logic nor StoreContractEvent should be called.
+	handler.AssertNotCalled(t, "HandleNodeBalanceUpdated", mock.Anything, mock.Anything, mock.Anything)
+	store.AssertNotCalled(t, "StoreContractEvent", mock.Anything)
+}
+
 func TestChannelHubReactor_UnknownEvent(t *testing.T) {
 	blockchainID := uint64(1)
 	nodeAddr := "0x1111111111111111111111111111111111111111"
@@ -1076,7 +1217,7 @@ func TestChannelHubReactor_OnEventProcessedCallback(t *testing.T) {
 		handler := new(mockChannelHubEventHandler)
 		assetStore := new(MockAssetStore)
 
-		handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		expectStoreContractEvent(store, "ChannelCheckpointed", 50, blockchainID)
 
 		reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
@@ -1099,7 +1240,7 @@ func TestChannelHubReactor_OnEventProcessedCallback(t *testing.T) {
 		handler := new(mockChannelHubEventHandler)
 		assetStore := new(MockAssetStore)
 
-		handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError)
+		handler.On("HandleHomeChannelCheckpointed", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError)
 
 		reactor := newReactor(blockchainID, nodeAddr, handler, assetStore, store)
 
@@ -1110,6 +1251,30 @@ func TestChannelHubReactor_OnEventProcessedCallback(t *testing.T) {
 
 		err := reactor.HandleEvent(context.Background(), logEntry)
 		require.Error(t, err)
+		assert.False(t, cbSuccess)
+	})
+
+	t.Run("callback receives false on pre-check error", func(t *testing.T) {
+		store := new(mockChannelHubStore)
+		handler := new(mockChannelHubEventHandler)
+		assetStore := new(MockAssetStore)
+
+		// Pre-check returns an error — deferred callback must still fire with success=false.
+		store.On("IsContractEventProcessed", mock.Anything, mock.Anything, mock.Anything).Return(false, assert.AnError)
+
+		useStoreInTx := func(fn ChannelHubReactorStoreTxHandler) error { return fn(store) }
+		reactor := NewChannelHubReactor(blockchainID, nodeAddr, handler, assetStore, useStoreInTx, store, nil)
+
+		var cbCalled bool
+		var cbSuccess bool
+		reactor.SetOnEventProcessed(func(_ uint64, success bool) {
+			cbCalled = true
+			cbSuccess = success
+		})
+
+		err := reactor.HandleEvent(context.Background(), logEntry)
+		require.Error(t, err)
+		assert.True(t, cbCalled, "callback must be invoked on pre-check error")
 		assert.False(t, cbSuccess)
 	})
 }

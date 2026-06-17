@@ -51,6 +51,36 @@ Invariant:
 Invariant:
 > Credits accrued while a channel was in `CHALLENGED` status are preserved — either reintegrated into the channel on challenge clearance, or carried into the next epoch on closure — and cannot be shadowed by a concurrently-opened replacement channel.
 
+---
+
+8. App session closure is **atomic across all participants**. The Node issues a new release receive-state on every participant's home channel as part of a single close transaction; a failure on any single participant aborts the entire close, leaving the session open and no release credits issued to anyone.
+
+The Node refuses to issue a release state when the recipient's most recent signed state encodes an **escrow operation that `EnsureNoOngoingEscrowOperation` does not yet treat as safely settled**. In practice this covers:
+
+* any pending `escrow_lock` or `mutual_lock` (always considered unresolved until superseded);
+* `escrow_deposit` or `escrow_withdraw` whose on-chain escrow-channel version has not caught up with the signed state version — with a narrow one-version-behind allowance for `escrow_deposit` while the escrow channel is `Open` or `Closed` (the steady state during a normal finalize/purge cycle).
+
+The release receive-state is stacked on top of the recipient's most recent signed state. If that state encodes an unfinalized escrow, signing a release on top risks state-chain invariant violations should the escrow ultimately revert or settle to a different version than was assumed when the release was issued. The Node therefore blocks until the escrow resolves rather than risking a co-signed credit that cannot be enforced on-chain.
+
+Consequence: a single participant whose escrow has not yet completed — whether due to slow on-chain confirmation, an active challenge, or deliberate non-finalization — blocks the cooperative close for **all** other participants in the session. Remaining participants have two recovery paths:
+
+* wait for the blocking participant's escrow to resolve and retry the close,
+* if the session's state machine permits intermediate updates, individually unwind their share via off-chain transfers out of the session and re-attempt closure with the remaining (non-blocked) members.
+
+This is an accepted trade-off for now, which may be lifted in the future: protocol safety (no release state co-signed against a potentially-reverting escrow chain) takes precedence over close-time liveness. Sessions whose participants require independent exit guarantees should be designed with state machines that support partial settlement rather than relying solely on cooperative close.
+
+Unlike the `CHALLENGED` channel path (rule 6) — where the release issuer **does** store unsigned releases for non-`Open` home channels so the rescue squash can pick them up at close — the close path does **not** extend that unsigned-fallback pattern to the escrow-rejected case. When `EnsureNoOngoingEscrowOperation` rejects a participant, the entire close aborts rather than queueing an unsigned release on top of an in-flight escrow. Extending the fallback here is a possible future improvement but is non-trivial: the safety of stacking an unsigned release on an unfinalized escrow depends on later reconciling the eventual escrow outcome with the queued credit, and the current implementation prefers refusal over partial trust.
+
+Invariant:
+> A single participant with a pending escrow operation can block cooperative closure of an app session for all other participants until the escrow resolves; no participant receives a release credit while the close is blocked.
+
+---
+
+9. The Node processes on-chain channel-lifecycle events with per-channel version monotonicity. An event whose `StateVersion` is strictly less than the row's current `StateVersion` is dropped with a structured warn log (see `nitronode/event_handlers/service.go`). For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers an on-chain `getChannelData` read via the `ChainStateRefresher` (`pkg/blockchain/evm/chain_state_refresher.go`, interface in `pkg/core/interface.go`) that overwrites the local row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. This is defense-in-depth against out-of-order event delivery from indexer mis-order, reorg replay, or any future contract change that re-introduces a same-transaction event-order quirk. Escrow event handlers enforce the guard without the refresh hook; cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
+
+Invariant:
+> The Node's local `channels.state_version` is monotonic per `channelId`. After any dropped lifecycle event for a home channel, the Node row converges with on-chain authoritative state without manual intervention.
+
 ## Invariants
 
 ---
@@ -185,6 +215,12 @@ no funds can be permanently locked if it does.
 
 ---
 
+### Reentrancy
+
+26. **Lifecycle reentrancy guard**: Every external/public function in `ChannelHub` that mutates lifecycle state is guarded by `nonReentrant` modifier. This prevents cross-function reentrancy via inbound token hooks (ERC777-style `tokensReceived`, non-standard `transferFrom` callbacks) from interleaving lifecycle operations during a `_pullFunds` call. The outbound side remains additionally protected by the `TRANSFER_GAS_LIMIT = 100_000` cap, which prevents recipient hooks from completing a reentrant lifecycle call within the forwarded gas budget.
+
+---
+
 ### ChannelClosed event orientation during abandoned migration
 
 `initiateMigration()` on the new home chain swaps `homeLedger` ↔ `nonHomeLedger` before storing the state, so that `homeLedger` always represents the chain where execution happens. A consequence of this swap is that `meta.lastState` on the new home chain is stored in opposite orientation from what both parties signed.
@@ -234,6 +270,14 @@ In the single-node deployment model, the ChannelHub is deployed by the Node oper
 - **Validator agreement**: Both users and nodes can only use agreed validators specified in the bitmask (plus the always-available default validator), preventing unilateral changes to signature validation schemes.
 - **Registration immutability**: Once a node registers a validator at a specific ID, it cannot be changed. Signatures created with a given validator ID remain valid for the lifetime of the ChannelHub deployment.
 - **Cross-chain consistency**: The same validator ID may map to different validator addresses on different chains, but the security properties must remain equivalent. Nodes are responsible for registering compatible validators across chains.
+
+### Asset-symbol equivalence
+
+The unified asset model treats every chain-specific token configured under a single asset symbol as a fully fungible 1:1 representation of the same asset. Off-chain credit denominated in an asset can therefore be redeemed from any token inventory sharing that symbol, independent of which inventory originally backed it. The validator binds unchanneled credit to the chain/token chosen at first channel creation, enforcing only that the asset symbol matches — not that the tokens are economically equivalent.
+
+This is intended behaviour: it enables cross-chain redemption. The only harmful configuration is an operator mapping economically non-equivalent tokens under one symbol (e.g. a test token and production USDC), which would let credit sourced from the cheap inventory be redeemed against the valuable one.
+
+**The Node operator MUST configure only economically equivalent (1:1 redeemable) tokens under a single asset symbol.** Token equivalence cannot be verified programmatically and is an operator configuration responsibility. See `docs/protocol/security-and-limitations.md` for the full trust-assumption statement.
 
 ---
 
@@ -531,6 +575,8 @@ Inbound transfer failures occur during:
 - Escrow deposit initiation (INITIATE_ESCROW_DEPOSIT on non-home chain)
 
 **Mitigation**: The Nitronode only processes operations after observing successful on-chain events. If a user signs a deposit state but the transfer fails on-chain, the state is never enforced, and the Node does not provide services based on unconfirmed deposits.
+
+**Reentrancy via inbound hooks**: Tokens whose `transferFrom` invokes a recipient hook (ERC777-style `tokensReceived`, ERC1363 callbacks, or non-standard ERC20 implementations) could in principle re-enter `ChannelHub` lifecycle entrypoints during an inbound pull. The `nonReentrant` guard on every lifecycle entrypoint blocks this class of attack at the contract layer — see invariant 26 above and `contracts/src/ChannelHub.sol`. Coverage splits by deployment vintage: future deployments built from commit `2a6a9f0d` or later carry the guard and are protected at the contract layer; currently-deployed contracts at the addresses listed in `contracts/deployments/HOOK-TOKEN-COMPATIBILITY.md` predate the guard and are protected only by the off-chain "no hook-bearing tokens" onboarding policy enforced by the Node operator.
 
 ---
 

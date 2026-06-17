@@ -77,14 +77,14 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		return
 	}
 	for _, id := range coreState.ApplicationIDs {
-		if id != strings.ToLower(id) {
-			c.Fail(rpc.Errorf("invalid_session_key_state: application_ids must be lowercase, got: %s", id), "")
+		if !app.IsValidApplicationID(id) {
+			c.Fail(rpc.Errorf("invalid_session_key_state: application_ids must contain only lowercase letters, digits, dashes, and underscores (max 66 chars), got: %s", id), "")
 			return
 		}
 	}
 	for _, id := range coreState.AppSessionIDs {
-		if id != strings.ToLower(id) {
-			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be lowercase, got: %s", id), "")
+		if !core.IsValidHash(id, true) {
+			c.Fail(rpc.Errorf("invalid_session_key_state: app_session_ids must be 0x-prefixed 32-byte lowercase hex hashes, got: %s", id), "")
 			return
 		}
 	}
@@ -92,19 +92,47 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		c.Fail(rpc.Errorf("invalid_session_key_state: user_sig is required"), "")
 		return
 	}
-	if coreState.SessionKeySig == "" {
-		c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
-		return
-	}
 
-	// Validate both signatures: wallet's UserSig and session-key holder's SessionKeySig.
-	if err := app.ValidateAppSessionKeyStateV1(coreState); err != nil {
-		c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
-		return
-	}
-
-	// Validate version and store the session key state
+	// A submit with expires_at after now activates, extends, or rotates the key and requires
+	// both signatures. A submit with expires_at <= now is a revocation: it only deactivates an
+	// existing delegation, so the wallet's user_sig alone authorizes it. Requiring session_key_sig
+	// on the revocation path would let a lost, unavailable, or malicious session key veto its own
+	// revocation, stranding the user until the prior expires_at naturally passes. now is captured
+	// here and reused for the cap/version logic inside the transaction so the active/inactive
+	// decision is consistent across both.
 	now := time.Now()
+	if coreState.ExpiresAt.After(now) {
+		if coreState.SessionKeySig == "" {
+			c.Fail(rpc.Errorf("invalid_session_key_state: session_key_sig is required"), "")
+			return
+		}
+		// Validate both signatures: wallet's UserSig and session-key holder's SessionKeySig.
+		if err := app.ValidateAppSessionKeyStateV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+	} else {
+		// Revocation only deactivates an existing delegation. Version 1 means there is no prior
+		// delegation, so reject it before LockSessionKeyState can seed a permanent ownership
+		// claim for a session_key the caller never proved possession of: a legitimate revoke is
+		// always version >= 2, since registration at version 1 is future-dated and requires both
+		// signatures.
+		if coreState.Version == 1 {
+			c.Fail(rpc.Errorf("invalid_session_key_state: cannot revoke a session key with no prior delegation"), "")
+			return
+		}
+		// Validate only the wallet's UserSig. Any session_key_sig present is ignored, so clear
+		// it before persisting to keep stored revocation rows canonical.
+		if err := app.ValidateAppSessionKeyStateUserSigV1(coreState); err != nil {
+			c.Fail(rpc.Errorf("invalid_session_key_state: %v", err), "")
+			return
+		}
+		coreState.SessionKeySig = ""
+	}
+
+	// revoked is true only when this submit transitions an active key to inactive,
+	// so the revocation log is not emitted for inactive-to-inactive updates.
+	var revoked bool
 	err = h.useStoreInTx(func(tx Store) error {
 		// Lock the (user, session_key, app_session) pointer row for the duration of the tx so
 		// that concurrent submits for the same (user, session_key) serialize cleanly and report
@@ -142,6 +170,7 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 		// (pg_advisory_xact_lock(hashtext(user_address))) before counting.
 		prevActive := latestVersion > 0 && latestExpiresAt.After(now)
 		submittedActive := coreState.ExpiresAt.After(now)
+		revoked = prevActive && !submittedActive
 		if !prevActive && submittedActive && h.maxSessionKeysPerUser > 0 {
 			count, err := tx.CountSessionKeysForUser(coreState.UserAddress)
 			if err != nil {
@@ -174,7 +203,7 @@ func (h *Handler) SubmitSessionKeyState(c *rpc.Context) {
 	}
 
 	c.Succeed(c.Request.Method, payload)
-	if !coreState.ExpiresAt.After(now) {
+	if revoked {
 		logger.Info("session key revoked",
 			"userAddress", coreState.UserAddress,
 			"sessionKey", coreState.SessionKey,

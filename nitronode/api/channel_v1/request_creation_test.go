@@ -2,7 +2,6 @@ package channel_v1
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"testing"
 
@@ -45,7 +44,6 @@ func TestRequestCreation_Success(t *testing.T) {
 		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -202,7 +200,6 @@ func TestRequestCreation_Acknowledgement_Success(t *testing.T) {
 		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -351,7 +348,6 @@ func TestRequestCreation_InvalidChallenge(t *testing.T) {
 		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data
@@ -454,7 +450,6 @@ func TestRequestCreation_ChallengeTooHigh(t *testing.T) {
 		maxChallenge:     maxChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data
@@ -553,7 +548,6 @@ func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
 		maxChallenge:     uint32(604800),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -625,9 +619,7 @@ func TestRequestCreation_NonClosedChannelRejection(t *testing.T) {
 }
 
 // TestRequestCreation_TransferSend_Success verifies that a TransferSend transition
-// on initial channel creation passes the action gateway and produces both
-// sender-side and receiver-side state effects. Covers the happy path opposite
-// TestRequestCreation_ActionGatewayRejection.
+// on initial channel creation produces both sender-side and receiver-side state effects.
 func TestRequestCreation_TransferSend_Success(t *testing.T) {
 	mockTxStore := new(MockStore)
 	mockMemoryStore := new(MockMemoryStore)
@@ -650,7 +642,6 @@ func TestRequestCreation_TransferSend_Success(t *testing.T) {
 		maxChallenge:     uint32(604800),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -783,107 +774,6 @@ func TestRequestCreation_TransferSend_Success(t *testing.T) {
 	mockTxStore.AssertExpectations(t)
 }
 
-// TestRequestCreation_ActionGatewayRejection verifies that an exhausted gated
-// action (e.g. transfer_send) is rejected at the gateway before any state is
-// signed, stored, or receiver-side state is issued. Mirrors the SubmitState
-// gate so users cannot bypass the 24h allowance via initial channel creation.
-func TestRequestCreation_ActionGatewayRejection(t *testing.T) {
-	mockTxStore := new(MockStore)
-	mockMemoryStore := new(MockMemoryStore)
-	mockAssetStore := new(MockAssetStore)
-	mockSigner := NewMockSigner()
-	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
-	nodeAddress := mockSigner.PublicKey().Address().String()
-	mockStatePacker := new(MockStatePacker)
-
-	handler := &Handler{
-		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
-		statePacker:   mockStatePacker,
-		useStoreInTx: func(handler StoreTxHandler) error {
-			return handler(mockTxStore)
-		},
-		memoryStore:      mockMemoryStore,
-		nodeSigner:       nodeSigner,
-		nodeAddress:      nodeAddress,
-		minChallenge:     uint32(3600),
-		maxChallenge:     uint32(604800),
-		metrics:          metrics.NewNoopRuntimeMetricExporter(),
-		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{Err: errors.New("transfer allowance exhausted")},
-	}
-
-	userSigner := NewMockSigner()
-	userWallet := userSigner.PublicKey().Address().String()
-	receiverWallet := "0x0987654321098765432109876543210987654321"
-	asset := "USDC"
-	tokenAddress := "0xTokenAddress"
-	blockchainID := uint64(1)
-	nonce := uint64(77)
-	challenge := uint32(86400)
-
-	homeChannelID, err := core.GetHomeChannelID(nodeAddress, userWallet, asset, nonce, challenge, "0x03")
-	require.NoError(t, err)
-
-	mockMemoryStore.On("IsAssetSupported", asset, tokenAddress, blockchainID).Return(true, nil).Once()
-
-	reqPayload := rpc.ChannelsV1RequestCreationRequest{
-		State: rpc.StateV1{
-			ID:            core.GetStateID(userWallet, asset, 1, 1),
-			UserWallet:    userWallet,
-			Asset:         asset,
-			Epoch:         "1",
-			Version:       "1",
-			HomeChannelID: &homeChannelID,
-			Transition: rpc.TransitionV1{
-				Type:      core.TransitionTypeTransferSend,
-				AccountID: receiverWallet,
-				Amount:    "100",
-			},
-			HomeLedger: rpc.LedgerV1{
-				TokenAddress: tokenAddress,
-				BlockchainID: "1",
-				UserBalance:  "0",
-				UserNetFlow:  "0",
-				NodeBalance:  "0",
-				NodeNetFlow:  "0",
-			},
-		},
-		ChannelDefinition: rpc.ChannelDefinitionV1{
-			Nonce:                 strconv.FormatUint(nonce, 10),
-			Challenge:             challenge,
-			ApprovedSigValidators: "0x03",
-		},
-	}
-
-	payload, err := rpc.NewPayload(reqPayload)
-	require.NoError(t, err)
-
-	ctx := &rpc.Context{
-		Context: context.Background(),
-		Request: rpc.Message{
-			RequestID: 1,
-			Method:    rpc.ChannelsV1RequestCreationMethod.String(),
-			Payload:   payload,
-		},
-	}
-
-	handler.RequestCreation(ctx)
-
-	require.NotNil(t, ctx.Response)
-	respErr := ctx.Response.Error()
-	require.Error(t, respErr)
-	assert.Contains(t, respErr.Error(), "transfer allowance exhausted")
-
-	// Gate fires before any state effect: nothing should be locked, stored, or recorded.
-	mockTxStore.AssertNotCalled(t, "LockUserState", mock.Anything, mock.Anything)
-	mockTxStore.AssertNotCalled(t, "HasNonClosedHomeChannel", mock.Anything, mock.Anything)
-	mockTxStore.AssertNotCalled(t, "GetLastUserState", mock.Anything, mock.Anything, mock.Anything)
-	mockTxStore.AssertNotCalled(t, "CreateChannel", mock.Anything)
-	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
-	mockTxStore.AssertNotCalled(t, "RecordTransaction", mock.Anything, mock.Anything)
-	mockMemoryStore.AssertExpectations(t)
-}
-
 // TestRequestCreation_RejectReusedHomeChannelID covers the case where the user's last
 // state has no HomeChannelID (e.g., it is a ChallengeRescue squash on a fresh epoch),
 // but the computed channel ID matches a previously stored channel record. The handler
@@ -911,7 +801,6 @@ func TestRequestCreation_RejectReusedHomeChannelID(t *testing.T) {
 		maxChallenge:     uint32(604800),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -1028,7 +917,6 @@ func TestRequestCreation_ChannelAlreadyInitialized(t *testing.T) {
 		maxChallenge:     uint32(604800),
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()

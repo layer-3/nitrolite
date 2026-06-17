@@ -140,7 +140,6 @@ describe('NitroliteClient getAppSessionsList compat mapping', () => {
                     name: 'Sepolia',
                     id: 11155111n,
                     channelHubAddress: '0x3333333333333333333333333333333333333333',
-                    lockingContractAddress: '0x4444444444444444444444444444444444444444',
                     blockStep: 0n,
                 },
             ],

@@ -1,10 +1,8 @@
 package app_session_v1
 
 import (
-	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/log"
@@ -75,7 +73,7 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	// derivation, and stored participant list all see the canonical (lowercase, 0x-prefixed)
 	// representation regardless of how the caller cased the address or whether they
 	// included the 0x prefix.
-	var totalWeights uint8
+	var totalWeights uint16
 	participantWeights := make(map[string]uint8)
 	for i, participant := range reqPayload.Definition.Participants {
 		participantWallet, err := core.NormalizeHexAddress(participant.WalletAddress)
@@ -89,12 +87,12 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 			c.Fail(rpc.Errorf("duplicate participant address: %s", participant.WalletAddress), "")
 			return
 		}
-		totalWeights += participant.SignatureWeight
+		totalWeights += uint16(participant.SignatureWeight)
 		participantWeights[participantWallet] = participant.SignatureWeight
 		appDef.Participants[i].WalletAddress = participantWallet
 	}
 
-	if reqPayload.Definition.Quorum > totalWeights {
+	if uint16(reqPayload.Definition.Quorum) > totalWeights {
 		c.Fail(rpc.Errorf("target quorum (%d) cannot be greater than total sum of weights (%d)",
 			reqPayload.Definition.Quorum, totalWeights), "")
 		return
@@ -121,54 +119,6 @@ func (h *Handler) CreateAppSession(c *rpc.Context) {
 	}
 
 	err = h.useStoreInTx(func(tx Store) error {
-		if h.appRegistryEnabled {
-			registeredApp, err := tx.GetApp(appDef.ApplicationID)
-			if err != nil {
-				return rpc.Errorf("failed to look up application: %v", err)
-			}
-
-			// App must be registered regardless of CreationApprovalNotRequired flag.
-			if registeredApp == nil {
-				return rpc.Errorf("application %s is not registered", appDef.ApplicationID)
-			}
-
-			if !registeredApp.App.CreationApprovalNotRequired {
-				if reqPayload.OwnerSig == "" {
-					return rpc.Errorf("owner_sig is required for this application")
-				}
-
-				sigBytes, err := hexutil.Decode(reqPayload.OwnerSig)
-				if err != nil {
-					return rpc.Errorf("failed to decode signature: %v", err)
-				}
-				if len(sigBytes) == 0 {
-					return rpc.Errorf("empty owner_sig after decode")
-				}
-
-				sigType := app.AppSessionSignerTypeV1(sigBytes[0])
-				appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
-					func(sessionKeyAddr string) (string, error) {
-						return tx.GetAppSessionKeyOwner(sessionKeyAddr, appSessionID, appDef.ApplicationID)
-					},
-				)
-				recoveredOwnerWallet, err := appSessionSignerValidator.Recover(packedRequest, sigBytes)
-				if err != nil {
-					h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, false)
-					return rpc.Errorf("failed to recover user wallet: %v", err)
-				}
-				h.metrics.IncAppSessionUpdateSigValidation(appSessionID, sigType, true)
-
-				if !strings.EqualFold(recoveredOwnerWallet, registeredApp.App.OwnerWallet) {
-					return rpc.Errorf("invalid owner signature: signer %s is not the app owner", recoveredOwnerWallet)
-				}
-			}
-
-			err = h.actionGateway.AllowAction(tx, registeredApp.App.OwnerWallet, core.GatedActionAppSessionCreation)
-			if err != nil {
-				return rpc.NewError(err)
-			}
-		}
-
 		if err := h.verifyQuorum(tx, appSessionID, appDef.ApplicationID, participantWeights, appDef.Quorum, packedRequest, reqPayload.QuorumSigs); err != nil {
 			return err
 		}

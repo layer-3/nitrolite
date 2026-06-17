@@ -53,7 +53,6 @@ export enum TransactionType {
   Transfer = 30,
   Commit = 40,
   Release = 41,
-  Rebalance = 42,
   Migrate = 100,
   EscrowLock = 110,
   MutualLock = 120,
@@ -166,8 +165,8 @@ export interface Blockchain {
   name: string;
   id: bigint; // uint64
   channelHubAddress: Address;
-  lockingContractAddress?: Address;
   blockStep: bigint; // uint64
+  confirmationDelaySecs: number; // seconds; 0 means gate is disabled
 }
 
 export interface Token {
@@ -210,13 +209,6 @@ export interface BalanceEntry {
   asset: string;
   balance: Decimal;
   enforced: Decimal;
-}
-
-export interface ActionAllowance {
-  gatedAction: string;
-  timeWindow: string;
-  allowance: bigint;
-  used: bigint;
 }
 
 // ============================================================================

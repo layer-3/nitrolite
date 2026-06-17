@@ -225,33 +225,6 @@ type AppSessionKeyStateV1 struct {
 }
 
 // ============================================================================
-// App Registry Types
-// ============================================================================
-
-// AppV1 represents a registered application definition (without timestamps).
-type AppV1 struct {
-	// ID is the application identifier
-	ID string `json:"id"`
-	// OwnerWallet is the owner's wallet address
-	OwnerWallet string `json:"owner_wallet"`
-	// Metadata is the application metadata
-	Metadata string `json:"metadata"`
-	// Version is the current version
-	Version string `json:"version"`
-	// CreationApprovalNotRequired indicates if sessions can be created without approval
-	CreationApprovalNotRequired bool `json:"creation_approval_not_required"`
-}
-
-// AppInfoV1 represents full application info including timestamps.
-type AppInfoV1 struct {
-	AppV1
-	// CreatedAt is the creation timestamp (unix seconds)
-	CreatedAt string `json:"created_at"`
-	// UpdatedAt is the last update timestamp (unix seconds)
-	UpdatedAt string `json:"updated_at"`
-}
-
-// ============================================================================
 // Asset and Blockchain Types
 // ============================================================================
 
@@ -291,8 +264,9 @@ type BlockchainInfoV1 struct {
 	BlockchainID string `json:"blockchain_id"`
 	// ChannelHubAddress is the contract address on this network
 	ChannelHubAddress string `json:"channel_hub_address"`
-	// LockingContractAddress is the contract address for the locking contract on this network
-	LockingContractAddress string `json:"locking_contract_address"`
+	// ConfirmationDelaySecs is the number of seconds the node waits before crediting a deposit event.
+	// Zero means the gate is disabled and events are processed immediately.
+	ConfirmationDelaySecs uint32 `json:"confirmation_delay_secs"`
 }
 
 // ============================================================================
@@ -329,22 +303,6 @@ type TransactionV1 struct {
 	Amount string `json:"amount"`
 	// CreatedAt is when the transaction was created
 	CreatedAt string `json:"created_at"`
-}
-
-// ============================================================================
-// Action Gateway Types
-// ============================================================================
-
-// ActionAllowanceV1 represents the allowance information for a specific gated action.
-type ActionAllowanceV1 struct {
-	// GatedAction is the specific action being gated (e.g. transfer, app_operation)
-	GatedAction core.GatedAction `json:"gated_action"`
-	// TimeWindow is the time window for which the allowance is valid (e.g. "1h", "24h")
-	TimeWindow string `json:"time_window"`
-	// Allowance is the total allowance for the gated action within the time window
-	Allowance string `json:"allowance"`
-	// Used is the amount of the allowance that has already been used within the time window
-	Used string `json:"used"`
 }
 
 // ============================================================================

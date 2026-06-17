@@ -38,15 +38,19 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 	var nodeSig string
 	incomingTransition := incomingState.Transition
+	var receiverWallet string
 	err = h.useStoreInTx(func(tx Store) error {
-		err := h.actionGateway.AllowAction(tx, incomingState.UserWallet, incomingState.Transition.Type.GatedAction())
-		if err != nil {
-			return rpc.NewError(err)
-		}
-
-		_, err = tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
-		if err != nil {
-			return rpc.Errorf("failed to lock user state: %v", err)
+		if incomingTransition.Type == core.TransitionTypeTransferSend {
+			// Lock both sender and receiver balance rows up front in deterministic
+			// order so concurrent opposite-direction transfers can't deadlock.
+			receiverWallet, err = h.lockTransferBalances(tx, incomingState)
+			if err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset); err != nil {
+				return rpc.Errorf("failed to lock user state: %v", err)
+			}
 		}
 
 		approvedSigValidators, channelStatus, err := tx.CheckActiveChannel(incomingState.UserWallet, incomingState.Asset)
@@ -99,10 +103,12 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 			// 	extraTransitions = nil // no extra transitions to reapply
 			// }
 		default:
-			// User has no previous state
+			// An active home channel always has its initial state stored atomically by
+			// request_creation. A nil state here means the channel row exists without its
+			// state — an invariant violation, not a first-submit. Fail closed rather than
+			// bootstrapping a synthetic Void state through the wrong endpoint.
 			if currentState == nil {
-				logger.Debug("no previous state found, issuing a void state")
-				currentState = core.NewVoidState(incomingState.Asset, incomingState.UserWallet)
+				return rpc.Errorf("active channel has no stored state")
 			}
 		}
 
@@ -121,7 +127,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 
 		// Validate user's signature
 		if incomingState.UserSig == nil {
-			return rpc.Errorf("missing incoming state user signature: %v", err)
+			return rpc.Errorf("missing incoming state user signature")
 		}
 		userSigBytes, err := hexutil.Decode(*incomingState.UserSig)
 		if err != nil {
@@ -167,7 +173,7 @@ func (h *Handler) SubmitState(c *rpc.Context) {
 				}
 
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, receiverWallet, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}

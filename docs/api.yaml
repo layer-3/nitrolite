@@ -159,7 +159,7 @@ types:
       fields:
         - name: application_id
           type: string
-          description: Application identifier from an app registry
+          description: Client-chosen application identifier (must match the application ID format). Not validated against any registry.
         - name: participants
           type: array
           items:
@@ -193,7 +193,7 @@ types:
           description: A unique application session identifier
         - name: intent
           type: string
-          description: The intent of the app session update (operate, deposit, withdraw, close, rebalance)
+          description: The intent of the app session update (operate, deposit, withdraw, close)
         - name: version
           type: string
           description: Version of the app state
@@ -270,6 +270,9 @@ types:
         - name: contract_address
           type: string
           description: Address of the main contract on this blockchain
+        - name: confirmation_delay_secs
+          type: integer
+          description: Per-chain reorg-protection window in seconds; events are buffered for this duration before being committed. 0 disables the gate. See nitronode/docs/reorg-fix.md.
 
   - balance_entry:
       description: Balance for a specific asset
@@ -297,9 +300,9 @@ types:
         - escrow_lock
         - escrow_withdraw
         - migrate
-        - rebalance
         - finalize
         - challenge_rescue
+        - unknown # fallback for legacy/removed types in response rows (e.g. former rebalance=42); not a valid request filter value
 
   - transaction:
       description: Transaction record
@@ -391,7 +394,10 @@ types:
           description: >
             Session-key holder's EIP-191 signature over the same payload as user_sig —
             abi.encode(SESSION_KEY_AUTH_TYPEHASH, session_key, metadata_hash) — proving possession of the key
-            being registered. Required on every submit to prevent registration of keys the submitter does not control.
+            being registered. Required when expires_at is in the future (registration, update, re-activation)
+            to prevent registration of keys the submitter does not control. Optional for revocation
+            (expires_at at or before now): a wallet may revoke unilaterally with user_sig alone so a lost or
+            uncooperative session key cannot block revocation.
 
   - app_session_key_state:
       description: Represents the state of an app session key
@@ -409,12 +415,20 @@ types:
           type: array
           items:
             type: string
-          description: Application IDs associated with this session key
+          description: >
+            Application IDs associated with this session key. Each entry must
+            match ^[a-z0-9_-]{1,66}$ (lowercase letters, digits, dashes, and
+            underscores, max 66 chars). Malformed entries are rejected before
+            signature verification.
         - name: app_session_id
           type: array
           items:
             type: string
-          description: Application session IDs associated with this session key
+          description: >
+            Application session IDs associated with this session key. Each entry
+            must be a 0x-prefixed 32-byte hash in lowercase canonical form
+            (^0x[0-9a-f]{64}$). Checksummed or uppercase hex is rejected before
+            signature verification.
         - name: expires_at
           type: string
           description: Unix timestamp in seconds indicating when the session key expires
@@ -423,67 +437,7 @@ types:
           description: User's signature over the session key metadata to authorize the registration/update of the session key
         - name: session_key_sig
           type: string
-          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required on every submit to prevent registration of keys the submitter does not control.
-
-  - app:
-      description: Application definition
-      fields:
-        - name: id
-          type: string
-          description: Application identifier
-        - name: owner_wallet
-          type: string
-          description: Owner's wallet address
-        - name: metadata
-          type: string
-          description: Application metadata (bytes32 hash)
-        - name: version
-          type: string
-          description: Current version of the application
-        - name: creation_approval_not_required
-          type: boolean
-          description: Whether app sessions can be created without owner approval
-
-  - app_info:
-      description: Full application info
-      fields:
-        - name: id
-          type: string
-          description: Application identifier
-        - name: owner_wallet
-          type: string
-          description: Owner's wallet address
-        - name: metadata
-          type: string
-          description: Application metadata (bytes32 hash)
-        - name: version
-          type: string
-          description: Current version of the application
-        - name: creation_approval_not_required
-          type: boolean
-          description: Whether app sessions can be created without owner approval
-        - name: created_at
-          type: string
-          description: Creation timestamp (unix seconds)
-        - name: updated_at
-          type: string
-          description: Last update timestamp (unix seconds)
-
-  - action_allowance:
-      description: Allowance information for a specific gated action
-      fields:
-        - name: gated_action
-          type: string
-          description: The specific action being gated (transfer, app_session_deposit, app_session_operation, app_session_withdrawal)
-        - name: time_window
-          type: string
-          description: Time window for which the allowance is valid (e.g. "24h0m0s")
-        - name: allowance
-          type: string
-          description: Total allowance for the action within the time window
-        - name: used
-          type: string
-          description: Amount already used within the time window
+          description: Session-key holder's signature over the same packed state (which already binds user_address) proving possession of the key being registered. Required when expires_at is in the future (registration, update, re-activation) to prevent registration of keys the submitter does not control. Optional for revocation (expires_at at or before now); a wallet may revoke unilaterally with user_sig alone so a lost or uncooperative session key cannot block revocation.
 
   - pagination_params:
       description: Pagination request parameters
@@ -494,7 +448,7 @@ types:
           optional: true
         - name: limit
           type: integer
-          description: Number of items to return
+          description: Number of items to return. A value of 0 is treated the same as omitting the field — the server default is used.
           optional: true
         - name: sort
           type: string
@@ -661,15 +615,16 @@ api:
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
 
-                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
-                on every submit, including the revocation path — the session key must co-sign its
-                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
-                supported by this method; that flow requires a separate code path and is tracked
-                as a follow-up.
+                Activation, update, and re-activation (`expires_at` in the future) require both
+                `user_sig` (wallet) and `session_key_sig` (session-key holder, proving possession).
+                Revocation (`expires_at` at or before now) requires only `user_sig`: a wallet may
+                revoke unilaterally so a lost, unavailable, or compromised session key cannot block
+                revocation of its own delegation. Any `session_key_sig` supplied on the revocation
+                path is ignored.
               request:
                 - field_name: state
                   type: channel_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state
@@ -765,20 +720,6 @@ api:
                   description: The signature quorum requirement is not satisfied
                 - message: ongoing_transition
                   description: There is an ongoing transition that must be resolved first
-            - name: rebalance_app_sessions
-              description: Rebalance multiple application sessions atomically
-              request:
-                - field_name: signed_updates
-                  type: array
-                  description: List of signed application session state updates to be submitted (each update must have intent 'rebalance')
-                  items:
-                    type: signed_app_state_update
-              response:
-                - field_name: batch_id
-                  type: string
-                  description: A unique identifier of executed rebalance operation
-
-              errors: []
             - name: get_app_definition
               description: Retrieve the application definition for a specific app session. Returns a successful response with `definition` omitted when no app session exists for the given ID.
               request:
@@ -824,7 +765,7 @@ api:
                 - message: invalid_parameters
                   description: The request parameters are invalid
             - name: create_app_session
-              description: Create a new application session between participants. The application must be registered in the app registry. If the application requires creation approval (creation_approval_not_required is false), an owner signature is required.
+              description: Create a new application session between participants. The application_id is a client-chosen identifier and is not validated against any registry; no owner approval is required.
               request:
                 - field_name: definition
                   type: app_definition
@@ -837,10 +778,6 @@ api:
                   description: Participant signatures for the app session creation
                   items:
                     type: string
-                - field_name: owner_sig
-                  type: string
-                  description: Owner signature for app session creation, required when the application's creation_approval_not_required is false
-                  optional: true
               response:
                 - field_name: app_session_id
                   type: string
@@ -854,12 +791,6 @@ api:
               errors:
                 - message: invalid_definition
                   description: The application definition is invalid
-                - message: application_not_registered
-                  description: The application is not registered in the app registry
-                - message: owner_sig_required
-                  description: Owner signature is required for this application (creation_approval_not_required is false)
-                - message: invalid_owner_signature
-                  description: The owner signature is invalid or does not match the registered app owner
                 - message: insufficient_balance
                   description: Participant has insufficient balance for allocations
             - name: submit_session_key_state
@@ -876,15 +807,16 @@ api:
                 The metadata hash binds `expires_at`, so each revoke or re-activation requires a
                 fresh user signature over the new payload. Negative unix timestamps are rejected.
 
-                Both `user_sig` (wallet) and `session_key_sig` (session-key holder) are required
-                on every submit, including the revocation path — the session key must co-sign its
-                own deactivation. Wallet-only revocation (for a lost or compromised key) is not
-                supported by this method; that flow requires a separate code path and is tracked
-                as a follow-up.
+                Activation, update, and re-activation (`expires_at` in the future) require both
+                `user_sig` (wallet) and `session_key_sig` (session-key holder, proving possession).
+                Revocation (`expires_at` at or before now) requires only `user_sig`: a wallet may
+                revoke unilaterally so a lost, unavailable, or compromised session key cannot block
+                revocation of its own delegation. Any `session_key_sig` supplied on the revocation
+                path is ignored.
               request:
                 - field_name: state
                   type: app_session_key_state
-                  description: Session key metadata and delegation information. Set `expires_at` to a past value to revoke; future to (re-)activate.
+                  description: Session key metadata and delegation information. Set `expires_at` to a value at or before now to revoke (user_sig only); future to (re-)activate (both signatures).
               response: []
               errors:
                 - message: invalid_session_key_state
@@ -919,58 +851,6 @@ api:
               errors:
                 - message: account_not_found
                   description: The specified account was not found
-
-    - name: apps
-      description: Operations related to application registry management
-      versions:
-        - version: v1
-          methods:
-            - name: get_apps
-              description: Retrieve registered applications with optional filtering by app ID and owner wallet
-              request:
-                - field_name: app_id
-                  type: string
-                  description: Filter by application ID
-                  optional: true
-                - field_name: owner_wallet
-                  type: string
-                  description: Filter by owner wallet address
-                  optional: true
-                - field_name: pagination
-                  type: pagination_params
-                  description: Pagination parameters (offset, limit, sort)
-                  optional: true
-              response:
-                - field_name: apps
-                  type: array
-                  items:
-                    type: app_info
-                  description: List of registered applications
-                - field_name: metadata
-                  type: pagination_metadata
-                  description: Pagination information
-              errors:
-                - message: invalid_parameters
-                  description: The request parameters are invalid
-            - name: submit_app_version
-              description: Register a new application in the app registry. Currently only version 1 (creation) is supported. The owner must sign the packed app data to prove ownership.
-              request:
-                - field_name: app
-                  type: app
-                  description: Application definition including ID, owner wallet, metadata, version, and creation approval flag
-                - field_name: owner_sig
-                  type: string
-                  description: Owner's EIP-191 signature over the packed application data
-              response: []
-              errors:
-                - message: invalid_app_id
-                  description: The application ID does not match the required format
-                - message: invalid_version
-                  description: Only version 1 (creation) is currently supported
-                - message: invalid_signature
-                  description: The owner signature is invalid
-                - message: app_already_exists
-                  description: An application with this ID already exists
 
     - name: session_keys
       description: Operations related to session key management
@@ -1032,23 +912,6 @@ api:
                   type: pagination_metadata
                   description: Pagination information
                   optional: true
-            - name: get_action_allowances
-              description: Retrieve action allowances for a user based on their staking level
-              request:
-                - field_name: wallet
-                  type: string
-                  description: User's wallet address
-              response:
-                - field_name: allowances
-                  type: array
-                  items:
-                    type: action_allowance
-                  description: List of action allowances
-              errors:
-                - message: wallet_required
-                  description: The wallet address is required
-                - message: retrieval_failed
-                  description: Failed to retrieve action allowances
 
     - name: node
       description: Utility methods to get node's configuration and check connectivity

@@ -43,20 +43,15 @@ func main() {
 
 	vl := bb.ValidationLimits
 	rpcRouterCfg := api.RPCRouterConfig{
-		NodeVersion:               bb.NodeVersion,
-		MinChallenge:              bb.ChannelMinChallengeDuration,
-		MaxChallenge:              bb.ChannelMaxChallengeDuration,
-		AppRegistryEnabled:        bb.AppRegistryEnabled,
-		MaxParticipants:           vl.MaxParticipants,
-		MaxSessionDataLen:         vl.MaxSessionDataLen,
-		MaxAppMetadataLen:         vl.MaxAppMetadataLen,
-		MaxRebalanceSignedUpdates: vl.MaxSignedUpdates,
-		MaxSessionKeyIDs:          vl.MaxSessionKeyIDs,
-		MaxSessionKeysPerUser:     vl.MaxSessionKeysPerUser,
-		RateLimitPerSec:           bb.RateLimitPerSec,
-		RateLimitBurst:            bb.RateLimitBurst,
+		NodeVersion:           bb.NodeVersion,
+		MinChallenge:          bb.ChannelMinChallengeDuration,
+		MaxChallenge:          bb.ChannelMaxChallengeDuration,
+		MaxParticipants:       vl.MaxParticipants,
+		MaxSessionDataLen:     vl.MaxSessionDataLen,
+		MaxSessionKeyIDs:      vl.MaxSessionKeyIDs,
+		MaxSessionKeysPerUser: vl.MaxSessionKeysPerUser,
 	}
-	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.ActionGateway, bb.RuntimeMetrics, bb.Logger)
+	api.NewRPCRouter(rpcRouterCfg, bb.RpcNode, bb.StateSigner, bb.DbStore, bb.MemoryStore, bb.RuntimeMetrics, bb.Logger)
 
 	rpcListenAddr := ":7824"
 	rpcListenEndpoint := "/ws"
@@ -111,6 +106,14 @@ func main() {
 				logger.Fatal("failed to create EVM client")
 			}
 
+			// Bind a read-only ChannelHub view for this chain so the reactor can issue
+			// getChannelData reads from home-channel guard-drop paths.
+			channelHubCaller, err := evm.NewChannelHubCaller(common.HexToAddress(b.ChannelHubAddress), client)
+			if err != nil {
+				logger.Fatal("failed to create ChannelHub caller", "error", err, "blockchainID", b.ID)
+			}
+			channelHubReader := evm.NewChannelHubReader(channelHubCaller)
+
 			sigValidators, err := bb.MemoryStore.GetChannelSigValidators(b.ID)
 			if err != nil {
 				logger.Fatal("failed to get channel signature validators from memory store", "error", err, "blockchainID", b.ID)
@@ -124,9 +127,37 @@ func main() {
 				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
 			}
 
-			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx)
+			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore, channelHubReader)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
+
+			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
+			var liveHandler evm.HandleEvent
+			var flushDownstream func()
+			if confirmationDelay > 0 {
+				gate, err := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, logger)
+				if err != nil {
+					logger.Fatal("failed to create confirmation gate", "error", err, "blockchainID", b.ID)
+				}
+				gate.Start(blockchainCtx, func(err error) {
+					if err != nil {
+						logger.Fatal("confirmation gate stopped", "error", err, "blockchainID", b.ID)
+					}
+				})
+				liveHandler = gate.HandleEvent
+				flushDownstream = gate.FlushPending
+			} else {
+				liveHandler = reactor.HandleEvent
+				// flushDownstream stays nil: no gate to flush on the no-delay path.
+			}
+
+			// Live events flow through the confirmation gate (when delay > 0) or directly to the
+			// reactor (when delay == 0). Historical events from eth_getLogs are routed per-event
+			// based on block age: events older than confirmationDelay go directly to the reactor
+			// (past the reorg window); recent events still flow through the live handler because
+			// their blocks may still be reorged.
+			// flushDownstream is nil when confirmationDelay == 0; NewListener skips the flush call
+			// when it is nil, preserving no-gate behavior bit-for-bit.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore, flushDownstream)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)
@@ -141,30 +172,6 @@ func main() {
 			})
 		} else {
 			logger.Info("channel hub address is not configured for blockchain", "blockchainID", b.ID)
-		}
-
-		if b.LockingContractAddress != "" {
-			appRegistryClient, err := evm.NewLockingClient(common.HexToAddress(b.LockingContractAddress), client, b.ID)
-			if err != nil {
-				logger.Fatal("failed to create locking client", "error", err, "blockchainID", b.ID)
-			}
-
-			useLCRStoreInTx := func(h evm.LockingContractReactorStoreTxHandler) error {
-				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
-			}
-
-			reactor, err := evm.NewLockingContractReactor(b.ID, eventHandlerService, appRegistryClient.GetTokenDecimals, useLCRStoreInTx)
-			if err != nil {
-				logger.Fatal("failed to create app registry reactor", "error", err, "blockchainID", b.ID)
-			}
-
-			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.LockingContractAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
-			l.Listen(blockchainCtx, func(err error) {
-				if err != nil {
-					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)
-				}
-			})
 		}
 	}
 

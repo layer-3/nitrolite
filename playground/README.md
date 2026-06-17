@@ -27,6 +27,14 @@ Only one env var:
 
 Supported chains are discovered from the Nitronode's `getConfig()`. Public RPC URLs for each chain are looked up at runtime; override via `src/networks.ts` if a chain is missing or you want a private endpoint.
 
+## On-chain confirmation delay
+
+Each chain reported by the Nitronode's `getConfig()` includes `confirmationDelaySecs`. After an on-chain
+operation (deposit, withdraw, close) the node waits that many seconds before crediting the result to your
+off-chain balance — a reorg-safety gate. The transaction is mined first; the balance updates only after
+the delay (a few seconds where the gate is enabled, up to ~13 min on Ethereum L1; `0` = disabled).
+Off-chain transfers are not gated and reflect immediately.
+
 ## Layout
 
 | File | Purpose |
@@ -65,7 +73,10 @@ ERC-20 approvals use the "infinite approve" pattern: the first deposit for a tok
 - Per-asset SK scoping (always all assets).
 - Transaction history panel.
 - App sessions.
-- Auto-polling. State is refreshed after each operation and on the refresh button.
+- Auto-polling. State is refreshed after each operation and on the refresh button. Note: a deposit's
+  off-chain credit lags the on-chain tx by the chain's confirmation delay (see "On-chain confirmation
+  delay" above), so a refresh immediately after a deposit may not show the new balance yet — refresh
+  again once the delay has elapsed.
 
 See `playground/TODO.md` (in the original design pack) for the full deferred list.
 

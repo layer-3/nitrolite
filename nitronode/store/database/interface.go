@@ -28,6 +28,13 @@ type DatabaseStore interface {
 	// Returns the current balance or zero if the row was just inserted.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID (must be used
+	// within a transaction). On postgres the lock key is derived from the channel in SQL and the
+	// channel is read under the lock, avoiding the stale pre-lock snapshot of a GetChannelByID +
+	// LockUserState pair; on non-postgres (sqlite in tests) the snapshot is taken before the lock
+	// for test compatibility. Returns nil if the channel does not exist.
+	LockUserStateForHomeChannel(channelID string) (*core.Channel, error)
+
 	// GetUserTransactions retrieves transaction history for a user with optional filters.
 	GetUserTransactions(wallet string, asset *string, txType *core.TransactionType, fromTime *uint64, toTime *uint64, paginate *core.PaginationParams) ([]core.Transaction, core.PaginationMetadata, error)
 
@@ -109,7 +116,6 @@ type DatabaseStore interface {
 	// channel status field has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
 
-
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
 	// minVersion. Receiver credits (TransferReceive, Release) contribute positively;
@@ -162,20 +168,6 @@ type DatabaseStore interface {
 
 	// GetStateByID retrieves a state by its deterministic ID.
 	GetStateByID(stateID string) (*core.State, error)
-
-	// --- App Registry Operations ---
-
-	// CreateApp registers a new application. Returns an error if the app ID already exists.
-	CreateApp(entry app.AppV1) error
-
-	// GetApp retrieves a single application by ID. Returns nil if not found.
-	GetApp(appID string) (*app.AppInfoV1, error)
-
-	// GetApps retrieves applications with optional filtering by app ID, owner wallet, and pagination.
-	GetApps(appID *string, ownerWallet *string, pagination *core.PaginationParams) ([]app.AppInfoV1, core.PaginationMetadata, error)
-
-	// GetAppCount returns the total number of applications owned by a specific wallet.
-	GetAppCount(ownerWallet string) (uint64, error)
 
 	// --- App Session Operations ---
 
@@ -294,26 +286,6 @@ type DatabaseStore interface {
 	// GetUserBalanceSummary returns the off-chain liquidity requirement per blockchain and asset.
 	GetUserBalanceSummary() ([]UserBalanceSummary, error)
 
-	// --- User Staked Operations ---
-
-	// UpdateUserStaked upserts the staked amount for a user on a specific blockchain.
-	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
-
-	// GetTotalUserStaked returns the total staked amount for a user across all blockchains.
-	GetTotalUserStaked(wallet string) (decimal.Decimal, error)
-
-	// --- Action Log Operations ---
-
-	// RecordAction inserts a new action log entry for a user.
-	RecordAction(wallet string, gatedAction core.GatedAction) error
-
-	// GetUserActionCount returns the number of actions matching the given wallet, method, and path
-	// within the specified time window.
-	GetUserActionCount(wallet string, gatedAction core.GatedAction, window time.Duration) (uint64, error)
-
-	// GetUserActionCounts returns a map of gated actions to their respective counts for a user within the specified time window.
-	GetUserActionCounts(userWallet string, window time.Duration) (map[core.GatedAction]uint64, error)
-
 	// --- Contract Event Operations ---
 
 	// StoreContractEvent stores a blockchain event to prevent duplicate processing.
@@ -322,6 +294,18 @@ type DatabaseStore interface {
 	// GetLatestContractEventBlockNumber returns the highest block number for a given contract.
 	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
 
-	// IsContractEventPresent checks if a specific contract event has already been stored.
-	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
+
+	// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of
+	// the highest stored event for the given contract. Returns (0, "", nil) when no rows exist.
+	GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (blockNumber uint64, blockHash string, err error)
+
+	// GetPreviousDistinctBlockHash returns the block_number and block_hash of the highest
+	// stored event with block_number strictly below belowBlockNumber. Returns (0, "", nil)
+	// when no such row exists.
+	GetPreviousDistinctBlockHash(contractAddress string, blockchainID uint64, belowBlockNumber uint64) (blockNumber uint64, blockHash string, err error)
 }

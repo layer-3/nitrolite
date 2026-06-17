@@ -3,9 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/api/app_session_v1"
-	"github.com/layer-3/nitrolite/nitronode/api/apps_v1"
 	"github.com/layer-3/nitrolite/nitronode/api/channel_v1"
 	"github.com/layer-3/nitrolite/nitronode/api/node_v1"
 	"github.com/layer-3/nitrolite/nitronode/api/user_v1"
@@ -22,26 +20,16 @@ type RPCRouter struct {
 	Node           rpc.Node
 	lg             log.Logger
 	runtimeMetrics metrics.RuntimeMetricExporter
-
-	rateLimitPerSec float64
-	rateLimitBurst  float64
 }
 
 type RPCRouterConfig struct {
-	NodeVersion  string
-	MinChallenge uint32
-	MaxChallenge uint32
-
-	AppRegistryEnabled        bool
-	MaxParticipants           int
-	MaxSessionDataLen         int
-	MaxAppMetadataLen         int
-	MaxRebalanceSignedUpdates int
-	MaxSessionKeyIDs          int
-	MaxSessionKeysPerUser     int
-
-	RateLimitPerSec float64
-	RateLimitBurst  float64
+	NodeVersion           string
+	MinChallenge          uint32
+	MaxChallenge          uint32
+	MaxParticipants       int
+	MaxSessionDataLen     int
+	MaxSessionKeyIDs      int
+	MaxSessionKeysPerUser int
 }
 
 func NewRPCRouter(
@@ -50,20 +38,16 @@ func NewRPCRouter(
 	signer sign.Signer,
 	dbStore database.DatabaseStore,
 	memoryStore memory.MemoryStore,
-	actionGateway action_gateway.ActionAllower,
 	runtimeMetrics metrics.RuntimeMetricExporter,
 	logger log.Logger,
 ) *RPCRouter {
 	r := &RPCRouter{
-		Node:            node,
-		lg:              logger.WithName("rpc-router"),
-		runtimeMetrics:  runtimeMetrics,
-		rateLimitPerSec: cfg.RateLimitPerSec,
-		rateLimitBurst:  cfg.RateLimitBurst,
+		Node:           node,
+		lg:             logger.WithName("rpc-router"),
+		runtimeMetrics: runtimeMetrics,
 	}
 
 	r.Node.Use(r.ObservabilityMiddleware)
-	r.Node.Use(r.RateLimitMiddleware)
 
 	// Transaction wrapper helpers for each store type.
 	// wrapWithMetrics executes fn inside a DB transaction with a metricStore wrapper,
@@ -85,9 +69,6 @@ func NewRPCRouter(
 	useAppSessionV1StoreInTx := func(h app_session_v1.StoreTxHandler) error {
 		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
 	}
-	useAppV1StoreInTx := func(h apps_v1.StoreTxHandler) error {
-		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
-	}
 	useUserV1StoreInTx := func(h user_v1.StoreTxHandler) error {
 		return wrapWithMetrics(func(ms *metricStore) error { return h(ms) })
 	}
@@ -102,12 +83,11 @@ func NewRPCRouter(
 		panic("failed to create channel wallet signer: " + err.Error())
 	}
 
-	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, cfg.MaxChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs, cfg.MaxSessionKeysPerUser)
-	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, actionGateway, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.AppRegistryEnabled, runtimeMetrics,
-		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxRebalanceSignedUpdates, cfg.MaxSessionKeysPerUser)
-	appsV1Handler := apps_v1.NewHandler(dbStore, useAppV1StoreInTx, actionGateway, cfg.MaxAppMetadataLen)
+	channelV1Handler := channel_v1.NewHandler(useChannelV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, cfg.MinChallenge, cfg.MaxChallenge, runtimeMetrics, cfg.MaxSessionKeyIDs, cfg.MaxSessionKeysPerUser)
+	appSessionV1Handler := app_session_v1.NewHandler(useAppSessionV1StoreInTx, memoryStore, nodeChannelSigner, stateAdvancer, statePacker, nodeAddress, runtimeMetrics,
+		cfg.MaxParticipants, cfg.MaxSessionDataLen, cfg.MaxSessionKeyIDs, cfg.MaxSessionKeysPerUser)
 	nodeV1Handler := node_v1.NewHandler(memoryStore, nodeAddress, cfg.NodeVersion)
-	userV1Handler := user_v1.NewHandler(dbStore, useUserV1StoreInTx, actionGateway)
+	userV1Handler := user_v1.NewHandler(dbStore, useUserV1StoreInTx)
 
 	appSessionV1Group := r.Node.NewGroup(rpc.AppSessionsV1Group.String())
 	appSessionV1Group.Handle(rpc.AppSessionsV1SubmitDepositStateMethod.String(), appSessionV1Handler.SubmitDepositState)
@@ -117,9 +97,6 @@ func NewRPCRouter(
 	appSessionV1Group.Handle(rpc.AppSessionsV1GetAppSessionsMethod.String(), appSessionV1Handler.GetAppSessions)
 	appSessionV1Group.Handle(rpc.AppSessionsV1SubmitSessionKeyStateMethod.String(), appSessionV1Handler.SubmitSessionKeyState)
 	appSessionV1Group.Handle(rpc.AppSessionsV1GetLastKeyStatesMethod.String(), appSessionV1Handler.GetLastKeyStates)
-	if cfg.MaxRebalanceSignedUpdates >= 2 {
-		appSessionV1Group.Handle(rpc.AppSessionsV1RebalanceAppSessionsMethod.String(), appSessionV1Handler.RebalanceAppSessions)
-	}
 
 	channelV1Group := r.Node.NewGroup(rpc.ChannelV1Group.String())
 	channelV1Group.Handle(rpc.ChannelsV1GetChannelsMethod.String(), channelV1Handler.GetChannels)
@@ -136,19 +113,9 @@ func NewRPCRouter(
 	nodeV1Group.Handle(rpc.NodeV1GetAssetsMethod.String(), nodeV1Handler.GetAssets)
 	nodeV1Group.Handle(rpc.NodeV1GetConfigMethod.String(), nodeV1Handler.GetConfig)
 
-	appsV1Group := r.Node.NewGroup(rpc.AppsV1Group.String())
-	if !cfg.AppRegistryEnabled {
-		appsV1Group.Use(func(c *rpc.Context) {
-			c.Fail(nil, "apps.v1 group is disabled")
-		})
-	}
-	appsV1Group.Handle(rpc.AppsV1GetAppsMethod.String(), appsV1Handler.GetApps)
-	appsV1Group.Handle(rpc.AppsV1SubmitAppVersionMethod.String(), appsV1Handler.SubmitAppVersion)
-
 	userV1Group := r.Node.NewGroup(rpc.UserV1Group.String())
 	userV1Group.Handle(rpc.UserV1GetBalancesMethod.String(), userV1Handler.GetBalances)
 	userV1Group.Handle(rpc.UserV1GetTransactionsMethod.String(), userV1Handler.GetTransactions)
-	userV1Group.Handle(rpc.UserV1GetActionAllowancesMethod.String(), userV1Handler.GetActionAllowances)
 
 	// Pre-publish per-method metric series at 0 so dashboards and absent()-style
 	// alerts have defined values before any traffic arrives. Must run after all

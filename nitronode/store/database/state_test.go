@@ -14,6 +14,17 @@ func TestState_TableName(t *testing.T) {
 	assert.Equal(t, "channel_states", state.TableName())
 }
 
+// storeLocked mirrors the production invariant for tests: callers lock the user balance row
+// (which creates it if absent) before storing a state. StoreUserState requires the balance
+// row to exist, so tests that exercise it as a setup primitive must establish it the same way.
+func storeLocked(t *testing.T, store DatabaseStore, state core.State, applicationID string) error {
+	t.Helper()
+	if _, err := store.LockUserState(state.UserWallet, state.Asset); err != nil {
+		return err
+	}
+	return store.StoreUserState(state, applicationID)
+}
+
 func TestDBStore_StoreUserState_ApplicationID(t *testing.T) {
 	newState := func(id string) core.State {
 		homeChannelID := "0xhomechannel123"
@@ -43,10 +54,8 @@ func TestDBStore_StoreUserState_ApplicationID(t *testing.T) {
 		defer cleanup()
 
 		store := NewDBStore(db)
-		_, err := store.LockUserState("0xuserapp", "USDC")
-		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(newState("state-app"), "my-app"))
+		require.NoError(t, storeLocked(t, store, newState("state-app"), "my-app"))
 
 		var dbState State
 		require.NoError(t, db.Where("id = ?", "state-app").First(&dbState).Error)
@@ -59,10 +68,8 @@ func TestDBStore_StoreUserState_ApplicationID(t *testing.T) {
 		defer cleanup()
 
 		store := NewDBStore(db)
-		_, err := store.LockUserState("0xuserapp", "USDC")
-		require.NoError(t, err)
 
-		require.NoError(t, store.StoreUserState(newState("state-noapp"), ""))
+		require.NoError(t, storeLocked(t, store, newState("state-noapp"), ""))
 
 		var dbState State
 		require.NoError(t, db.Where("id = ?", "state-noapp").First(&dbState).Error)
@@ -103,7 +110,7 @@ func TestDBStore_StoreUserState(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		// Verify state was stored
@@ -163,7 +170,7 @@ func TestDBStore_StoreUserState(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		// Verify state was stored
@@ -200,12 +207,43 @@ func TestDBStore_StoreUserState(t *testing.T) {
 			},
 		}
 
-		err := store.StoreUserState(state, "")
+		err := storeLocked(t, store, state, "")
 		require.NoError(t, err)
 
 		// Try to store again with same ID
-		err = store.StoreUserState(state, "")
+		err = storeLocked(t, store, state, "")
 		assert.Error(t, err)
+	})
+
+	t.Run("Error - No locked balance row", func(t *testing.T) {
+		db, cleanup := SetupTestDB(t)
+		defer cleanup()
+
+		store := NewDBStore(db)
+
+		homeChannelID := "0xhomechannel123"
+		state := core.State{
+			ID:            "state-nolock",
+			Asset:         "USDC",
+			UserWallet:    "0xuser123",
+			Epoch:         1,
+			Version:       1,
+			HomeChannelID: &homeChannelID,
+			Transition:    core.Transition{},
+			HomeLedger: core.Ledger{
+				UserBalance: decimal.NewFromInt(1000),
+				UserNetFlow: decimal.Zero,
+				NodeBalance: decimal.Zero,
+				NodeNetFlow: decimal.Zero,
+			},
+		}
+
+		// No LockUserState first: the user_balances row does not exist, so the balance
+		// update matches zero rows and StoreUserState must error. Callers wrap this in a
+		// transaction, so the error rolls back the orphaned state row.
+		err := store.StoreUserState(state, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected 1 row affected")
 	})
 }
 
@@ -263,8 +301,8 @@ func TestDBStore_GetLastUserState(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		// Get last state
 		result, err := store.GetLastUserState("0xuser123", "USDC", false)
@@ -334,8 +372,8 @@ func TestDBStore_GetLastUserState(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		// Get last signed state should return state2
 		result, err := store.GetLastUserState("0xuser123", "USDC", true)
@@ -411,8 +449,8 @@ func TestDBStore_GetLastUserState(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		// Get last state - should prioritize higher epoch
 		result, err := store.GetLastUserState("0xuser123", "USDC", false)
@@ -463,7 +501,7 @@ func TestDBStore_GetLastStateByChannelID(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetLastStateByChannelID(homeChannelID, false)
 		require.NoError(t, err)
@@ -530,7 +568,7 @@ func TestDBStore_GetLastStateByChannelID(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetLastStateByChannelID(escrowChannelID, false)
 		require.NoError(t, err)
@@ -601,8 +639,8 @@ func TestDBStore_GetLastStateByChannelID(t *testing.T) {
 			NodeSig: &nodeSig,
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		result, err := store.GetLastStateByChannelID(homeChannelID, true)
 		require.NoError(t, err)
@@ -679,8 +717,8 @@ func TestDBStore_GetStateByChannelIDAndVersion(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state1, ""))
-		require.NoError(t, store.StoreUserState(state2, ""))
+		require.NoError(t, storeLocked(t, store, state1, ""))
+		require.NoError(t, storeLocked(t, store, state2, ""))
 
 		// Get version 1
 		result, err := store.GetStateByChannelIDAndVersion(homeChannelID, 1)
@@ -757,7 +795,7 @@ func TestDBStore_GetStateByChannelIDAndVersion(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetStateByChannelIDAndVersion(escrowChannelID, 5)
 		require.NoError(t, err)
@@ -806,7 +844,7 @@ func TestDBStore_GetStateByChannelIDAndVersion(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, store.StoreUserState(state, ""))
+		require.NoError(t, storeLocked(t, store, state, ""))
 
 		result, err := store.GetStateByChannelIDAndVersion(homeChannelID, 999)
 		require.NoError(t, err)

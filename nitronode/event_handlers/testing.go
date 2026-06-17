@@ -97,12 +97,6 @@ func (m *MockStore) RefreshUserEnforcedBalance(wallet, asset string) error {
 	return args.Error(0)
 }
 
-// UpdateUserStaked mocks updating the total staked amount for a user
-func (m *MockStore) UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error {
-	args := m.Called(wallet, blockchainID, amount)
-	return args.Error(0)
-}
-
 // UpdateStateSigsIfMissing mocks backfilling missing user and/or node signatures
 // for a stored state.
 func (m *MockStore) UpdateStateSigsIfMissing(channelID string, version uint64, userSig, nodeSig string) error {
@@ -123,12 +117,21 @@ func (m *MockStore) LockUserState(wallet, asset string) (decimal.Decimal, error)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
 }
 
+// LockUserStateForHomeChannel mocks locking the balance row of the channel owner and
+// returning the channel read under that lock.
+func (m *MockStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	args := m.Called(channelID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Channel), args.Error(1)
+}
+
 // HasSignedFinalize mocks the existence check for a node-signed Finalize state on the given home channel.
 func (m *MockStore) HasSignedFinalize(channelID string) (bool, error) {
 	args := m.Called(channelID)
 	return args.Bool(0), args.Error(1)
 }
-
 
 // StoreUserState mocks persisting a user state row.
 func (m *MockStore) StoreUserState(state core.State, applicationID string) error {

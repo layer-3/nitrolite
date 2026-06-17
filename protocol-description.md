@@ -154,6 +154,14 @@ These changes are reflected only in cumulative net flows until enforced on-chain
 
 ---
 
+### App session closure and participant atomicity
+
+Closing an app session distributes locked allocations back to each participant by issuing a new release receive-state on every participant's home channel. The operation is **atomic across all participants** — if the Node cannot issue a release for any one participant, the entire close aborts.
+
+In particular, the Node refuses to issue a release to a recipient whose latest signed state encodes an escrow operation that the off-chain gate (`EnsureNoOngoingEscrowOperation`) does not yet treat as safely settled — covering any pending `escrow_lock`/`mutual_lock`, plus `escrow_deposit` or `escrow_withdraw` states the gate still treats as unsafe (broadly, those whose on-chain escrow channel has not caught up, with a narrow one-version-behind allowance for `escrow_deposit` during normal finalize/purge transitions). A single such participant blocks cooperative closure for everyone else in the session until their escrow resolves. See [`contracts/SECURITY.md`](contracts/SECURITY.md) Behavior rule 8 for the full rationale and recovery paths.
+
+---
+
 ## On-chain protocol (enforcement plane)
 
 The on-chain contract is the **final arbiter** of correctness.
@@ -630,6 +638,8 @@ On-chain fund accounting is correct in both cases — each chain pays from its o
   * Combined gas limiting + reclaim pattern ensures channel operations continue regardless of transfer success.
 
 * **Node trust for off-chain transfer routing**: Off-chain transfers between parties are routed through the Node. The sender signs a state where their allocation decreases; the Node is expected to countersign it and also countersign a corresponding credit state for the receiver. The on-chain contract cannot enforce atomicity between two independent channel updates. A malicious Node could apply the sender's state while withholding the receiver's credit, effectively capturing the transferred funds. Users must trust the Node to faithfully execute both legs of every off-chain transfer.
+
+* **Asset-symbol equivalence**: All tokens configured under one asset symbol are treated as fully fungible 1:1 representations, so off-chain credit can be redeemed from any token inventory sharing that symbol. The Node operator MUST configure only economically equivalent (1:1 redeemable) tokens under a single symbol; equivalence cannot be verified programmatically and is an operator configuration responsibility.
 
 ---
 

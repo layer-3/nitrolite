@@ -82,7 +82,7 @@ func TestGetLatestContractEventBlockNumber(t *testing.T) {
 	})
 }
 
-func TestIsContractEventPresent(t *testing.T) {
+func TestIsContractEventProcessed(t *testing.T) {
 	db, cleanup := SetupTestDB(t)
 	defer cleanup()
 
@@ -100,38 +100,32 @@ func TestIsContractEventPresent(t *testing.T) {
 	require.NoError(t, store.StoreContractEvent(ev))
 
 	t.Run("existing event returns true", func(t *testing.T) {
-		present, err := store.IsContractEventPresent(1, 500, ev.TransactionHash, 3)
+		present, err := store.IsContractEventProcessed(ev.TransactionHash, 3, 1)
 		require.NoError(t, err)
 		assert.True(t, present)
 	})
 
 	t.Run("case-insensitive txHash match", func(t *testing.T) {
 		// Query with uppercase — stored value was lowercased by StoreContractEvent
-		present, err := store.IsContractEventPresent(1, 500, "0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890", 3)
+		present, err := store.IsContractEventProcessed("0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890", 3, 1)
 		require.NoError(t, err)
 		assert.True(t, present)
 	})
 
-	t.Run("wrong block number returns false", func(t *testing.T) {
-		present, err := store.IsContractEventPresent(1, 501, ev.TransactionHash, 3)
-		require.NoError(t, err)
-		assert.False(t, present)
-	})
-
 	t.Run("wrong log index returns false", func(t *testing.T) {
-		present, err := store.IsContractEventPresent(1, 500, ev.TransactionHash, 4)
+		present, err := store.IsContractEventProcessed(ev.TransactionHash, 4, 1)
 		require.NoError(t, err)
 		assert.False(t, present)
 	})
 
 	t.Run("wrong blockchain returns false", func(t *testing.T) {
-		present, err := store.IsContractEventPresent(2, 500, ev.TransactionHash, 3)
+		present, err := store.IsContractEventProcessed(ev.TransactionHash, 3, 2)
 		require.NoError(t, err)
 		assert.False(t, present)
 	})
 
 	t.Run("wrong txHash returns false", func(t *testing.T) {
-		present, err := store.IsContractEventPresent(1, 500, "0x0000000000000000000000000000000000000000000000000000000000000000", 3)
+		present, err := store.IsContractEventProcessed("0x0000000000000000000000000000000000000000000000000000000000000000", 3, 1)
 		require.NoError(t, err)
 		assert.False(t, present)
 	})

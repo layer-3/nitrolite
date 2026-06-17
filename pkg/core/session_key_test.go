@@ -135,6 +135,50 @@ func TestValidateChannelSessionKeyStateV1(t *testing.T) {
 	assert.Error(t, ValidateChannelSessionKeyStateV1(stateTampered))
 }
 
+func TestValidateChannelSessionKeyStateUserSigV1(t *testing.T) {
+	t.Parallel()
+	userSigner, userAddress := createSigner(t)
+	_, sessionKeyAddr := createSigner(t)
+
+	version := uint64(1)
+	assets := []string{}
+	expiresAt := time.Now().Add(-time.Hour) // revocation
+
+	metadataHash, err := GetChannelSessionKeyAuthMetadataHashV1(userAddress, version, assets, expiresAt.Unix())
+	require.NoError(t, err)
+	packed, err := PackChannelKeyStateV1(sessionKeyAddr, metadataHash)
+	require.NoError(t, err)
+	userSig, err := userSigner.Sign(packed)
+	require.NoError(t, err)
+
+	state := ChannelSessionKeyStateV1{
+		UserAddress: userAddress,
+		SessionKey:  sessionKeyAddr,
+		Version:     version,
+		Assets:      assets,
+		ExpiresAt:   expiresAt,
+		UserSig:     hexutil.Encode(userSig),
+	}
+
+	// Valid user_sig alone passes — no session_key_sig required on the revocation path.
+	require.NoError(t, ValidateChannelSessionKeyStateUserSigV1(state))
+
+	// user_sig signed by the wrong wallet is rejected.
+	wrongSigner, _ := createSigner(t)
+	wrongUserSig, err := wrongSigner.Sign(packed)
+	require.NoError(t, err)
+	stateWrongUser := state
+	stateWrongUser.UserSig = hexutil.Encode(wrongUserSig)
+	err = ValidateChannelSessionKeyStateUserSigV1(stateWrongUser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match wallet")
+
+	// Tampered version diverges the packed bytes, so recovery no longer matches.
+	stateTampered := state
+	stateTampered.Version = 2
+	assert.Error(t, ValidateChannelSessionKeyStateUserSigV1(stateTampered))
+}
+
 // TestValidateChannelSessionKeyStateV1_NoReplay verifies that signatures cannot be replayed
 // across (wallet, session_key) pairs. session_key binds the packed payload and user_address
 // binds the metadata hash, so substituting either dimension causes signature recovery to

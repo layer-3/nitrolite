@@ -15,21 +15,30 @@ func NewNoopLogger() Logger {
 
 // Debug implements Logger.Debug but performs no operation.
 func (n NoopLogger) Debug(msg string, keysAndValues ...any) {}
+
 // Info implements Logger.Info but performs no operation.
-func (n NoopLogger) Info(msg string, keysAndValues ...any)  {}
+func (n NoopLogger) Info(msg string, keysAndValues ...any) {}
+
 // Warn implements Logger.Warn but performs no operation.
-func (n NoopLogger) Warn(msg string, keysAndValues ...any)  {}
+func (n NoopLogger) Warn(msg string, keysAndValues ...any) {}
+
 // Error implements Logger.Error but performs no operation.
 func (n NoopLogger) Error(msg string, keysAndValues ...any) {}
+
 // Fatal implements Logger.Fatal but performs no operation.
 func (n NoopLogger) Fatal(msg string, keysAndValues ...any) {}
+
 // WithKV implements Logger.WithKV but returns the same NoopLogger instance.
-func (n NoopLogger) WithKV(key string, value any) Logger    { return n }
+func (n NoopLogger) WithKV(key string, value any) Logger { return n }
+
 // GetAllKV implements Logger.GetAllKV and returns an empty slice.
-func (n NoopLogger) GetAllKV() []any                        { return []any{} }
+func (n NoopLogger) GetAllKV() []any { return []any{} }
+
 // WithName implements Logger.WithName but returns the same NoopLogger instance.
-func (n NoopLogger) WithName(name string) Logger            { return n }
+func (n NoopLogger) WithName(name string) Logger { return n }
+
 // Name implements Logger.Name and always returns "noop".
-func (n NoopLogger) Name() string                           { return "noop" }
+func (n NoopLogger) Name() string { return "noop" }
+
 // AddCallerSkip implements Logger.AddCallerSkip but returns the same NoopLogger instance.
-func (n NoopLogger) AddCallerSkip(skip int) Logger          { return n }
+func (n NoopLogger) AddCallerSkip(skip int) Logger { return n }

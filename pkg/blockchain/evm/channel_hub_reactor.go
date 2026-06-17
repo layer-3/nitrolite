@@ -81,6 +81,13 @@ type ChannelHubReactorStore interface {
 	// in tests.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID and
+	// returns the channel read under that lock, deriving the lock key from the channel in
+	// SQL so no stale pre-lock snapshot is used. Event handlers must use this instead of a
+	// GetChannelByID + LockUserState pair, which reads channel status before the lock and
+	// races a concurrent submit_state finalization. Returns nil if the channel is absent.
+	LockUserStateForHomeChannel(channelID string) (*core.Channel, error)
+
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored
 	// state when the corresponding column is currently NULL. Either signature may be
 	// empty to skip that side.
@@ -89,7 +96,6 @@ type ChannelHubReactorStore interface {
 	// HasSignedFinalize reports whether a node-signed Finalize state exists for the given
 	// home channel.
 	HasSignedFinalize(channelID string) (bool, error)
-
 
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
@@ -106,6 +112,12 @@ type ChannelHubReactorStore interface {
 
 	// StoreContractEvent persists a blockchain event to the database.
 	StoreContractEvent(ev core.BlockchainEvent) error
+
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	// NOTE: uses block-level logIndex — does not detect reorged events where the same tx
+	// re-mines with a different block-level log position (see nitronode/docs/reorg-fix.md §6.6).
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
 }
 
 var channelHubAbi *abi.ABI
@@ -142,17 +154,27 @@ type ChannelHubReactor struct {
 	nodeAddress      string
 	eventHandler     core.ChannelHubEventHandler
 	assetStore       AssetStore
+	store            ChannelHubReactorStore // non-transactional; used for the pre-check in HandleEvent
 	useStoreInTx     ChannelHubReactorStoreTxProvider
+	channelHubReader core.ReadOnlyChannelHub
 	onEventProcessed func(blockchainID uint64, success bool)
 }
 
-func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider) *ChannelHubReactor {
+// NewChannelHubReactor wires a reactor for a single chain. store backs the
+// non-transactional pre-check in HandleEvent (event-already-processed dedup
+// gate). channelHubReader is the read-only ChannelHub view for this reactor's
+// chain; it is threaded into the home-channel guard-drop handlers so they can
+// converge the Node row with chain when a version-regression guard drops an
+// event.
+func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider, store ChannelHubReactorStore, channelHubReader core.ReadOnlyChannelHub) *ChannelHubReactor {
 	return &ChannelHubReactor{
-		blockchainID: blockchainID,
-		nodeAddress:  nodeAddress,
-		eventHandler: eventHandler,
-		assetStore:   assetStore,
-		useStoreInTx: useStoreInTx,
+		blockchainID:     blockchainID,
+		nodeAddress:      nodeAddress,
+		eventHandler:     eventHandler,
+		assetStore:       assetStore,
+		store:            store,
+		useStoreInTx:     useStoreInTx,
+		channelHubReader: channelHubReader,
 	}
 }
 
@@ -161,7 +183,13 @@ func (r *ChannelHubReactor) SetOnEventProcessed(fn func(blockchainID uint64, suc
 	r.onEventProcessed = fn
 }
 
-func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error {
+func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) (err error) {
+	defer func() {
+		if r.onEventProcessed != nil {
+			r.onEventProcessed(r.blockchainID, err == nil)
+		}
+	}()
+
 	logger := log.FromContext(ctx)
 
 	eventID := l.Topics[0]
@@ -172,7 +200,22 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 	}
 	logger.Debug("received event", "name", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 
-	err := r.useStoreInTx(func(store ChannelHubReactorStore) error {
+	// Pre-check: skip already-committed events without opening a transaction.
+	// This converts the constraint-violation rollback path into a clean early exit and
+	// is required for the reconciliation walk (§4.4) to replay events without errors.
+	// Reorged events with a changed block-level logIndex pass through this check;
+	// they are handled by the reactor's business-logic idempotency (see nitronode/docs/reorg-fix.md §6.6).
+	processed, err := r.store.IsContractEventProcessed(l.TxHash.String(), uint32(l.Index), r.blockchainID)
+	if err != nil {
+		return errors.Wrap(err, "pre-check IsContractEventProcessed failed")
+	}
+	if processed {
+		logger.Info("skipping re-delivered event, already committed",
+			"event", eventName, "txHash", l.TxHash.String(), "logIndex", l.Index, "chainID", r.blockchainID)
+		return nil
+	}
+
+	err = r.useStoreInTx(func(store ChannelHubReactorStore) error {
 		var err error
 		switch eventID {
 		case channelHubAbi.Events["NodeBalanceUpdated"].ID:
@@ -239,6 +282,7 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 			ContractAddress: l.Address.Hex(),
 			TransactionHash: l.TxHash.String(),
 			LogIndex:        uint32(l.Index),
+			BlockHash:       l.BlockHash.Hex(),
 		}); err != nil {
 			logger.Warn("error storing contract event", "error", err, "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 			return errors.Wrap(err, "error storing contract event")
@@ -247,9 +291,6 @@ func (r *ChannelHubReactor) HandleEvent(ctx context.Context, l types.Log) error 
 		logger.Info("processed event", "event", eventName, "blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
 		return nil
 	})
-	if r.onEventProcessed != nil {
-		r.onEventProcessed(r.blockchainID, err == nil)
-	}
 	return err
 }
 
@@ -261,11 +302,17 @@ func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store 
 
 	asset, err := r.assetStore.GetTokenAsset(r.blockchainID, event.Token.String())
 	if err != nil {
+		if r.skipIfUnsupportedToken(ctx, err, event.Token, l) {
+			return nil
+		}
 		return errors.Wrap(err, "failed to get token asset")
 	}
 
 	decimals, err := r.assetStore.GetTokenDecimals(r.blockchainID, event.Token.String())
 	if err != nil {
+		if r.skipIfUnsupportedToken(ctx, err, event.Token, l) {
+			return nil
+		}
 		return errors.Wrap(err, "failed to get token decimals")
 	}
 
@@ -277,6 +324,26 @@ func (r *ChannelHubReactor) handleNodeBalanceUpdated(ctx context.Context, store 
 		Balance:      balance,
 	}
 	return r.eventHandler.HandleNodeBalanceUpdated(ctx, store, &ev)
+}
+
+// skipIfUnsupportedToken reports whether a NodeBalanceUpdated lookup error is an
+// unsupported-token error that should be skipped rather than treated as fatal.
+// Anyone can deposit an arbitrary ERC20 via depositToNode(), so an event for an
+// unconfigured token (or a chain with no configured tokens) must not stop the
+// listener. The caller returns nil so HandleEvent records the event and it is
+// not replayed.
+//
+// Note: this is a dedup record, not a replay queue. Once an event is recorded as
+// skipped, the balance change is NOT re-applied if the operator later configures
+// that token — a legitimate new asset requires a manual resync.
+func (r *ChannelHubReactor) skipIfUnsupportedToken(ctx context.Context, err error, token common.Address, l types.Log) bool {
+	if !errors.Is(err, core.ErrTokenNotSupported) {
+		return false
+	}
+	log.FromContext(ctx).Warn("skipping NodeBalanceUpdated for unsupported token",
+		"token", token.String(), "blockchainID", r.blockchainID,
+		"blockNumber", l.BlockNumber, "txHash", l.TxHash.String(), "logIndex", l.Index)
+	return true
 }
 
 func (r *ChannelHubReactor) handleHomeChannelCreated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -325,7 +392,7 @@ func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, s
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -339,7 +406,7 @@ func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store Ch
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -353,7 +420,7 @@ func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store Ch
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -368,7 +435,7 @@ func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, sto
 		ChallengeExpiry: event.ChallengeExpireAt,
 		UserSig:         encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -382,7 +449,7 @@ func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store C
 		StateVersion: event.FinalState.Version,
 		UserSig:      encodeSig(event.FinalState.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelClosed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelClosed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -482,7 +549,7 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Conte
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -496,7 +563,7 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Conte
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -510,7 +577,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Co
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -524,7 +591,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Co
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 // Additional event handlers for events not yet defined in core.BlockchainEventHandler

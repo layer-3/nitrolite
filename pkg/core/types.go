@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -135,8 +136,24 @@ func NewChannel(channelID, userWallet, asset string, ChType ChannelType, blockch
 		ChallengeDuration:     challenge,
 		ApprovedSigValidators: approvedSigValidators,
 		Status:                ChannelStatusVoid,
-		StateVersion:          0,
+		StateVersion:          0, // 0 means "channel created but no on-chain state has materialised yet"
 	}
+}
+
+// OnChainChannelSnapshot carries the authoritative on-chain channel snapshot
+// returned by ReadOnlyChannelHub.FetchChannel and used to converge a Node row
+// that has diverged from chain.
+//
+// The snapshot reflects on-chain state at RPC-read time, not event-emit time:
+// the contract may have advanced the channel through additional transitions
+// between when the dropped event was emitted and when the refresh RPC ran. The
+// Node row may therefore briefly skip an intermediate status it never observed,
+// but it will always converge to a status the chain currently asserts.
+type OnChainChannelSnapshot struct {
+	Status             ChannelStatus // mapped from on-chain ChannelStatus enum
+	StateVersion       uint64        // from ChannelMeta.lastState.version
+	ChallengeExpiresAt *time.Time    // nil if no active challenge (on-chain expiry is zero)
+	LastStateUserSig   string        // hex-encoded user signature for UpdateStateSigsIfMissing backfill; empty when chain has no sig populated
 }
 
 // ChannelDefinition represents configuration for creating a channel
@@ -179,9 +196,11 @@ func NewVoidState(asset, userWallet string) *State {
 // user against closedChannelID. Placement depends on prev:
 //
 //   - prev is in-channel (HomeChannelID != nil): the rescue opens a fresh epoch at
-//     (prev.Epoch+1, version=0) with a clean ledger seeded by amount. Used when no
+//     (prev.Epoch+1, version=1) with a clean ledger seeded by amount. Used when no
 //     node-signed Finalize exists locally for the closed channel — the user's chain
-//     has not been advanced past prev yet.
+//     has not been advanced past prev yet. Version=1 (not 0) mirrors NextState()'s
+//     post-Finalize convention so version=0 stays reserved as the "no on-chain state
+//     materialised yet" sentinel.
 //
 //   - prev is detached (HomeChannelID == nil): the rescue appends at (prev.Epoch,
 //     prev.Version+1), inheriting prev's ledger and adding amount on top. Used after
@@ -218,11 +237,13 @@ func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.
 		}
 	} else {
 		// In-channel prev: wrap to a fresh epoch with a clean ledger seeded by amount.
+		// Version=1 (not 0) keeps the post-Finalize convention so version=0 stays
+		// reserved as the "no on-chain state materialised yet" sentinel.
 		rescue = &State{
 			Asset:      prev.Asset,
 			UserWallet: prev.UserWallet,
 			Epoch:      prev.Epoch + 1,
-			Version:    0,
+			Version:    1,
 			HomeLedger: Ledger{
 				UserBalance: amount,
 				UserNetFlow: decimal.Zero,
@@ -244,11 +265,17 @@ func NewChallengeRescueState(prev State, closedChannelID string, amount decimal.
 func (state State) NextState() *State {
 	var nextState *State
 	if state.IsFinal() {
+		// Post-Finalize epochs start at Version: 1 — Version: 0 is reserved as a
+		// sentinel for "channel created but no on-chain state has materialised yet"
+		// (see NewChannel: StateVersion=0). Starting the fresh epoch at 1 prevents
+		// the EnsureNoOngoingStateTransitions gate from accidentally treating a
+		// Void channel's first signed HomeDeposit (state.version == channel.state_version == 0)
+		// as already settled on-chain.
 		nextState = &State{
 			Asset:           state.Asset,
 			UserWallet:      state.UserWallet,
 			Epoch:           state.Epoch + 1,
-			Version:         0,
+			Version:         1,
 			HomeChannelID:   nil,
 			EscrowChannelID: nil,
 			HomeLedger: Ledger{
@@ -729,9 +756,8 @@ const (
 
 	TransactionTypeTransfer TransactionType = 30
 
-	TransactionTypeCommit    TransactionType = 40
-	TransactionTypeRelease   TransactionType = 41
-	TransactionTypeRebalance TransactionType = 42
+	TransactionTypeCommit  TransactionType = 40
+	TransactionTypeRelease TransactionType = 41
 
 	TransactionTypeMigrate    TransactionType = 100
 	TransactionTypeEscrowLock TransactionType = 110
@@ -767,8 +793,6 @@ func (t TransactionType) String() string {
 		return "escrow_withdraw"
 	case TransactionTypeMigrate:
 		return "migrate"
-	case TransactionTypeRebalance:
-		return "rebalance"
 	case TransactionTypeFinalize:
 		return "finalize"
 	case TransactionTypeChallengeRescue:
@@ -879,12 +903,12 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 		toAccount = transition.AccountID
 
 	case TransitionTypeRelease:
-		txType = TransactionTypeRelease
-		fromAccount = transition.AccountID
-		toAccount = receiverState.UserWallet
 		if receiverState == nil {
 			return nil, fmt.Errorf("receiver state must not be nil for 'release' transition")
 		}
+		txType = TransactionTypeRelease
+		fromAccount = transition.AccountID
+		toAccount = receiverState.UserWallet
 
 	case TransitionTypeMutualLock:
 		if senderState.EscrowChannelID == nil || senderState.HomeChannelID == nil {
@@ -928,16 +952,18 @@ func NewTransactionFromTransition(senderState *State, receiverState *State, tran
 	}
 
 	var receiverStateID *string
-	var txID string
-	var err error
 	if receiverState != nil {
 		receiverStateID = &receiverState.ID
-		txID, err = GetReceiverTransactionID(fromAccount, receiverState.ID)
-	} else {
-		txID, err = GetSenderTransactionID(toAccount, senderState.ID)
 	}
-	if err != nil {
-		return nil, err
+
+	// The transaction ID must equal the transition's TxID so that the transition
+	// row references this transaction. For transfers, the sender's TransferSend and
+	// the receiver's TransferReceive share the same TxID, so both must point at this
+	// single transaction. The TxID is canonicalised and validated in the state
+	// advancer, making it the single source of truth.
+	txID := transition.TxID
+	if txID == "" {
+		return nil, fmt.Errorf("transition has empty txID")
 	}
 
 	return NewTransaction(
@@ -1043,15 +1069,6 @@ func (t TransitionType) String() string {
 	}
 }
 
-func (t TransitionType) GatedAction() GatedAction {
-	switch t {
-	case TransitionTypeTransferSend:
-		return GatedActionTransfer
-	default:
-		return ""
-	}
-}
-
 // Transition represents a state transition
 type Transition struct {
 	Type      TransitionType  `json:"type"`       // Type of state transition
@@ -1089,11 +1106,11 @@ func (t1 Transition) Equal(t2 Transition) error {
 
 // Blockchain represents information about a supported blockchain network
 type Blockchain struct {
-	Name                   string `json:"name"`                     // Blockchain name
-	ID                     uint64 `json:"id"`                       // Blockchain network ID
-	ChannelHubAddress      string `json:"channel_hub_address"`      // Address of the ChannelHub contract on this blockchain
-	LockingContractAddress string `json:"locking_contract_address"` // Address of the Locking contract on this blockchain
-	BlockStep              uint64 `json:"block_step"`               // Number of blocks between each channel update
+	Name                  string `json:"name"`                    // Blockchain name
+	ID                    uint64 `json:"id"`                      // Blockchain network ID
+	ChannelHubAddress     string `json:"channel_hub_address"`     // Address of the ChannelHub contract on this blockchain
+	BlockStep             uint64 `json:"block_step"`              // Number of blocks between each channel update
+	ConfirmationDelaySecs uint32 `json:"confirmation_delay_secs"` // Seconds to wait before processing an event (0 = immediate)
 }
 
 // Asset represents information about a supported asset
@@ -1112,63 +1129,6 @@ type Token struct {
 	Address      string `json:"address"`       // Token contract address
 	BlockchainID uint64 `json:"blockchain_id"` // Blockchain network ID
 	Decimals     uint8  `json:"decimals"`      // Number of decimal places
-}
-
-// GatedAction represents an action that can be gated behind certain conditions, such as feature flags or access controls.
-type GatedAction string
-
-var (
-	GatedActionTransfer GatedAction = "transfer"
-
-	GatedActionAppSessionCreation   GatedAction = "app_session_creation"
-	GatedActionAppSessionOperation  GatedAction = "app_session_operation"
-	GatedActionAppSessionDeposit    GatedAction = "app_session_deposit"
-	GatedActionAppSessionWithdrawal GatedAction = "app_session_withdrawal"
-)
-
-// ID returns a unique identifier for the GatedAction, which can be used for efficient storage and retrieval in databases or feature flag systems.
-func (g GatedAction) ID() uint8 {
-	switch g {
-	case GatedActionTransfer:
-		return 1
-	case GatedActionAppSessionCreation:
-		return 10
-	case GatedActionAppSessionOperation:
-		return 11
-	case GatedActionAppSessionDeposit:
-		return 12
-	case GatedActionAppSessionWithdrawal:
-		return 13
-	}
-	return 0
-}
-
-// GatedActionFromID returns the GatedAction corresponding to the given uint8 ID.
-// Returns an empty GatedAction and false if the ID is unknown.
-func GatedActionFromID(id uint8) (GatedAction, bool) {
-	switch id {
-	case 1:
-		return GatedActionTransfer, true
-	case 10:
-		return GatedActionAppSessionCreation, true
-	case 11:
-		return GatedActionAppSessionOperation, true
-	case 12:
-		return GatedActionAppSessionDeposit, true
-	case 13:
-		return GatedActionAppSessionWithdrawal, true
-	default:
-		return "", false
-	}
-}
-
-// ActionAllowance represents the allowance information for a specific gated action,
-// including the time window for which the allowance applies, the total allowance, and the amount used.
-type ActionAllowance struct {
-	GatedAction GatedAction
-	TimeWindow  string
-	Allowance   uint64
-	Used        uint64
 }
 
 // ========= Blockchain CLient Response Types =========
@@ -1201,8 +1161,8 @@ type EscrowWithdrawalDataResponse struct {
 
 // BalanceEntry represents a balance entry for an asset
 type BalanceEntry struct {
-	Asset   string          `json:"asset"`   // Asset symbol
-	Balance decimal.Decimal `json:"balance"` // Balance amount
+	Asset    string          `json:"asset"`    // Asset symbol
+	Balance  decimal.Decimal `json:"balance"`  // Balance amount
 	Enforced decimal.Decimal `json:"enforced"` // On-chain enforced balance
 }
 
@@ -1214,6 +1174,7 @@ type PaginationParams struct {
 }
 
 // GetOffsetAndLimit extracts offset and limit from pagination params with defaults and max limit enforcement.
+// A limit of 0 is treated the same as an absent limit: the defaultLimit is used.
 func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (offset, limit uint32) {
 	offset = 0
 	limit = defaultLimit
@@ -1222,10 +1183,16 @@ func (p *PaginationParams) GetOffsetAndLimit(defaultLimit, maxLimit uint32) (off
 		if p.Offset != nil {
 			offset = *p.Offset
 		}
-		if p.Limit != nil {
+		if p.Limit != nil && *p.Limit > 0 {
 			limit = min(*p.Limit, maxLimit)
 		}
 	}
+
+	// Callers convert offset to int before handing it to GORM's Offset(). On a
+	// 32-bit target int(offset) wraps to a negative value for large uint32s,
+	// which GORM treats as "no offset" and silently returns the first page.
+	// Clamp to MaxInt32 so the conversion is always a non-negative int.
+	offset = min(offset, math.MaxInt32)
 
 	return offset, limit
 }

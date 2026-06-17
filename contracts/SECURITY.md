@@ -74,6 +74,13 @@ Unlike the `CHALLENGED` channel path (rule 6) — where the release issuer **doe
 Invariant:
 > A single participant with a pending escrow operation can block cooperative closure of an app session for all other participants until the escrow resolves; no participant receives a release credit while the close is blocked.
 
+---
+
+9. The Node processes on-chain channel-lifecycle events with per-channel version monotonicity. An event whose `StateVersion` is strictly less than the row's current `StateVersion` is dropped with a structured warn log (see `nitronode/event_handlers/service.go`). For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers an on-chain `getChannelData` read via the `ChainStateRefresher` (`pkg/blockchain/evm/chain_state_refresher.go`, interface in `pkg/core/interface.go`) that overwrites the local row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. This is defense-in-depth against out-of-order event delivery from indexer mis-order, reorg replay, or any future contract change that re-introduces a same-transaction event-order quirk. Escrow event handlers enforce the guard without the refresh hook; cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
+
+Invariant:
+> The Node's local `channels.state_version` is monotonic per `channelId`. After any dropped lifecycle event for a home channel, the Node row converges with on-chain authoritative state without manual intervention.
+
 ## Invariants
 
 ---
@@ -205,6 +212,12 @@ no funds can be permanently locked if it does.
 23. **Enforcement determinism**: Enforcing the same `(prevState, candidateState)` pair always yields the same on-chain result.
 24. **Invariant preservation**: Every state transition that can be enforced on-chain preserves all invariants listed above.
 25. **Latest-state dominance**: The economically correct outcome is always determined by the latest valid signed state, regardless of enforcement order.
+
+---
+
+### Reentrancy
+
+26. **Lifecycle reentrancy guard**: Every external/public function in `ChannelHub` that mutates lifecycle state is guarded by `nonReentrant` modifier. This prevents cross-function reentrancy via inbound token hooks (ERC777-style `tokensReceived`, non-standard `transferFrom` callbacks) from interleaving lifecycle operations during a `_pullFunds` call. The outbound side remains additionally protected by the `TRANSFER_GAS_LIMIT = 100_000` cap, which prevents recipient hooks from completing a reentrant lifecycle call within the forwarded gas budget.
 
 ---
 
@@ -562,6 +575,8 @@ Inbound transfer failures occur during:
 - Escrow deposit initiation (INITIATE_ESCROW_DEPOSIT on non-home chain)
 
 **Mitigation**: The Nitronode only processes operations after observing successful on-chain events. If a user signs a deposit state but the transfer fails on-chain, the state is never enforced, and the Node does not provide services based on unconfirmed deposits.
+
+**Reentrancy via inbound hooks**: Tokens whose `transferFrom` invokes a recipient hook (ERC777-style `tokensReceived`, ERC1363 callbacks, or non-standard ERC20 implementations) could in principle re-enter `ChannelHub` lifecycle entrypoints during an inbound pull. The `nonReentrant` guard on every lifecycle entrypoint blocks this class of attack at the contract layer — see invariant 26 above and `contracts/src/ChannelHub.sol`. Coverage splits by deployment vintage: future deployments built from commit `2a6a9f0d` or later carry the guard and are protected at the contract layer; currently-deployed contracts at the addresses listed in `contracts/deployments/HOOK-TOKEN-COMPATIBILITY.md` predate the guard and are protected only by the off-chain "no hook-bearing tokens" onboarding policy enforced by the Node operator.
 
 ---
 

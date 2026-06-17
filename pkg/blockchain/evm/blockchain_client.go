@@ -3,6 +3,7 @@ package evm
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -15,6 +16,13 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
 )
+
+// RpcCallTimeout bounds the wall-clock duration of a single EVM RPC call.
+// Used by per-operation `context.WithTimeout` wrappers across the package
+// (e.g. ChannelHub reads, startup chain-ID / contract-version checks). 5s
+// stays well above realistic call latency on slow public RPCs while
+// preventing a hung endpoint from blocking the caller indefinitely.
+const RpcCallTimeout = 5 * time.Second
 
 var _ core.BlockchainClient = &BlockchainClient{}
 

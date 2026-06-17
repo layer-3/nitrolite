@@ -346,4 +346,3 @@ func GenerateAppSessionIDV1(definition AppDefinitionV1) (string, error) {
 	// Return the Keccak256 hash as hex string
 	return crypto.Keccak256Hash(packed).Hex(), nil
 }
-

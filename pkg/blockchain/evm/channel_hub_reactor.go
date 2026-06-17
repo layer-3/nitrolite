@@ -156,17 +156,25 @@ type ChannelHubReactor struct {
 	assetStore       AssetStore
 	store            ChannelHubReactorStore // non-transactional; used for the pre-check in HandleEvent
 	useStoreInTx     ChannelHubReactorStoreTxProvider
+	channelHubReader core.ReadOnlyChannelHub
 	onEventProcessed func(blockchainID uint64, success bool)
 }
 
-func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider, store ChannelHubReactorStore) *ChannelHubReactor {
+// NewChannelHubReactor wires a reactor for a single chain. store backs the
+// non-transactional pre-check in HandleEvent (event-already-processed dedup
+// gate). channelHubReader is the read-only ChannelHub view for this reactor's
+// chain; it is threaded into the home-channel guard-drop handlers so they can
+// converge the Node row with chain when a version-regression guard drops an
+// event.
+func NewChannelHubReactor(blockchainID uint64, nodeAddress string, eventHandler core.ChannelHubEventHandler, assetStore AssetStore, useStoreInTx ChannelHubReactorStoreTxProvider, store ChannelHubReactorStore, channelHubReader core.ReadOnlyChannelHub) *ChannelHubReactor {
 	return &ChannelHubReactor{
-		blockchainID: blockchainID,
-		nodeAddress:  nodeAddress,
-		eventHandler: eventHandler,
-		assetStore:   assetStore,
-		store:        store,
-		useStoreInTx: useStoreInTx,
+		blockchainID:     blockchainID,
+		nodeAddress:      nodeAddress,
+		eventHandler:     eventHandler,
+		assetStore:       assetStore,
+		store:            store,
+		useStoreInTx:     useStoreInTx,
+		channelHubReader: channelHubReader,
 	}
 }
 
@@ -384,7 +392,7 @@ func (r *ChannelHubReactor) handleHomeChannelCheckpointed(ctx context.Context, s
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -398,7 +406,7 @@ func (r *ChannelHubReactor) handleChannelDeposited(ctx context.Context, store Ch
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -412,7 +420,7 @@ func (r *ChannelHubReactor) handleChannelWithdrawn(ctx context.Context, store Ch
 		StateVersion: event.Candidate.Version,
 		UserSig:      encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -427,7 +435,7 @@ func (r *ChannelHubReactor) handleHomeChannelChallenged(ctx context.Context, sto
 		ChallengeExpiry: event.ChallengeExpireAt,
 		UserSig:         encodeSig(event.Candidate.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelChallenged(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -441,7 +449,7 @@ func (r *ChannelHubReactor) handleHomeChannelClosed(ctx context.Context, store C
 		StateVersion: event.FinalState.Version,
 		UserSig:      encodeSig(event.FinalState.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelClosed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelClosed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowDepositInitiated(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -541,7 +549,7 @@ func (r *ChannelHubReactor) handleEscrowDepositInitiatedOnHome(ctx context.Conte
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -555,7 +563,7 @@ func (r *ChannelHubReactor) handleEscrowDepositFinalizedOnHome(ctx context.Conte
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -569,7 +577,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalInitiatedOnHome(ctx context.Co
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Context, store ChannelHubReactorStore, l types.Log) error {
@@ -583,7 +591,7 @@ func (r *ChannelHubReactor) handleEscrowWithdrawalFinalizedOnHome(ctx context.Co
 		StateVersion: event.State.Version,
 		UserSig:      encodeSig(event.State.UserSig),
 	}
-	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, &ev)
+	return r.eventHandler.HandleHomeChannelCheckpointed(ctx, store, r.channelHubReader, &ev)
 }
 
 // Additional event handlers for events not yet defined in core.BlockchainEventHandler

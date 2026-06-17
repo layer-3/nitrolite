@@ -106,6 +106,14 @@ func main() {
 				logger.Fatal("failed to create EVM client")
 			}
 
+			// Bind a read-only ChannelHub view for this chain so the reactor can issue
+			// getChannelData reads from home-channel guard-drop paths.
+			channelHubCaller, err := evm.NewChannelHubCaller(common.HexToAddress(b.ChannelHubAddress), client)
+			if err != nil {
+				logger.Fatal("failed to create ChannelHub caller", "error", err, "blockchainID", b.ID)
+			}
+			channelHubReader := evm.NewChannelHubReader(channelHubCaller)
+
 			sigValidators, err := bb.MemoryStore.GetChannelSigValidators(b.ID)
 			if err != nil {
 				logger.Fatal("failed to get channel signature validators from memory store", "error", err, "blockchainID", b.ID)
@@ -119,7 +127,7 @@ func main() {
 				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
 			}
 
-			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore)
+			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore, channelHubReader)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
 
 			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second

@@ -480,9 +480,9 @@ func initBlockchainRPCs(logger log.Logger, memoryStore memory.MemoryStore) map[u
 
 // checkChainId connects to an RPC endpoint and verifies it returns the expected chain ID.
 // This ensures the RPC URL points to the correct blockchain network.
-// The function uses a 5-second timeout for the connection and chain ID query.
+// Bounded by evm.RPCCallTimeout for the connection and chain ID query.
 func checkChainId(blockchainRPC string, expectedChainID uint64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), evm.RpcCallTimeout)
 	defer cancel()
 
 	client, err := ethclient.DialContext(ctx, blockchainRPC)
@@ -505,9 +505,9 @@ func checkChainId(blockchainRPC string, expectedChainID uint64) error {
 
 // checkChannelHubVersion verifies that the ChannelHub contract at the given address
 // has the expected VERSION constant value.
-// The function uses a 5-second timeout for the connection and contract calls.
+// Bounded by evm.RPCCallTimeout for the connection and contract calls.
 func checkChannelHubVersion(blockchainRPC string, channelHubAddress common.Address, expectedVersion uint8) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), evm.RpcCallTimeout)
 	defer cancel()
 
 	client, err := ethclient.DialContext(ctx, blockchainRPC)

@@ -70,6 +70,31 @@ func (c *Client) GetBlockchains(ctx context.Context) ([]core.Blockchain, error) 
 	return config.Blockchains, nil
 }
 
+// GetConfirmationDelay returns the confirmation-gate delay, in seconds, that the node
+// applies before crediting an on-chain event for the given chain. A return value of 0
+// means the gate is disabled and events are credited immediately.
+//
+// This fetches the node config on each call (config is not cached on the client).
+//
+// Parameters:
+//   - chainID: The blockchain network ID (e.g., 1 for Ethereum mainnet)
+//
+// Returns:
+//   - Delay in seconds before off-chain credit lands; 0 if the gate is disabled
+//   - Error if the request fails or the chain is not present in the node config
+func (c *Client) GetConfirmationDelay(ctx context.Context, chainID uint64) (uint32, error) {
+	blockchains, err := c.GetBlockchains(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get confirmation delay: %w", err)
+	}
+	for _, bc := range blockchains {
+		if bc.ID == chainID {
+			return bc.ConfirmationDelaySecs, nil
+		}
+	}
+	return 0, fmt.Errorf("blockchain %d not found in node config", chainID)
+}
+
 // GetAssets retrieves all supported assets with optional blockchain filter.
 //
 // Parameters:

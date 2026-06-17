@@ -127,9 +127,37 @@ func main() {
 				return wrapInTx(func(s database.DatabaseStore) error { return h(s) })
 			}
 
-			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, channelHubReader)
+			reactor := evm.NewChannelHubReactor(b.ID, bb.StateSigner.PublicKey().Address().String(), eventHandlerService, bb.MemoryStore, useCHRStoreInTx, bb.DbStore, channelHubReader)
 			reactor.SetOnEventProcessed(bb.RuntimeMetrics.IncBlockchainEvent)
-			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, logger, reactor.HandleEvent, bb.DbStore)
+
+			confirmationDelay := time.Duration(b.ConfirmationDelaySecs) * time.Second
+			var liveHandler evm.HandleEvent
+			var flushDownstream func()
+			if confirmationDelay > 0 {
+				gate, err := evm.NewConfirmationGate(confirmationDelay, b.ID, reactor.HandleEvent, logger)
+				if err != nil {
+					logger.Fatal("failed to create confirmation gate", "error", err, "blockchainID", b.ID)
+				}
+				gate.Start(blockchainCtx, func(err error) {
+					if err != nil {
+						logger.Fatal("confirmation gate stopped", "error", err, "blockchainID", b.ID)
+					}
+				})
+				liveHandler = gate.HandleEvent
+				flushDownstream = gate.FlushPending
+			} else {
+				liveHandler = reactor.HandleEvent
+				// flushDownstream stays nil: no gate to flush on the no-delay path.
+			}
+
+			// Live events flow through the confirmation gate (when delay > 0) or directly to the
+			// reactor (when delay == 0). Historical events from eth_getLogs are routed per-event
+			// based on block age: events older than confirmationDelay go directly to the reactor
+			// (past the reorg window); recent events still flow through the live handler because
+			// their blocks may still be reorged.
+			// flushDownstream is nil when confirmationDelay == 0; NewListener skips the flush call
+			// when it is nil, preserving no-gate behavior bit-for-bit.
+			l := evm.NewListener(common.HexToAddress(b.ChannelHubAddress), client, b.ID, b.BlockStep, confirmationDelay, logger, liveHandler, reactor.HandleEvent, bb.DbStore, flushDownstream)
 			l.Listen(blockchainCtx, func(err error) {
 				if err != nil {
 					logger.Fatal("blockchain listener stopped", "error", err, "blockchainID", b.ID)

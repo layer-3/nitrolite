@@ -179,6 +179,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 			{Text: "close-channel", Description: "Close home channel on-chain"},
 			{Text: "acknowledge", Description: "Acknowledge transfer or channel creation"},
 			{Text: "checkpoint", Description: "Submit latest state on-chain"},
+			{Text: "wait-credit", Description: "Wait for off-chain credit to land after checkpoint"},
 
 			// Node information
 			{Text: "ping", Description: "Test node connection"},
@@ -211,7 +212,7 @@ func (o *Operator) complete(d prompt.Document) []prompt.Suggest {
 				{Text: "node", Description: "Node info and connection"},
 				{Text: "session-key", Description: "Session key management"},
 			}
-		case "close-channel", "acknowledge", "checkpoint":
+		case "close-channel", "acknowledge", "checkpoint", "wait-credit":
 			return o.getAssetSuggestions()
 		case "token-balance", "approve", "deposit", "withdraw":
 			return o.getChainSuggestions()
@@ -486,6 +487,12 @@ func (o *Operator) Execute(s string) {
 			return
 		}
 		o.checkpoint(ctx, args[1])
+	case "wait-credit":
+		if len(args) < 2 {
+			fmt.Println("ERROR: Usage: wait-credit <asset>")
+			return
+		}
+		o.waitCredit(args[1])
 
 	// Node information
 	case "ping":
@@ -659,6 +666,31 @@ func (o *Operator) getWalletSuggestion() []prompt.Suggest {
 			Description: "Your imported wallet",
 		},
 	}
+}
+
+// confirmationDelayForAsset resolves the confirmation_delay_secs for the chain that the
+// given asset settles on. It returns (delay, true) on success and (0, false) when the
+// chain cannot be resolved (no home channel yet, RPC error, chain not in node config).
+// Callers must treat this as advisory — never gate a successful operation on it.
+func (o *Operator) confirmationDelayForAsset(ctx context.Context, asset string) (uint32, bool) {
+	wallet := o.getImportedWalletAddress()
+	if wallet == "" {
+		return 0, false
+	}
+	channel, err := o.client.GetHomeChannel(ctx, wallet, asset)
+	if err != nil || channel == nil {
+		return 0, false
+	}
+	chains, err := o.client.GetBlockchains(ctx)
+	if err != nil {
+		return 0, false
+	}
+	for _, c := range chains {
+		if c.ID == channel.BlockchainID {
+			return c.ConfirmationDelaySecs, true
+		}
+	}
+	return 0, false
 }
 
 func (o *Operator) parseChainID(chainIDStr string) (uint64, error) {

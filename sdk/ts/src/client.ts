@@ -45,6 +45,24 @@ import { EthereumMsgSigner, StateSigner, TransactionSigner } from './signers.js'
  */
 export const DEFAULT_CHALLENGE_PERIOD = 86400;
 
+/** Default poll interval for waitForCheckpoint (ms). */
+export const DEFAULT_CHECKPOINT_POLL_INTERVAL_MS = 3000;
+
+export interface WaitForCheckpointOptions {
+    /** Chain the checkpoint tx was submitted on. Used to apply the confirmation_delay_secs
+     *  lower-bound wait before the first poll. If omitted, no lower-bound wait is applied. */
+    chainId?: bigint;
+    /** Expected minimum ENFORCED balance the asset should reach (in display units). When set,
+     *  the wait resolves once the polled `enforced` balance is >= this value. When omitted, the
+     *  wait resolves on the first `enforced` balance change relative to the value at call time.
+     *  NOTE: the gate credits on-chain events to `enforced`, not spendable `balance` — see below. */
+    expectedBalance?: Decimal;
+    /** Max time to wait after the lower-bound delay, in ms. Default: 120_000. */
+    timeoutMs?: number;
+    /** Poll interval in ms. Default: DEFAULT_CHECKPOINT_POLL_INTERVAL_MS (3000). */
+    pollIntervalMs?: number;
+}
+
 /**
  * Strip the channel signer type prefix byte from a signature.
  * Session key registration requires a raw EIP-191 wallet signature,
@@ -1013,6 +1031,26 @@ export class Client {
   }
 
   /**
+   * GetConfirmationDelay returns the confirmation-gate delay, in seconds, that the node
+   * applies before crediting an on-chain event for the given chain. A return value of 0
+   * means the gate is disabled and events are credited immediately.
+   *
+   * This fetches the node config on each call (config is not cached on the client).
+   *
+   * @param chainId - The blockchain network ID (e.g., 1n for Ethereum mainnet)
+   * @returns Delay in seconds before off-chain credit lands; 0 if the gate is disabled
+   * @throws If the chain is not present in the node config
+   */
+  async getConfirmationDelay(chainId: bigint): Promise<number> {
+    const blockchains = await this.getBlockchains();
+    const chain = blockchains.find((b) => b.id === chainId);
+    if (!chain) {
+      throw new Error(`blockchain ${chainId} not found in node config`);
+    }
+    return chain.confirmationDelaySecs;
+  }
+
+  /**
    * GetAssets retrieves the list of supported assets, optionally filtered by blockchain.
    *
    * @param blockchainId - Optional blockchain ID to filter assets
@@ -1060,6 +1098,81 @@ export class Client {
     };
     const resp = await this.rpcClient.userV1GetBalances(req);
     return transformBalances(resp.balances);
+  }
+
+  /**
+   * WaitForCheckpoint waits until the off-chain credit for `asset` lands after an on-chain
+   * checkpoint transaction. Because the node applies a per-chain confirmation gate
+   * (confirmation_delay_secs) before crediting an event, the off-chain balance does not
+   * update the instant the tx receipt is mined — it updates up to confirmation_delay_secs later.
+   *
+   * The method:
+   *   1. If opts.chainId is given, sleeps for that chain's confirmation_delay_secs (the
+   *      lower bound — the credit cannot arrive before the gate elapses) before polling.
+   *   2. Polls getBalances(user) every pollIntervalMs until either the target condition is
+   *      met or timeoutMs elapses.
+   *
+   * Target condition:
+   *   - opts.expectedBalance set → balance for `asset` is >= expectedBalance.
+   *   - otherwise → balance for `asset` differs from the value observed at call time
+   *     ("balance changed").
+   *
+   * @param asset - The asset symbol (e.g., "usdc")
+   * @param txHash - The checkpoint transaction hash (informational; included in the timeout error)
+   * @param opts - See WaitForCheckpointOptions
+   * @returns The BalanceEntry for `asset` once the condition is met
+   * @throws If the timeout elapses before the credit lands, or on RPC failure
+   */
+  async waitForCheckpoint(
+    asset: string,
+    txHash: string,
+    opts?: WaitForCheckpointOptions
+  ): Promise<core.BalanceEntry> {
+    const wallet = this.getUserAddress();
+    const pollIntervalMs = opts?.pollIntervalMs ?? DEFAULT_CHECKPOINT_POLL_INTERVAL_MS;
+    const timeoutMs = opts?.timeoutMs ?? 120_000;
+
+    // Snapshot the starting ENFORCED balance for "changed" mode. The confirmation gate
+    // credits on-chain events to the `enforced` balance (RefreshUserEnforcedBalance updates
+    // the `enforced` column), so that is the field that lands after the gate elapses — NOT
+    // spendable `balance`, which only moves on the user's own signed home_deposit transition.
+    const findEnforced = (entries: core.BalanceEntry[]): Decimal =>
+      entries.find((e) => e.asset === asset)?.enforced ?? new Decimal(0);
+    const startEnforced = findEnforced(await this.getBalances(wallet));
+
+    // Lower-bound wait: the credit cannot land before the gate elapses.
+    if (opts?.chainId !== undefined) {
+      const delaySecs = await this.getConfirmationDelay(opts.chainId);
+      if (delaySecs > 0) {
+        await new Promise((r) => setTimeout(r, delaySecs * 1000));
+      }
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    // Loop: poll, check condition, sleep. First poll happens immediately after the
+    // lower-bound wait.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const balances = await this.getBalances(wallet);
+      const entry = balances.find((e) => e.asset === asset);
+      const current = entry?.enforced ?? new Decimal(0);
+
+      const satisfied =
+        opts?.expectedBalance !== undefined
+          ? current.gte(opts.expectedBalance)
+          : !current.eq(startEnforced);
+
+      if (satisfied && entry) {
+        return entry;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `waitForCheckpoint timed out after ${timeoutMs}ms waiting for ${asset} credit (tx ${txHash})`
+        );
+      }
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
   }
 
   /**

@@ -5,17 +5,27 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type HandleEvent func(ctx context.Context, eventLog types.Log) error
 
-// ContractEventGetter is used by Listener for resumption and deduplication.
+// ContractEventGetter is used by Listener for resumption, deduplication, and
+// reconciliation-walk queries.
 type ContractEventGetter interface {
 	// GetLatestContractEventBlockNumber returns the block to resume from (0 = start fresh).
 	GetLatestContractEventBlockNumber(contractAddress string, blockchainID uint64) (lastBlock uint64, err error)
-	// IsContractEventPresent checks whether a specific event was already processed.
-	IsContractEventPresent(blockchainID, blockNumber uint64, txHash string, logIndex uint32) (isPresent bool, err error)
+	// IsContractEventProcessed reports whether an event identified by (txHash, logIndex, blockchainID)
+	// has already been committed, regardless of which block it appeared in.
+	IsContractEventProcessed(txHash string, logIndex uint32, blockchainID uint64) (bool, error)
+	// GetLatestContractEventBlockHashAndNumber returns the block_number and block_hash of
+	// the highest stored event. Returns (0, "", nil) when no rows exist.
+	GetLatestContractEventBlockHashAndNumber(contractAddress string, blockchainID uint64) (blockNumber uint64, blockHash string, err error)
+	// GetPreviousDistinctBlockHash returns the block_number and block_hash of the highest
+	// stored event with block_number strictly below belowBlockNumber. Returns (0, "", nil)
+	// when no such row exists (genesis fallback).
+	GetPreviousDistinctBlockHash(contractAddress string, blockchainID uint64, belowBlockNumber uint64) (blockNumber uint64, blockHash string, err error)
 }
 
 type AssetStore interface {
@@ -35,4 +45,9 @@ type AssetStore interface {
 type EVMClient interface {
 	ethereum.ChainStateReader
 	bind.ContractBackend
+	// HeaderByHash is used by the gate's block-timestamp fetcher and by the
+	// Listener's age-based routing of Phase 1 events. It returns whatever header
+	// the node has for the given hash (which may be a side-chain header) — it is
+	// NOT suitable for canonicality checks; use HeaderByNumber for that.
+	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 }

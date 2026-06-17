@@ -19,6 +19,7 @@ Nitronode is built with a modular architecture:
 
 - **RPC Server**: WebSocket-based JSON-RPC server handling client requests.
 - **Blockchain Listeners**: Monitors on-chain events from Nitrolite `ChannelHub` contracts across multiple chains.
+- **Confirmation Gate**: Per-chain reorg-protection buffer between the listener and event handlers. Delays event delivery by `confirmation_delay_secs` so that events whose blocks are reorged out before the window elapses are dropped instead of committed. See [docs/reorg-fix.md](docs/reorg-fix.md).
 - **Event Handlers**: Processes blockchain events to update internal channel and user states.
 - **Storage Layer**:
   - **Database Store**: Persistent storage for channels, states, and transactions (supports SQLite and PostgreSQL).
@@ -63,6 +64,7 @@ blockchains:
     id: 80002
     contract_address: "0x9d1E88627884e066B81A02d69BCB2437a520534C"
     block_step: 1000
+    confirmation_delay_secs: 10   # reorg-protection window; 0 disables. See docs/reorg-fix.md.
 
   - name: base_sepolia
     id: 84532
@@ -138,6 +140,7 @@ docker run -p 7824:7824 -e NITRONODE_SIGNER_KEY=... nitronode
 nitronode/
 ├── api/             # JSON-RPC request handlers
 ├── config/          # Default configurations and migrations
+├── docs/            # Component design notes (e.g. reorg-fix.md)
 ├── event_handlers/  # Logic for reacting to blockchain events
 ├── metrics/         # Prometheus telemetry implementation
 ├── store/           # Persistence layer (SQL and Memory)
@@ -167,6 +170,7 @@ The following protocol operations are fully specified in [protocol-description.m
 - [Nitrolite Protocol Overview](../protocol-description.md)
 - [Communication Flows](../docs/communication_flows/)
 - [API Reference](../docs/api.yaml)
+- [Reorg-Protection Confirmation Gate](docs/reorg-fix.md)
 
 ## License
 

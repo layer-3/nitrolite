@@ -166,6 +166,7 @@ export interface Blockchain {
   id: bigint; // uint64
   channelHubAddress: Address;
   blockStep: bigint; // uint64
+  confirmationDelaySecs: number; // seconds; 0 means gate is disabled
 }
 
 export interface Token {

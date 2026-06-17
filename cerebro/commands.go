@@ -1236,12 +1236,17 @@ func (o *Operator) waitCredit(asset string) {
 		shortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		balances, err := o.client.GetBalances(shortCtx, wallet)
 		cancel()
-		if err == nil {
-			for _, b := range balances {
-				if strings.EqualFold(b.Asset, asset) {
-					baseEnforced = b.Enforced
-					break
-				}
+		if err != nil {
+			// Without a reliable baseline a pre-existing balance would be misread as a
+			// freshly-landed credit. Abort rather than report a false SUCCESS.
+			fmt.Printf("ERROR: Could not read baseline balance: %v\n", err)
+			fmt.Println("Cannot reliably detect a credit without a baseline; run 'wait-credit' again or check 'balances'.")
+			return
+		}
+		for _, b := range balances {
+			if strings.EqualFold(b.Asset, asset) {
+				baseEnforced = b.Enforced
+				break
 			}
 		}
 	}

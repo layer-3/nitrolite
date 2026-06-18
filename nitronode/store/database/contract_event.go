@@ -86,7 +86,7 @@ func (s *DBStore) GetLatestContractEventBlockHashAndNumber(contractAddress strin
 	if err != nil {
 		return 0, "", err
 	}
-	return ev.BlockNumber, ev.BlockHash, nil
+	return ev.BlockNumber, strings.TrimSpace(ev.BlockHash), nil
 }
 
 // GetPreviousDistinctBlockHash returns the block_number and block_hash of the highest
@@ -104,5 +104,5 @@ func (s *DBStore) GetPreviousDistinctBlockHash(contractAddress string, blockchai
 	if err != nil {
 		return 0, "", err
 	}
-	return ev.BlockNumber, ev.BlockHash, nil
+	return ev.BlockNumber, strings.TrimSpace(ev.BlockHash), nil
 }

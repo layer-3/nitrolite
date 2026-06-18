@@ -1,6 +1,6 @@
 {
   "name": "@yellow-org/sdk-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Unified MCP server for Yellow SDK and Nitrolite protocol context for AI agents and IDEs",
   "type": "module",
   "mcpName": "io.github.layer-3/yellow-sdk-mcp",

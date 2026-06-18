@@ -1,6 +1,6 @@
 {
     "name": "@yellow-org/sdk-compat",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "description": "Curated migration layer preserving selected Nitrolite SDK v0.5.3 app-facing APIs over the v1 runtime.",
     "type": "module",
     "sideEffects": false,

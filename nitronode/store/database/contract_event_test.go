@@ -1,6 +1,7 @@
 package database
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -79,6 +80,57 @@ func TestGetLatestContractEventBlockNumber(t *testing.T) {
 		block, err := store.GetLatestContractEventBlockNumber(contractAddress, 999)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), block)
+	})
+}
+
+// TestGetContractEventBlockHash_TrimsPaddedEmpty is the regression guard for the
+// reorg-reconciliation bug: block_hash was a CHAR(66) NOT NULL DEFAULT '' column,
+// so legacy/pre-migration rows read back as a 66-space-padded string rather than "".
+// The reconciler's empty-hash guard compares against "", so an untrimmed padded
+// value slipped through, got fed to common.HexToHash (-> zero hash), and made every
+// stored block look reorged on every chain. The getters now TrimSpace so a padded
+// empty collapses to "" the guard recognizes, while real 0x… hashes pass through.
+func TestGetContractEventBlockHash_TrimsPaddedEmpty(t *testing.T) {
+	db, cleanup := SetupTestDB(t)
+	defer cleanup()
+
+	store := NewDBStore(db)
+
+	contractAddress := "0x1234567890123456789012345678901234567890"
+	blockchainID := uint64(1)
+	paddedEmpty := strings.Repeat(" ", 66) // mimics CHAR(66) padding of ''
+	realHash := "0x" + strings.Repeat("ab", 32)
+
+	t.Run("latest padded-empty hash trims to empty string", func(t *testing.T) {
+		require.NoError(t, store.StoreContractEvent(core.BlockchainEvent{
+			ContractAddress: contractAddress, BlockchainID: blockchainID, Name: "E1",
+			BlockNumber: 100, BlockHash: paddedEmpty, TransactionHash: "0xaaa", LogIndex: 0,
+		}))
+
+		num, hash, err := store.GetLatestContractEventBlockHashAndNumber(contractAddress, blockchainID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(100), num)
+		assert.Equal(t, "", hash, "padded-empty block_hash must trim to \"\" so the reconciler guard fires")
+	})
+
+	t.Run("previous padded-empty hash trims to empty string", func(t *testing.T) {
+		// A newer row sits above the padded-empty one so the "below" query returns the legacy row.
+		require.NoError(t, store.StoreContractEvent(core.BlockchainEvent{
+			ContractAddress: contractAddress, BlockchainID: blockchainID, Name: "E2",
+			BlockNumber: 200, BlockHash: realHash, TransactionHash: "0xbbb", LogIndex: 0,
+		}))
+
+		num, hash, err := store.GetPreviousDistinctBlockHash(contractAddress, blockchainID, 200)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(100), num)
+		assert.Equal(t, "", hash, "padded-empty block_hash must trim to \"\" mid-walk")
+	})
+
+	t.Run("real hash is preserved (not over-trimmed)", func(t *testing.T) {
+		num, hash, err := store.GetLatestContractEventBlockHashAndNumber(contractAddress, blockchainID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(200), num)
+		assert.Equal(t, realHash, hash)
 	})
 }
 

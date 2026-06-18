@@ -15,7 +15,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/metrics"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/nitronode/store/memory"
@@ -36,16 +35,12 @@ type Backbone struct {
 	NodeVersion                 string
 	ChannelMinChallengeDuration uint32
 	ChannelMaxChallengeDuration uint32
-	AppRegistryEnabled          bool
 	BlockchainRPCs              map[uint64]string
 	BlockchainGasLimit          uint64
 	ValidationLimits            ValidationLimits
-	RateLimitPerSec             float64
-	RateLimitBurst              float64
 
 	DbStore        database.DatabaseStore
 	MemoryStore    memory.MemoryStore
-	ActionGateway  action_gateway.ActionAllower
 	RpcNode        rpc.Node
 	StateSigner    sign.Signer
 	TxSigner       sign.Signer
@@ -70,8 +65,6 @@ type FullConfig struct {
 	Database                    database.DatabaseConfig
 	ChannelMinChallengeDuration uint32           `yaml:"channel_min_challenge_duration" env:"NITRONODE_CHANNEL_MIN_CHALLENGE_DURATION" env-default:"86400"`  // 24 hours
 	ChannelMaxChallengeDuration uint32           `yaml:"channel_max_challenge_duration" env:"NITRONODE_CHANNEL_MAX_CHALLENGE_DURATION" env-default:"604800"` // 7 days
-	ActionLimitsEnabled         bool             `yaml:"action_limits_enabled" env:"NITRONODE_ACTION_LIMITS_ENABLED"`
-	AppRegistryEnabled          bool             `yaml:"app_registry_enabled" env:"NITRONODE_APP_REGISTRY_ENABLED"`
 	Signer                      SignerConfig     `yaml:"signer"`
 	SignerType                  string           `yaml:"signer_type" env:"NITRONODE_SIGNER_TYPE" env-default:"key"` // "key" or "gcp-kms"
 	SignerKey                   string           `yaml:"signer_key" env:"NITRONODE_SIGNER_KEY"`                     // required when signer_type=key
@@ -103,11 +96,12 @@ type SignerConfig struct {
 
 // ValidationLimits defines configurable upper bounds for dynamic-length request fields.
 type ValidationLimits struct {
-	MaxParticipants       int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
-	MaxSessionDataLen     int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
-	MaxAppMetadataLen     int `yaml:"max_app_metadata_len" env:"NITRONODE_MAX_APP_METADATA_LEN" env-default:"1024"`
-	MaxSessionKeyIDs      int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
-	MaxSignedUpdates      int `yaml:"max_signed_updates" env:"NITRONODE_MAX_SIGNED_UPDATES" env-default:"0"`
+	MaxParticipants   int `yaml:"max_participants" env:"NITRONODE_MAX_PARTICIPANTS" env-default:"32"`
+	MaxSessionDataLen int `yaml:"max_session_data_len" env:"NITRONODE_MAX_SESSION_DATA_LEN" env-default:"1024"`
+	MaxSessionKeyIDs  int `yaml:"max_session_key_ids" env:"NITRONODE_MAX_SESSION_KEY_IDS" env-default:"10"`
+	// MaxSessionKeysPerUser is a soft per-user cap on active session keys, a DoS/storage
+	// bound enforced when a submit activates a key (new registration or reactivation).
+	// A value <= 0 disables the cap entirely (unlimited). Default 100.
 	MaxSessionKeysPerUser int `yaml:"max_session_keys_per_user" env:"NITRONODE_MAX_SESSION_KEYS_PER_USER" env-default:"100"`
 }
 
@@ -150,6 +144,21 @@ func validateChannelChallengeConfig(minChallenge, maxChallenge uint32) error {
 	return nil
 }
 
+// maxParticipantsUint16Safe is the largest MaxParticipants value that cannot overflow the
+// uint16 quorum-weight accumulators: 257 × 255 = 65535 = math.MaxUint16.
+const maxParticipantsUint16Safe = 257
+
+func validateValidationLimits(vl ValidationLimits) error {
+	if vl.MaxParticipants > maxParticipantsUint16Safe {
+		return fmt.Errorf(
+			"NITRONODE_MAX_PARTICIPANTS must be ≤ %d to prevent quorum-weight overflow (uint16 ceiling), got %d",
+			maxParticipantsUint16Safe,
+			vl.MaxParticipants,
+		)
+	}
+	return nil
+}
+
 // InitBackbone initializes the backbone components of the application.
 func InitBackbone() *Backbone {
 	closers := []func() error{} // collect closer functions for resources that need cleanup
@@ -176,6 +185,9 @@ func InitBackbone() *Backbone {
 	if err := validateBlockchainGasLimit(conf.BlockchainGasLimit); err != nil {
 		logger.Fatal("invalid blockchain gas limit config", "error", err)
 	}
+	if err := validateValidationLimits(conf.ValidationLimits); err != nil {
+		logger.Fatal("invalid validation limits config", "error", err)
+	}
 
 	logger.Info("config loaded", "version", Version)
 
@@ -196,21 +208,6 @@ func InitBackbone() *Backbone {
 	memoryStore, err := memory.NewMemoryStoreV1FromConfig(configDirPath)
 	if err != nil {
 		logger.Fatal("failed to load blockchains", "error", err)
-	}
-
-	// ------------------------------------------------
-	// Action Gateway
-	// ------------------------------------------------
-
-	var actionGateway action_gateway.ActionAllower
-	if conf.ActionLimitsEnabled {
-		actionGateway, err = action_gateway.NewActionGatewayFromYaml(configDirPath)
-		if err != nil {
-			logger.Fatal("failed to initialize action gateway", "error", err)
-		}
-	} else {
-		actionGateway = action_gateway.NewPermissiveActionAllower()
-		logger.Info("action limits disabled, using permissive action allower")
 	}
 
 	// ------------------------------------------------
@@ -286,6 +283,21 @@ func InitBackbone() *Backbone {
 			)
 		}
 	}
+
+	// Per-connection request-count budget. Enforced at the frame layer alongside
+	// the byte budget so a flood of tiny frames — malformed or unknown-method
+	// frames included, which never reach the handler chain — is throttled before
+	// it can be parsed. Set <=0 to disable.
+	reqPerSec := conf.RateLimitPerSec
+	reqBurst := conf.RateLimitBurst
+	if reqPerSec > 0 && reqBurst < 1 {
+		logger.Fatal(
+			"NITRONODE_RATE_LIMIT_BURST must be >= 1 when NITRONODE_RATE_LIMIT_PER_SEC is enabled",
+			"rate_limit_burst", reqBurst,
+			"rate_limit_per_sec", reqPerSec,
+		)
+	}
+
 	rpcNode, err := rpc.NewWebsocketNode(rpc.WebsocketNodeConfig{
 		Logger:                  logger,
 		ObserveConnections:      runtimeMetrics.SetRPCConnections,
@@ -293,10 +305,21 @@ func InitBackbone() *Backbone {
 		WsConnWriteBufferSize:   conf.WsWriteBufferSize,
 		WsConnMaxMessageSize:    conf.WsMaxMessageSize,
 		NewFrameRateLimiter: func() rpc.FrameRateLimiter {
-			if bytesPerSec <= 0 {
-				return rpc.NoopFrameRateLimiter{}
+			var limiters rpc.CompositeFrameRateLimiter
+			if bytesPerSec > 0 {
+				limiters = append(limiters, rpc.NewByteTokenBucket(bytesPerSec, bytesBurst))
 			}
-			return rpc.NewByteTokenBucket(bytesPerSec, bytesBurst)
+			if reqPerSec > 0 {
+				limiters = append(limiters, rpc.NewRequestTokenBucket(reqPerSec, reqBurst))
+			}
+			switch len(limiters) {
+			case 0:
+				return rpc.NoopFrameRateLimiter{}
+			case 1:
+				return limiters[0]
+			default:
+				return limiters
+			}
 		},
 	})
 	if err != nil {
@@ -322,16 +345,12 @@ func InitBackbone() *Backbone {
 		NodeVersion:                 Version,
 		ChannelMinChallengeDuration: conf.ChannelMinChallengeDuration,
 		ChannelMaxChallengeDuration: conf.ChannelMaxChallengeDuration,
-		AppRegistryEnabled:          conf.AppRegistryEnabled,
 		BlockchainRPCs:              blockchainRPCs,
 		BlockchainGasLimit:          conf.BlockchainGasLimit,
 		ValidationLimits:            conf.ValidationLimits,
-		RateLimitPerSec:             conf.RateLimitPerSec,
-		RateLimitBurst:              conf.RateLimitBurst,
 
 		DbStore:        dbStore,
 		MemoryStore:    memoryStore,
-		ActionGateway:  actionGateway,
 		RpcNode:        rpcNode,
 		StateSigner:    stateSigner,
 		TxSigner:       txSigner,
@@ -461,9 +480,9 @@ func initBlockchainRPCs(logger log.Logger, memoryStore memory.MemoryStore) map[u
 
 // checkChainId connects to an RPC endpoint and verifies it returns the expected chain ID.
 // This ensures the RPC URL points to the correct blockchain network.
-// The function uses a 5-second timeout for the connection and chain ID query.
+// Bounded by evm.RPCCallTimeout for the connection and chain ID query.
 func checkChainId(blockchainRPC string, expectedChainID uint64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), evm.RpcCallTimeout)
 	defer cancel()
 
 	client, err := ethclient.DialContext(ctx, blockchainRPC)
@@ -486,9 +505,9 @@ func checkChainId(blockchainRPC string, expectedChainID uint64) error {
 
 // checkChannelHubVersion verifies that the ChannelHub contract at the given address
 // has the expected VERSION constant value.
-// The function uses a 5-second timeout for the connection and contract calls.
+// Bounded by evm.RPCCallTimeout for the connection and contract calls.
 func checkChannelHubVersion(blockchainRPC string, channelHubAddress common.Address, expectedVersion uint8) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), evm.RpcCallTimeout)
 	defer cancel()
 
 	client, err := ethclient.DialContext(ctx, blockchainRPC)

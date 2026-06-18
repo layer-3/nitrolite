@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -915,10 +916,10 @@ type GetLastChannelKeyStatesOptions struct {
 // SubmitChannelSessionKeyState submits a channel session key state for registration,
 // update, revocation, or re-activation. The state must carry both the wallet's UserSig
 // (authorizing the delegation) and the session-key holder's SessionKeySig (proving
-// possession of the key); submits without a valid SessionKeySig are rejected on every
-// path, including revocation — the session key must co-sign its own deactivation.
-// Wallet-only revocation (for a lost or compromised key) is not supported by this
-// method.
+// possession of the key) when state.ExpiresAt is in the future (registration, update,
+// or re-activation). For revocation (state.ExpiresAt at or before now) only UserSig is
+// required — use RevokeChannelSessionKey for the wallet-only revocation of a lost,
+// unavailable, or compromised key.
 //
 // Set state.ExpiresAt to a future time to register or update the key. Set it to a
 // value at or before time.Now() to revoke the key — the auth path filters by
@@ -1069,6 +1070,49 @@ func SignChannelSessionKeyOwnership(state core.ChannelSessionKeyStateV1, session
 	}
 
 	return sig.String(), nil
+}
+
+// RevokeChannelSessionKey revokes a channel session key using only the wallet's signature.
+// Use it when the session-key holder cannot or will not co-sign — a lost, unavailable, or
+// compromised delegate. The supplied state must carry the next monotonic Version (latest + 1)
+// and an ExpiresAt at or before now; the method signs it with the wallet (UserSig) and submits
+// with an empty SessionKeySig. The server accepts user-only signatures only on the revocation
+// path (ExpiresAt <= now). For registration, rotation, or extension use
+// SubmitChannelSessionKeyState with both signatures.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - state: The channel session key state to revoke (Version = latest + 1, ExpiresAt <= now)
+//
+// Returns:
+//   - Error if ExpiresAt is in the future, signing fails, or the request fails
+//
+// Example:
+//
+//	state := core.ChannelSessionKeyStateV1{
+//	    UserAddress: client.GetUserAddress(),
+//	    SessionKey:  lostSessionKey,
+//	    Version:     latestVersion + 1,
+//	    Assets:      []string{},
+//	    ExpiresAt:   time.Now(),
+//	}
+//	err := client.RevokeChannelSessionKey(ctx, state)
+func (c *Client) RevokeChannelSessionKey(ctx context.Context, state core.ChannelSessionKeyStateV1) error {
+	// Compare Unix seconds, matching the precision SignChannelSessionKeyState signs at
+	// (ExpiresAt.Unix()), so a value inside the current Unix second is not rejected locally
+	// even though the server treats it as expires_at <= now.
+	if state.ExpiresAt.Unix() > time.Now().Unix() {
+		return fmt.Errorf("revocation requires expires_at at or before now, got %s", state.ExpiresAt)
+	}
+
+	userSig, err := c.SignChannelSessionKeyState(state)
+	if err != nil {
+		return fmt.Errorf("failed to sign channel session key revocation: %w", err)
+	}
+	state.UserSig = userSig
+	state.SessionKeySig = ""
+
+	return c.SubmitChannelSessionKeyState(ctx, state)
 }
 
 // ApproveToken approves the ChannelHub contract to spend tokens on behalf of the user.

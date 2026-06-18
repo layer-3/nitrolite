@@ -122,5 +122,13 @@ func (e Error) Error() string {
 //
 // The resulting Params will contain: {"error": "invalid address format"}
 func NewErrorPayload(errMsg string) Payload {
-	return Payload{errorParamKey: json.RawMessage(fmt.Sprintf(`"%s"`, errMsg))}
+	// json.Marshal escapes quotes, backslashes, and control characters so the
+	// resulting RawMessage is always valid JSON. Building the string by hand
+	// would corrupt the payload whenever errMsg contains JSON-special chars.
+	encoded, err := json.Marshal(errMsg)
+	if err != nil {
+		// Marshaling a Go string cannot fail; fall back to an empty JSON string.
+		encoded = json.RawMessage(`""`)
+	}
+	return Payload{errorParamKey: encoded}
 }

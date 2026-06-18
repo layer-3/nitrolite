@@ -82,18 +82,19 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 	applicationID := rpc.GetApplicationID(c)
 
 	var nodeSig string
+	var receiverWallet string
 	err = h.useStoreInTx(func(tx Store) error {
-		// Gate the incoming transition through the action gateway before any state
-		// is signed, stored, or receiver-side state is issued. Mirrors SubmitState so
-		// gated actions (e.g. transfer_send) cannot bypass the 24h allowance by
-		// piggybacking on channel creation.
-		if err := h.actionGateway.AllowAction(tx, incomingState.UserWallet, incomingState.Transition.Type.GatedAction()); err != nil {
-			return rpc.NewError(err)
-		}
-
-		_, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset)
-		if err != nil {
-			return rpc.Errorf("failed to lock user state: %v", err)
+		if incomingState.Transition.Type == core.TransitionTypeTransferSend {
+			// Lock both sender and receiver balance rows up front in deterministic
+			// order so concurrent opposite-direction transfers can't deadlock.
+			receiverWallet, err = h.lockTransferBalances(tx, incomingState)
+			if err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.LockUserState(incomingState.UserWallet, incomingState.Asset); err != nil {
+				return rpc.Errorf("failed to lock user state: %v", err)
+			}
 		}
 
 		// Reject if any home channel for this (wallet, asset) is not fully closed on-chain.
@@ -234,7 +235,7 @@ func (h *Handler) RequestCreation(c *rpc.Context) {
 
 				// We return Node's signature, the user is expected to submit this on blockchain.
 			case core.TransitionTypeTransferSend:
-				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, applicationID)
+				newReceiverState, err := h.issueTransferReceiverState(ctx, tx, incomingState, receiverWallet, applicationID)
 				if err != nil {
 					return rpc.Errorf("failed to issue receiver state: %v", err)
 				}

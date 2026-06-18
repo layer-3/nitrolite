@@ -47,19 +47,6 @@ type BlockchainClient interface {
 	FinalizeEscrowWithdrawal(candidate State) (string, error)
 }
 
-// ========= AppRegistryClient Interface =========
-
-type AppRegistryClient interface {
-	ApproveToken(amount decimal.Decimal) (string, error)
-	GetBalance(user string) (decimal.Decimal, error)
-	GetTokenDecimals() (uint8, error)
-
-	Lock(targetWallet string, amount decimal.Decimal) (string, error)
-	Relock() (string, error)
-	Unlock() (string, error)
-	Withdraw(destinationWallet string) (string, error)
-}
-
 // ========= TransitionValidator Interface =========
 
 // StateAdvancer applies state transitions
@@ -84,14 +71,34 @@ type AssetStore interface {
 	GetTokenDecimals(blockchainID uint64, tokenAddress string) (uint8, error)
 }
 
-// Channel lifecycle event handlers
+// ReadOnlyChannelHub is a read-only view of the on-chain ChannelHub contract,
+// used by event handlers to converge the Node row with chain after a guard
+// drops an event. Each reactor binds a ReadOnlyChannelHub for its own chain
+// and threads it into the handler methods that need an authoritative on-chain
+// snapshot; no global multi-chain dispatcher is required.
+type ReadOnlyChannelHub interface {
+	// FetchChannel reads the authoritative on-chain channel snapshot for channelID
+	// and returns an OnChainChannelSnapshot ready to overwrite the Node's local
+	// row. The snapshot reflects on-chain state at RPC-read time, not
+	// event-emit time.
+	FetchChannel(ctx context.Context, channelID string) (*OnChainChannelSnapshot, error)
+}
+
+// ChannelHubEventHandler defines the off-chain reactions to ChannelHub
+// blockchain events. Only the three home-channel guard-drop handlers
+// (HandleHomeChannelChallenged, HandleHomeChannelCheckpointed,
+// HandleHomeChannelClosed) take a ReadOnlyChannelHub: they are the entrypoints
+// where a version-regression guard may drop an event whose outer transaction
+// has nonetheless committed state on chain, and the on-chain refresh is
+// required to converge the Node row with chain. Other handlers do not need
+// the hub and so do not accept the parameter, keeping the interface narrow.
 type ChannelHubEventHandler interface {
 	HandleNodeBalanceUpdated(context.Context, ChannelHubEventHandlerStore, *NodeBalanceUpdatedEvent) error
 	HandleHomeChannelCreated(context.Context, ChannelHubEventHandlerStore, *HomeChannelCreatedEvent) error
 	HandleHomeChannelMigrated(context.Context, ChannelHubEventHandlerStore, *HomeChannelMigratedEvent) error
-	HandleHomeChannelCheckpointed(context.Context, ChannelHubEventHandlerStore, *HomeChannelCheckpointedEvent) error
-	HandleHomeChannelChallenged(context.Context, ChannelHubEventHandlerStore, *HomeChannelChallengedEvent) error
-	HandleHomeChannelClosed(context.Context, ChannelHubEventHandlerStore, *HomeChannelClosedEvent) error
+	HandleHomeChannelCheckpointed(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelCheckpointedEvent) error
+	HandleHomeChannelChallenged(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelChallengedEvent) error
+	HandleHomeChannelClosed(ctx context.Context, tx ChannelHubEventHandlerStore, hub ReadOnlyChannelHub, event *HomeChannelClosedEvent) error
 	HandleEscrowDepositInitiated(context.Context, ChannelHubEventHandlerStore, *EscrowDepositInitiatedEvent) error
 	HandleEscrowDepositChallenged(context.Context, ChannelHubEventHandlerStore, *EscrowDepositChallengedEvent) error
 	HandleEscrowDepositFinalized(context.Context, ChannelHubEventHandlerStore, *EscrowDepositFinalizedEvent) error
@@ -156,6 +163,14 @@ type ChannelHubEventHandlerStore interface {
 	// in tests.
 	LockUserState(wallet, asset string) (decimal.Decimal, error)
 
+	// LockUserStateForHomeChannel locks the balance row of the user owning channelID. On
+	// postgres it derives the lock key from the channel in SQL and returns the channel read
+	// under that lock; on non-postgres (sqlite in tests) the snapshot is taken before the lock
+	// for test compatibility. Event handlers must use this instead of a GetChannelByID +
+	// LockUserState pair, which reads channel status before the lock and races a concurrent
+	// submit_state finalization. Returns nil if the channel is absent.
+	LockUserStateForHomeChannel(channelID string) (*Channel, error)
+
 	// UpdateStateSigsIfMissing backfills the user and/or node signatures for a stored state
 	// when the corresponding column is currently NULL. Used to repair the local record after
 	// an on-chain event proves the state was enforced. Either signature may be empty to skip
@@ -166,7 +181,6 @@ type ChannelHubEventHandlerStore interface {
 	// home channel. Used to detect the post-Finalize lifecycle when the channel status
 	// has been temporarily overwritten by an on-chain challenge.
 	HasSignedFinalize(channelID string) (bool, error)
-
 
 	// SumNetTransitionAmountAfterVersion returns the net effect on the user's
 	// home-channel balance of transitions stored against channelID strictly above
@@ -183,13 +197,4 @@ type ChannelHubEventHandlerStore interface {
 	// RecordTransaction creates a transaction row linking state transitions. Used by the
 	// event handler to record the ChallengeRescue transaction associated with the squash.
 	RecordTransaction(tx Transaction, applicationID string) error
-}
-
-type LockingContractEventHandler interface {
-	HandleUserLockedBalanceUpdated(context.Context, LockingContractEventHandlerStore, *UserLockedBalanceUpdatedEvent) error
-}
-
-type LockingContractEventHandlerStore interface {
-	// UpdateUserStaked updates the total staked amount for a user on a specific blockchain.
-	UpdateUserStaked(wallet string, blockchainID uint64, amount decimal.Decimal) error
 }

@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/layer-3/nitrolite/pkg/app"
@@ -249,43 +250,6 @@ func (c *Client) SubmitAppState(ctx context.Context, appStateUpdate app.AppState
 	return nil
 }
 
-// RebalanceAppSessions rebalances multiple application sessions atomically.
-//
-// This method performs atomic rebalancing across multiple app sessions, ensuring
-// that funds are redistributed consistently without the risk of partial updates.
-//
-// Parameters:
-//   - signedUpdates: Slice of signed app state updates to apply atomically
-//
-// Returns:
-//   - BatchID for tracking the rebalancing operation
-//   - Error if the request fails
-//
-// Example:
-//
-//	updates := []app.SignedAppStateUpdateV1{...}
-//	batchID, err := client.RebalanceAppSessions(ctx, updates)
-//	fmt.Printf("Rebalance batch ID: %s\n", batchID)
-func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.SignedAppStateUpdateV1) (string, error) {
-	// Transform SDK types to RPC types
-	rpcUpdates := make([]rpc.SignedAppStateUpdateV1, 0, len(signedUpdates))
-	for _, update := range signedUpdates {
-		rpcUpdate := transformSignedAppStateUpdateToRPC(update)
-		rpcUpdates = append(rpcUpdates, rpcUpdate)
-	}
-
-	req := rpc.AppSessionsV1RebalanceAppSessionsRequest{
-		SignedUpdates: rpcUpdates,
-	}
-
-	resp, err := c.rpcClient.AppSessionsV1RebalanceAppSessions(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("failed to rebalance app sessions: %w", err)
-	}
-
-	return resp.BatchID, nil
-}
-
 // ============================================================================
 // Session Key Methods
 // ============================================================================
@@ -293,10 +257,10 @@ func (c *Client) RebalanceAppSessions(ctx context.Context, signedUpdates []app.S
 // SubmitAppSessionKeyState submits a session key state for registration, update,
 // revocation, or re-activation. The state must carry both the wallet's UserSig
 // (authorizing the delegation) and the session-key holder's SessionKeySig (proving
-// possession of the key); submits without a valid SessionKeySig are rejected on every
-// path, including revocation — the session key must co-sign its own deactivation.
-// Wallet-only revocation (for a lost or compromised key) is not supported by this
-// method.
+// possession of the key) when state.ExpiresAt is in the future (registration, update,
+// or re-activation). For revocation (state.ExpiresAt at or before now) only UserSig is
+// required — use RevokeAppSessionKey for the wallet-only revocation of a lost,
+// unavailable, or compromised key.
 //
 // Set state.ExpiresAt to a future time to register or update the key. Set it to a
 // value at or before time.Now() to revoke the key — the auth path filters by
@@ -445,4 +409,48 @@ func SignAppSessionKeyOwnership(state app.AppSessionKeyStateV1, sessionKeySigner
 	}
 
 	return hexutil.Encode(sig), nil
+}
+
+// RevokeAppSessionKey revokes an app session key using only the wallet's signature.
+// Use it when the session-key holder cannot or will not co-sign — a lost, unavailable, or
+// compromised delegate. The supplied state must carry the next monotonic Version (latest + 1)
+// and an ExpiresAt at or before now; the method signs it with the wallet (UserSig) and submits
+// with an empty SessionKeySig. The server accepts user-only signatures only on the revocation
+// path (ExpiresAt <= now). For registration, rotation, or extension use
+// SubmitAppSessionKeyState with both signatures.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - state: The app session key state to revoke (Version = latest + 1, ExpiresAt <= now)
+//
+// Returns:
+//   - Error if ExpiresAt is in the future, signing fails, or the request fails
+//
+// Example:
+//
+//	state := app.AppSessionKeyStateV1{
+//	    UserAddress:    client.GetUserAddress(),
+//	    SessionKey:     lostSessionKey,
+//	    Version:        latestVersion + 1,
+//	    ApplicationIDs: []string{},
+//	    AppSessionIDs:  []string{},
+//	    ExpiresAt:      time.Now(),
+//	}
+//	err := client.RevokeAppSessionKey(ctx, state)
+func (c *Client) RevokeAppSessionKey(ctx context.Context, state app.AppSessionKeyStateV1) error {
+	// Compare Unix seconds, matching the precision PackAppSessionKeyStateV1 signs at
+	// (ExpiresAt.Unix()), so a value inside the current Unix second is not rejected locally
+	// even though the server treats it as expires_at <= now.
+	if state.ExpiresAt.Unix() > time.Now().Unix() {
+		return fmt.Errorf("revocation requires expires_at at or before now, got %s", state.ExpiresAt)
+	}
+
+	userSig, err := c.SignSessionKeyState(state)
+	if err != nil {
+		return fmt.Errorf("failed to sign session key revocation: %w", err)
+	}
+	state.UserSig = userSig
+	state.SessionKeySig = ""
+
+	return c.SubmitAppSessionKeyState(ctx, state)
 }

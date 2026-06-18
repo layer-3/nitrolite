@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -49,10 +50,12 @@ func TestState_NextState(t *testing.T) {
 	assert.Equal(t, uint64(1), next.Epoch)
 	assert.Nil(t, next.EscrowLedger)
 
-	// Final state next state (new epoch)
+	// Final state next state (new epoch). Version starts at 1 (not 0) so the gate
+	// can distinguish a freshly created (Void) channel from one with a confirmed
+	// on-chain state.
 	state.Transition.Type = TransitionTypeFinalize
 	nextFinal := state.NextState()
-	assert.Equal(t, uint64(0), nextFinal.Version)
+	assert.Equal(t, uint64(1), nextFinal.Version)
 	assert.Equal(t, uint64(2), nextFinal.Epoch)
 
 	// With Escrow Ledger
@@ -216,7 +219,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		}
 	}
 
-	t.Run("Success - in-channel prev wraps to fresh epoch at version 0", func(t *testing.T) {
+	t.Run("Success - in-channel prev wraps to fresh epoch at version 1", func(t *testing.T) {
 		prev := makePrev()
 		amount := decimal.NewFromInt(42)
 
@@ -227,7 +230,7 @@ func TestNewChallengeRescueState(t *testing.T) {
 		assert.Equal(t, prev.Asset, rescue.Asset)
 		assert.Equal(t, prev.UserWallet, rescue.UserWallet)
 		assert.Equal(t, prev.Epoch+1, rescue.Epoch)
-		assert.Equal(t, uint64(0), rescue.Version)
+		assert.Equal(t, uint64(1), rescue.Version)
 		assert.Nil(t, rescue.HomeChannelID)
 		assert.Empty(t, rescue.HomeLedger.TokenAddress)
 		assert.Equal(t, uint64(0), rescue.HomeLedger.BlockchainID)
@@ -550,23 +553,60 @@ func TestNewTransactionFromTransition(t *testing.T) {
 	senderState.EscrowChannelID = new(string)
 	*senderState.EscrowChannelID = "EC"
 
-	// HomeDeposit
-	transition := Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10)}
+	// HomeDeposit: transaction ID must equal the transition's TxID,
+	// computed over the HomeChannelID (AccountID), not the UserWallet.
+	homeDepositTxID, err := GetSenderTransactionID(*senderState.HomeChannelID, senderState.ID)
+	require.NoError(t, err)
+	transition := Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.HomeChannelID, TxID: homeDepositTxID}
 	tx, err := NewTransactionFromTransition(senderState, nil, transition)
 	require.NoError(t, err)
 	assert.Equal(t, TransactionTypeHomeDeposit, tx.TxType)
+	assert.Equal(t, homeDepositTxID, tx.ID)
 
-	// TransferSend
-	transition = Transition{Type: TransitionTypeTransferSend, Amount: decimal.NewFromInt(10), AccountID: "REC"}
+	// EscrowDeposit: same divergence — ID over EscrowChannelID, not UserWallet.
+	escrowDepositTxID, err := GetSenderTransactionID(*senderState.EscrowChannelID, senderState.ID)
+	require.NoError(t, err)
+	transition = Transition{Type: TransitionTypeEscrowDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.EscrowChannelID, TxID: escrowDepositTxID}
+	tx, err = NewTransactionFromTransition(senderState, nil, transition)
+	require.NoError(t, err)
+	assert.Equal(t, TransactionTypeEscrowDeposit, tx.TxType)
+	assert.Equal(t, escrowDepositTxID, tx.ID)
+
+	// TransferSend: sender and receiver transitions share this TxID, computed
+	// over the recipient (AccountID) and the sender's state ID.
+	transferTxID, err := GetSenderTransactionID("REC", senderState.ID)
+	require.NoError(t, err)
+	transition = Transition{Type: TransitionTypeTransferSend, Amount: decimal.NewFromInt(10), AccountID: "REC", TxID: transferTxID}
 	receiverState := NewVoidState("A", "REC")
 	tx, err = NewTransactionFromTransition(senderState, receiverState, transition)
 	require.NoError(t, err)
 	assert.Equal(t, TransactionTypeTransfer, tx.TxType)
+	assert.Equal(t, transferTxID, tx.ID)
+
+	// The receiver's TransferReceive transition must carry the same TxID as the
+	// sender's TransferSend, so both states reference the single transfer
+	// transaction recorded above.
+	receiveTransition, err := receiverState.ApplyTransferReceiveTransition(senderState.UserWallet, decimal.NewFromInt(10), transferTxID)
+	require.NoError(t, err)
+	assert.Equal(t, transferTxID, receiveTransition.TxID)
+	assert.Equal(t, transition.TxID, receiveTransition.TxID)
 
 	// TransferSend error: nil receiverState
 	_, err = NewTransactionFromTransition(senderState, nil, transition)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "receiver state must not be nil")
+
+	// Release error: nil receiverState must return an error, not panic
+	transition = Transition{Type: TransitionTypeRelease, Amount: decimal.NewFromInt(10), AccountID: "REC"}
+	_, err = NewTransactionFromTransition(senderState, nil, transition)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "receiver state must not be nil for 'release' transition")
+
+	// Empty TxID is rejected.
+	transition = Transition{Type: TransitionTypeHomeDeposit, Amount: decimal.NewFromInt(10), AccountID: *senderState.HomeChannelID}
+	_, err = NewTransactionFromTransition(senderState, nil, transition)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty txID")
 
 	// Invalid
 	transition = Transition{Type: 255}
@@ -591,4 +631,16 @@ func TestPaginationParams_GetOffsetAndLimit(t *testing.T) {
 	lim = 200
 	o, l = p.GetOffsetAndLimit(10, 100)
 	assert.Equal(t, uint32(100), l) // Capped at max
+
+	lim = 0
+	o, l = p.GetOffsetAndLimit(10, 100)
+	assert.Equal(t, uint32(10), l) // Zero treated as absent — falls back to defaultLimit
+	assert.Equal(t, uint32(5), o)
+
+	// Offset is clamped to MaxInt32 so int(offset) never wraps negative on 32-bit.
+	bigOff := uint32(math.MaxUint32)
+	p = &PaginationParams{Offset: &bigOff}
+	o, _ = p.GetOffsetAndLimit(10, 100)
+	assert.Equal(t, uint32(math.MaxInt32), o)
+	assert.GreaterOrEqual(t, int(o), 0)
 }

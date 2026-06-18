@@ -9,7 +9,6 @@ Nitronode provides a WebSocket-based RPC service that allows users and applicati
 - Perform instant off-chain transfers between users
 - Execute multi-party application sessions with arbitrary logic
 - Delegate signing authority via session keys
-- Atomically rebalance funds across multiple application sessions
 - Track balances and transaction history across all supported assets
 
 The node monitors blockchain events, validates state transitions using a monotonic sequence logic, and ensures secure coordination between on-chain channels and off-chain state updates.
@@ -20,6 +19,7 @@ Nitronode is built with a modular architecture:
 
 - **RPC Server**: WebSocket-based JSON-RPC server handling client requests.
 - **Blockchain Listeners**: Monitors on-chain events from Nitrolite `ChannelHub` contracts across multiple chains.
+- **Confirmation Gate**: Per-chain reorg-protection buffer between the listener and event handlers. Delays event delivery by `confirmation_delay_secs` so that events whose blocks are reorged out before the window elapses are dropped instead of committed. See [docs/reorg-fix.md](docs/reorg-fix.md).
 - **Event Handlers**: Processes blockchain events to update internal channel and user states.
 - **Storage Layer**:
   - **Database Store**: Persistent storage for channels, states, and transactions (supports SQLite and PostgreSQL).
@@ -32,11 +32,21 @@ Nitronode is built with a modular architecture:
 The WebSocket RPC service exposes several API groups:
 
 1. **channel_v1**: Core payment channel management (Creation, State Submission, Latest State).
-2. **app_session_v1**: Advanced application session management (Creation, Deposits, Rebalancing).
+2. **app_session_v1**: Advanced application session management (Creation, Deposits).
 3. **user_v1**: User-specific queries (Balances, Transaction History).
 4. **node_v1**: Node-level information (Config, Supported Assets).
 
 For detailed API specifications, see [../docs/api.yaml](../docs/api.yaml).
+
+### Event handler version monotonicity
+
+Channel-lifecycle events from the blockchain listener are applied with per-channel version monotonicity. If an event whose `StateVersion` is lower than the row's current `StateVersion` arrives (possible under contract reentrancy, indexer mis-order, or reorg replay), the handler logs a structured warning and drops the event without mutating the row. Implementation lives in [`event_handlers/service.go`](event_handlers/service.go).
+
+For home-channel events (`ChannelChallenged`, `ChannelCheckpointed`, `ChannelClosed`), a dropped event additionally triggers a chain-state refresh: the Node fetches the authoritative on-chain channel state via `getChannelData` on the bound `ChannelHub` contract and overwrites the row's `Status`, `StateVersion`, and `ChallengeExpiresAt`. The refresher implementation is [`pkg/blockchain/evm/chain_state_refresher.go`](../pkg/blockchain/evm/chain_state_refresher.go), bound through the [`core.ChainStateRefresher`](../pkg/core/interface.go) interface.
+
+The refresh runs inside the event-processing transaction. On RPC failure the transaction rolls back and the listener replays the event, so convergence is never silently lost. Escrow event handlers enforce the guard without the refresh hook — cross-chain RPC plumbing for escrow refresh is a deferred follow-up item. Pending its arrival, escrow rows can remain divergent from chain across an interim window until the next on-chain event arrives.
+
+Operators may see `"event state version is less than current channel state version, ignoring"` warn logs during channel-lifecycle events; these indicate the defense-in-depth path fired and the Node converged with chain.
 
 ## Configuration
 
@@ -54,6 +64,7 @@ blockchains:
     id: 80002
     contract_address: "0x9d1E88627884e066B81A02d69BCB2437a520534C"
     block_step: 1000
+    confirmation_delay_secs: 10   # reorg-protection window; 0 disables. See docs/reorg-fix.md.
 
   - name: base_sepolia
     id: 84532
@@ -63,6 +74,8 @@ blockchains:
 ### Asset Configuration
 
 Define supported assets and their multi-chain token deployments in `config/assets.yaml`:
+
+> **Warning:** all tokens grouped under one `symbol` are treated as fully fungible 1:1 representations of the same asset — off-chain credit denominated in that asset can be redeemed from any of these token inventories. Group only economically equivalent (1:1 redeemable) tokens under one symbol; mixing non-equivalent tokens (e.g. a test token and production USDC) lets credit sourced from the cheap inventory be redeemed against the valuable one. Equivalence cannot be verified programmatically and is an operator responsibility. See [Asset-symbol equivalence](../docs/protocol/security-and-limitations.md).
 
 ```yaml
 assets:
@@ -127,6 +140,7 @@ docker run -p 7824:7824 -e NITRONODE_SIGNER_KEY=... nitronode
 nitronode/
 ├── api/             # JSON-RPC request handlers
 ├── config/          # Default configurations and migrations
+├── docs/            # Component design notes (e.g. reorg-fix.md)
 ├── event_handlers/  # Logic for reacting to blockchain events
 ├── metrics/         # Prometheus telemetry implementation
 ├── store/           # Persistence layer (SQL and Memory)
@@ -156,6 +170,7 @@ The following protocol operations are fully specified in [protocol-description.m
 - [Nitrolite Protocol Overview](../protocol-description.md)
 - [Communication Flows](../docs/communication_flows/)
 - [API Reference](../docs/api.yaml)
+- [Reorg-Protection Confirmation Gate](docs/reorg-fix.md)
 
 ## License
 

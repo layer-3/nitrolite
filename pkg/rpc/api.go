@@ -189,18 +189,6 @@ type SignedAppStateUpdateV1 struct {
 	QuorumSigs []string `json:"quorum_sigs"`
 }
 
-// AppSessionsV1RebalanceAppSessionsRequest rebalances multiple application sessions atomically.
-type AppSessionsV1RebalanceAppSessionsRequest struct {
-	// SignedUpdates is the list of signed application session state updates
-	SignedUpdates []SignedAppStateUpdateV1 `json:"signed_updates"`
-}
-
-// AppSessionsV1RebalanceAppSessionsResponse returns the batch ID for the rebalancing operation.
-type AppSessionsV1RebalanceAppSessionsResponse struct {
-	// BatchID is the unique identifier for this rebalancing operation
-	BatchID string `json:"batch_id"`
-}
-
 // AppSessionsV1GetAppDefinitionRequest retrieves the application definition for a specific app session.
 type AppSessionsV1GetAppDefinitionRequest struct {
 	// AppSessionID is the application session ID
@@ -291,40 +279,6 @@ type AppSessionsV1GetLastKeyStatesResponse struct {
 }
 
 // ============================================================================
-// Apps Group - V1 API
-// ============================================================================
-
-// AppsV1GetAppsRequest retrieves registered applications with optional filtering.
-type AppsV1GetAppsRequest struct {
-	// AppID filters by application ID
-	AppID *string `json:"app_id,omitempty"`
-	// OwnerWallet filters by owner wallet address
-	OwnerWallet *string `json:"owner_wallet,omitempty"`
-	// Pagination contains pagination parameters (offset, limit, sort)
-	Pagination *PaginationParamsV1 `json:"pagination,omitempty"`
-}
-
-// AppsV1GetAppsResponse returns the list of registered applications.
-type AppsV1GetAppsResponse struct {
-	// Apps is the list of registered applications
-	Apps []AppInfoV1 `json:"apps"`
-	// Metadata contains pagination information
-	Metadata PaginationMetadataV1 `json:"metadata"`
-}
-
-// AppsV1SubmitAppVersionRequest submits a new application version (currently only creation is supported).
-type AppsV1SubmitAppVersionRequest struct {
-	// App contains the application definition
-	App AppV1 `json:"app"`
-	// OwnerSig is the owner's signature over the packed app data
-	OwnerSig string `json:"owner_sig"`
-}
-
-// AppsV1SubmitAppVersionResponse returns the result of the application version submission.
-type AppsV1SubmitAppVersionResponse struct {
-}
-
-// ============================================================================
 // User Group - V1 API
 // ============================================================================
 
@@ -362,18 +316,6 @@ type UserV1GetTransactionsResponse struct {
 	Transactions []TransactionV1 `json:"transactions"`
 	// Metadata contains pagination information
 	Metadata PaginationMetadataV1 `json:"metadata"`
-}
-
-// UserV1GetActionAllowancesRequest retrieves the current action allowances for a user.
-type UserV1GetActionAllowancesRequest struct {
-	// Wallet is the user's wallet address
-	Wallet string `json:"wallet"`
-}
-
-// UserV1GetActionAllowancesResponse returns the list of action allowances for the user.
-type UserV1GetActionAllowancesResponse struct {
-	// Allowances is the list of action allowances for the user
-	Allowances []ActionAllowanceV1 `json:"allowances"`
 }
 
 // ============================================================================

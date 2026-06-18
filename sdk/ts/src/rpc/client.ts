@@ -138,13 +138,6 @@ export class RPCClient {
     return this.call(Methods.AppSessionsV1SubmitAppStateMethod, req, signal);
   }
 
-  async appSessionsV1RebalanceAppSessions(
-    req: API.AppSessionsV1RebalanceAppSessionsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppSessionsV1RebalanceAppSessionsResponse> {
-    return this.call(Methods.AppSessionsV1RebalanceAppSessionsMethod, req, signal);
-  }
-
   async appSessionsV1GetAppDefinition(
     req: API.AppSessionsV1GetAppDefinitionRequest,
     signal?: AbortSignal
@@ -185,24 +178,6 @@ export class RPCClient {
   }
 
   // ============================================================================
-  // Apps Group - V1 API Methods
-  // ============================================================================
-
-  async appsV1GetApps(
-    req: API.AppsV1GetAppsRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppsV1GetAppsResponse> {
-    return this.call(Methods.AppsV1GetAppsMethod, req, signal);
-  }
-
-  async appsV1SubmitAppVersion(
-    req: API.AppsV1SubmitAppVersionRequest,
-    signal?: AbortSignal
-  ): Promise<API.AppsV1SubmitAppVersionResponse> {
-    return this.call(Methods.AppsV1SubmitAppVersionMethod, req, signal);
-  }
-
-  // ============================================================================
   // User Group - V1 API Methods
   // ============================================================================
 
@@ -218,13 +193,6 @@ export class RPCClient {
     signal?: AbortSignal
   ): Promise<API.UserV1GetTransactionsResponse> {
     return this.call(Methods.UserV1GetTransactionsMethod, req, signal);
-  }
-
-  async userV1GetActionAllowances(
-    req: API.UserV1GetActionAllowancesRequest,
-    signal?: AbortSignal
-  ): Promise<API.UserV1GetActionAllowancesResponse> {
-    return this.call(Methods.UserV1GetActionAllowancesMethod, req, signal);
   }
 
   // ============================================================================

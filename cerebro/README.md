@@ -68,12 +68,12 @@ config session-key app-keys                                  List active app ses
 ```text
 token-balance <chain_id> <asset>             Check on-chain token balance
 approve <chain_id> <asset> <amount>          Approve token spending for deposits
-deposit <chain_id> <asset> <amount>          Deposit to channel (auto-create if needed)
+deposit <chain_id> <asset> <amount>          Deposit to channel (auto-create if needed; off-chain credit lags by the chain's confirmation delay)
 withdraw <chain_id> <asset> <amount>         Withdraw from channel
-transfer <recipient> <asset> <amount>        Transfer to another wallet
+transfer <recipient> <asset> <amount>        Transfer to another wallet (off-chain, instant)
 acknowledge <asset>                          Acknowledge transfer or channel creation
 close-channel <asset>                        Close home channel on-chain
-checkpoint <asset>                           Submit latest state on-chain
+checkpoint <asset>                           Submit latest state on-chain (off-chain credit lags by the chain's confirmation delay)
 ```
 
 ### Queries
@@ -84,30 +84,15 @@ chains                        List supported blockchains
 assets [chain_id]             List supported assets (optionally filter by chain)
 balances [wallet]             Get user balances (defaults to configured wallet)
 transactions [wallet]         Get transaction history
-action-allowances [wallet]    Get action allowances
 state [wallet] <asset>        Get latest state
 home-channel [wallet] <asset> Get home channel
 escrow-channel <channel_id>   Get escrow channel by ID
 ```
 
-### App Registry
+### App Sessions
 
 ```text
-app-info <app_id>                    Show application details
-my-apps                              List your registered applications
-register-app <app_id> [no-approval]  Register a new application
-app-sessions                         List app sessions
-```
-
-### Security Token Operations
-
-```text
-security-token approve <chain_id> <amount>                  Approve security token spending
-security-token balance <chain_id> [wallet]                  Check escrowed security token balance
-security-token escrow <chain_id> [target_address] <amount>  Escrow security tokens
-security-token initiate-withdrawal <chain_id>               Start unlock period
-security-token cancel-withdrawal <chain_id>                 Cancel unlock and re-lock
-security-token withdraw <chain_id> <destination>            Withdraw unlocked security tokens
+app-sessions                  List app sessions
 ```
 
 ### Other
@@ -218,6 +203,17 @@ cerebro> chains
 cerebro> assets
 cerebro> config node
 ```
+
+### Confirmation delay
+
+On-chain operations (`deposit`, `withdraw`, `checkpoint`, `close-channel`) submit a transaction and
+return once it is **mined**. The node then waits a per-chain **confirmation delay** before crediting the
+result to your off-chain balance — a safety gate against chain reorganizations. Until it elapses,
+`balances` will not reflect a fresh deposit.
+
+`chains` and `config node` print each chain's delay (`confirmation_delay_secs`; `0` means the gate is
+disabled and credit is immediate). Off-chain `transfer` is never gated. After a `deposit`/`checkpoint`,
+re-run `balances` once the printed delay has passed to see the credit.
 
 ### Inspect State
 

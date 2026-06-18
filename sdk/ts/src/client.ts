@@ -10,7 +10,7 @@ import { Decimal } from 'decimal.js';
 import * as core from './core/index.js';
 import * as app from './app/index.js';
 import * as API from './rpc/api.js';
-import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1, AppV1, AppInfoV1 } from './rpc/types.js';
+import { StateV1, ChannelDefinitionV1, ChannelSessionKeyStateV1 } from './rpc/types.js';
 import { RPCClient } from './rpc/client.js';
 import { WebsocketDialer } from './rpc/dialer.js';
 import { ClientAssetStore } from './asset_store.js';
@@ -29,7 +29,6 @@ import {
   transformSignedAppStateUpdateToRPC,
   transformAppSessionInfo,
   transformAppDefinitionFromRPC,
-  transformActionAllowance,
 } from './utils.js';
 import {
   transformChannelSessionKeyState,
@@ -45,6 +44,24 @@ import { EthereumMsgSigner, StateSigner, TransactionSigner } from './signers.js'
  * Default challenge period for channels (1 day in seconds)
  */
 export const DEFAULT_CHALLENGE_PERIOD = 86400;
+
+/** Default poll interval for waitForCheckpoint (ms). */
+export const DEFAULT_CHECKPOINT_POLL_INTERVAL_MS = 3000;
+
+export interface WaitForCheckpointOptions {
+    /** Chain the checkpoint tx was submitted on. Used to apply the confirmation_delay_secs
+     *  lower-bound wait before the first poll. If omitted, no lower-bound wait is applied. */
+    chainId?: bigint;
+    /** Expected minimum ENFORCED balance the asset should reach (in display units). When set,
+     *  the wait resolves once the polled `enforced` balance is >= this value. When omitted, the
+     *  wait resolves on the first `enforced` balance change relative to the value at call time.
+     *  NOTE: the gate credits on-chain events to `enforced`, not spendable `balance` — see below. */
+    expectedBalance?: Decimal;
+    /** Max time to wait after the lower-bound delay, in ms. Default: 120_000. */
+    timeoutMs?: number;
+    /** Poll interval in ms. Default: DEFAULT_CHECKPOINT_POLL_INTERVAL_MS (3000). */
+    pollIntervalMs?: number;
+}
 
 /**
  * Strip the channel signer type prefix byte from a signature.
@@ -107,7 +124,6 @@ export class Client {
   private exitPromise: Promise<void>;
   private exitResolve?: () => void;
   private blockchainClients: Map<bigint, blockchain.evm.Client>;
-  private blockchainLockingClients: Map<bigint, blockchain.evm.LockingClient>;
   private homeBlockchains: Map<string, bigint>;
   private stateSigner: StateSigner;
   private txSigner: TransactionSigner;
@@ -127,7 +143,6 @@ export class Client {
     this.txSigner = txSigner;
     this.assetStore = assetStore;
     this.blockchainClients = new Map();
-    this.blockchainLockingClients = new Map();
     this.homeBlockchains = new Map();
     this.stateAdvancer = new core.StateAdvancerV1(assetStore);
 
@@ -964,92 +979,6 @@ export class Client {
   }
 
   // ============================================================================
-  // Locking On-Chain Methods
-  // ============================================================================
-
-  /**
-   * Lock tokens into the Locking contract on the specified blockchain.
-   * The tokens are locked for the specified target address. Before calling this method,
-   * you must approve the Locking contract to spend your tokens using approveSecurityToken.
-   *
-   * @param targetWalletAddress - The Ethereum address to lock tokens for
-   * @param blockchainId - The blockchain network ID
-   * @param amount - The amount of tokens to lock (in human-readable decimals, e.g., 100.5 USDC)
-   * @returns Transaction hash
-   */
-  async escrowSecurityTokens(targetWalletAddress: string, blockchainId: bigint, amount: Decimal): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.lock(
-      targetWalletAddress as Address,
-      amount,
-    );
-  }
-
-  /**
-   * Initiate the unlock process for locked tokens in the Locking contract.
-   * After the unlock period elapses, withdrawSecurityTokens can be called to retrieve the tokens.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @returns Transaction hash
-   */
-  async initiateSecurityTokensWithdrawal(blockchainId: bigint): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.unlock();
-  }
-
-  /**
-   * Re-lock tokens that are currently in the unlocking state,
-   * cancelling the pending unlock and returning them to the locked state.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @returns Transaction hash
-   */
-  async cancelSecurityTokensWithdrawal(blockchainId: bigint): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.relock();
-  }
-
-  /**
-   * Withdraw unlocked tokens from the Locking contract to the specified destination.
-   * Can only be called after the unlock period has fully elapsed.
-   *
-   * @param blockchainId - The blockchain network ID
-   * @param destinationWalletAddress - The Ethereum address to receive the withdrawn tokens
-   * @returns Transaction hash
-   */
-  async withdrawSecurityTokens(blockchainId: bigint, destinationWalletAddress: string): Promise<string> {
-    await this.initializeLockingClient(blockchainId);
-    return this.blockchainLockingClients.get(blockchainId)!.withdraw(
-      destinationWalletAddress as Address,
-    );
-  }
-
-  /**
-   * Approve the Locking contract to spend tokens on behalf of the caller.
-   * This must be called before escrowSecurityTokens.
-   *
-   * @param chainId - The blockchain network ID
-   * @param amount - The amount of tokens to approve
-   * @returns Transaction hash
-   */
-  async approveSecurityToken(chainId: bigint, amount: Decimal): Promise<string> {
-    await this.initializeLockingClient(chainId);
-    return this.blockchainLockingClients.get(chainId)!.approveToken(amount);
-  }
-
-  /**
-   * Get the locked balance of a user in the Locking contract.
-   *
-   * @param chainId - The blockchain network ID
-   * @param wallet - The Ethereum address to check
-   * @returns The locked balance as a Decimal (adjusted for token decimals)
-   */
-  async getLockedBalance(chainId: bigint, wallet: string): Promise<Decimal> {
-    await this.initializeLockingClient(chainId);
-    return this.blockchainLockingClients.get(chainId)!.getBalance(wallet as Address);
-  }
-
-  // ============================================================================
   // Node Information Methods
   // ============================================================================
 
@@ -1099,6 +1028,26 @@ export class Client {
   async getBlockchains(): Promise<core.Blockchain[]> {
     const config = await this.getConfig();
     return config.blockchains;
+  }
+
+  /**
+   * GetConfirmationDelay returns the confirmation-gate delay, in seconds, that the node
+   * applies before crediting an on-chain event for the given chain. A return value of 0
+   * means the gate is disabled and events are credited immediately.
+   *
+   * This fetches the node config on each call (config is not cached on the client).
+   *
+   * @param chainId - The blockchain network ID (e.g., 1n for Ethereum mainnet)
+   * @returns Delay in seconds before off-chain credit lands; 0 if the gate is disabled
+   * @throws If the chain is not present in the node config
+   */
+  async getConfirmationDelay(chainId: bigint): Promise<number> {
+    const blockchains = await this.getBlockchains();
+    const chain = blockchains.find((b) => b.id === chainId);
+    if (!chain) {
+      throw new Error(`blockchain ${chainId} not found in node config`);
+    }
+    return chain.confirmationDelaySecs;
   }
 
   /**
@@ -1152,6 +1101,81 @@ export class Client {
   }
 
   /**
+   * WaitForCheckpoint waits until the off-chain credit for `asset` lands after an on-chain
+   * checkpoint transaction. Because the node applies a per-chain confirmation gate
+   * (confirmation_delay_secs) before crediting an event, the off-chain balance does not
+   * update the instant the tx receipt is mined — it updates up to confirmation_delay_secs later.
+   *
+   * The method:
+   *   1. If opts.chainId is given, sleeps for that chain's confirmation_delay_secs (the
+   *      lower bound — the credit cannot arrive before the gate elapses) before polling.
+   *   2. Polls getBalances(user) every pollIntervalMs until either the target condition is
+   *      met or timeoutMs elapses.
+   *
+   * Target condition:
+   *   - opts.expectedBalance set → balance for `asset` is >= expectedBalance.
+   *   - otherwise → balance for `asset` differs from the value observed at call time
+   *     ("balance changed").
+   *
+   * @param asset - The asset symbol (e.g., "usdc")
+   * @param txHash - The checkpoint transaction hash (informational; included in the timeout error)
+   * @param opts - See WaitForCheckpointOptions
+   * @returns The BalanceEntry for `asset` once the condition is met
+   * @throws If the timeout elapses before the credit lands, or on RPC failure
+   */
+  async waitForCheckpoint(
+    asset: string,
+    txHash: string,
+    opts?: WaitForCheckpointOptions
+  ): Promise<core.BalanceEntry> {
+    const wallet = this.getUserAddress();
+    const pollIntervalMs = opts?.pollIntervalMs ?? DEFAULT_CHECKPOINT_POLL_INTERVAL_MS;
+    const timeoutMs = opts?.timeoutMs ?? 120_000;
+
+    // Snapshot the starting ENFORCED balance for "changed" mode. The confirmation gate
+    // credits on-chain events to the `enforced` balance (RefreshUserEnforcedBalance updates
+    // the `enforced` column), so that is the field that lands after the gate elapses — NOT
+    // spendable `balance`, which only moves on the user's own signed home_deposit transition.
+    const findEnforced = (entries: core.BalanceEntry[]): Decimal =>
+      entries.find((e) => e.asset === asset)?.enforced ?? new Decimal(0);
+    const startEnforced = findEnforced(await this.getBalances(wallet));
+
+    // Lower-bound wait: the credit cannot land before the gate elapses.
+    if (opts?.chainId !== undefined) {
+      const delaySecs = await this.getConfirmationDelay(opts.chainId);
+      if (delaySecs > 0) {
+        await new Promise((r) => setTimeout(r, delaySecs * 1000));
+      }
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    // Loop: poll, check condition, sleep. First poll happens immediately after the
+    // lower-bound wait.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const balances = await this.getBalances(wallet);
+      const entry = balances.find((e) => e.asset === asset);
+      const current = entry?.enforced ?? new Decimal(0);
+
+      const satisfied =
+        opts?.expectedBalance !== undefined
+          ? current.gte(opts.expectedBalance)
+          : !current.eq(startEnforced);
+
+      if (satisfied && entry) {
+        return entry;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `waitForCheckpoint timed out after ${timeoutMs}ms waiting for ${asset} credit (tx ${txHash})`
+        );
+      }
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+  }
+
+  /**
    * GetTransactions retrieves the transaction history for a user's wallet.
    *
    * @param wallet - The user's wallet address
@@ -1194,26 +1218,6 @@ export class Client {
       transactions: resp.transactions.map(transformTransaction),
       metadata: transformPaginationMetadata(resp.metadata),
     };
-  }
-
-  /**
-   * GetActionAllowances retrieves the action allowances for a user based on their staking level.
-   *
-   * @param wallet - The user's wallet address
-   * @returns Array of action allowances for each gated action
-   *
-   * @example
-   * ```typescript
-   * const allowances = await client.getActionAllowances('0x1234...');
-   * for (const a of allowances) {
-   *   console.log(`${a.gatedAction}: ${a.used}/${a.allowance} (${a.timeWindow})`);
-   * }
-   * ```
-   */
-  async getActionAllowances(wallet: Address): Promise<core.ActionAllowance[]> {
-    const req: API.UserV1GetActionAllowancesRequest = { wallet };
-    const resp = await this.rpcClient.userV1GetActionAllowances(req);
-    return resp.allowances.map(transformActionAllowance);
   }
 
   // ============================================================================
@@ -1573,126 +1577,6 @@ export class Client {
     await this.rpcClient.appSessionsV1SubmitAppState(req);
   }
 
-  /**
-   * RebalanceAppSessions rebalances multiple application sessions atomically.
-   *
-   * This method performs atomic rebalancing across multiple app sessions, ensuring
-   * that funds are redistributed consistently without the risk of partial updates.
-   *
-   * @param signedUpdates - Array of signed app state updates to apply atomically
-   * @returns BatchID for tracking the rebalancing operation
-   *
-   * @example
-   * ```typescript
-   * const updates: app.SignedAppStateUpdateV1[] = [
-   *   {
-   *     appStateUpdate: { appSessionId: 'session1', intent: app.AppStateUpdateIntent.Rebalance, ... },
-   *     quorumSigs: ['sig1', 'sig2'],
-   *   },
-   *   {
-   *     appStateUpdate: { appSessionId: 'session2', intent: app.AppStateUpdateIntent.Rebalance, ... },
-   *     quorumSigs: ['sig3', 'sig4'],
-   *   },
-   * ];
-   * const batchId = await client.rebalanceAppSessions(updates);
-   * console.log('Rebalance batch ID:', batchId);
-   * ```
-   */
-  async rebalanceAppSessions(
-    signedUpdates: app.SignedAppStateUpdateV1[]
-  ): Promise<string> {
-    // Transform SDK types to RPC types
-    const rpcUpdates = signedUpdates.map(transformSignedAppStateUpdateToRPC);
-
-    const req: API.AppSessionsV1RebalanceAppSessionsRequest = {
-      signed_updates: rpcUpdates as any, // RPC type
-    };
-
-    const resp = await this.rpcClient.appSessionsV1RebalanceAppSessions(req);
-    return resp.batch_id;
-  }
-
-  // ============================================================================
-  // App Registry Methods
-  // ============================================================================
-
-  /**
-   * GetApps retrieves registered applications with optional filtering.
-   *
-   * @param options - Optional filters (appId, ownerWallet, pagination)
-   * @returns Array of registered apps and pagination metadata
-   *
-   * @example
-   * ```typescript
-   * const { apps, metadata } = await client.getApps({ ownerWallet: '0x1234...' });
-   * for (const app of apps) {
-   *   console.log(`${app.id}: owned by ${app.owner_wallet}`);
-   * }
-   * ```
-   */
-  async getApps(options?: {
-    appId?: string;
-    ownerWallet?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{ apps: AppInfoV1[]; metadata: core.PaginationMetadata }> {
-    const req: API.AppsV1GetAppsRequest = {
-      app_id: options?.appId,
-      owner_wallet: options?.ownerWallet,
-      pagination: options?.page && options?.pageSize ? {
-        offset: (options.page - 1) * options.pageSize,
-        limit: options.pageSize,
-      } : undefined,
-    };
-    const resp = await this.rpcClient.appsV1GetApps(req);
-    return {
-      apps: resp.apps,
-      metadata: transformPaginationMetadata(resp.metadata),
-    };
-  }
-
-  /**
-   * RegisterApp registers a new application in the app registry.
-   * Currently only version 1 (creation) is supported.
-   *
-   * The method builds the app definition from the provided parameters,
-   * using the client's signer address as the owner wallet and version 1.
-   * It then packs and signs the definition automatically.
-   *
-   * Session key signers are not allowed to perform this action; the main
-   * wallet signer must be used.
-   *
-   * @param appID - The application identifier
-   * @param metadata - The application metadata
-   * @param creationApprovalNotRequired - Whether sessions can be created without owner approval
-   *
-   * @example
-   * ```typescript
-   * await client.registerApp('my-app', '{"name": "My App"}', false);
-   * ```
-   */
-  async registerApp(appID: string, metadata: string, creationApprovalNotRequired: boolean): Promise<void> {
-    const appDef: AppV1 = {
-      id: appID,
-      owner_wallet: this.txSigner.getAddress(),
-      metadata,
-      version: '1',
-      creation_approval_not_required: creationApprovalNotRequired,
-    };
-
-    const packed = app.packAppV1(appDef);
-    if (!this.txSigner.signPersonalMessage) {
-      throw new Error('TransactionSigner must implement signPersonalMessage for app registration');
-    }
-    const ownerSig = await this.txSigner.signPersonalMessage(packed);
-
-    const req: API.AppsV1SubmitAppVersionRequest = {
-      app: appDef,
-      owner_sig: ownerSig,
-    };
-    await this.rpcClient.appsV1SubmitAppVersion(req);
-  }
-
   // ============================================================================
   // Channel Session Key Methods
   // ============================================================================
@@ -1762,10 +1646,11 @@ export class Client {
    *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
    *     for the per-user cap and the auth path stops accepting state signed by it
    *
-   * The state must carry both the wallet's user_sig (proving the user authorized the
-   * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
-   * are rejected.
+   * Activation, rotation, and re-activation (expires_at > now) require both the wallet's
+   * user_sig (proving the user authorized the delegation) and the session-key holder's
+   * session_key_sig (proving possession). Revocation (expires_at <= now) requires only
+   * user_sig — use revokeChannelSessionKey for the wallet-only revocation of a lost,
+   * unavailable, or compromised key.
    *
    * @param state - The channel session key state containing delegation information
    */
@@ -1774,6 +1659,34 @@ export class Client {
       state,
     };
     await this.rpcClient.channelsV1SubmitSessionKeyState(req);
+  }
+
+  /**
+   * Revoke a channel session key using only the wallet's signature. Use it when the
+   * session-key holder cannot or will not co-sign — a lost, unavailable, or compromised
+   * delegate. The supplied state must carry the next monotonic version (latest + 1) and an
+   * expires_at at or before now; this method signs it with the wallet (user_sig) and submits
+   * with an empty session_key_sig. The server accepts user-only signatures only on the
+   * revocation path (expires_at <= now). For registration, rotation, or extension use
+   * submitChannelSessionKeyState with both signatures.
+   *
+   * @param state - The channel session key state to revoke (version = latest + 1, expires_at <= now). Signature fields are supplied by this method, so callers omit them.
+   */
+  async revokeChannelSessionKey(
+    state: Omit<ChannelSessionKeyStateV1, 'user_sig' | 'session_key_sig'>
+  ): Promise<void> {
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (BigInt(state.expires_at) > nowSec) {
+      throw new Error(
+        `revocation requires expires_at at or before now, got ${state.expires_at}`
+      );
+    }
+    const fullState: ChannelSessionKeyStateV1 = { ...state, user_sig: '', session_key_sig: '' };
+    const userSig = await this.signChannelSessionKeyState(fullState);
+    await this.submitChannelSessionKeyState({
+      ...fullState,
+      user_sig: userSig,
+    });
   }
 
   /**
@@ -1856,10 +1769,11 @@ export class Client {
    *   - revocation: bump version with expires_at <= now to retire the key; the slot is freed
    *     for the per-user cap and the auth path stops accepting state signed by it
    *
-   * The state must carry both the wallet's user_sig (proving the user authorized the
-   * delegation) and the session-key holder's session_key_sig (proving possession of the
-   * key being registered, rotated, or revoked). Submits without a valid session_key_sig
-   * are rejected.
+   * Activation, rotation, and re-activation (expires_at > now) require both the wallet's
+   * user_sig (proving the user authorized the delegation) and the session-key holder's
+   * session_key_sig (proving possession). Revocation (expires_at <= now) requires only
+   * user_sig — use revokeSessionKey for the wallet-only revocation of a lost, unavailable,
+   * or compromised key.
    *
    * @param state - The session key state containing delegation information
    */
@@ -1868,6 +1782,34 @@ export class Client {
       state,
     };
     await this.rpcClient.appSessionsV1SubmitSessionKeyState(req);
+  }
+
+  /**
+   * Revoke an app session key using only the wallet's signature. Use it when the
+   * session-key holder cannot or will not co-sign — a lost, unavailable, or compromised
+   * delegate. The supplied state must carry the next monotonic version (latest + 1) and an
+   * expires_at at or before now; this method signs it with the wallet (user_sig) and submits
+   * with an empty session_key_sig. The server accepts user-only signatures only on the
+   * revocation path (expires_at <= now). For registration, rotation, or extension use
+   * submitSessionKeyState with both signatures.
+   *
+   * @param state - The app session key state to revoke (version = latest + 1, expires_at <= now). Signature fields are supplied by this method, so callers omit them.
+   */
+  async revokeSessionKey(
+    state: Omit<app.AppSessionKeyStateV1, 'user_sig' | 'session_key_sig'>
+  ): Promise<void> {
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (BigInt(state.expires_at) > nowSec) {
+      throw new Error(
+        `revocation requires expires_at at or before now, got ${state.expires_at}`
+      );
+    }
+    const fullState: app.AppSessionKeyStateV1 = { ...state, user_sig: '', session_key_sig: '' };
+    const userSig = await this.signSessionKeyState(fullState);
+    await this.submitSessionKeyState({
+      ...fullState,
+      user_sig: userSig,
+    });
   }
 
   /**
@@ -2053,32 +1995,6 @@ export class Client {
     );
 
     this.blockchainClients.set(chainId, blockchainClient);
-  }
-
-  /**
-   * Initialize a Locking contract client for a specific chain.
-   * This is called lazily when a locking operation is needed.
-   */
-  private async initializeLockingClient(chainId: bigint): Promise<void> {
-    if (this.blockchainLockingClients.has(chainId)) {
-      return;
-    }
-
-    const { rpcUrl, blockchainInfo } = await this.getBlockchainRPCInfo(chainId);
-
-    if (!blockchainInfo.lockingContractAddress) {
-      throw new Error(`locking contract address not configured for blockchain ${chainId}`);
-    }
-
-    const { publicClient, walletClient } = this.createEVMClients(chainId, rpcUrl);
-
-    const lockingClient = new blockchain.evm.LockingClient(
-      blockchainInfo.lockingContractAddress,
-      publicClient,
-      walletClient || undefined,
-    );
-
-    this.blockchainLockingClients.set(chainId, lockingClient);
   }
 
   /**

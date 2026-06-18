@@ -67,12 +67,6 @@ type channelChallengedEvent struct {
 	UserSig string `json:"user_sig,omitempty"`
 }
 
-type UserLockedBalanceUpdatedEvent struct {
-	UserAddress  string          `json:"user_address"`
-	BlockchainID uint64          `json:"blockchain_id"`
-	Balance      decimal.Decimal `json:"balance"`
-}
-
 // ValidatorRegisteredEvent is emitted by ChannelHub when the node registers a new
 // signature validator. Users should react to unexpected registrations by revoking
 // ERC20 approvals granted to ChannelHub — see contracts/SECURITY.md for details.
@@ -93,4 +87,5 @@ type BlockchainEvent struct {
 	BlockNumber     uint64 `json:"block_number"`
 	TransactionHash string `json:"transaction_hash"`
 	LogIndex        uint32 `json:"log_index"`
+	BlockHash       string `json:"block_hash"`
 }

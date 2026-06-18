@@ -2,7 +2,9 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -11,6 +13,35 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
 )
+
+// HashRegex matches a 32-byte hash rendered as a 0x-prefixed hex string, the
+// canonical form of channel IDs and app session IDs (both Keccak256 hashes).
+// Case-insensitive, since callers may submit checksummed or lowercased hex.
+var HashRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
+
+// LowercaseHashRegex matches the strict lowercase canonical form of a 32-byte
+// hash, rejecting checksummed or uppercase hex.
+var LowercaseHashRegex = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+
+// IsValidHash reports whether s is a well-formed 32-byte hash (see HashRegex).
+// When requireLowercase is true, s must be in strict lowercase canonical form
+// (see LowercaseHashRegex); otherwise checksummed and uppercase hex are accepted.
+func IsValidHash(s string, requireLowercase bool) bool {
+	if requireLowercase {
+		return LowercaseHashRegex.MatchString(s)
+	}
+	return HashRegex.MatchString(s)
+}
+
+// SafeOffset converts a uint32 pagination offset to a non-negative int suitable
+// for GORM's Offset(). A raw int(offset) wraps to a negative value on a 32-bit
+// target for large uint32s, which GORM treats as "no offset" and silently
+// returns the first page. Clamping to MaxInt32 keeps the conversion safe even
+// when a caller reaches the store without routing through
+// PaginationParams.GetOffsetAndLimit.
+func SafeOffset(offset uint32) int {
+	return int(min(offset, math.MaxInt32))
+}
 
 // maxInt256 = 2^255 - 1, the largest value representable as Solidity int256.
 var maxInt256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(1))

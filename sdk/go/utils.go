@@ -26,11 +26,11 @@ func transformNodeConfig(resp rpc.NodeV1GetConfigResponse) (*core.NodeConfig, er
 		}
 
 		blockchains = append(blockchains, core.Blockchain{
-			Name:                   info.Name,
-			ID:                     blockchainID,
-			ChannelHubAddress:      info.ChannelHubAddress,
-			LockingContractAddress: info.LockingContractAddress,
-			BlockStep:              0, // Not provided in RPC response
+			Name:                  info.Name,
+			ID:                    blockchainID,
+			ChannelHubAddress:     info.ChannelHubAddress,
+			BlockStep:             0, // Not provided in RPC response
+			ConfirmationDelaySecs: info.ConfirmationDelaySecs,
 		})
 	}
 
@@ -163,6 +163,7 @@ func transformChannel(channel rpc.ChannelV1) (core.Channel, error) {
 		BlockchainID:          blockchainID,
 		TokenAddress:          channel.TokenAddress,
 		ChallengeDuration:     channel.ChallengeDuration,
+		ChallengeExpiresAt:    channel.ChallengeExpiresAt,
 		Nonce:                 nonce,
 		ApprovedSigValidators: channel.ApprovedSigValidators,
 		Status:                channelStatus,

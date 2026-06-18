@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -652,6 +653,29 @@ func TestGenerateChannelMetadata(t *testing.T) {
 	})
 }
 
+func TestSafeOffset(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		offset uint32
+		want   int
+	}{
+		{"zero", 0, 0},
+		{"small", 42, 42},
+		{"max_int32", math.MaxInt32, math.MaxInt32},
+		{"above_max_int32_clamped", math.MaxInt32 + 1, math.MaxInt32},
+		{"max_uint32_clamped", math.MaxUint32, math.MaxInt32},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := SafeOffset(tt.offset)
+			assert.Equal(t, tt.want, got)
+			assert.GreaterOrEqual(t, got, 0, "offset must never be negative")
+		})
+	}
+}
+
 func TestTransitionToIntent_OperateIntents(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -828,5 +852,40 @@ func TestDecimalToInt256(t *testing.T) {
 		_, err := DecimalToInt256(amount, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "below int256 min")
+	})
+}
+
+func TestIsValidHash(t *testing.T) {
+	lowercase := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	uppercase := "0xABCDEF0000000000000000000000000000000000000000000000000000000000"
+	mixed := "0xabcdefABCDEF0000000000000000000000000000000000000000000000000000"
+
+	invalid := []string{
+		"",
+		"0xabc",
+		"1111111111111111111111111111111111111111111111111111111111111111",    // missing 0x
+		"0x111111111111111111111111111111111111111111111111111111111111111",   // 63 hex
+		"0x11111111111111111111111111111111111111111111111111111111111111111", // 65 hex
+		"0xzz11111111111111111111111111111111111111111111111111111111111111",  // non-hex
+	}
+
+	t.Run("case-insensitive", func(t *testing.T) {
+		for _, s := range []string{lowercase, uppercase, mixed} {
+			assert.True(t, IsValidHash(s, false), "expected %q to be valid", s)
+		}
+		for _, s := range invalid {
+			assert.False(t, IsValidHash(s, false), "expected %q to be invalid", s)
+		}
+	})
+
+	t.Run("require lowercase", func(t *testing.T) {
+		assert.True(t, IsValidHash(lowercase, true), "expected %q to be valid", lowercase)
+		// uppercase and mixed are well-formed hex but not canonical lowercase.
+		for _, s := range []string{uppercase, mixed} {
+			assert.False(t, IsValidHash(s, true), "expected %q to be rejected", s)
+		}
+		for _, s := range invalid {
+			assert.False(t, IsValidHash(s, true), "expected %q to be invalid", s)
+		}
 	})
 }

@@ -68,3 +68,67 @@ func (b *ByteTokenBucket) Admit(now time.Time, size int) bool {
 	b.tokens -= cost
 	return true
 }
+
+// RequestTokenBucket is a token bucket on frame COUNT: one token per frame,
+// regardless of size. One bucket per connection; not safe for concurrent use,
+// the connection's read goroutine is the sole caller of Admit.
+//
+// It complements ByteTokenBucket: bytes guard bandwidth, request count guards
+// RPC throughput so a flood of tiny frames — including malformed or
+// unknown-method frames that never reach the handler chain — cannot drive CPU
+// past the intended rate while staying under the byte cap.
+type RequestTokenBucket struct {
+	perSec float64
+	burst  float64
+	tokens float64
+	last   time.Time
+}
+
+// NewRequestTokenBucket returns a bucket pre-filled to burst capacity.
+//
+// perSec is the steady-state refill rate in frames per second.
+// burst is the maximum bucket size; with burst < 1 no frame is ever admitted.
+func NewRequestTokenBucket(perSec, burst float64) *RequestTokenBucket {
+	return &RequestTokenBucket{
+		perSec: perSec,
+		burst:  burst,
+		tokens: burst,
+	}
+}
+
+// Admit refills tokens for elapsed time, caps at burst, then debits one token.
+// The frame size is ignored. Returns false when fewer than one token remains.
+func (b *RequestTokenBucket) Admit(now time.Time, _ int) bool {
+	if !b.last.IsZero() {
+		b.tokens += now.Sub(b.last).Seconds() * b.perSec
+		if b.tokens > b.burst {
+			b.tokens = b.burst
+		}
+	}
+	b.last = now
+
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+// CompositeFrameRateLimiter admits a frame only when every member admits it.
+// Members are consulted in order and short-circuit on the first rejection;
+// because a rejection closes the connection, a member debited before a later
+// member rejects is harmless. nil members are skipped.
+type CompositeFrameRateLimiter []FrameRateLimiter
+
+// Admit returns false as soon as any member rejects the frame.
+func (c CompositeFrameRateLimiter) Admit(now time.Time, size int) bool {
+	for _, l := range c {
+		if l == nil {
+			continue
+		}
+		if !l.Admit(now, size) {
+			return false
+		}
+	}
+	return true
+}

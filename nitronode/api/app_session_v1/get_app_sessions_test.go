@@ -160,7 +160,7 @@ func TestGetAppSessions_SuccessWithAppSessionID(t *testing.T) {
 	}
 
 	// Test data
-	sessionID := "session1"
+	sessionID := "0x3333333333333333333333333333333333333333333333333333333333333333"
 	participant := "0x1234567890123456789012345678901234567890"
 
 	sessions := []app.AppSessionV1{
@@ -189,7 +189,7 @@ func TestGetAppSessions_SuccessWithAppSessionID(t *testing.T) {
 
 	// Mock expectations
 	mockStore.On("GetAppSessions", &sessionID, (*string)(nil), app.AppSessionStatusVoid, &core.PaginationParams{}).Return(sessions, metadata, nil)
-	mockStore.On("GetParticipantAllocations", "session1").Return(map[string]map[string]decimal.Decimal{}, nil)
+	mockStore.On("GetParticipantAllocations", sessionID).Return(map[string]map[string]decimal.Decimal{}, nil)
 
 	// Create RPC request
 	reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{
@@ -269,6 +269,45 @@ func TestGetAppSessions_MissingRequiredParams(t *testing.T) {
 
 	// Verify no store calls were made
 	mockStore.AssertExpectations(t)
+}
+
+func TestGetAppSessions_InvalidAppSessionID(t *testing.T) {
+	mockStore := new(MockStore)
+	mockSigner := NewMockChannelSigner()
+	mockAssetStore := new(MockAssetStore)
+
+	handler := &Handler{
+		useStoreInTx: func(fn StoreTxHandler) error {
+			return fn(mockStore)
+		},
+		signer:        mockSigner,
+		nodeAddress:   mockSigner.PublicKey().Address().String(),
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   new(MockStatePacker),
+		metrics:       metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	// An empty or malformed app_session_id must be rejected, not silently
+	// dropped into an unfiltered list.
+	for _, id := range []string{"", "0xabc", "session1"} {
+		invalidID := id
+		reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{AppSessionID: &invalidID}
+		payload, err := rpc.NewPayload(reqPayload)
+		require.NoError(t, err)
+
+		ctx := &rpc.Context{
+			Context: context.Background(),
+			Request: rpc.Message{Method: "app_sessions.v1.get_app_sessions", Payload: payload},
+		}
+
+		handler.GetAppSessions(ctx)
+
+		require.NotNil(t, ctx.Response.Error(), "id %q should be rejected", id)
+		assert.Contains(t, ctx.Response.Error().Error(), "invalid app_session_id")
+	}
+
+	// A malformed id must never reach the store.
+	mockStore.AssertNotCalled(t, "GetAppSessions")
 }
 
 func TestGetAppSessions_WithStatusFilter(t *testing.T) {
@@ -408,6 +447,77 @@ func TestGetAppSessions_StoreError(t *testing.T) {
 	assert.Contains(t, ctx.Response.Error().Error(), "failed to retrieve app sessions")
 
 	// Verify all mock expectations
+	mockStore.AssertExpectations(t)
+}
+
+// TestGetAppSessions_NilLimit verifies that omitting pagination.limit (nil) uses the default
+// and succeeds without error.
+func TestGetAppSessions_NilLimit(t *testing.T) {
+	mockStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(fn StoreTxHandler) error { return fn(mockStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	participant := "0x1234567890123456789012345678901234567890"
+
+	// Pagination present but Limit omitted — should reach the store with default behavior.
+	mockStore.On("GetAppSessions", (*string)(nil), &participant, app.AppSessionStatusVoid, &core.PaginationParams{Limit: nil}).
+		Return([]app.AppSessionV1{}, core.PaginationMetadata{Page: 1, PerPage: 50, PageCount: 0, TotalCount: 0}, nil)
+
+	reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{
+		Participant: &participant,
+		Pagination:  &rpc.PaginationParamsV1{}, // Limit is nil
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "app_sessions.v1.get_app_sessions", Payload: payload},
+	}
+
+	handler.GetAppSessions(ctx)
+
+	require.Nil(t, ctx.Response.Error())
+	mockStore.AssertExpectations(t)
+}
+
+// TestGetAppSessions_ZeroLimit verifies that pagination.limit == 0 is treated as absent
+// (coerced to the default limit) and succeeds without error.
+func TestGetAppSessions_ZeroLimit(t *testing.T) {
+	mockStore := new(MockStore)
+
+	handler := &Handler{
+		useStoreInTx: func(fn StoreTxHandler) error { return fn(mockStore) },
+		metrics:      metrics.NewNoopRuntimeMetricExporter(),
+	}
+
+	participant := "0x1234567890123456789012345678901234567890"
+	zero := uint32(0)
+
+	// limit=0 passes through to the store; GetOffsetAndLimit coerces it to DefaultLimit.
+	mockStore.On("GetAppSessions", (*string)(nil), &participant, app.AppSessionStatusVoid, &core.PaginationParams{Limit: &zero}).
+		Return([]app.AppSessionV1{}, core.PaginationMetadata{Page: 1, PerPage: 10, PageCount: 0, TotalCount: 0}, nil)
+
+	reqPayload := rpc.AppSessionsV1GetAppSessionsRequest{
+		Participant: &participant,
+		Pagination: &rpc.PaginationParamsV1{
+			Limit: &zero,
+		},
+	}
+	payload, err := rpc.NewPayload(reqPayload)
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "app_sessions.v1.get_app_sessions", Payload: payload},
+	}
+
+	handler.GetAppSessions(ctx)
+
+	require.Nil(t, ctx.Response.Error())
 	mockStore.AssertExpectations(t)
 }
 

@@ -70,3 +70,75 @@ func TestNoopFrameRateLimiter_AdmitsAll(t *testing.T) {
 	require.True(t, lim.Admit(time.Now(), 1<<30))
 	require.True(t, lim.Admit(time.Time{}, 0))
 }
+
+func TestRequestTokenBucket_BurstThenEmpty(t *testing.T) {
+	t.Parallel()
+
+	b := rpc.NewRequestTokenBucket(10, 3)
+	base := time.Unix(0, 0)
+
+	// Frame size is ignored: each frame costs exactly one token.
+	require.True(t, b.Admit(base, 9999))
+	require.True(t, b.Admit(base, 0))
+	require.True(t, b.Admit(base, 1))
+	require.False(t, b.Admit(base, 1), "fourth frame exceeds burst of 3")
+}
+
+func TestRequestTokenBucket_Refill(t *testing.T) {
+	t.Parallel()
+
+	b := rpc.NewRequestTokenBucket(10, 2) // 10 frames/sec => 1 token per 100ms
+	base := time.Unix(0, 0)
+
+	require.True(t, b.Admit(base, 1))
+	require.True(t, b.Admit(base, 1))
+	require.False(t, b.Admit(base, 1), "bucket emptied")
+	require.False(t, b.Admit(base.Add(50*time.Millisecond), 1), "50ms < 100ms, no token yet")
+	require.True(t, b.Admit(base.Add(100*time.Millisecond), 1), "100ms refills one token")
+}
+
+func TestRequestTokenBucket_BurstCap(t *testing.T) {
+	t.Parallel()
+
+	b := rpc.NewRequestTokenBucket(10, 3)
+	base := time.Unix(0, 0)
+
+	// Long idle must not let tokens grow past burst.
+	require.True(t, b.Admit(base.Add(time.Hour), 1))
+	require.True(t, b.Admit(base.Add(time.Hour), 1))
+	require.True(t, b.Admit(base.Add(time.Hour), 1))
+	require.False(t, b.Admit(base.Add(time.Hour), 1), "capped at burst of 3")
+}
+
+func TestRequestTokenBucket_SubUnitBurstRejectsAll(t *testing.T) {
+	t.Parallel()
+
+	b := rpc.NewRequestTokenBucket(10, 0.5)
+	require.False(t, b.Admit(time.Unix(0, 0), 1), "burst < 1 admits no frame")
+}
+
+func TestCompositeFrameRateLimiter_RejectsWhenAnyMemberRejects(t *testing.T) {
+	t.Parallel()
+
+	base := time.Unix(0, 0)
+	// Byte budget is generous; request budget is the binding constraint.
+	lim := rpc.CompositeFrameRateLimiter{
+		rpc.NewByteTokenBucket(1<<20, 1<<20),
+		rpc.NewRequestTokenBucket(10, 2),
+	}
+
+	require.True(t, lim.Admit(base, 50))
+	require.True(t, lim.Admit(base, 50))
+	require.False(t, lim.Admit(base, 50), "request bucket exhausted closes the frame out")
+}
+
+func TestCompositeFrameRateLimiter_EmptyAndNilMembers(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, rpc.CompositeFrameRateLimiter{}.Admit(time.Unix(0, 0), 100),
+		"no members admits everything")
+
+	lim := rpc.CompositeFrameRateLimiter{nil, rpc.NewRequestTokenBucket(10, 1)}
+	require.True(t, lim.Admit(time.Unix(0, 0), 1), "nil members are skipped")
+	require.False(t, lim.Admit(time.Unix(0, 0), 1), "non-nil member still enforced")
+}

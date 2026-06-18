@@ -27,17 +27,14 @@ import (
 type Handler struct {
 	useStoreInTx          StoreTxProvider
 	assetStore            AssetStore
-	actionGateway         ActionGateway
 	signer                *core.ChannelDefaultSigner
 	stateAdvancer         core.StateAdvancer
 	statePacker           core.StatePacker
 	nodeAddress           string // Node's wallet address
-	appRegistryEnabled    bool
 	metrics               metrics.RuntimeMetricExporter
 	maxParticipants       int
 	maxSessionData        int
 	maxSessionKeyIDs      int
-	maxSignedUpdates      int
 	maxSessionKeysPerUser int
 }
 
@@ -45,30 +42,25 @@ type Handler struct {
 func NewHandler(
 	useStoreInTx StoreTxProvider,
 	assetStore AssetStore,
-	actionGateway ActionGateway,
 	signer *core.ChannelDefaultSigner,
 	stateAdvancer core.StateAdvancer,
 	statePacker core.StatePacker,
 	nodeAddress string,
-	appRegistryEnabled bool,
 	m metrics.RuntimeMetricExporter,
-	maxParticipants, maxSessionData, maxSessionKeyIDs, maxSignedUpdates int,
+	maxParticipants, maxSessionData, maxSessionKeyIDs int,
 	maxSessionKeysPerUser int,
 ) *Handler {
 	return &Handler{
 		useStoreInTx:          useStoreInTx,
 		assetStore:            assetStore,
-		actionGateway:         actionGateway,
 		signer:                signer,
 		stateAdvancer:         stateAdvancer,
 		statePacker:           statePacker,
 		nodeAddress:           nodeAddress,
-		appRegistryEnabled:    appRegistryEnabled,
 		metrics:               m,
 		maxParticipants:       maxParticipants,
 		maxSessionData:        maxSessionData,
 		maxSessionKeyIDs:      maxSessionKeyIDs,
-		maxSignedUpdates:      maxSignedUpdates,
 		maxSessionKeysPerUser: maxSessionKeysPerUser,
 	}
 }
@@ -76,7 +68,7 @@ func NewHandler(
 func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, participantWeights map[string]uint8, requiredQuorum uint8, data []byte, signatures []string) error {
 	// Verify signatures and calculate quorum
 	signedWeights := make(map[string]bool)
-	var achievedQuorum uint8
+	var achievedQuorum uint16
 
 	appSessionSignerValidator := app.NewAppSessionKeySigValidatorV1(
 		func(sessionKeyAddr string) (string, error) {
@@ -112,12 +104,12 @@ func (h *Handler) verifyQuorum(tx Store, appSessionId, applicationID string, par
 		// Add weight if not already counted
 		if !signedWeights[userWallet] {
 			signedWeights[userWallet] = true
-			achievedQuorum += weight
+			achievedQuorum += uint16(weight)
 		}
 	}
 
 	// Check if quorum is met
-	if achievedQuorum < requiredQuorum {
+	if achievedQuorum < uint16(requiredQuorum) {
 		return rpc.Errorf("quorum not met: achieved %d, required %d", achievedQuorum, requiredQuorum)
 	}
 

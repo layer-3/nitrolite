@@ -33,11 +33,11 @@ func NewMemoryStoreV1(assetsConfig AssetsConfig, blockchainsConfig map[uint64]Bl
 		}
 
 		blockchains = append(blockchains, core.Blockchain{
-			ID:                     bc.ID,
-			Name:                   bc.Name,
-			ChannelHubAddress:      bc.ChannelHubAddress,
-			LockingContractAddress: bc.LockingContractAddress,
-			BlockStep:              bc.BlockStep,
+			ID:                    bc.ID,
+			Name:                  bc.Name,
+			ChannelHubAddress:     bc.ChannelHubAddress,
+			BlockStep:             bc.BlockStep,
+			ConfirmationDelaySecs: bc.ConfirmationDelaySecs,
 		})
 	}
 	slices.SortFunc(blockchains, func(a, b core.Blockchain) int {
@@ -239,11 +239,11 @@ func (ms *MemoryStoreV1) GetTokenDecimals(blockchainID uint64, tokenAddress stri
 
 	decimalsOnChain, ok := ms.tokenDecimals[blockchainID]
 	if !ok {
-		return 0, fmt.Errorf("blockchain with ID '%d' is not supported", blockchainID)
+		return 0, fmt.Errorf("blockchain with ID '%d' has no configured tokens: %w", blockchainID, core.ErrTokenNotSupported)
 	}
 	decimals, ok := decimalsOnChain[tokenAddress]
 	if !ok {
-		return 0, fmt.Errorf("token %s is not supported on blockchain with ID '%d'", tokenAddress, blockchainID)
+		return 0, fmt.Errorf("token %s is not supported on blockchain with ID '%d': %w", tokenAddress, blockchainID, core.ErrTokenNotSupported)
 	}
 	return decimals, nil
 }
@@ -254,11 +254,11 @@ func (ms *MemoryStoreV1) GetTokenAsset(blockchainID uint64, tokenAddress string)
 
 	assetsOnChain, ok := ms.tokenAssets[blockchainID]
 	if !ok {
-		return "", fmt.Errorf("blockchain with ID '%d' is not supported", blockchainID)
+		return "", fmt.Errorf("blockchain with ID '%d' has no configured tokens: %w", blockchainID, core.ErrTokenNotSupported)
 	}
 	asset, ok := assetsOnChain[tokenAddress]
 	if !ok {
-		return "", fmt.Errorf("token %s is not supported on blockchain with ID '%d'", tokenAddress, blockchainID)
+		return "", fmt.Errorf("token %s is not supported on blockchain with ID '%d': %w", tokenAddress, blockchainID, core.ErrTokenNotSupported)
 	}
 	return asset.Symbol, nil
 }

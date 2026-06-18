@@ -16,6 +16,7 @@ import (
 	"github.com/layer-3/nitrolite/pkg/core"
 	"github.com/layer-3/nitrolite/pkg/sign"
 	sdk "github.com/layer-3/nitrolite/sdk/go"
+	"github.com/shopspring/decimal"
 	"golang.org/x/term"
 )
 
@@ -66,6 +67,7 @@ OPERATIONS
   acknowledge <asset>                          Acknowledge transfer or channel creation
   close-channel <asset>                        Close home channel on-chain
   checkpoint <asset>                           Submit latest state on-chain
+  wait-credit <asset>                          Wait for off-chain credit after checkpoint
 
 QUERIES
   ping                          Test node connection
@@ -73,24 +75,12 @@ QUERIES
   assets [chain_id]             List supported assets (optionally filter by chain)
   balances [wallet]             Get user balances (defaults to configured wallet)
   transactions [wallet]         Get transaction history
-  action-allowances [wallet]    Get action allowances
   state [wallet] <asset>        Get latest state
   home-channel [wallet] <asset> Get home channel
   escrow-channel <channel_id>   Get escrow channel by ID
 
-APP REGISTRY
-  app-info <app_id>                    Show application details
-  my-apps                              List your registered applications
-  register-app <app_id> [no-approval]  Register a new application
-  app-sessions                         List app sessions
-
-SECURITY TOKEN OPERATIONS
-  security-token approve <chain_id> <amount>                  Approve security token spending
-  security-token balance <chain_id> [wallet]                  Check escrowed security token balance
-  security-token escrow <chain_id> [target_address] <amount>  Escrow security tokens
-  security-token initiate-withdrawal <chain_id>               Start unlock period
-  security-token cancel-withdrawal <chain_id>                 Cancel unlock and re-lock
-  security-token withdraw <chain_id> <destination>            Withdraw unlocked security tokens
+APP SESSIONS
+  app-sessions                  List app sessions
 
 OTHER
   help                          Display this help message
@@ -461,8 +451,21 @@ func (o *Operator) checkpoint(ctx context.Context, asset string) {
 		return
 	}
 
-	fmt.Printf("SUCCESS: Checkpoint completed\n")
+	fmt.Printf("SUCCESS: Checkpoint submitted on-chain\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
+
+	// Best-effort: tell the user when the off-chain credit will actually land.
+	// The node runs a confirmation gate (PR #832): the off-chain balance only
+	// updates confirmation_delay_secs after the tx is mined. Any failure here is
+	// non-fatal — the checkpoint already succeeded.
+	if delay, ok := o.confirmationDelayForAsset(ctx, asset); ok {
+		if delay == 0 {
+			fmt.Println("INFO: Off-chain credit is immediate on this chain (no confirmation gate).")
+		} else {
+			fmt.Printf("INFO: Off-chain credit expected in ~%ds (node confirmation window).\n", delay)
+			fmt.Printf("INFO: Run 'balances' after that, or 'wait-credit %s' to wait automatically.\n", asset)
+		}
+	}
 }
 
 // ============================================================================
@@ -511,9 +514,7 @@ func (o *Operator) nodeInfo(ctx context.Context) {
 	for _, bc := range config.Blockchains {
 		fmt.Printf("  - %s (ID: %d)\n", bc.Name, bc.ID)
 		fmt.Printf("    Channel Hub: %s\n", bc.ChannelHubAddress)
-		if bc.LockingContractAddress != "" {
-			fmt.Printf("    Locking:     %s\n", bc.LockingContractAddress)
-		}
+		fmt.Printf("    Confirmation Delay: %s\n", formatConfirmationDelay(bc.ConfirmationDelaySecs))
 	}
 }
 
@@ -547,6 +548,7 @@ func (o *Operator) listChains(ctx context.Context) {
 		fmt.Printf("- %s\n", chain.Name)
 		fmt.Printf("  Chain ID:  %d\n", chain.ID)
 		fmt.Printf("  Contract:  %s\n", chain.ChannelHubAddress)
+		fmt.Printf("  Confirm:   %s\n", formatConfirmationDelay(chain.ConfirmationDelaySecs))
 
 		// Check if RPC is configured
 		_, err := o.store.GetRPC(chain.ID)
@@ -745,90 +747,6 @@ func (o *Operator) listTransactions(ctx context.Context, wallet string) {
 		fmt.Printf("  To:        %s\n", tx.ToAccount)
 		fmt.Printf("  Amount:    %s %s\n", tx.Amount.String(), tx.Asset)
 		fmt.Printf("  Created:   %s\n", tx.CreatedAt.Format("2006-01-02 15:04:05"))
-	}
-}
-
-func (o *Operator) getActionAllowances(ctx context.Context, wallet string) {
-	allowances, err := o.client.GetActionAllowances(ctx, wallet)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get action allowances: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Action Allowances for %s\n", wallet)
-	fmt.Println("========================================")
-	if len(allowances) == 0 {
-		fmt.Println("No action allowances found")
-		return
-	}
-
-	for _, a := range allowances {
-		fmt.Printf("- %s\n", a.GatedAction)
-		fmt.Printf("  Window:    %s\n", a.TimeWindow)
-		fmt.Printf("  Used:      %d / %d\n", a.Used, a.Allowance)
-		remaining := uint64(0)
-		if a.Allowance > a.Used {
-			remaining = a.Allowance - a.Used
-		}
-		fmt.Printf("  Remaining: %d\n", remaining)
-	}
-}
-
-// ============================================================================
-// App Registry
-// ============================================================================
-
-func (o *Operator) getApps(ctx context.Context, appID *string, ownerWallet *string) {
-	fmt.Println("Fetching registered applications...")
-
-	apps, _, err := o.client.GetApps(ctx, &sdk.GetAppsOptions{
-		AppID:       appID,
-		OwnerWallet: ownerWallet,
-	})
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get apps: %v\n", err)
-		return
-	}
-
-	if len(apps) == 0 {
-		fmt.Println("No applications found.")
-		return
-	}
-
-	fmt.Printf("Found %d application(s):\n\n", len(apps))
-	for _, a := range apps {
-		fmt.Printf("  App ID:       %s\n", a.App.ID)
-		fmt.Printf("  Owner:        %s\n", a.App.OwnerWallet)
-		fmt.Printf("  Version:      %d\n", a.App.Version)
-		if a.App.CreationApprovalNotRequired {
-			fmt.Println("  Approval:     Not required")
-		} else {
-			fmt.Println("  Approval:     Required")
-		}
-		if a.App.Metadata != "" {
-			fmt.Printf("  Metadata:     %s\n", a.App.Metadata)
-		}
-		fmt.Printf("  Created:      %s\n", a.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("  Updated:      %s\n", a.UpdatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Println()
-	}
-}
-
-func (o *Operator) registerApp(ctx context.Context, appID, metadata string, creationApprovalNotRequired bool) {
-	fmt.Printf("Registering application: %s...\n", appID)
-
-	err := o.client.RegisterApp(ctx, appID, metadata, creationApprovalNotRequired)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to register app: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Application registered")
-	fmt.Printf("  App ID:   %s\n", appID)
-	if creationApprovalNotRequired {
-		fmt.Println("  Approval: Not required for session creation")
-	} else {
-		fmt.Println("  Approval: Required for session creation")
 	}
 }
 
@@ -1281,147 +1199,105 @@ func (o *Operator) listAppSessionKeys(ctx context.Context, wallet string) {
 }
 
 // ============================================================================
-// Security Token Operations
-// ============================================================================
-
-func (o *Operator) escrowSecurityTokens(ctx context.Context, chainIDStr, targetAddress, amountStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	amount, err := o.parseAmount(amountStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	// Default target to own wallet if not specified
-	if targetAddress == "" {
-		targetAddress = o.getImportedWalletAddress()
-		if targetAddress == "" {
-			fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first.")
-			return
-		}
-		fmt.Printf("INFO: Using configured wallet as target: %s\n", targetAddress)
-	}
-
-	fmt.Printf("Escrowing %s security tokens for %s on chain %d...\n", amount.String(), targetAddress, chainID)
-
-	txHash, err := o.client.EscrowSecurityTokens(ctx, targetAddress, chainID, amount)
-	if err != nil {
-		fmt.Printf("ERROR: Escrow failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens escrowed")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) initiateSecurityWithdrawal(ctx context.Context, chainIDStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Initiating security tokens withdrawal on chain %d...\n", chainID)
-
-	txHash, err := o.client.InitiateSecurityTokensWithdrawal(ctx, chainID)
-	if err != nil {
-		fmt.Printf("ERROR: Initiate withdrawal failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawal initiated")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) cancelSecurityWithdrawal(ctx context.Context, chainIDStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Cancelling security tokens withdrawal on chain %d...\n", chainID)
-
-	txHash, err := o.client.CancelSecurityTokensWithdrawal(ctx, chainID)
-	if err != nil {
-		fmt.Printf("ERROR: Cancel withdrawal failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawal cancelled (re-locked)")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) withdrawSecurityTokens(ctx context.Context, chainIDStr, destination string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Withdrawing security tokens to %s on chain %d...\n", destination, chainID)
-
-	txHash, err := o.client.WithdrawSecurityTokens(ctx, chainID, destination)
-	if err != nil {
-		fmt.Printf("ERROR: Withdraw security tokens failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security tokens withdrawn")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) approveSecurityToken(ctx context.Context, chainIDStr, amountStr string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	amount, err := o.parseAmount(amountStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Approving %s security tokens on chain %d...\n", amount.String(), chainID)
-
-	txHash, err := o.client.ApproveSecurityToken(ctx, chainID, amount)
-	if err != nil {
-		fmt.Printf("ERROR: Approve security token failed: %v\n", err)
-		return
-	}
-
-	fmt.Println("SUCCESS: Security token spending approved")
-	fmt.Printf("Transaction Hash: %s\n", txHash)
-}
-
-func (o *Operator) securityBalance(ctx context.Context, chainIDStr, wallet string) {
-	chainID, err := o.parseChainID(chainIDStr)
-	if err != nil {
-		fmt.Printf("ERROR: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Querying security token balance for %s on chain %d...\n", wallet, chainID)
-
-	balance, err := o.client.GetLockedBalance(ctx, chainID, wallet)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to get security token balance: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Security token balance: %s\n", balance.String())
-}
-
-// ============================================================================
 // Helper Methods
 // ============================================================================
+
+// formatConfirmationDelay renders a chain's confirmation_delay_secs for display.
+// Zero means the gate is disabled (BFT / single-slot chains) — off-chain credit is
+// effectively immediate.
+func formatConfirmationDelay(secs uint32) string {
+	if secs == 0 {
+		return "instant (no confirmation gate)"
+	}
+	return fmt.Sprintf("~%ds", secs)
+}
+
+// waitCredit waits for the off-chain enforced balance of the given asset to change
+// after a checkpoint/deposit. It builds its own context (not the shared 30s command
+// context) so the confirmation-window sleep isn't killed prematurely.
+func (o *Operator) waitCredit(asset string) {
+	wallet := o.getImportedWalletAddress()
+	if wallet == "" {
+		fmt.Println("ERROR: No wallet configured. Use 'config wallet import' first.")
+		return
+	}
+
+	// Resolve confirmation delay (advisory — best effort).
+	delay, delayKnown := o.confirmationDelayForAsset(context.Background(), asset)
+
+	// Build a generous context: delay*2 + 60s (min 60s).
+	timeout := time.Duration(delay)*2*time.Second + 60*time.Second
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), timeout)
+	defer waitCancel()
+
+	// Read baseline enforced balance.
+	baseEnforced := decimal.Zero
+	{
+		shortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		balances, err := o.client.GetBalances(shortCtx, wallet)
+		cancel()
+		if err != nil {
+			// Without a reliable baseline a pre-existing balance would be misread as a
+			// freshly-landed credit. Abort rather than report a false SUCCESS.
+			fmt.Printf("ERROR: Could not read baseline balance: %v\n", err)
+			fmt.Println("Cannot reliably detect a credit without a baseline; run 'wait-credit' again or check 'balances'.")
+			return
+		}
+		for _, b := range balances {
+			if strings.EqualFold(b.Asset, asset) {
+				baseEnforced = b.Enforced
+				break
+			}
+		}
+	}
+
+	fmt.Printf("Watching enforced balance for %s (wallet: %s)\n", asset, wallet)
+	fmt.Printf("Baseline enforced: %s\n", baseEnforced.String())
+
+	if delay > 0 {
+		fmt.Printf("INFO: Waiting ~%ds for the confirmation window before polling...\n", delay)
+		select {
+		case <-time.After(time.Duration(delay) * time.Second):
+		case <-waitCtx.Done():
+			fmt.Println("WARNING: Context expired during confirmation window wait.")
+			return
+		}
+	} else {
+		if !delayKnown {
+			fmt.Println("INFO: confirmation gate disabled (or delay unknown); polling immediately.")
+		} else {
+			fmt.Println("INFO: Off-chain credit is immediate on this chain (no confirmation gate); polling immediately.")
+		}
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			fmt.Printf("WARNING: enforced balance unchanged after %s; run 'balances' to re-check.\n", timeout)
+			return
+		case <-ticker.C:
+			shortCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			balances, err := o.client.GetBalances(shortCtx, wallet)
+			cancel()
+			if err != nil {
+				fmt.Printf("WARNING: Failed to poll balances: %v\n", err)
+				continue
+			}
+			for _, b := range balances {
+				if strings.EqualFold(b.Asset, asset) {
+					if !b.Enforced.Equal(baseEnforced) {
+						fmt.Printf("SUCCESS: Off-chain credit landed. New enforced balance: %s\n", b.Enforced.String())
+						return
+					}
+					break
+				}
+			}
+		}
+	}
+}
 
 // generatePrivateKey generates a new Ethereum private key
 func generatePrivateKey() (string, error) {

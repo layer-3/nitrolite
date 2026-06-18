@@ -255,11 +255,9 @@ function categorizeMethod(name: string): string {
 function categorizeGoMethod(name: string): string {
     const lower = name.toLowerCase();
     if (/channel|deposit|withdraw|transfer|checkpoint|challenge|acknowledge|close/.test(lower)) return 'Channels & Transactions';
-    if (/appsession|appstate|appdef|rebalance/.test(lower)) return 'App Sessions';
+    if (/appsession|appstate|appdef/.test(lower)) return 'App Sessions';
     if (/sessionkey|keystate/.test(lower)) return 'Session Keys';
-    if (/escrow|security|locked/.test(lower)) return 'Security Tokens';
-    if (/app/.test(lower) && /register/.test(lower)) return 'App Registry';
-    if (/balance|transaction|allowance|user/.test(lower)) return 'User Queries';
+    if (/balance|transaction|user/.test(lower)) return 'User Queries';
     if (/config|blockchain|asset|ping/.test(lower)) return 'Node & Config';
     return 'Other';
 }
@@ -271,7 +269,6 @@ function loadGoTypes(): void {
         { path: resolve(PKG_ROOT, 'rpc/types.go'), source: 'pkg/rpc' },
         { path: resolve(GO_SDK_ROOT, 'config.go'), source: 'sdk/go' },
         { path: resolve(GO_SDK_ROOT, 'app_session.go'), source: 'sdk/go' },
-        { path: resolve(GO_SDK_ROOT, 'app_registry.go'), source: 'sdk/go' },
         { path: resolve(GO_SDK_ROOT, 'user.go'), source: 'sdk/go' },
         { path: resolve(GO_SDK_ROOT, 'channel.go'), source: 'sdk/go' },
     ];
@@ -372,7 +369,6 @@ function loadGoSdkMethods(): void {
         { path: resolve(GO_SDK_ROOT, 'node.go'), category: 'Node & Config' },
         { path: resolve(GO_SDK_ROOT, 'user.go'), category: 'User Queries' },
         { path: resolve(GO_SDK_ROOT, 'app_session.go'), category: 'App Sessions' },
-        { path: resolve(GO_SDK_ROOT, 'app_registry.go'), category: 'App Registry' },
         { path: resolve(GO_SDK_ROOT, 'client.go'), category: '' },
     ];
 
@@ -405,7 +401,7 @@ function loadGoSdkMethods(): void {
 }
 
 function buildGoApiMethodsContent(): string {
-    const ORDER = ['Connection', 'Channels & Transactions', 'App Sessions', 'Session Keys', 'Security Tokens', 'App Registry', 'User Queries', 'Node & Config', 'Other'];
+    const ORDER = ['Connection', 'Channels & Transactions', 'App Sessions', 'Session Keys', 'User Queries', 'Node & Config', 'Other'];
     const grouped = new Map<string, GoMethodInfo[]>();
     for (const m of goMethods) {
         const arr = grouped.get(m.category) ?? [];
@@ -1519,9 +1515,13 @@ How to use Nitrolite for AI agent payments and agent-to-agent interactions.
 ## Why State Channels for AI Agents?
 
 AI agents need to make frequent, small payments — often thousands per session. On-chain transactions are too slow and expensive. State channels provide:
-- **Instant finality** — no waiting for block confirmations
+- **Instant off-chain transfers** — agent-to-agent payments settle the moment both parties co-sign; no waiting for block confirmations
 - **Near-zero cost** — gas only on channel open/close, not per-transfer
 - **Programmable** — agents manage channels autonomously via the SDK
+
+> **On-chain steps lag.** Funding (deposit) and withdrawal still touch the chain. After the transaction is
+> mined, the node waits \`confirmationDelaySecs\` (per chain, from \`node.v1.GetConfig\`) before crediting
+> the off-chain balance — a reorg-safety gate. Only the **transfers between agents** are instant.
 
 ## Agent Wallet Setup
 

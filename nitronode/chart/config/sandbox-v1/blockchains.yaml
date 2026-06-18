@@ -4,23 +4,33 @@ blockchains:
   channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
   channel_hub_sig_validators:
     1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+  # +2s over Linea mainnet to absorb sequencer restarts/redeploys on Consensys-operated testnet.
+  confirmation_delay_secs: 6
 - name: "polygon_amoy"
   id: 80002
   channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
   channel_hub_sig_validators:
     1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+  # +1s over Polygon mainnet; Polygon recommended raising thresholds during Heimdall-v2 rollout.
+  confirmation_delay_secs: 6
 - name: "base_sepolia"
   id: 84532
   channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
   channel_hub_sig_validators:
     1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+  # +2s over Base mainnet — staging ground for Flashblocks / OP Stack releases; operator rewinds more common.
+  confirmation_delay_secs: 4
 - name: "xrpl_evm_testnet"
   id: 1449000
   channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
   channel_hub_sig_validators:
     1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+  # CometBFT BFT-deterministic instant finality — same as mainnet. Gate disabled.
+  confirmation_delay_secs: 0
 - name: "ethereum_sepolia"
   id: 11155111
   channel_hub_address: "0x5dba8515af063db0c243c15ece7b99f91459c7c3"
   channel_hub_sig_validators:
     1: "0xB08901fb3c9952f9e33469169A1E3290FaD79e22"
+  # 3 blocks × 12s. Same PoS reorg model as mainnet; permissioned validator set is no worse day-to-day.
+  confirmation_delay_secs: 36

@@ -42,8 +42,6 @@ config:
   blockchains: ""
   # -- Assets configuration
   assets: ""
-  # -- Action Gateway configuration
-  actionGateway: ""
 
 # -- Number of replicas
 replicaCount: 1

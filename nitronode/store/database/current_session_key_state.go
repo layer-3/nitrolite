@@ -92,12 +92,14 @@ func upsertCurrentSessionKeyState(tx *gorm.DB, userAddress, sessionKey string, k
 // SELECT ... FOR UPDATE is postgres-only; on sqlite the locking clause is skipped and the
 // surrounding transaction provides the necessary ordering for the in-process test setup.
 //
-// Seed-row permanence: the version=0 row written below is intentionally never deleted on
-// failure paths (sig validation, version mismatch, cap exceeded, mid-tx errors). Once a wallet
-// has staked a claim on (session_key, kind), no other wallet can take it for that kind — the
-// seed is the ownership reservation, not a transient placeholder. CountSessionKeysForUser
-// excludes version=0 rows so the per-user cap is unaffected, but the (session_key, kind)
-// ownership bind is permanent by design.
+// Seed-row permanence: the version=0 row written below is part of the caller's transaction,
+// so it persists only when that transaction commits. Failure paths that abort the tx (version
+// mismatch, cap exceeded, mid-tx errors) roll the seed back with everything else, and callers
+// must guard against committing a seed for an unauthorized claim — e.g. the submit handlers
+// reject a revoke at version 1, so a wallet cannot stake a claim on (session_key, kind) without
+// a prior delegation it proved possession of. Once a submit does commit, the ownership bind is
+// permanent: no other wallet can take that (session_key, kind). CountSessionKeysForUser excludes
+// version=0 rows so the per-user cap is unaffected.
 //
 // When locked.Version > 0, the matching history row's expires_at is also returned so callers
 // can distinguish a reactivation (prev inactive → submitted active) from a rotation/update

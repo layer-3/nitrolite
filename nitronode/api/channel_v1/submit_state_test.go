@@ -51,6 +51,84 @@ func TestSubmitState_InvalidUserWallet_Rejected(t *testing.T) {
 	mockTxStore.AssertNotCalled(t, "LockUserState", mock.Anything, mock.Anything)
 }
 
+func TestSubmitState_ActiveChannelMissingState_Rejected(t *testing.T) {
+	// An active home channel always has its initial state stored by request_creation.
+	// If CheckActiveChannel reports an active channel but GetLastUserState returns nil,
+	// SubmitState must fail closed rather than bootstrapping a synthetic Void state.
+	mockTxStore := new(MockStore)
+	mockMemoryStore := new(MockMemoryStore)
+	mockAssetStore := new(MockAssetStore)
+	mockSigner := NewMockSigner()
+	nodeSigner, _ := core.NewChannelDefaultSigner(mockSigner)
+	mockStatePacker := new(MockStatePacker)
+
+	handler := &Handler{
+		stateAdvancer: core.NewStateAdvancerV1(mockAssetStore),
+		statePacker:   mockStatePacker,
+		useStoreInTx: func(handler StoreTxHandler) error {
+			return handler(mockTxStore)
+		},
+		memoryStore:      mockMemoryStore,
+		nodeSigner:       nodeSigner,
+		nodeAddress:      mockSigner.PublicKey().Address().String(),
+		minChallenge:     uint32(3600),
+		metrics:          metrics.NewNoopRuntimeMetricExporter(),
+		maxSessionKeyIDs: 256,
+	}
+
+	userSigner := NewMockSigner()
+	senderWallet := userSigner.PublicKey().Address().String()
+	receiverWallet := "0x0987654321098765432109876543210987654321"
+	asset := "USDC"
+	homeChannelID := "0xHomeChannel123"
+
+	currentState := core.State{
+		ID:            core.GetStateID(senderWallet, asset, 1, 1),
+		Asset:         asset,
+		UserWallet:    senderWallet,
+		Epoch:         1,
+		Version:       1,
+		HomeChannelID: &homeChannelID,
+		HomeLedger: core.Ledger{
+			TokenAddress: "0xTokenAddress",
+			BlockchainID: 1,
+			UserBalance:  decimal.NewFromInt(500),
+			UserNetFlow:  decimal.NewFromInt(500),
+			NodeBalance:  decimal.NewFromInt(0),
+			NodeNetFlow:  decimal.NewFromInt(0),
+		},
+	}
+	incomingState := currentState.NextState()
+	_, err := incomingState.ApplyTransferSendTransition(receiverWallet, decimal.NewFromInt(100))
+	require.NoError(t, err)
+
+	// Reports an active channel, but no stored state exists for the (wallet, asset) slot.
+	// Both sender and receiver balances are locked in deterministic order (MF3-L18).
+	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("LockUserState", receiverWallet, asset).Return(decimal.Zero, nil)
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(nil, nil)
+
+	rpcState := toRPCState(*incomingState)
+	payload, err := rpc.NewPayload(rpc.ChannelsV1SubmitStateRequest{State: rpcState})
+	require.NoError(t, err)
+
+	ctx := &rpc.Context{
+		Context: context.Background(),
+		Request: rpc.Message{Method: "channels.v1.submit_state", Payload: payload},
+	}
+
+	handler.SubmitState(ctx)
+
+	require.NotNil(t, ctx.Response)
+	respErr := ctx.Response.Error()
+	require.NotNil(t, respErr)
+	assert.Contains(t, respErr.Error(), "active channel has no stored state")
+	// Failed before signing/persistence.
+	mockTxStore.AssertNotCalled(t, "StoreUserState", mock.Anything, mock.Anything)
+	mockTxStore.AssertExpectations(t)
+}
+
 func TestSubmitState_TransferSend_Success(t *testing.T) {
 	// Setup
 	mockTxStore := new(MockStore)
@@ -78,7 +156,6 @@ func TestSubmitState_TransferSend_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive senderWallet from a user signer key
@@ -257,7 +334,6 @@ func TestSubmitState_TransferSend_ReceiverHomeChannelChallenged_NoNodeSig(t *tes
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -386,7 +462,6 @@ func TestSubmitState_TransferSend_ReceiverWithEscrowLock_Rejected(t *testing.T) 
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive senderWallet from a user signer key
@@ -529,7 +604,6 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Derive senderWallet from a real key — Address().String() returns checksummed (mixed case)
@@ -573,18 +647,17 @@ func TestSubmitState_TransferSend_SameWalletCaseInsensitive_Rejected(t *testing.
 	userSigStr := userSig.String()
 	incomingSenderState.UserSig = &userSigStr
 
-	// Mock expectations — should reach the issueTransferReceiverState check
-	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil)
-	mockTxStore.On("LockUserState", senderWallet, asset).Return(decimal.Zero, nil)
-	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil)
-	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil)
-	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil)
+	// Mock expectations. The self-transfer check now runs inside lockTransferBalances,
+	// before any balance row is locked or any state is stored, so none of the store
+	// methods below should be reached. Marked Maybe() to document that they are
+	// deliberately not expected.
+	mockAssetStore.On("GetAssetDecimals", asset).Return(uint8(6), nil).Maybe()
+	mockTxStore.On("LockUserState", mock.Anything, asset).Return(decimal.Zero, nil).Maybe()
+	mockTxStore.On("CheckActiveChannel", senderWallet, asset).Return("0x03", core.ChannelStatusOpen, nil).Maybe()
+	mockTxStore.On("GetLastUserState", senderWallet, asset, false).Return(currentSenderState, nil).Maybe()
+	mockTxStore.On("EnsureNoOngoingStateTransitions", senderWallet, asset).Return(nil).Maybe()
 	mockStatePacker.On("PackState", mock.Anything).Return(packedSenderState, nil).Maybe()
-
-	// Sender state is stored before the transition-specific logic
-	mockTxStore.On("StoreUserState", mock.MatchedBy(func(state core.State) bool {
-		return state.UserWallet == senderWallet && state.NodeSig != nil
-	}), mock.Anything).Return(nil)
+	mockTxStore.On("StoreUserState", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	rpcState := toRPCState(*incomingSenderState)
 	reqPayload := rpc.ChannelsV1SubmitStateRequest{
@@ -642,7 +715,6 @@ func TestSubmitState_EscrowLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -801,7 +873,6 @@ func TestSubmitState_EscrowWithdraw_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -958,7 +1029,6 @@ func TestSubmitState_HomeDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1093,7 +1163,6 @@ func TestSubmitState_HomeWithdrawal_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1230,7 +1299,6 @@ func TestSubmitState_MutualLock_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1389,7 +1457,6 @@ func TestSubmitState_EscrowDeposit_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1548,7 +1615,6 @@ func TestSubmitState_Finalize_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1699,7 +1765,6 @@ func TestSubmitState_Acknowledgement_Success(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	// Test data - derive userWallet from a user signer key
@@ -1820,7 +1885,6 @@ func TestSubmitState_MutualLock_VoidHomeChannel_Rejected(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -1911,7 +1975,6 @@ func TestSubmitState_EscrowLock_VoidHomeChannel_Rejected(t *testing.T) {
 		minChallenge:     minChallenge,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()
@@ -2004,7 +2067,6 @@ func TestSubmitState_ClosingChannel_Rejected(t *testing.T) {
 		minChallenge:     3600,
 		metrics:          metrics.NewNoopRuntimeMetricExporter(),
 		maxSessionKeyIDs: 256,
-		actionGateway:    &MockActionGateway{},
 	}
 
 	userSigner := NewMockSigner()

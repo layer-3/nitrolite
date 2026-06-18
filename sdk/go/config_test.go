@@ -35,7 +35,7 @@ func TestWithErrorHandler(t *testing.T) {
 	}
 	opt := WithErrorHandler(handler)
 	opt(c)
-	
+
 	assert.NotNil(t, c.ErrorHandler)
 	c.ErrorHandler(nil)
 	assert.True(t, called)

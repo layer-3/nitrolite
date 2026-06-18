@@ -143,7 +143,6 @@ await client.close();
 | `getAccountInfo()` | Aggregate balance + channel count |
 | `getConfig()` | Node configuration |
 | `getBlockchains()` | List supported blockchains |
-| `getActionAllowances(wallet?)` | Get gated action allowances for a wallet |
 | `getEscrowChannel(escrowChannelId)` | Query an escrow channel by ID |
 | `getChannelData(channelId)` | Full channel + state for a specific channel |
 | `getLastAppSessionsListError()` | Last `getAppSessionsList()` error message (if any) |
@@ -159,13 +158,6 @@ await client.close();
 | `getAppDefinition(appSessionId)` | Get the definition for a session |
 
 App-session allocation strings remain **human-readable decimal strings** such as `'0.01'`. They are not raw smallest-unit token strings.
-
-### App Registry
-
-| Method | Description |
-|---|---|
-| `getApps(options?)` | List registered applications (filter by appId, owner, pagination) |
-| `registerApp(appID, metadata, creationApprovalNotRequired)` | Register a new application |
 
 ### App Session Signing Helpers
 
@@ -232,17 +224,6 @@ These legacy methods remain intentionally unsupported because the v1 runtime no 
 - `getChannelBalance(...)`
 
 Workflow-style RPC helpers such as `createTransferMessage(...)`, `createCreateChannelMessage(...)`, `createCloseChannelMessage(...)`, and `createResizeChannelMessage(...)` are in the same category: they stay exported for migration, but now fail fast with migration guidance instead of silently approximating old behavior.
-
-### Security Token Locking
-
-| Method | Description |
-|---|---|
-| `lockSecurityTokens(targetWallet, chainId, amount)` | Lock tokens into the Locking contract for a target address |
-| `initiateSecurityTokensWithdrawal(chainId)` | Start the unlock process for locked tokens |
-| `cancelSecurityTokensWithdrawal(chainId)` | Re-lock tokens, cancelling a pending unlock |
-| `withdrawSecurityTokens(chainId, destination)` | Withdraw unlocked tokens to a destination address |
-| `approveSecurityToken(chainId, amount)` | Approve the Locking contract to spend tokens |
-| `getLockedBalance(chainId, wallet?)` | Query locked balance (returns raw bigint) |
 
 ### Lifecycle
 
@@ -378,41 +359,13 @@ poller.stop();
 poller.setInterval(10000); // change interval
 ```
 
-## Security Token Locking
-
-Lock tokens into the on-chain Locking contract to provide security deposits. The locking token and its decimals are resolved from the contract at runtime — `blockchainRPCs` must be configured for the target chain or these methods will throw.
-
-```typescript
-const chainId = 11155111; // Sepolia
-// Yellow token on Sepolia has 18 decimals; 100 YELLOW = 100 * 10^18
-const amount = 100_000_000_000_000_000_000n;
-
-// Approve the Locking contract to spend tokens
-await client.approveSecurityToken(chainId, amount);
-
-// Lock tokens for a target address
-await client.lockSecurityTokens(targetWallet, chainId, amount);
-
-// Query locked balance (returns raw bigint in token's smallest unit)
-const locked = await client.getLockedBalance(chainId);
-
-// Initiate unlock (starts the unlock period)
-await client.initiateSecurityTokensWithdrawal(chainId);
-
-// Cancel unlock (re-lock tokens)
-await client.cancelSecurityTokensWithdrawal(chainId);
-
-// After unlock period elapses, withdraw to a destination
-await client.withdrawSecurityTokens(chainId, destinationWallet);
-```
-
 ### Amount conventions
 
 The compat layer keeps the old amount conventions explicit instead of flattening them:
 
 | Method group | Input type | Example: 100 tokens (18 decimals) |
 |---|---|---|
-| `deposit`, `withdrawal`, `lockSecurityTokens`, `approveSecurityToken`, `getLockedBalance` | Raw `bigint` | `100_000_000_000_000_000_000n` |
+| `deposit`, `withdrawal` | Raw `bigint` | `100_000_000_000_000_000_000n` |
 | `transfer` | Raw asset-unit string via `TransferAllocation.amount` | `'100000000000000000000'` |
 | `createAppSession`, `closeAppSession`, `submitAppState` allocations | Human-readable decimal string | `'100.0'` |
 

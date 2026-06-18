@@ -47,8 +47,8 @@ func (s *DBStore) GetUserBalances(wallet string) ([]core.BalanceEntry, error) {
 	result := make([]core.BalanceEntry, 0, len(balances))
 	for _, balance := range balances {
 		result = append(result, core.BalanceEntry{
-			Asset:   balance.Asset,
-			Balance: balance.Balance,
+			Asset:    balance.Asset,
+			Balance:  balance.Balance,
 			Enforced: balance.Enforced,
 		})
 	}
@@ -145,6 +145,66 @@ func (s *DBStore) LockUserState(wallet, asset string) (decimal.Decimal, error) {
 	return balance.Balance, nil
 }
 
+// LockUserStateForHomeChannel acquires the balance-row lock of the user owning channelID and
+// returns the channel read *after* the lock is held. The order matters: the lock is taken first,
+// then the channel is read in a separate statement, so a concurrent transaction (e.g. submit_state
+// co-signing a Finalize and flipping the channel to Closing) that commits while we wait on the lock
+// is reflected in the returned status. Callers that previously did GetChannelByID followed by
+// LockUserState must use this instead — the separate read is read-before-lock and races.
+//
+// Returns (nil, nil) if the channel does not exist. Channel-type checks remain the caller's
+// responsibility.
+func (s *DBStore) LockUserStateForHomeChannel(channelID string) (*core.Channel, error) {
+	channelID = strings.ToLower(channelID)
+	if !strings.HasPrefix(channelID, "0x") {
+		channelID = "0x" + channelID
+	}
+
+	// Non-postgres (sqlite in tests) cannot SELECT ... FOR UPDATE and has no real concurrency
+	// in those paths; resolve, ensure the balance row via LockUserState, and read directly.
+	if s.db.Dialector.Name() != "postgres" {
+		channel, err := s.GetChannelByID(channelID)
+		if err != nil || channel == nil {
+			return channel, err
+		}
+		if _, err := s.LockUserState(channel.UserWallet, channel.Asset); err != nil {
+			return nil, err
+		}
+		return channel, nil
+	}
+
+	// Resolve the channel's (wallet, asset) lock key. These columns are immutable for a given
+	// channel, so reading them at this statement's snapshot is safe even though status is not.
+	var key struct {
+		UserWallet string
+		Asset      string
+	}
+	result := s.db.Raw(`SELECT user_wallet, asset FROM channels WHERE channel_id = ?`, channelID).Scan(&key)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to resolve lock key for channel %s: %w", channelID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	// Acquire the (wallet, asset) balance-row lock first (ensures the row, then SELECT ... FOR
+	// UPDATE). This blocks until any concurrent transaction holding the row commits.
+	if _, err := s.LockUserState(key.UserWallet, key.Asset); err != nil {
+		return nil, err
+	}
+
+	// Read the channel only after the lock is held. A single SELECT ... FOR UPDATE OF b that
+	// joins channels would return c.* from the statement-start snapshot — a Finalize that flips
+	// status to Closing while we wait on the balance lock would not be reflected. This separate
+	// statement takes a fresh snapshot once the lock is acquired, so the returned status reflects
+	// any such committed transition.
+	//
+	// NOTE: requires READ COMMITTED isolation (Postgres default, and nitronode never overrides it).
+	// Under REPEATABLE READ or SERIALIZABLE this statement still sees the transaction-start
+	// snapshot, returning the stale pre-lock status and negating the fix.
+	return s.GetChannelByID(channelID)
+}
+
 // EnsureNoOngoingStateTransitions validates that no conflicting blockchain operations are pending.
 // This method prevents race conditions by ensuring blockchain state versions
 // match the user's last signed state version before accepting new transitions.
@@ -164,6 +224,7 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 		TransitionType       core.TransitionType
 		StateVersion         uint64
 		HomeChannelVersion   *uint64
+		HomeChannelStatus    *core.ChannelStatus
 		EscrowChannelVersion *uint64
 	}
 
@@ -173,6 +234,7 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 			s.transition_type as transition_type,
 			s.version as state_version,
 			hc.state_version as home_channel_version,
+			hc.status as home_channel_status,
 			ec.state_version as escrow_channel_version
 		FROM channel_states s
 		LEFT JOIN channels hc ON hc.channel_id = s.home_channel_id
@@ -198,14 +260,24 @@ func (s *DBStore) EnsureNoOngoingStateTransitions(wallet, asset string) error {
 	// Validation logic by transition type
 	switch result.TransitionType {
 	case core.TransitionTypeHomeDeposit:
-		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
+		// Verify last_state.version == home_channel.state_version AND channel is Open.
+		// Defence-in-depth: without the status check, a Void channel
+		// (status=Void, state_version=0) trivially matches a state_version=0 signed
+		// HomeDeposit and the gate would treat the deposit as settled on-chain before
+		// any confirmation event lands.
+		if result.HomeChannelVersion == nil ||
+			result.HomeChannelStatus == nil ||
+			result.StateVersion != *result.HomeChannelVersion ||
+			*result.HomeChannelStatus != core.ChannelStatusOpen {
 			return fmt.Errorf("home deposit is still ongoing")
 		}
 
 	case core.TransitionTypeHomeWithdrawal:
-		// Verify last_state.version == home_channel.state_version
-		if result.HomeChannelVersion == nil || result.StateVersion != *result.HomeChannelVersion {
+		// Verify last_state.version == home_channel.state_version AND channel is Open.
+		if result.HomeChannelVersion == nil ||
+			result.HomeChannelStatus == nil ||
+			result.StateVersion != *result.HomeChannelVersion ||
+			*result.HomeChannelStatus != core.ChannelStatusOpen {
 			return fmt.Errorf("home withdrawal is still ongoing")
 		}
 

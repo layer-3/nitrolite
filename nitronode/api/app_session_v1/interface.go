@@ -3,7 +3,6 @@ package app_session_v1
 import (
 	"time"
 
-	"github.com/layer-3/nitrolite/nitronode/action_gateway"
 	"github.com/layer-3/nitrolite/nitronode/store/database"
 	"github.com/layer-3/nitrolite/pkg/app"
 	"github.com/layer-3/nitrolite/pkg/core"
@@ -12,9 +11,6 @@ import (
 
 // Store defines the persistence layer interface for app session management.
 type Store interface {
-	// App registry operations
-	GetApp(appID string) (*app.AppInfoV1, error)
-
 	// App session operations
 	CreateAppSession(session app.AppSessionV1) error
 	GetAppSession(sessionID string) (*app.AppSessionV1, error)
@@ -68,13 +64,6 @@ type Store interface {
 
 	// Channel Session key state operations
 	ValidateChannelSessionKeyForAsset(wallet, sessionKey, asset, metadataHash string) (bool, error)
-
-	action_gateway.Store
-}
-
-type ActionGateway interface {
-	// AllowAction checks if a user is allowed to perform a specific gated action based on their past activity and allowances.
-	AllowAction(tx action_gateway.Store, userAddress string, gatedAction core.GatedAction) error
 }
 
 // StoreTxHandler is a function that executes Store operations within a transaction.

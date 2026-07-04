@@ -9,7 +9,7 @@
   "dependencies": {
     "@yellow-org/sdk": "file:../..",
     "decimal.js": "^10.4.3",
-    "viem": "^2.50.4",
+    "viem": "^2.54.2",
     "ws": "^8.21.0"
   },
   "devDependencies": {

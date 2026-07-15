@@ -66,18 +66,32 @@ const client = await Client.create(
 );
 ```
 
-There is no login handshake; authorization is per-call, from the signatures inside each payload. **Each agent runs its own client with its own key, in its own process.** The examples below show several signers together for readability; in a real agent-to-agent deployment each agent constructs only its own signer and signs only its own part.
+There is no login handshake; authorization is per-call, from the signatures inside each payload. **Each agent runs its own client with its own key, in its own process.** The examples below show several signers together for readability; in a real agent-to-agent deployment each agent constructs only its own signer and signs the shared state hash with its own key.
 
 ## Roles and key separation
 
 Agent-to-agent means the keys are distributed. You cannot take several agents' private keys into one client. Model these roles:
 
-- **Each agent** holds its own key and runs its own client. A backend agent is private-key based; a frontend agent is wallet based. It signs only its own part of any state, in its own process.
-- **Proposer** (an agent, or a coordinating server): builds a state update, packs the hash, and asks each required signer to sign it.
+- **Each agent** holds its own key and runs its own client. A backend agent is private-key based; a frontend agent is wallet based. Every signer signs the **same** full-state hash independently with its own key, in its own process (this is independent co-signing, not partial or threshold signing).
+- **Proposer** (an agent, or a coordinating server): builds a state update, packs the hash, and sends that hash to each required signer.
 - **Signers** (the agents whose combined weight must meet quorum): each signs the packed hash with its own key and returns the signature.
 - **Submitter** (usually the proposer): collects the signatures and calls the Nitronode (`createAppSession` / `submitAppSessionDeposit` / `submitAppState`).
 
-A common topology: a Nitronode, agents connecting to a coordinating server (an app), and agents transacting agent-to-agent through shared sessions. The single-process code below co-locates keys only for readability and local testing; do not ship it that way.
+The cross-process pattern uses the same methods as the single-process code below:
+
+```ts
+// Proposer (any agent or a coordinating server): build the state, pack the hash.
+const hash = packAppStateUpdateV1(update);   // portable 0x string, safe to send over the wire
+
+// Each signer, in its OWN process with its OWN key:
+const mySig = await new AppSessionWalletSignerV1(new EthereumMsgSigner(myKey)).signMessage(hash);
+// ...return mySig to the proposer over your own transport (HTTP, queue, etc.)
+
+// Submitter: gather signatures until summed weight meets quorum, then submit once.
+await client.submitAppState(update, [sigFromA, sigFromB, sigFromC]);
+```
+
+The protocol carries no transport for moving the hash out and the signatures back; that is the integrator's to build. A common topology: a Nitronode, agents connecting to a coordinating server (an app), and agents transacting agent-to-agent through shared sessions. The single-process code below co-locates keys only for readability and local testing; do not ship it that way.
 
 ## Open the session
 
@@ -116,7 +130,7 @@ const created = await client.createAppSession(definition, sessionData, [
 // created.appSessionId, created.version, created.status
 ```
 
-The participant set is **immutable after creation**; no agent can be added later. Creation must meet quorum, so every participant that makes up the quorum co-signs the create request. Optionally `client.registerApp(appId, meta, true)` first; some nodes disable the registry (`apps.v1 group is disabled`) - continue without it.
+The participant set is **immutable after creation**; no agent can be added later. Creation must meet quorum, so every participant that makes up the quorum co-signs the create request.
 
 ## Read the live state
 
@@ -133,7 +147,7 @@ All updates share one shape; `intent` is a **number**, not a string.
 
 ```ts
 import { AppStateUpdateIntent, packAppStateUpdateV1, type AppStateUpdateV1 } from '@yellow-org/sdk';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';   // named import: default import is not constructable under NodeNext
 
 // DEPOSIT (own endpoint): a depositor commits its OWN funds into the session.
 // List ONLY the depositing participant in allocations; do not add zero-value

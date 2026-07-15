@@ -2,6 +2,8 @@
 
 Real code, real method names, grounded in the official `@yellow-org/sdk` example at `github.com/layer-3/docs`, `examples/nitrolite-v1-lifecycle`. That example runs a two-party lifecycle against the Yellow sandbox; the flow below is the same API generalised to three participants. Nothing here is invented - every method appears in the official example.
 
+**Key separation.** In a real agent-to-agent deployment each agent runs its own client with its own key, in its own process, and signs only its own part. The three-signers-in-one-process code below co-locates keys purely for a readable local run or a custodial server; do not ship it that way. See the skill's `Roles and key separation` section.
+
 ## Setup
 
 ESM project, Node 20+.
@@ -12,11 +14,11 @@ ESM project, Node 20+.
   "dependencies": { "@yellow-org/sdk": "^1", "decimal.js": "^10", "viem": "^2" } }
 ```
 
-Environment per participant: a funded user wallet (Sepolia gas + the test asset), an RPC URL, and the Nitronode WS URL (`wss://nitronode-sandbox.yellow.org/v1/ws` for sandbox).
+Environment per participant: its own key, an RPC URL, and the Nitronode WS URL (`wss://nitronode-sandbox.yellow.org/v1/ws` for sandbox). Only participants that DEPOSIT also need a funded wallet (Sepolia gas + the test asset); non-depositing participants need neither gas nor the asset.
 
-## 0. Prerequisite: each participant's account must be funded
+## 0. Prerequisite: a funded account for each depositor
 
-App sessions operate on funds already in a participant's account balance at Yellow (an account is backed by an on-chain channel; treat it as the participant's balance). Funding is done once per participant and is a hard prerequisite - `submitAppSessionDeposit` fails without it. The funding calls, from the official example:
+A session opens with zero allocations, so not every participant needs funds. Only a participant that makes a deposit needs a funded account balance at Yellow (an account is backed by an on-chain channel; treat it as the participant's balance). Funding is done once, on-chain, and is a hard prerequisite for a depositor - `submitAppSessionDeposit` fails on an unfunded account. The funding calls, from the official example:
 
 ```ts
 await client.setHomeBlockchain(asset, chainId);
@@ -27,7 +29,7 @@ const txHash = await client.checkpoint(asset);        // finalizes on-chain
 
 For the exact funding sequence and any Node-specific transaction setup, follow the official `nitrolite-v1-lifecycle` example and the quickstart.
 
-**This skill assumes that prerequisite is already met.** It never funds accounts. Check a participant's balance first:
+**This skill assumes each depositor is already funded.** It never funds accounts. Check a depositor's balance before it deposits:
 
 ```ts
 const balances = await client.getBalances(wallet);    // account balances at Yellow, per asset
@@ -53,7 +55,10 @@ import {
   packCreateAppSessionRequestV1, type AppDefinitionV1,
 } from '@yellow-org/sdk';
 
-// One session signer per participant - a plain wallet signer (type 0xa1).
+// LOCAL TEST ONLY: co-locating pkA, pkB, pkC in one process is a shortcut for a
+// readable local run or a custodial server. In a real agent-to-agent deployment
+// each agent builds ONLY its own signer, in its own process, from its own key,
+// and signs only its own part.
 const sign = {
   A: new AppSessionWalletSignerV1(new EthereumMsgSigner(pkA)),
   B: new AppSessionWalletSignerV1(new EthereumMsgSigner(pkB)),
@@ -101,16 +106,18 @@ import Decimal from 'decimal.js';
 let session = await getSession(clientA, appSessionId);
 const clientBudget = new Decimal('10');
 
+// Only the DEPOSITING participant (the client) appears in allocations; do not
+// add zero-value entries for the others.
 const deposit: AppStateUpdateV1 = {
   appSessionId, intent: AppStateUpdateIntent.Deposit, version: session.version + 1n,
   allocations: [
     { participant: addrA, asset, amount: clientBudget },
-    { participant: addrB, asset, amount: new Decimal('0') },
-    { participant: addrC, asset, amount: new Decimal('0') },
   ],
   sessionData: JSON.stringify({ intent: 'fund' }),
 };
 const dp = packAppStateUpdateV1(deposit);
+// The deposit state still needs signatures meeting quorum; each agent signs the
+// hash with its own key (shown together here only for a local run).
 await clientA.submitAppSessionDeposit(
   deposit,
   [await sign.A.signMessage(dp), await sign.B.signMessage(dp), await sign.C.signMessage(dp)],
@@ -160,7 +167,8 @@ await clientA.submitAppState(close, [
 ## Gotchas
 
 - ESM only: `"type": "module"`.
-- The funding prerequisite (Step 0) is mandatory; `submitAppSessionDeposit` fails on an unfunded account (sandbox error: `no channel state to advance`). Check `getBalances(wallet)` first.
+- The funding prerequisite (Step 0) applies to depositors only; `submitAppSessionDeposit` fails on an unfunded account (sandbox error: `no channel state to advance`). Check `getBalances(wallet)` first. Non-depositing participants need no funds.
+- Distributed keys: in a real deployment each agent runs its own client and signs only its own part with its own key. The single-process code here is a readable local run, not a deployment pattern.
 - `intent` is a number on the wire (`Operate=0, Deposit=1, Withdraw=2, Close=3`). Docs that show strings are wrong.
 - Creation must meet quorum: multi-party create needs multiple signatures, not one.
 - `version` must be exactly `session.version + 1n`; re-read live before signing and retry on collision, re-collecting signatures.

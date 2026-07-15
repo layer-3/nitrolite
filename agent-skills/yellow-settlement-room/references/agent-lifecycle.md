@@ -101,7 +101,7 @@ async function getSession(client, appSessionId: string) {
 
 ```ts
 import { AppStateUpdateIntent, packAppStateUpdateV1, type AppStateUpdateV1 } from '@yellow-org/sdk';
-import Decimal from 'decimal.js';
+import { Decimal } from 'decimal.js';   // named import: default is not constructable under NodeNext
 
 let session = await getSession(clientA, appSessionId);
 const clientBudget = new Decimal('10');

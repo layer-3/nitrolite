@@ -9,16 +9,18 @@ Use this skill when several AI agents need to hold funds together and settle one
 
 **The session holds N agents, not two.** A payment rail moves value from one payer to one payee; a swarm of agents settling over a rail needs a separate escrow per pair. One session settles all of them at once: one object, one deposit per agent, one final allocation. That is the shape to reach for when more than two agents have a stake in the same outcome.
 
-This skill covers the **app-session (virtual) layer** only. Every method here operates on funds that are *already in a participant's account balance at Yellow*. Getting funds there is a one-time on-chain step - see `## Prerequisite`. This skill never funds accounts; check a participant's balance first with `client.getBalances(wallet)`, and if it is short, stop and report it.
+This skill covers the **app-session (virtual) layer** only. It operates on funds that are *already in an account balance at Yellow*. A session opens with zero allocations, so not every participant needs funds - only a participant that makes a deposit does. Getting funds into an account is a one-time on-chain step, out of scope here - see `## Prerequisite`. This skill never funds accounts; before a participant deposits, check its balance with `client.getBalances(wallet)`, and if it is short, stop and report it.
 
 Package: `@yellow-org/sdk` (v1). A complete runnable reference is the official example at `github.com/layer-3/docs`, `examples/nitrolite-v1-lifecycle`; the flow below matches it exactly, generalised from two participants to N. For method lookups, the docs MCP: `npx -y @yellow-org/sdk-mcp@^1`.
 
 ## Core Model
 
 ```text
-Each agent has a FUNDED account at Yellow (prerequisite, on-chain, one-time)
+Each agent runs its own client with its own key (backend: private-key based)
   -> agents open one app session: N participants, signature weights, quorum
-  -> each agent deposits channel funds into the session
+     (opens with ZERO allocations; nobody needs funds yet)
+  -> a depositing agent commits its OWN funds into the session
+     (only depositors need a funded account; others can hold zero)
   -> agents reallocate between themselves (operate), each update co-signed to quorum
   -> withdraw / close: the final split releases back to channels, withdrawable on-chain
 ```
@@ -27,13 +29,14 @@ The session is an off-chain ledger hosted by the Yellow node. Its guarantee is s
 
 ## Design Rules
 
-- **Never fund accounts from this skill.** Funding happens once, on-chain, before a session. Check each participant's balance first with `client.getBalances(wallet)`; if it is short, stop and report the shortfall. Do not attempt `deposit`, `approveToken`, or `transfer` to self-fund.
+- **One agent, one key, one client.** Each agent signs only with its own key, from its own process. A backend service is private-key based; a frontend is wallet based. You cannot take several agents' private keys into one client. Holding multiple participants' keys in one process is valid only as a local test or an explicitly custodial server. See `## Roles and key separation`.
+- **Never fund accounts from this skill.** Funding happens once, on-chain, before a session. Only a participant that deposits needs funds; check its balance first with `client.getBalances(wallet)` and if it is short, stop and report the shortfall. Do not attempt `deposit`, `approveToken`, or `transfer` to self-fund.
 - **Never call an allocation "locked on-chain and enforceable."** Funds are committed out of a channel and governed by quorum, so no counterparty agent can take them - but releasing them still needs the node to co-sign. State both halves.
 - **Default to equal weights and unanimous quorum.** Only give a subset of agents combined weight >= quorum when that subset is intentionally trusted. See `## Weights and Quorum`.
 
-## Prerequisite: a funded account per participant
+## Prerequisite: a funded account for each depositor
 
-Each participant must already hold a funded account balance at Yellow for the asset. (An account is backed by an on-chain state channel, but you can treat it as the participant's balance.) That balance is the ceiling on what they can commit and the maximum they can lose. Check it before doing anything:
+A session is created with zero allocations, so not every participant needs funds. Only a participant that makes a deposit needs a funded account balance at Yellow for the asset. (An account is backed by an on-chain state channel, but you can treat it as the participant's balance.) That balance is the ceiling on what a depositor can commit and the most it can lose. Check a depositor's balance before it deposits:
 
 ```ts
 const balances = await client.getBalances(wallet);   // account balances at Yellow, per asset
@@ -63,7 +66,18 @@ const client = await Client.create(
 );
 ```
 
-There is no login handshake; authorization is per-call, from the signatures inside each payload. Each participant runs its own client.
+There is no login handshake; authorization is per-call, from the signatures inside each payload. **Each agent runs its own client with its own key, in its own process.** The examples below show several signers together for readability; in a real agent-to-agent deployment each agent constructs only its own signer and signs only its own part.
+
+## Roles and key separation
+
+Agent-to-agent means the keys are distributed. You cannot take several agents' private keys into one client. Model these roles:
+
+- **Each agent** holds its own key and runs its own client. A backend agent is private-key based; a frontend agent is wallet based. It signs only its own part of any state, in its own process.
+- **Proposer** (an agent, or a coordinating server): builds a state update, packs the hash, and asks each required signer to sign it.
+- **Signers** (the agents whose combined weight must meet quorum): each signs the packed hash with its own key and returns the signature.
+- **Submitter** (usually the proposer): collects the signatures and calls the Nitronode (`createAppSession` / `submitAppSessionDeposit` / `submitAppState`).
+
+A common topology: a Nitronode, agents connecting to a coordinating server (an app), and agents transacting agent-to-agent through shared sessions. The single-process code below co-locates keys only for readability and local testing; do not ship it that way.
 
 ## Open the session
 
@@ -73,9 +87,11 @@ import {
   packCreateAppSessionRequestV1, type AppDefinitionV1,
 } from '@yellow-org/sdk';
 
-// One session signer per participant. This is a plain wallet signer (type 0xa1).
-// Session keys exist as an optional friction-reducer for repeat approvals; they
-// are not required and are omitted here.
+// One session signer per participant, a plain wallet signer (type 0xa1).
+// LOCAL TEST ONLY: holding pkA, pkB, pkC in one process is a shortcut for a
+// smoke test or a custodial server. In a real deployment each agent builds ONLY
+// its own signer, in its own process, from its own key (see Roles and key
+// separation above). Session keys are an optional friction-reducer, omitted here.
 const signerA = new AppSessionWalletSignerV1(new EthereumMsgSigner(pkA));
 const signerB = new AppSessionWalletSignerV1(new EthereumMsgSigner(pkB));
 const signerC = new AppSessionWalletSignerV1(new EthereumMsgSigner(pkC));
@@ -119,17 +135,20 @@ All updates share one shape; `intent` is a **number**, not a string.
 import { AppStateUpdateIntent, packAppStateUpdateV1, type AppStateUpdateV1 } from '@yellow-org/sdk';
 import Decimal from 'decimal.js';
 
-// DEPOSIT (own endpoint): commit channel funds into the session.
+// DEPOSIT (own endpoint): a depositor commits its OWN funds into the session.
+// List ONLY the depositing participant in allocations; do not add zero-value
+// entries for participants who are not depositing here.
 const deposit: AppStateUpdateV1 = {
   appSessionId, intent: AppStateUpdateIntent.Deposit, version: session.version + 1n,
   allocations: [
     { participant: addrA, asset, amount: new Decimal('10') },
-    { participant: addrB, asset, amount: new Decimal('0') },
-    { participant: addrC, asset, amount: new Decimal('0') },
   ],
   sessionData: JSON.stringify({ intent: 'fund' }),
 };
 const dp = packAppStateUpdateV1(deposit);
+// The deposit state still needs signatures meeting quorum. Each agent signs the
+// hash with its OWN key in its OWN process; here they are shown together only for
+// readability. The submitter gathers the signatures and calls the node.
 await client.submitAppSessionDeposit(
   deposit, [await signerA.signMessage(dp), await signerB.signMessage(dp), await signerC.signMessage(dp)],
   asset, new Decimal('10'),                        // amount must equal the deposit allocation total
@@ -156,7 +175,7 @@ await client.submitAppState(operate, [ /* signatures summing to quorum */
 
 `Withdraw` (intent 2) may only decrease allocations and releases to channels. `Close` (intent 3) must restate the current allocation exactly, releases everything, and is terminal - never close while work or a review is outstanding. Both use `submitAppState` the same way.
 
-**Each participant collects its own signatures.** Pass one per signer until summed weight meets quorum; the protocol has no transport for gathering them across agents. Duplicate signers count once.
+**Signatures are collected across agents, off the wire.** The proposer builds the state and hash; each agent signs that hash with its own key in its own process; the submitter gathers the signatures until summed weight meets quorum and calls the node. The protocol provides no transport for this exchange - it is the caller's responsibility. Duplicate signers count once.
 
 ## Weights and Quorum
 
@@ -194,7 +213,7 @@ State this before any agent puts value at risk. Do not soften it.
 
 1. Which agents are in the session, and whether they cooperate or mutually distrust.
 2. Participant set with weights and quorum, and the arithmetic showing no coalition can rob a party.
-3. Each participant's funded balance confirmed via `getBalances(wallet)`, and its deposit as the max it can lose.
+3. Each depositor's funded balance confirmed via `getBalances(wallet)`, and its deposit as the max it can lose. Non-depositing participants need no funds.
 4. The happy path: open, deposit, operate, (withdraw), close - and the disagreement path, or an explicit statement that the room deadlocks.
 5. The trust disclosure from `## Trust Boundary`, in plain language, before any value moves.
 
